@@ -1,7 +1,13 @@
 /**
  * =====================================================================
- * CONTROLLER: XÁC THỰC VÀ TÀI KHOẢN (AUTH CONTROLLER)
- * Thực thi các Stored Procedure: sp_ThemNguoiDung, sp_DangNhap, sp_LayThongTinNguoiDung
+ * CONTROLLER: XÁC THỰC VÀ QUẢN LÝ NGƯỜI DÙNG (AUTH & USER CONTROLLER)
+ * 100% SỬ DỤNG STORED PROCEDURES (SQL SERVER):
+ * 1. sp_ThemNguoiDung
+ * 2. sp_DangNhap
+ * 3. sp_LayThongTinNguoiDung
+ * 4. sp_LayDanhSachNguoiDung
+ * 5. sp_SuaNguoiDung
+ * 6. sp_XoaNguoiDung
  * =====================================================================
  */
 
@@ -12,7 +18,8 @@ require('dotenv').config();
 
 /**
  * 1. Đăng ký tài khoản người dùng mới
- * Method: POST /api/auth/register
+ * Method: POST /api/auth/register hoặc POST /api/auth/users
+ * Procedure: sp_ThemNguoiDung
  */
 const dangKy = async (req, res) => {
     try {
@@ -29,7 +36,7 @@ const dangKy = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(mat_khau, salt);
 
-        // Kết nối pool và thực thi Stored Procedure sp_ThemNguoiDung
+        // Gọi Stored Procedure sp_ThemNguoiDung
         const pool = await poolPromise;
         const result = await pool.request()
             .input('ho_ten', sql.NVarChar(100), ho_ten)
@@ -43,7 +50,7 @@ const dangKy = async (req, res) => {
 
         return res.status(201).json({
             success: true,
-            message: 'Đăng ký tài khoản thành công!',
+            message: 'Tạo tài khoản thành công!',
             data: newUser
         });
     } catch (error) {
@@ -58,6 +65,7 @@ const dangKy = async (req, res) => {
 /**
  * 2. Đăng nhập tài khoản
  * Method: POST /api/auth/login
+ * Procedure: sp_DangNhap
  */
 const dangNhap = async (req, res) => {
     try {
@@ -70,7 +78,7 @@ const dangNhap = async (req, res) => {
             });
         }
 
-        // Thực thi Stored Procedure sp_DangNhap
+        // Gọi Stored Procedure sp_DangNhap
         const pool = await poolPromise;
         const result = await pool.request()
             .input('email', sql.VarChar(255), email)
@@ -127,6 +135,7 @@ const dangNhap = async (req, res) => {
 /**
  * 3. Lấy thông tin cá nhân (Profile)
  * Method: GET /api/auth/profile
+ * Procedure: sp_LayThongTinNguoiDung
  */
 const layThongTinCaNhan = async (req, res) => {
     try {
@@ -152,8 +161,101 @@ const layThongTinCaNhan = async (req, res) => {
     }
 };
 
+/**
+ * 4. Lấy danh sách tất cả người dùng (Admin Dashboard)
+ * Method: GET /api/auth/users
+ * Procedure: sp_LayDanhSachNguoiDung
+ */
+const layDanhSachNguoiDung = async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .execute('sp_LayDanhSachNguoiDung');
+
+        return res.status(200).json({
+            success: true,
+            data: result.recordset
+        });
+    } catch (error) {
+        console.error('Lỗi sp_LayDanhSachNguoiDung:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách người dùng'
+        });
+    }
+};
+
+/**
+ * 5. Cập nhật thông tin người dùng (Admin Dashboard)
+ * Method: PUT /api/auth/users/:id
+ * Procedure: sp_SuaNguoiDung
+ */
+const suaNguoiDung = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { ho_ten, email, so_dien_thoai, vai_tro, mat_khau } = req.body;
+
+        let hashedPassword = null;
+        if (mat_khau && mat_khau.trim() !== '') {
+            const salt = await bcrypt.genSalt(10);
+            hashedPassword = await bcrypt.hash(mat_khau, salt);
+        }
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .input('ho_ten', sql.NVarChar(100), ho_ten)
+            .input('email', sql.VarChar(255), email)
+            .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
+            .input('vai_tro', sql.VarChar(20), vai_tro || 'KHACH_HANG')
+            .input('mat_khau', sql.VarChar(255), hashedPassword)
+            .execute('sp_SuaNguoiDung');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật tài khoản thành công!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi sp_SuaNguoiDung:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi cập nhật người dùng'
+        });
+    }
+};
+
+/**
+ * 6. Xóa người dùng (Admin Dashboard)
+ * Method: DELETE /api/auth/users/:id
+ * Procedure: sp_XoaNguoiDung
+ */
+const xoaNguoiDung = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await poolPromise;
+        await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .execute('sp_XoaNguoiDung');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Xóa tài khoản thành công!'
+        });
+    } catch (error) {
+        console.error('Lỗi sp_XoaNguoiDung:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xóa người dùng'
+        });
+    }
+};
+
 module.exports = {
     dangKy,
     dangNhap,
-    layThongTinCaNhan
+    layThongTinCaNhan,
+    layDanhSachNguoiDung,
+    suaNguoiDung,
+    xoaNguoiDung
 };

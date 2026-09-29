@@ -15,7 +15,16 @@ router.post('/register', authController.dangKy);
 // Đăng nhập
 router.post('/login', authController.dangNhap);
 
-// Lấy thông tin cá nhân (Cần đăng nhập)
-router.get('/profile', verifyToken, authController.layThongTinCaNhan);
+// Lấy danh sách người dùng
+router.get('/users', authController.layDanhSachNguoiDung);
+
+// Tạo người dùng mới
+router.post('/users', authController.dangKy);
+
+// Cập nhật người dùng
+router.put('/users/:id', authController.suaNguoiDung);
+
+// Xóa người dùng
+router.delete('/users/:id', authController.xoaNguoiDung);
 
 module.exports = router;

@@ -18,4 +18,13 @@ router.post('/them-vao-don', verifyToken, dichVuController.themDichVuVaoDon);
 // Nhập kho dịch vụ (Yêu cầu quyền ADMIN hoặc NHAN_VIEN)
 router.post('/nhap-kho', verifyToken, authorizeRoles('ADMIN', 'NHAN_VIEN'), dichVuController.nhapKhoDichVu);
 
+// Thêm mới dịch vụ
+router.post('/', dichVuController.themDichVu);
+
+// Cập nhật dịch vụ
+router.put('/:id', dichVuController.suaDichVu);
+
+// Xóa dịch vụ
+router.delete('/:id', dichVuController.xoaDichVu);
+
 module.exports = router;
