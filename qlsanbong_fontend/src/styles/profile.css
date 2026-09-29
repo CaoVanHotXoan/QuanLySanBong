@@ -1,0 +1,45 @@
+/* =========================================================
+   STYLE TÙY BIẾN CHO TRANG PROFILE (DARK THEME)
+   Hỗ trợ thêm animation, custom scrollbar và hiệu ứng chuyển tab
+   ========================================================= */
+
+/* Hiệu ứng fadeIn mượt mà khi chuyển nội dung các tab */
+@keyframes profileFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-content-animate {
+  animation: profileFadeIn 0.25s ease-out forwards;
+}
+
+/* Custom scrollbar mỏng, thanh lịch theo phong cách Dark Mode */
+.profile-custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.profile-custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 9999px;
+}
+
+.profile-custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 9999px;
+}
+
+.profile-custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 1);
+}
+
+/* Hiệu ứng viền phát sáng nhẹ khi focus vào input */
+.profile-input-focus:focus {
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+}

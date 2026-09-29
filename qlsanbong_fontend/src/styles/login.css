@@ -1,0 +1,249 @@
+/* =========================================================
+   LOGIN & REGISTER MODAL STYLES (PURE CSS - DARK THEME)
+   ========================================================= */
+
+/* Nút bấm kích hoạt mở Modal */
+.login-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+  transition: all 0.25s ease;
+  outline: none;
+}
+
+.login-trigger-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+  filter: brightness(1.1);
+}
+
+.login-trigger-btn:active {
+  transform: translateY(0);
+}
+
+/* Lớp phủ mờ toàn màn hình (Overlay) - Căn giữa tuyệt đối bằng Flexbox */
+.login-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 7, 18, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 16px;
+  box-sizing: border-box;
+  animation: modalFadeIn 0.25s ease-out forwards;
+}
+
+/* Khung popup Modal (Nền xanh đen đậm Dark Theme) */
+.login-modal-container {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  background: linear-gradient(145deg, #0f1c2e 0%, #080e18 100%);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 20px;
+  padding: 36px 32px 32px 32px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7),
+              0 0 35px rgba(14, 165, 233, 0.15);
+  color: #ffffff;
+  box-sizing: border-box;
+  animation: modalScaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Nút đóng (X) ở góc trên cùng */
+.login-close-btn {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  color: #94a3b8;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.login-close-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #f87171;
+  transform: rotate(90deg);
+}
+
+/* Tiêu đề Modal Header */
+.login-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: #f8fafc;
+  letter-spacing: -0.5px;
+}
+
+.login-subtitle {
+  font-size: 14px;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* Form Container */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Nhóm Input & Label */
+.login-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.login-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #cbd5e1;
+}
+
+/* Ô Input: Nền tối, viền mỏng, phát sáng khi focus */
+.login-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #ffffff;
+  background-color: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+  outline: none;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.login-input::placeholder {
+  color: #64748b;
+}
+
+.login-input:focus {
+  border-color: #38bdf8;
+  background-color: rgba(15, 23, 42, 1);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2),
+              0 0 15px rgba(56, 189, 248, 0.15);
+}
+
+/* Nút Submit Form màu xanh ngọc nổi bật */
+.login-submit-btn {
+  width: 100%;
+  padding: 13px;
+  margin-top: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  color: #022c22;
+  background: linear-gradient(135deg, #2dd4bf 0%, #10b981 100%);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
+  transition: all 0.25s ease;
+  outline: none;
+}
+
+.login-submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(20, 184, 166, 0.5);
+  filter: brightness(1.08);
+}
+
+.login-submit-btn:active {
+  transform: translateY(0);
+}
+
+/* Chuyển đổi qua lại giữa Đăng nhập & Đăng ký */
+.login-footer {
+  margin-top: 22px;
+  text-align: center;
+  font-size: 13.5px;
+  color: #94a3b8;
+}
+
+.login-toggle-link {
+  color: #2dd4bf;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+.login-toggle-link:hover {
+  color: #38bdf8;
+  text-decoration: underline;
+}
+
+/* Hiệu ứng mờ dần (Fade In) */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Hiệu ứng phóng to mượt mà (Scale Up) */
+@keyframes modalScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Tối ưu hiển thị trên màn hình nhỏ / điện thoại */
+@media (max-width: 480px) {
+  .login-modal-container {
+    padding: 28px 20px;
+    border-radius: 16px;
+  }
+  .login-title {
+    font-size: 22px;
+  }
+}
