@@ -212,11 +212,57 @@ const nhapKhoDichVu = async (req, res) => {
     }
 };
 
+/**
+ * 7. Lấy danh sách phiếu nhập kho (Phieu_Nhap_Kho)
+ * Method: GET /api/dich-vu/phieu-nhap
+ * Procedure: sp_LayDanhSachPhieuNhapKho
+ */
+const layDanhSachPhieuNhapKho = async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().execute('sp_LayDanhSachPhieuNhapKho');
+        return res.status(200).json({
+            success: true,
+            data: result.recordset
+        });
+    } catch (error) {
+        console.error('Lỗi sp_LayDanhSachPhieuNhapKho:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách phiếu nhập kho'
+        });
+    }
+};
+
+/**
+ * 8. Lấy toàn bộ danh sách chi tiết dịch vụ đã bán (Chi_Tiet_Dich_Vu)
+ * Method: GET /api/dich-vu/chi-tiet-ban-hang
+ * Procedure: sp_LayDanhSachChiTietDichVu
+ */
+const layDanhSachChiTietDichVu = async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().execute('sp_LayDanhSachChiTietDichVu');
+        return res.status(200).json({
+            success: true,
+            data: result.recordset
+        });
+    } catch (error) {
+        console.error('Lỗi sp_LayDanhSachChiTietDichVu:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách chi tiết dịch vụ đã bán'
+        });
+    }
+};
+
 module.exports = {
     layDanhSachDichVu,
     themDichVu,
     suaDichVu,
     xoaDichVu,
     themDichVuVaoDon,
-    nhapKhoDichVu
+    nhapKhoDichVu,
+    layDanhSachPhieuNhapKho,
+    layDanhSachChiTietDichVu
 };

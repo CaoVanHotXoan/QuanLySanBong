@@ -160,6 +160,56 @@
               0 0 15px rgba(56, 189, 248, 0.15);
 }
 
+/* Khung ô nhập Email tích hợp đuôi sẵn @gmail.com */
+.login-email-box {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+  background-color: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.login-email-box:focus-within {
+  border-color: #38bdf8;
+  background-color: rgba(15, 23, 42, 1);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2),
+              0 0 15px rgba(56, 189, 248, 0.15);
+}
+
+/* Input bên trong khung email */
+.login-email-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 12px 14px;
+  color: #ffffff;
+  font-size: 14px;
+  outline: none;
+  min-width: 0;
+}
+
+/* Nhãn đuôi @gmail.com hiển thị trực quan, phong cách hiện đại */
+.login-email-addon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border-left: 1px solid rgba(56, 189, 248, 0.25);
+  user-select: none;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
 /* Nút Submit Form màu xanh ngọc nổi bật */
 .login-submit-btn {
   width: 100%;

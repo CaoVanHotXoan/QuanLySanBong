@@ -429,6 +429,161 @@ const huyDonVaHoanCoc = async (req, res) => {
     }
 };
 
+/**
+ * 14. Tính giá sân linh hoạt theo số phút
+ * Method: POST /api/dat-san/tinh-gia-linh-hoat
+ * Procedure: sp_TinhGiaSanLinhHoat
+ */
+const tinhGiaLinhHoat = async (req, res) => {
+    try {
+        const { ma_san, ngay_da, gio_bat_dau, gio_ket_thuc } = req.body;
+
+        if (!ma_san || !ngay_da || !gio_bat_dau || !gio_ket_thuc) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ: ma_san, ngay_da, gio_bat_dau, gio_ket_thuc!'
+            });
+        }
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_san', sql.Int, parseInt(ma_san, 10))
+            .input('ngay_da', sql.Date, ngay_da)
+            .input('gio_bat_dau', sql.VarChar(8), gio_bat_dau)
+            .input('gio_ket_thuc', sql.VarChar(8), gio_ket_thuc)
+            .execute('sp_TinhGiaSanLinhHoat');
+
+        return res.status(200).json({
+            success: true,
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi sp_TinhGiaSanLinhHoat:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi tính giá sân linh hoạt'
+        });
+    }
+};
+
+/**
+ * 15. Đặt sân theo giờ linh hoạt
+ * Method: POST /api/dat-san/dat-linh-hoat
+ * Procedure: sp_DatSanLinhHoat
+ */
+const datSanLinhHoat = async (req, res) => {
+    try {
+        const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung || 1);
+        const { ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, ghi_chu, tien_coc } = req.body;
+
+        if (!ma_san || !ngay_da || !gio_bat_dau || !gio_ket_thuc) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ: ma_san, ngay_da, gio_bat_dau, gio_ket_thuc!'
+            });
+        }
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_nguoi_dung', sql.Int, parseInt(ma_nguoi_dung, 10))
+            .input('ma_san', sql.Int, parseInt(ma_san, 10))
+            .input('ngay_da', sql.Date, ngay_da)
+            .input('gio_bat_dau', sql.VarChar(8), gio_bat_dau)
+            .input('gio_ket_thuc', sql.VarChar(8), gio_ket_thuc)
+            .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+            .input('tien_coc', sql.Decimal(10, 2), tien_coc ? parseFloat(tien_coc) : 0)
+            .execute('sp_DatSanLinhHoat');
+
+        return res.status(201).json({
+            success: true,
+            message: 'Đặt sân tính giờ linh hoạt thành công!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi sp_DatSanLinhHoat:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi đặt sân linh hoạt'
+        });
+    }
+};
+
+/**
+ * 16. Bắt đầu tính giờ linh hoạt ngay tại quầy (Check-in tức thì)
+ * Method: POST /api/dat-san/checkin-linh-hoat
+ * Procedure: sp_BatDauDaLinhHoat
+ */
+const batDauDaLinhHoat = async (req, res) => {
+    try {
+        const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung || 3);
+        const { ma_san, ten_khach_hang, so_dien_thoai, ghi_chu } = req.body;
+
+        if (!ma_san) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp mã sân (ma_san)!'
+            });
+        }
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_nguoi_dung', sql.Int, parseInt(ma_nguoi_dung, 10))
+            .input('ma_san', sql.Int, parseInt(ma_san, 10))
+            .input('ten_khach_hang', sql.NVarChar(100), ten_khach_hang || null)
+            .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
+            .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+            .execute('sp_BatDauDaLinhHoat');
+
+        return res.status(201).json({
+            success: true,
+            message: 'Đã check-in và bắt đầu tính giờ đá linh hoạt cho sân!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi sp_BatDauDaLinhHoat:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi bắt đầu tính giờ đá linh hoạt'
+        });
+    }
+};
+
+/**
+ * 17. Kết thúc đá linh hoạt và chốt thanh toán theo phút (Check-out)
+ * Method: POST /api/dat-san/checkout-linh-hoat
+ * Procedure: sp_KetThucDaLinhHoat
+ */
+const ketThucDaLinhHoat = async (req, res) => {
+    try {
+        const { ma_don_dat, gio_ket_thuc } = req.body;
+
+        if (!ma_don_dat) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp mã đơn đặt (ma_don_dat)!'
+            });
+        }
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+            .input('gio_ket_thuc', sql.VarChar(8), gio_ket_thuc || null)
+            .execute('sp_KetThucDaLinhHoat');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đã chốt giờ và tính tiền sân linh hoạt thành công!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi sp_KetThucDaLinhHoat:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi kết thúc tính giờ đá linh hoạt'
+        });
+    }
+};
+
 module.exports = {
     layDanhSachSan,
     layDanhSachLoaiSan,
@@ -442,5 +597,9 @@ module.exports = {
     layTatCaDonDat,
     layLichSan,
     datSan,
-    huyDonVaHoanCoc
+    huyDonVaHoanCoc,
+    tinhGiaLinhHoat,
+    datSanLinhHoat,
+    batDauDaLinhHoat,
+    ketThucDaLinhHoat
 };

@@ -149,10 +149,11 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
       return;
     }
 
-    if (newPassword.length < 10) {
+    // Kiểm tra độ dài mật khẩu mới: Tối thiểu 6 ký tự
+    if (newPassword.length < 6) {
       setPasswordMsg({
         type: "error",
-        text: "Mật khẩu mới phải có tối thiểu 10 ký tự!",
+        text: "Mật khẩu mới phải có tối thiểu 6 ký tự!",
       });
       return;
     }
@@ -523,7 +524,7 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                       type={showNewPassword ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Tối thiểu 10 ký tự"
+                      placeholder="Tối thiểu 6 ký tự"
                       className="w-full pl-10 pr-10 py-3 bg-slate-800/70 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm profile-input-focus focus:outline-none focus:border-emerald-500 transition-colors"
                     />
                     <button

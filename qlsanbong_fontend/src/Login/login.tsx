@@ -1,30 +1,23 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 
-interface UserAccount {
-  hoTen: string;
+// Định nghĩa kiểu dữ liệu người dùng khi xác thực thành công
+export interface AuthUser {
+  id?: number;
+  ho_ten: string;
   email: string;
-  password: string;
+  so_dien_thoai?: string;
+  vai_tro?: string;
+  anh_dai_dien?: string;
 }
 
 interface LoginProps {
-  onLoginSuccess?: (userData: { email: string; hoTen?: string }) => void;
+  onLoginSuccess?: (userData: AuthUser) => void;
 }
 
-// Danh sách tài khoản mẫu ban đầu (Mật khẩu tối thiểu 10 ký tự)
-const DEFAULT_USERS: UserAccount[] = [
-  {
-    hoTen: "Nguyễn Văn Đạt",
-    email: "vandat.soccer@gmail.com",
-    password: "1234567890",
-  },
-  {
-    hoTen: "Quản Trị Viên",
-    email: "admin@gmail.com",
-    password: "1234567890",
-  },
-];
+// Địa chỉ API Backend kết nối trực tiếp với SQL Server
+const API_BASE_URL = "http://localhost:5000/api/auth";
 
 export default function Login({ onLoginSuccess }: LoginProps = {}) {
   // Trạng thái đóng / mở Modal Popup
@@ -33,46 +26,36 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
   // Trạng thái chuyển đổi form: false = "Đăng nhập", true = "Đăng ký"
   const [isRegister, setIsRegister] = useState<boolean>(false);
 
-  // Danh sách tài khoản đã đăng ký (Được đồng bộ với LocalStorage)
-  const [userList, setUserList] = useState<UserAccount[]>(DEFAULT_USERS);
+  // Trạng thái đang gửi yêu cầu lên Backend (Loading spinner)
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Khai báo các State lưu trữ dữ liệu người dùng nhập vào
   const [hoTen, setHoTen] = useState<string>("");
-  const [email, setEmail] = useState<string>("");
+  // Tên tài khoản email (Phần trước đuôi @gmail.com)
+  const [emailUsername, setEmailUsername] = useState<string>("");
+  const [soDienThoai, setSoDienThoai] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
 
-  // Thông báo lỗi trực tiếp trên form (nếu có)
+  // Thông báo lỗi hoặc thông báo thành công trực tiếp trên form
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [successMessage, setSuccessMessage] = useState<string>("");
 
-  // Load danh sách người dùng đã đăng ký từ localStorage khi mở ứng dụng
-  useEffect(() => {
-    try {
-      const savedUsers = localStorage.getItem("soccer_registered_users");
-      if (savedUsers) {
-        const parsed: UserAccount[] = JSON.parse(savedUsers);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setUserList(parsed);
-          return;
-        }
-      }
-      // Lưu danh sách mặc định lần đầu nếu chưa có
-      localStorage.setItem("soccer_registered_users", JSON.stringify(DEFAULT_USERS));
-    } catch (err) {
-      console.error("Lỗi khi đọc danh sách tài khoản:", err);
+  // Hàm chuẩn hóa email và ghép nối với đuôi @gmail.com cố định
+  const getFullEmail = (username: string): string => {
+    let clean = username.trim().toLowerCase();
+    // Nếu người dùng lỡ gõ hoặc dán cả chuỗi có chứa đuôi @gmail.com thì tách ra
+    if (clean.includes("@")) {
+      clean = clean.split("@")[0];
     }
-  }, []);
-
-  // Hàm kiểm tra Email có đuôi @gmail.com hợp lệ
-  const isValidGmail = (mail: string): boolean => {
-    const trimmed = mail.toLowerCase().trim();
-    return /^[a-zA-Z0-9._%+-]+@gmail\.com$/.test(trimmed);
+    return clean ? `${clean}@gmail.com` : "";
   };
 
   // Hàm mở Modal
   const handleOpenModal = () => {
     setIsRegister(false);
     setErrorMessage("");
+    setSuccessMessage("");
     setIsOpen(true);
   };
 
@@ -81,43 +64,48 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
     setIsOpen(false);
     setIsRegister(false);
     setHoTen("");
-    setEmail("");
+    setEmailUsername("");
+    setSoDienThoai("");
     setPassword("");
     setConfirmPassword("");
     setErrorMessage("");
+    setSuccessMessage("");
+    setIsLoading(false);
   };
 
   // Hàm chuyển đổi qua lại giữa form Đăng nhập và Đăng ký
   const toggleForm = () => {
     setIsRegister(!isRegister);
     setErrorMessage("");
-    // Reset mật khẩu khi chuyển đổi
+    setSuccessMessage("");
     setPassword("");
     setConfirmPassword("");
   };
 
-  // Xử lý gửi Form (Submit)
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  // Xử lý gửi Form (Đăng ký / Đăng nhập trực tiếp với Cơ sở dữ liệu SQL Server)
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMessage("");
+    setSuccessMessage("");
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const fullEmail = getFullEmail(emailUsername);
 
     // =========================================================================
-    // 1. KIỂM TRA ĐIỀU KIỆN CHUNG: EMAIL ĐUÔI @gmail.com & MẬT KHẨU >= 10 KÝ TỰ
+    // 1. KIỂM TRA DỮ LIỆU ĐẦU VÀO (VALIDATION)
     // =========================================================================
-    if (!isValidGmail(normalizedEmail)) {
-      setErrorMessage("⚠️ Email bắt buộc phải có định dạng đuôi @gmail.com (Ví dụ: name@gmail.com).");
+    if (!emailUsername.trim()) {
+      setErrorMessage("⚠️ Vui lòng nhập tên tài khoản Email.");
       return;
     }
 
-    if (password.length < 10) {
-      setErrorMessage("⚠️ Mật khẩu phải có tối thiểu 10 ký tự.");
+    // Yêu cầu: Đăng ký / Đăng nhập mật khẩu tối thiểu 6 ký tự
+    if (password.length < 6) {
+      setErrorMessage("⚠️ Mật khẩu bắt buộc phải có tối thiểu 6 ký tự.");
       return;
     }
 
     // =========================================================================
-    // 2. XỬ LÝ LOGIC ĐĂNG KÝ TÀI KHOẢN MỚI
+    // 2. XỬ LÝ ĐĂNG KÝ TÀI KHOẢN MỚI (LƯU TRỰC TIẾP VÀO CSDL SQL SERVER)
     // =========================================================================
     if (isRegister) {
       if (!hoTen.trim()) {
@@ -130,77 +118,119 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
         return;
       }
 
-      // Kiểm tra xem email này đã tồn tại trong danh sách hay chưa
-      const isExisted = userList.some(
-        (u) => u.email.toLowerCase() === normalizedEmail
-      );
-
-      if (isExisted) {
-        setErrorMessage("⚠️ Email này đã được đăng ký! Vui lòng chuyển sang Đăng nhập.");
-        return;
-      }
-
-      // Tạo tài khoản mới và lưu vào danh sách
-      const newUser: UserAccount = {
-        hoTen: hoTen.trim(),
-        email: normalizedEmail,
-        password: password,
-      };
-
-      const updatedUsers = [...userList, newUser];
-      setUserList(updatedUsers);
+      setIsLoading(true);
 
       try {
-        localStorage.setItem("soccer_registered_users", JSON.stringify(updatedUsers));
-      } catch (err) {
-        console.error("Lỗi khi lưu tài khoản:", err);
-      }
+        // Gửi Request POST lên API Backend Express -> Thực thi Stored Procedure sp_ThemNguoiDung trong SQL Server
+        const response = await fetch(`${API_BASE_URL}/register`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ho_ten: hoTen.trim(),
+            email: fullEmail,
+            so_dien_thoai: soDienThoai.trim() || null,
+            mat_khau: password,
+            vai_tro: "KHACH_HANG",
+          }),
+        });
 
-      alert(`🎉 Đăng ký tài khoản thành công cho: ${hoTen}! Vui lòng nhập mật khẩu để đăng nhập.`);
-      
-      // Chuyển sang form đăng nhập
-      setIsRegister(false);
-      setPassword("");
-      setConfirmPassword("");
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          setErrorMessage(data.message || "⚠️ Đăng ký thất bại. Vui lòng thử lại!");
+          setIsLoading(false);
+          return;
+        }
+
+        // Đăng ký thành công vào SQL Server
+        setSuccessMessage(`🎉 Đăng ký tài khoản thành công cho: ${hoTen.trim()}! Vui lòng nhập mật khẩu để đăng nhập.`);
+        setIsLoading(false);
+
+        // Tự động chuyển sang form Đăng nhập sau 1.2s và giữ lại email vừa đăng ký
+        setTimeout(() => {
+          setIsRegister(false);
+          setPassword("");
+          setConfirmPassword("");
+          setSuccessMessage("");
+        }, 1200);
+
+      } catch (error) {
+        console.error("Lỗi khi kết nối máy chủ SQL Server:", error);
+        setErrorMessage("❌ Không thể kết nối đến máy chủ Backend SQL Server. Vui lòng kiểm tra lại kết nối mạng hoặc server!");
+        setIsLoading(false);
+      }
     } else {
       // =========================================================================
-      // 3. XỬ LÝ LOGIC KIỂM TRA ĐĂNG NHẬP
+      // 3. XỬ LÝ ĐĂNG NHẬP TÀI KHOẢN (XÁC THỰC QUA CSDL SQL SERVER)
       // =========================================================================
-      
-      // Tìm tài khoản theo email
-      const matchedUser = userList.find(
-        (u) => u.email.toLowerCase() === normalizedEmail
-      );
+      setIsLoading(true);
 
-      // Nếu KHÔNG tìm thấy tài khoản -> Chặn đăng nhập
-      if (!matchedUser) {
-        setErrorMessage(
-          "⚠️ Tài khoản không tồn tại! Vui lòng bấm 'Đăng ký ngay' ở bên dưới để tạo tài khoản mới."
-        );
-        return;
-      }
-
-      // Nếu tài khoản tồn tại nhưng SAI mật khẩu -> Báo lỗi sai mật khẩu
-      if (matchedUser.password !== password) {
-        setErrorMessage("⚠️ Mật khẩu không chính xác. Vui lòng kiểm tra lại!");
-        return;
-      }
-
-      // Đăng nhập thành công -> Cập nhật trạng thái người dùng lên trang chủ
-      if (onLoginSuccess) {
-        onLoginSuccess({
-          email: matchedUser.email,
-          hoTen: matchedUser.hoTen,
+      try {
+        // Gửi Request POST lên API Backend Express -> Thực thi Stored Procedure sp_DangNhap trong SQL Server
+        const response = await fetch(`${API_BASE_URL}/login`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: fullEmail,
+            mat_khau: password,
+          }),
         });
-      }
 
-      handleCloseModal(); // Đóng modal
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          setErrorMessage(data.message || "⚠️ Đăng nhập thất bại. Vui lòng kiểm tra lại email hoặc mật khẩu!");
+          setIsLoading(false);
+          return;
+        }
+
+        // Lưu JWT Token và thông tin người dùng từ SQL Server vào LocalStorage
+        if (data.token) {
+          localStorage.setItem("auth_token", data.token);
+        }
+
+        const userFromDb: AuthUser = {
+          id: data.data.id,
+          ho_ten: data.data.ho_ten,
+          email: data.data.email,
+          so_dien_thoai: data.data.so_dien_thoai || "",
+          vai_tro: data.data.vai_tro || "KHACH_HANG",
+          anh_dai_dien: data.data.anh_dai_dien,
+        };
+
+        localStorage.setItem("auth_user", JSON.stringify(userFromDb));
+        localStorage.setItem("soccer_current_user", JSON.stringify({
+          id: userFromDb.id,
+          hoTen: userFromDb.ho_ten,
+          email: userFromDb.email,
+          soDienThoai: userFromDb.so_dien_thoai,
+          diaChi: "Hà Nội",
+          avatarUrl: userFromDb.anh_dai_dien || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250&auto=format&fit=crop",
+        }));
+
+        setIsLoading(false);
+
+        // Kích hoạt callback thông báo đăng nhập thành công cho Component cha
+        if (onLoginSuccess) {
+          onLoginSuccess(userFromDb);
+        }
+
+        handleCloseModal();
+      } catch (error) {
+        console.error("Lỗi khi kết nối đăng nhập:", error);
+        setErrorMessage("❌ Không thể kết nối tới máy chủ SQL Server. Vui lòng kiểm tra lại dịch vụ Backend!");
+        setIsLoading(false);
+      }
     }
   };
 
   return (
     <>
-      {/* Nút bấm Đăng nhập hiển thị trên trang */}
+      {/* Nút bấm Đăng nhập hiển thị trên thanh Header Navbar */}
       <button
         type="button"
         className="login-trigger-btn"
@@ -209,7 +239,7 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
         Đăng nhập
       </button>
 
-      {/* Khung Modal & Lớp phủ mờ (Overlay) */}
+      {/* Khung Modal Popup & Lớp phủ mờ (Overlay) */}
       {isOpen && (
         <div
           className="login-modal-overlay"
@@ -217,12 +247,12 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
           role="dialog"
           aria-modal="true"
         >
-          {/* Khung nội dung Modal (Chặn nổi bọt sự kiện click để không bị đóng khi click vào bên trong) */}
+          {/* Khung nội dung Modal (Chặn nổi bọt sự kiện click) */}
           <div
             className="login-modal-container"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Nút X ở góc trên cùng để đóng */}
+            {/* Nút X ở góc trên cùng để đóng popup */}
             <button
               type="button"
               className="login-close-btn"
@@ -239,7 +269,7 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
               </h2>
               <p className="login-subtitle">
                 {isRegister
-                  ? "Tạo tài khoản mới để đặt sân nhanh chóng và tiện lợi"
+                  ? "Tạo tài khoản mới trực tiếp vào CSDL để đặt sân nhanh chóng"
                   : "Chào mừng bạn quay trở lại với hệ thống"}
               </p>
             </div>
@@ -263,13 +293,32 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
               </div>
             )}
 
-            {/* Form thao tác */}
+            {/* Thông báo thành công nếu có */}
+            {successMessage && (
+              <div
+                style={{
+                  backgroundColor: "rgba(16, 185, 129, 0.15)",
+                  border: "1px solid rgba(16, 185, 129, 0.4)",
+                  borderRadius: "10px",
+                  padding: "10px 14px",
+                  marginBottom: "16px",
+                  color: "#6ee7b7",
+                  fontSize: "13px",
+                  lineHeight: "1.4",
+                  textAlign: "left",
+                }}
+              >
+                {successMessage}
+              </div>
+            )}
+
+            {/* Form thao tác Đăng nhập / Đăng ký */}
             <form className="login-form" onSubmit={handleSubmit}>
               {/* Trường Họ tên (Chỉ hiển thị khi ở form Đăng ký) */}
               {isRegister && (
                 <div className="login-input-group">
                   <label className="login-label" htmlFor="input-hoten">
-                    Họ và tên
+                    Họ và tên <span style={{ color: "#ef4444" }}>*</span>
                   </label>
                   <input
                     id="input-hoten"
@@ -286,36 +335,65 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
                 </div>
               )}
 
-              {/* Trường Email */}
+              {/* Trường Số điện thoại (Tùy chọn khi Đăng ký) */}
+              {isRegister && (
+                <div className="login-input-group">
+                  <label className="login-label" htmlFor="input-phone">
+                    Số điện thoại
+                  </label>
+                  <input
+                    id="input-phone"
+                    type="tel"
+                    className="login-input"
+                    placeholder="Nhập số điện thoại (ví dụ: 0912345678)"
+                    value={soDienThoai}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      setSoDienThoai(e.target.value);
+                      if (errorMessage) setErrorMessage("");
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Trường Địa chỉ Email với đuôi sẵn @gmail.com cố định */}
               <div className="login-input-group">
                 <label className="login-label" htmlFor="input-email">
-                  Địa chỉ Email (@gmail.com)
+                  Địa chỉ Email <span style={{ color: "#ef4444" }}>*</span>
                 </label>
-                <input
-                  id="input-email"
-                  type="email"
-                  className="login-input"
-                  placeholder="name@gmail.com"
-                  value={email}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setEmail(e.target.value);
-                    if (errorMessage) setErrorMessage("");
-                  }}
-                  required
-                />
+                <div className="login-email-box">
+                  <input
+                    id="input-email"
+                    type="text"
+                    className="login-email-input"
+                    placeholder="Nhập tên tài khoản"
+                    value={emailUsername}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      let val = e.target.value;
+                      // Nếu người dùng paste email đầy đủ dạng name@gmail.com -> tách lấy phần username
+                      if (val.includes("@")) {
+                        val = val.split("@")[0];
+                      }
+                      setEmailUsername(val.trim());
+                      if (errorMessage) setErrorMessage("");
+                    }}
+                    required
+                  />
+                  {/* Đuôi email @gmail.com hiển thị cố định sẵn cho người dùng */}
+                  <span className="login-email-addon">@gmail.com</span>
+                </div>
               </div>
 
-              {/* Trường Mật khẩu */}
+              {/* Trường Mật khẩu: Tối thiểu 6 ký tự */}
               <div className="login-input-group">
                 <label className="login-label" htmlFor="input-password">
-                  Mật khẩu (Tối thiểu 10 ký tự)
+                  Mật khẩu (Tối thiểu 6 ký tự) <span style={{ color: "#ef4444" }}>*</span>
                 </label>
                 <input
                   id="input-password"
                   type="password"
                   className="login-input"
-                  placeholder="Nhập mật khẩu (tối thiểu 10 ký tự)"
-                  minLength={10}
+                  placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
+                  minLength={6}
                   value={password}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     setPassword(e.target.value);
@@ -329,14 +407,14 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
               {isRegister && (
                 <div className="login-input-group">
                   <label className="login-label" htmlFor="input-confirm-password">
-                    Nhập lại mật khẩu
+                    Nhập lại mật khẩu <span style={{ color: "#ef4444" }}>*</span>
                   </label>
                   <input
                     id="input-confirm-password"
                     type="password"
                     className="login-input"
                     placeholder="Nhập lại mật khẩu trên"
-                    minLength={10}
+                    minLength={6}
                     value={confirmPassword}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                       setConfirmPassword(e.target.value);
@@ -348,8 +426,13 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
               )}
 
               {/* Nút Submit Form */}
-              <button type="submit" className="login-submit-btn">
-                {isRegister ? "Đăng Ký" : "Đăng Nhập"}
+              <button 
+                type="submit" 
+                className="login-submit-btn" 
+                disabled={isLoading}
+                style={{ opacity: isLoading ? 0.7 : 1, cursor: isLoading ? "not-allowed" : "pointer" }}
+              >
+                {isLoading ? "Đang xử lý..." : isRegister ? "Đăng Ký Tài Khoản" : "Đăng Nhập"}
               </button>
             </form>
 

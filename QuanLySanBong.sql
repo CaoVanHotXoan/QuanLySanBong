@@ -22,13 +22,22 @@ IF OBJECT_ID('San_Bong', 'U') IS NOT NULL DROP TABLE San_Bong;
 IF OBJECT_ID('Khung_Gio_Gia', 'U') IS NOT NULL DROP TABLE Khung_Gio_Gia;
 IF OBJECT_ID('Loai_San', 'U') IS NOT NULL DROP TABLE Loai_San;
 IF OBJECT_ID('Nguoi_Dung', 'U') IS NOT NULL DROP TABLE Nguoi_Dung;
+IF OBJECT_ID('Vai_Tro', 'U') IS NOT NULL DROP TABLE Vai_Tro;
 GO
 
 -- =====================================================================
 -- 4. TẠO CÁC BẢNG DỮ LIỆU CHUẨN SQL SERVER
 -- =====================================================================
 
--- 4.1. Bảng Nguoi_Dung (Người dùng & Khách hàng)
+-- 4.0. Bảng Vai_Tro (Vai trò người dùng: Admin, Nhân viên, Khách hàng)
+CREATE TABLE Vai_Tro (
+    MaVaiTro INT IDENTITY(1,1) PRIMARY KEY,
+    TenVaiTro NVARCHAR(50) UNIQUE NOT NULL,
+    MoTa NVARCHAR(255) NULL
+);
+GO
+
+-- 4.1. Bảng Nguoi_Dung (Người dùng & Khách hàng liên kết bảng Vai_Tro)
 CREATE TABLE Nguoi_Dung (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ho_ten NVARCHAR(100) NOT NULL,
@@ -36,8 +45,9 @@ CREATE TABLE Nguoi_Dung (
     so_dien_thoai VARCHAR(15),
     mat_khau VARCHAR(255),
     anh_dai_dien VARCHAR(255) NULL,
-    vai_tro VARCHAR(20) CHECK (vai_tro IN ('ADMIN', 'NHAN_VIEN', 'KHACH_HANG')) DEFAULT 'KHACH_HANG',
-    ngay_tao DATETIME DEFAULT GETDATE()
+    MaVaiTro INT NOT NULL DEFAULT 3,
+    ngay_tao DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (MaVaiTro) REFERENCES Vai_Tro(MaVaiTro) ON DELETE NO ACTION
 );
 GO
 
@@ -74,7 +84,7 @@ CREATE TABLE San_Bong (
 );
 GO
 
--- 4.5. Bảng Don_Dat_San (Đơn đặt lịch thi đấu)
+-- 4.5. Bảng Don_Dat_San (Đơn đặt lịch thi đấu: Cố định hoặc Linh hoạt theo phút)
 CREATE TABLE Don_Dat_San (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ma_nguoi_dung INT NOT NULL,
@@ -84,6 +94,9 @@ CREATE TABLE Don_Dat_San (
     gio_ket_thuc TIME NOT NULL,
     tien_san DECIMAL(10, 2) NOT NULL,
     tong_tien DECIMAL(10, 2) NOT NULL,
+    kieu_dat VARCHAR(20) CHECK (kieu_dat IN ('CO_DINH', 'LINH_HOAT')) DEFAULT 'CO_DINH',
+    so_phut_da INT NULL,
+    ghi_chu NVARCHAR(255) NULL,
     trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_XAC_NHAN', 'DA_CHOT', 'HOAN_THANH', 'DA_HUY')) DEFAULT 'CHO_XAC_NHAN',
     ngay_tao DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
@@ -154,11 +167,17 @@ GO
 -- 5. CHÈN DỮ LIỆU MẪU BAN ĐẦU (INITIAL SEED DATA)
 -- =====================================================================
 
+-- 5.0. Vai trò mẫu
+INSERT INTO Vai_Tro (TenVaiTro, MoTa) VALUES
+(N'ADMIN', N'Quản trị viên toàn quyền hệ thống'),
+(N'NHAN_VIEN', N'Nhân viên quản lý sân và bán hàng'),
+(N'KHACH_HANG', N'Khách hàng đặt sân trực tuyến');
+
 -- 5.1. Người dùng mẫu (Admin, Nhân viên, Khách hàng)
-INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, mat_khau, vai_tro) VALUES
-(N'Quản Trị Viên Hệ Thống', 'admin@soccer247.vn', '0909123456', '$2b$10$wE8eJ5.lK6xT8GzZz3lG..zM1bZ0v6O2D1aB3c4e5f6g7h8i9j0k', 'ADMIN'),
-(N'Nhân Viên Quản Lý Sân', 'staff@soccer247.vn', '0909789789', '$2b$10$wE8eJ5.lK6xT8GzZz3lG..zM1bZ0v6O2D1aB3c4e5f6g7h8i9j0k', 'NHAN_VIEN'),
-(N'Nguyễn Văn Đạt', 'vandat.soccer@gmail.com', '0988776655', '$2b$10$wE8eJ5.lK6xT8GzZz3lG..zM1bZ0v6O2D1aB3c4e5f6g7h8i9j0k', 'KHACH_HANG');
+INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, mat_khau, MaVaiTro) VALUES
+(N'Quản Trị Viên Hệ Thống', 'admin@soccer247.vn', '0909123456', '$2b$10$wE8eJ5.lK6xT8GzZz3lG..zM1bZ0v6O2D1aB3c4e5f6g7h8i9j0k', 1),
+(N'Nhân Viên Quản Lý Sân', 'staff@soccer247.vn', '0909789789', '$2b$10$wE8eJ5.lK6xT8GzZz3lG..zM1bZ0v6O2D1aB3c4e5f6g7h8i9j0k', 2),
+(N'Nguyễn Văn Đạt', 'vandat.soccer@gmail.com', '0988776655', '$2b$10$wE8eJ5.lK6xT8GzZz3lG..zM1bZ0v6O2D1aB3c4e5f6g7h8i9j0k', 3);
 
 -- 5.2. Loại sân
 INSERT INTO Loai_San (ten_loai, mo_ta, gia_co_ban, trang_thai) VALUES

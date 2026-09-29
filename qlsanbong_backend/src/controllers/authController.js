@@ -17,7 +17,7 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 /**
- * 1. Đăng ký tài khoản người dùng mới
+ * 1. Đăng ký tài khoản người dùng mới (Lưu trực tiếp vào CSDL SQL Server)
  * Method: POST /api/auth/register hoặc POST /api/auth/users
  * Procedure: sp_ThemNguoiDung
  */
@@ -25,6 +25,7 @@ const dangKy = async (req, res) => {
     try {
         const { ho_ten, email, so_dien_thoai, mat_khau, vai_tro } = req.body;
 
+        // Kiểm tra dữ liệu đầu vào bắt buộc
         if (!ho_ten || !email || !mat_khau) {
             return res.status(400).json({
                 success: false,
@@ -32,15 +33,26 @@ const dangKy = async (req, res) => {
             });
         }
 
-        // Mã hóa mật khẩu bằng bcryptjs
+        // Kiểm tra độ dài mật khẩu: Tối thiểu 6 ký tự
+        if (mat_khau.trim().length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mật khẩu phải có tối thiểu 6 ký tự!'
+            });
+        }
+
+        // Chuẩn hóa định dạng email (viết thường và xóa khoảng trắng thừa)
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // Mã hóa mật khẩu bảo mật bằng bcryptjs trước khi lưu vào SQL Server
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(mat_khau, salt);
 
-        // Gọi Stored Procedure sp_ThemNguoiDung
+        // Gọi Stored Procedure sp_ThemNguoiDung để lưu vào CSDL SQL Server
         const pool = await poolPromise;
         const result = await pool.request()
-            .input('ho_ten', sql.NVarChar(100), ho_ten)
-            .input('email', sql.VarChar(255), email)
+            .input('ho_ten', sql.NVarChar(100), ho_ten.trim())
+            .input('email', sql.VarChar(255), normalizedEmail)
             .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
             .input('mat_khau', sql.VarChar(255), hashedPassword)
             .input('vai_tro', sql.VarChar(20), vai_tro || 'KHACH_HANG')
@@ -50,14 +62,14 @@ const dangKy = async (req, res) => {
 
         return res.status(201).json({
             success: true,
-            message: 'Tạo tài khoản thành công!',
+            message: 'Tạo tài khoản thành công và đã lưu vào CSDL SQL Server!',
             data: newUser
         });
     } catch (error) {
         console.error('Lỗi sp_ThemNguoiDung:', error.message);
         return res.status(400).json({
             success: false,
-            message: error.message || 'Lỗi khi đăng ký tài khoản'
+            message: error.message || 'Lỗi khi đăng ký tài khoản vào cơ sở dữ liệu'
         });
     }
 };
@@ -251,11 +263,97 @@ const xoaNguoiDung = async (req, res) => {
     }
 };
 
+/**
+ * 7. Lấy danh sách Vai Trò (Vai_Tro)
+ * Method: GET /api/auth/vai-tro
+ * Procedure: sp_LayDanhSachVaiTro
+ */
+const layDanhSachVaiTro = async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().execute('sp_LayDanhSachVaiTro');
+        return res.status(200).json({
+            success: true,
+            data: result.recordset
+        });
+    } catch (error) {
+        console.error('Lỗi sp_LayDanhSachVaiTro:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách vai trò'
+        });
+    }
+};
+
+/**
+ * 8. Thêm vai trò mới
+ * Method: POST /api/auth/vai-tro
+ * Procedure: sp_ThemVaiTro
+ */
+const themVaiTro = async (req, res) => {
+    try {
+        const { TenVaiTro, MoTa } = req.body;
+        if (!TenVaiTro) {
+            return res.status(400).json({ success: false, message: 'Tên vai trò không được bỏ trống!' });
+        }
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('TenVaiTro', sql.NVarChar(50), TenVaiTro)
+            .input('MoTa', sql.NVarChar(255), MoTa || null)
+            .execute('sp_ThemVaiTro');
+
+        return res.status(201).json({
+            success: true,
+            message: 'Thêm vai trò mới thành công!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi sp_ThemVaiTro:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi thêm vai trò'
+        });
+    }
+};
+
+/**
+ * 9. Sửa vai trò
+ * Method: PUT /api/auth/vai-tro/:id
+ * Procedure: sp_SuaVaiTro
+ */
+const suaVaiTro = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { TenVaiTro, MoTa } = req.body;
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('MaVaiTro', sql.Int, parseInt(id, 10))
+            .input('TenVaiTro', sql.NVarChar(50), TenVaiTro)
+            .input('MoTa', sql.NVarChar(255), MoTa || null)
+            .execute('sp_SuaVaiTro');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật vai trò thành công!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi sp_SuaVaiTro:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi sửa vai trò'
+        });
+    }
+};
+
 module.exports = {
     dangKy,
     dangNhap,
     layThongTinCaNhan,
     layDanhSachNguoiDung,
     suaNguoiDung,
-    xoaNguoiDung
+    xoaNguoiDung,
+    layDanhSachVaiTro,
+    themVaiTro,
+    suaVaiTro
 };

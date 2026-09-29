@@ -72,6 +72,52 @@ const thanhToanDon = async (req, res) => {
     }
 };
 
+/**
+ * Lấy danh sách lịch sử giao dịch thanh toán
+ * Method: GET /api/thanh-toan/danh-sach
+ * Procedure: sp_LayDanhSachThanhToan
+ */
+const layDanhSachThanhToan = async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().execute('sp_LayDanhSachThanhToan');
+        return res.status(200).json({
+            success: true,
+            data: result.recordset
+        });
+    } catch (error) {
+        console.error('Lỗi sp_LayDanhSachThanhToan:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách thanh toán'
+        });
+    }
+};
+
+/**
+ * Lấy danh sách lịch sử hoàn tiền / hủy đơn
+ * Method: GET /api/thanh-toan/hoan-tien
+ * Procedure: sp_LayDanhSachHoanTien
+ */
+const layDanhSachHoanTien = async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().execute('sp_LayDanhSachHoanTien');
+        return res.status(200).json({
+            success: true,
+            data: result.recordset
+        });
+    } catch (error) {
+        console.error('Lỗi sp_LayDanhSachHoanTien:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách hoàn tiền'
+        });
+    }
+};
+
 module.exports = {
-    thanhToanDon
+    thanhToanDon,
+    layDanhSachThanhToan,
+    layDanhSachHoanTien
 };

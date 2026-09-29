@@ -35,6 +35,12 @@ router.get('/lich-san', datSanController.layLichSan);
 // Đặt sân bóng (sp_DatSan)
 router.post('/', datSanController.datSan);
 
+// Đặt sân & tính giờ linh hoạt theo số phút (Flexible Booking)
+router.post('/tinh-gia-linh-hoat', datSanController.tinhGiaLinhHoat);
+router.post('/dat-linh-hoat', datSanController.datSanLinhHoat);
+router.post('/checkin-linh-hoat', datSanController.batDauDaLinhHoat);
+router.post('/checkout-linh-hoat', datSanController.ketThucDaLinhHoat);
+
 // Hủy đơn đặt sân và hoàn cọc (sp_HuyDonVaHoanCoc)
 router.post('/huy-don', datSanController.huyDonVaHoanCoc);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Head from 'next/head';
 import {
   Calendar,
@@ -23,7 +23,6 @@ import {
   ChevronRight,
   Info,
   X,
-  CreditCard,
   DollarSign,
   Activity,
   SlidersHorizontal,
@@ -31,43 +30,46 @@ import {
   Sun,
   Moon,
   ArrowLeft,
-  QrCode
+  QrCode,
+  RefreshCw
 } from 'lucide-react';
-import Login from '../Login/login';
+import Login, { AuthUser } from '../Login/login';
 import Profile from '../profile/profile';
 
 // =====================================================================
-// 1. ĐỊNH NGHĨA INTERFACES & KIỂU DỮ LIỆU (MAPPING TỪ DATABASE SQL SERVER)
+// 1. ĐỊNH NGHĨA INTERFACES & KIỂU DỮ LIỆU (MAPPING TỪ CSDL SQL SERVER)
 // =====================================================================
 
 /**
- * Interface Loại Sân - Tương ứng bảng Loai_San trong CSDL
- * Mapping: id, ten_loai, mo_ta, gia_co_ban, trang_thai
+ * Interface Loại Sân - Tương ứng bảng Loai_San trong CSDL SQL Server
  */
 interface LoaiSan {
   id: number;
   ten_loai: string;
   mo_ta: string;
   gia_co_ban: number;
+  trang_thai?: boolean;
 }
 
 /**
- * Interface Sân Bóng - Tương ứng bảng San_Bong & sp_LayDanhSachSan
- * Mapping: id, ma_loai_san, ten_san, hinh_anh, trang_thai ('SAN_SANG' | 'BAO_TRI')
+ * Interface Sân Bóng - Tương ứng bảng San_Bong & thủ tục sp_LayDanhSachSan
  */
 interface SanBong {
   id: number;
   ma_loai_san: number;
   ten_san: string;
   ten_loai: string;
+  hinh_anh?: string;
+  mo_ta?: string;
+  gia_co_ban?: number;
   trang_thai: 'SAN_SANG' | 'BAO_TRI';
 }
 
 /**
- * Trạng thái slot giờ đá (Mapping từ Don_Dat_San và sp_LayLichSan):
- * - TRONG (Xanh lá): Sân còn trống, khách có thể click đặt sân ngay
- * - CHO_XAC_NHAN (Vàng): Đang có khách giữ chỗ, chờ duyệt cọc (Trong vòng 15-30 phút)
- * - DA_CHOT (Đỏ): Đã thanh toán cọc/chốt lịch hoặc đã hoàn thành, không thể đặt
+ * Trạng thái slot giờ đá (Mapping từ Don_Dat_San và sp_LayLichSan trong SQL Server):
+ * - TRONG: Sân còn trống trong CSDL, khách có thể click đặt sân ngay
+ * - CHO_XAC_NHAN: Đang có khách giữ chỗ cọc trong CSDL
+ * - DA_CHOT: Đã chốt đơn trong CSDL
  */
 type TrangThaiSlot = 'TRONG' | 'CHO_XAC_NHAN' | 'DA_CHOT';
 
@@ -82,7 +84,7 @@ interface SlotLichSan {
 }
 
 /**
- * Interface Dịch Vụ Đi Kèm - Tương ứng bảng Dich_Vu
+ * Interface Dịch Vụ Đi Kèm - Tương ứng bảng Dich_Vu trong CSDL SQL Server
  */
 interface DichVu {
   id: number;
@@ -90,45 +92,26 @@ interface DichVu {
   don_gia: number;
   don_vi_tinh: string;
   ton_kho: number;
-  icon: string;
 }
 
 /**
- * Interface Khung Giờ & Bảng Giá - Tương ứng bảng Khung_Gio_Gia
+ * Interface Khung Giờ & Bảng Giá - Tương ứng bảng Khung_Gio_Gia trong SQL Server
  */
-interface BangGiaKhungGio {
+interface KhungGioGiaItem {
   id: number;
+  ma_loai_san: number;
   ten_loai: string;
-  gio_thuong: string;
-  gia_thuong: number;
-  gio_vang: string;
-  gia_vang: number;
-  gia_cuoi_tuan: number;
+  gio_bat_dau: string;
+  gio_ket_thuc: string;
+  la_cuoi_tuan: boolean;
+  don_gia: number;
 }
 
-// =====================================================================
-// 2. DỮ LIỆU MOCK KHỞI TẠO (GIẢ LẬP KẾT QUẢ TỪ BACKEND & STORED PROCEDURES)
-// =====================================================================
+// Cấu hình URL Backend API Express kết nối trực tiếp CSDL SQL Server
+const API_BASE_URL = 'http://localhost:5000/api';
 
-const MOCK_LOAI_SAN: LoaiSan[] = [
-  { id: 1, ten_loai: 'Sân 5 người', mo_ta: 'Cỏ nhân tạo FIFA tiêu chuẩn, hệ thống đèn LED chống chói', gia_co_ban: 250000 },
-  { id: 2, ten_loai: 'Sân 7 người', mo_ta: 'Mặt cỏ mềm cao cấp, khu vực khán đài rộng rãi', gia_co_ban: 450000 },
-  { id: 3, ten_loai: 'Sân Pickleball', mo_ta: 'Mặt sân cao su chuẩn quốc tế, lưới và vạch kẻ chuẩn thi đấu', gia_co_ban: 180000 },
-  { id: 4, ten_loai: 'Sân Cầu lông', mo_ta: 'Sàn gỗ chuyên dụng trong nhà, chống trơn trượt tối đa', gia_co_ban: 120000 },
-];
-
-const MOCK_SAN_BONG: SanBong[] = [
-  { id: 1, ma_loai_san: 1, ten_san: 'Sân 5A (Cỏ nhân tạo)', ten_loai: 'Sân 5 người', trang_thai: 'SAN_SANG' },
-  { id: 2, ma_loai_san: 1, ten_san: 'Sân 5B (Cỏ nhân tạo)', ten_loai: 'Sân 5 người', trang_thai: 'SAN_SANG' },
-  { id: 3, ma_loai_san: 1, ten_san: 'Sân 5C (VIP)', ten_loai: 'Sân 5 người', trang_thai: 'SAN_SANG' },
-  { id: 4, ma_loai_san: 2, ten_san: 'Sân 7A (Sân lớn)', ten_loai: 'Sân 7 người', trang_thai: 'SAN_SANG' },
-  { id: 5, ma_loai_san: 2, ten_san: 'Sân 7B (Sân lớn)', ten_loai: 'Sân 7 người', trang_thai: 'SAN_SANG' },
-  { id: 6, ma_loai_san: 3, ten_san: 'Pickleball 01 (Indoor)', ten_loai: 'Sân Pickleball', trang_thai: 'SAN_SANG' },
-  { id: 7, ma_loai_san: 3, ten_san: 'Pickleball 02 (Outdoor)', ten_loai: 'Sân Pickleball', trang_thai: 'SAN_SANG' },
-  { id: 8, ma_loai_san: 4, ten_san: 'Cầu lông 01 (Trong nhà)', ten_loai: 'Sân Cầu lông', trang_thai: 'SAN_SANG' },
-];
-
-const MOCK_TIME_SLOTS = [
+// Danh sách các khung giờ đá tiêu chuẩn trong ngày
+const TIME_SLOTS = [
   { start: '15:00', end: '16:30', isGold: false },
   { start: '16:30', end: '18:00', isGold: true },
   { start: '18:00', end: '19:30', isGold: true },
@@ -136,102 +119,39 @@ const MOCK_TIME_SLOTS = [
   { start: '21:00', end: '22:30', isGold: false },
 ];
 
-// Tạo mock lịch đặt sân ban đầu với đủ 3 trạng thái Xanh/Vàng/Đỏ
-const generateInitialGridSlots = (): Record<string, SlotLichSan> => {
-  const grid: Record<string, SlotLichSan> = {};
-
-  MOCK_SAN_BONG.forEach((san) => {
-    MOCK_TIME_SLOTS.forEach((slot, index) => {
-      const key = `${san.id}_${slot.start}`;
-      // Giả lập phân bổ trạng thái trực quan
-      let trangThai: TrangThaiSlot = 'TRONG';
-      let khachHang = '';
-
-      if (san.id === 1 && slot.start === '18:00') {
-        trangThai = 'DA_CHOT';
-        khachHang = 'FC Anh Em (Nguyễn Văn A)';
-      } else if (san.id === 1 && slot.start === '19:30') {
-        trangThai = 'CHO_XAC_NHAN';
-        khachHang = 'Trần Hải Đăng (Đang cọc)';
-      } else if (san.id === 4 && slot.start === '18:00') {
-        trangThai = 'DA_CHOT';
-        khachHang = 'CLB Doanh Nhân Trẻ';
-      } else if (san.id === 6 && slot.start === '16:30') {
-        trangThai = 'DA_CHOT';
-        khachHang = 'Hội Pickleball SG';
-      } else if (san.id === 2 && slot.start === '19:30') {
-        trangThai = 'CHO_XAC_NHAN';
-        khachHang = 'FC IT Lương Sơn';
-      } else if (index === 2 && san.id % 2 === 0) {
-        trangThai = 'DA_CHOT';
-        khachHang = 'Khách đặt qua Hotline';
-      }
-
-      const loai = MOCK_LOAI_SAN.find((l) => l.id === san.ma_loai_san);
-      const giaCoBan = loai ? loai.gia_co_ban : 200000;
-      const giaApDung = slot.isGold ? Math.round(giaCoBan * 1.35) : giaCoBan;
-
-      grid[key] = {
-        ma_san: san.id,
-        gio_bat_dau: slot.start,
-        gio_ket_thuc: slot.end,
-        trang_thai: trangThai,
-        ten_khach_hang: khachHang,
-        gia_ap_dung: giaApDung,
-      };
-    });
-  });
-
-  return grid;
-};
-
-const MOCK_DICH_VU: DichVu[] = [
-  { id: 1, ten_dich_vu: 'Nước lọc / Nước suối Aquafina', don_gia: 10000, don_vi_tinh: 'Chai', ton_kho: 150, icon: 'water' },
-  { id: 2, ten_dich_vu: 'Nước tăng lực Revive chanh muối', don_gia: 20000, don_vi_tinh: 'Chai', ton_kho: 80, icon: 'coffee' },
-  { id: 3, ten_dich_vu: 'Nước điện giải Pocari Sweat', don_gia: 25000, don_vi_tinh: 'Chai', ton_kho: 60, icon: 'coffee' },
-  { id: 4, ten_dich_vu: 'Thuê bộ áo Bib phân đội (10 áo)', don_gia: 30000, don_vi_tinh: 'Bộ / Trận', ton_kho: 20, icon: 'shirt' },
-  { id: 5, ten_dich_vu: 'Thuê giày đá bóng sân cỏ nhân tạo', don_gia: 40000, don_vi_tinh: 'Đôi / Trận', ton_kho: 35, icon: 'shirt' },
-  { id: 6, ten_dich_vu: 'Thuê trọng tài bắt trận chuyên nghiệp', don_gia: 200000, don_vi_tinh: 'Người / Trận', ton_kho: 5, icon: 'award' },
-];
-
-const MOCK_BANG_GIA: BangGiaKhungGio[] = [
-  { id: 1, ten_loai: 'Sân Bóng Đá 5 Người', gio_thuong: '06:00 - 16:30 & 21:00 - 23:00', gia_thuong: 250000, gio_vang: '16:30 - 21:00 (Khung Giờ Vàng)', gia_vang: 350000, gia_cuoi_tuan: 380000 },
-  { id: 2, ten_loai: 'Sân Bóng Đá 7 Người', gio_thuong: '06:00 - 16:30 & 21:00 - 23:00', gia_thuong: 450000, gio_vang: '16:30 - 21:00 (Khung Giờ Vàng)', gia_vang: 650000, gia_cuoi_tuan: 700000 },
-  { id: 3, ten_loai: 'Sân Thể Thao Pickleball', gio_thuong: '06:00 - 16:30 & 21:00 - 23:00', gia_thuong: 180000, gio_vang: '16:30 - 21:00 (Khung Giờ Vàng)', gia_vang: 260000, gia_cuoi_tuan: 280000 },
-  { id: 4, ten_loai: 'Sân Cầu Lông Trong Nhà', gio_thuong: '06:00 - 16:30 & 21:00 - 23:00', gia_thuong: 120000, gio_vang: '16:30 - 21:00 (Khung Giờ Vàng)', gia_vang: 180000, gia_cuoi_tuan: 200000 },
-];
-
 // =====================================================================
-// 3. COMPONENT TRANG CHỦ CHÍNH (HOMEPAGE COMPONENT)
+// 2. COMPONENT TRANG CHỦ CHÍNH (HOMEPAGE COMPONENT)
 // =====================================================================
 
 export default function HomePage() {
   // -------------------------------------------------------------
-  // A. CÁC STATE QUẢN LÝ DỮ LIỆU & GIAO DIỆN
+  // A. CÁC STATE QUẢN LÝ DỮ LIỆU THỰC TỪ SQL SERVER
   // -------------------------------------------------------------
 
-  // 0. State Chuyển đổi Giao diện Sáng / Tối (Light / Dark Mode)
+  // Chuyển đổi Giao diện Sáng / Tối
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
-  // 1. State xác thực người dùng (JWT Auth):
-  // Mô phỏng token lưu trong localStorage/Cookies và user profile từ Backend Express (sp_DangNhap / sp_LayThongTinNguoiDung)
-  const [currentUser, setCurrentUser] = useState<{
-    id: number;
-    ho_ten: string;
-    email: string;
-    so_dien_thoai: string;
-    vai_tro: string;
-    anh_dai_dien?: string;
-  } | null>(null);
+  // Danh sách dữ liệu nạp trực tiếp từ SQL Server
+  const [loaiSanList, setLoaiSanList] = useState<LoaiSan[]>([]);
+  const [sanBongList, setSanBongList] = useState<SanBong[]>([]);
+  const [dichVuList, setDichVuList] = useState<DichVu[]>([]);
+  const [khungGioGiaList, setKhungGioGiaList] = useState<KhungGioGiaItem[]>([]);
+  
+  // Lưới ma trận slot lịch sân (Được tổng hợp từ San_Bong + sp_LayLichSan SQL Server)
+  const [gridSlots, setGridSlots] = useState<Record<string, SlotLichSan>>({});
 
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  // Trạng thái tải dữ liệu từ SQL Server
+  const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+
+  // State xác thực người dùng đã đăng nhập (Lưu từ SQL Server)
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [userDropdownOpen, setUserDropdownOpen] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
 
-  // State tìm kiếm nhanh tên sân tại Top Navbar
+  // State tìm kiếm nhanh tên sân tại Navbar
   const [searchCourtName, setSearchCourtName] = useState<string>('');
 
-  // 2. State Bộ lọc Đặt sân nhanh (Hero Section Booking Bar):
-  // Dùng để gọi API GET /api/dat-san/lich-san?ngay_da=...&ma_loai_san=... (sp_LayLichSan)
+  // State Bộ lọc Đặt sân nhanh (Loại sân & Ngày đá)
   const [filterLoaiSan, setFilterLoaiSan] = useState<string>('ALL');
   const [filterNgayDa, setFilterNgayDa] = useState<string>(() => {
     const today = new Date();
@@ -239,10 +159,7 @@ export default function HomePage() {
   });
   const [filterKhungGio, setFilterKhungGio] = useState<string>('ALL');
 
-  // 3. State Lưới Lịch Sân Thời Gian Thực (Ma trận Grid Slot)
-  const [gridSlots, setGridSlots] = useState<Record<string, SlotLichSan>>(generateInitialGridSlots);
-
-  // 4. State Quản lý Modal Đặt Sân Tương Tác
+  // State Quản lý Modal Đặt Sân
   const [selectedSlot, setSelectedSlot] = useState<{
     san: SanBong;
     slot: { start: string; end: string; isGold: boolean };
@@ -254,15 +171,15 @@ export default function HomePage() {
 
   // Form thông tin khách đặt sân trong Modal
   const [bookingForm, setBookingForm] = useState({
-    ho_ten: currentUser?.ho_ten || '',
-    so_dien_thoai: currentUser?.so_dien_thoai || '',
+    ho_ten: '',
+    so_dien_thoai: '',
     ghi_chu: '',
-    loai_thanh_toan: 'DAT_COC', // 'DAT_COC' (Cọc 30%) | 'TRA_HET' (100%)
+    loai_thanh_toan: 'DAT_COC', // 'DAT_COC' (30%) | 'TRA_HET' (100%)
     dich_vu_chon: {} as Record<number, number>, // ma_dich_vu -> so_luong
   });
 
-  // State thông báo Toast & Trạng thái Loading
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // State thông báo Toast & Trạng thái gửi đơn
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
   // Tự động đóng Toast sau 4 giây
@@ -273,71 +190,228 @@ export default function HomePage() {
     }
   }, [toastMessage]);
 
+  // Khôi phục thông tin người dùng từ localStorage khi tải trang
+  useEffect(() => {
+    try {
+      const savedAuthUser = localStorage.getItem('auth_user');
+      if (savedAuthUser) {
+        const parsed: AuthUser = JSON.parse(savedAuthUser);
+        setCurrentUser(parsed);
+      }
+    } catch (e) {
+      console.error('Lỗi khi đọc auth_user:', e);
+    }
+  }, []);
+
   // Cập nhật form khách hàng khi currentUser thay đổi
   useEffect(() => {
     if (currentUser) {
       setBookingForm((prev) => ({
         ...prev,
-        ho_ten: currentUser.ho_ten,
-        so_dien_thoai: currentUser.so_dien_thoai,
+        ho_ten: currentUser.ho_ten || '',
+        so_dien_thoai: currentUser.so_dien_thoai || '',
       }));
     }
   }, [currentUser]);
 
   // -------------------------------------------------------------
-  // B. CÁC HÀM XỬ LÝ SỰ KIỆN & GỌI API BACKEND EXPRESS (JWT & STORED PROCEDURES)
+  // B. HÀM TẢI DỮ LIỆU THỰC TỪ CSDL SQL SERVER QUA BACKEND API
   // -------------------------------------------------------------
 
-  /**
-   * Chú thích kiến trúc API:
-   * Khi gọi Backend Express thật, ta sẽ truyền JWT token qua header:
-   * Authorization: `Bearer ${localStorage.getItem('token')}`
-   * 
-   * Backend nhận request -> Xác thực verifyToken -> Lấy ma_nguoi_dung từ JWT ->
-   * Thực thi Stored Procedure SQL Server tương ứng (sp_LayLichSan, sp_DatSan, sp_TaoThanhToan)
-   */
+  // 1. Tải danh mục Loại sân (sp_LayDanhSachLoaiSan)
+  const fetchLoaiSan = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/dat-san/loai-san`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setLoaiSanList(data.data);
+      }
+    } catch (err) {
+      console.error('Lỗi fetch loại sân từ SQL Server:', err);
+    }
+  };
 
-  // Lọc danh sách sân theo loại sân và từ khóa tìm kiếm tên sân trên Top Header
+  // 2. Tải danh sách Sân bóng (sp_LayDanhSachSan)
+  const fetchSanBong = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/dat-san/danh-sach-san`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setSanBongList(data.data);
+      }
+    } catch (err) {
+      console.error('Lỗi fetch danh sách sân từ SQL Server:', err);
+    }
+  };
+
+  // 3. Tải danh sách Dịch vụ đi kèm (sp_LayDanhSachDichVu)
+  const fetchDichVu = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/dich-vu`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setDichVuList(data.data);
+      }
+    } catch (err) {
+      console.error('Lỗi fetch dịch vụ từ SQL Server:', err);
+    }
+  };
+
+  // 4. Tải danh sách Khung giờ giá (sp_LayKhungGioGia)
+  const fetchKhungGioGia = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/dat-san/khung-gio-gia`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setKhungGioGiaList(data.data);
+      }
+    } catch (err) {
+      console.error('Lỗi fetch khung giờ giá từ SQL Server:', err);
+    }
+  };
+
+  // 5. Tải ma trận Lịch đặt sân theo ngày thực từ SQL Server (sp_LayLichSan)
+  const fetchLichSan = useCallback(async (ngay: string, currentSanList: SanBong[]) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/dat-san/lich-san?ngay_da=${ngay}`);
+      const data = await res.json();
+      const bookings = data.success && Array.isArray(data.data) ? data.data : [];
+
+      // Tạo ma trận grid kết hợp danh sách sân thật và đơn đặt thật trong SQL Server
+      const newGrid: Record<string, SlotLichSan> = {};
+
+      currentSanList.forEach((san) => {
+        TIME_SLOTS.forEach((slot) => {
+          const key = `${san.id}_${slot.start}`;
+
+          // Kiểm tra xem trong SQL Server đã có đơn đặt trùng mã sân và giờ bắt đầu chưa
+          const matchedBooking = bookings.find((b: { ma_san: number; gio_bat_dau: string; trang_thai: string; ten_khach_hang?: string; id?: number }) => {
+            const startClean = (b.gio_bat_dau || '').substring(0, 5);
+            return b.ma_san === san.id && startClean === slot.start && b.trang_thai !== 'DA_HUY';
+          });
+
+          let trangThai: TrangThaiSlot = 'TRONG';
+          let khachHang = '';
+          let maDon: number | undefined = undefined;
+
+          if (matchedBooking) {
+            if (matchedBooking.trang_thai === 'DA_CHOT' || matchedBooking.trang_thai === 'HOAN_THANH') {
+              trangThai = 'DA_CHOT';
+            } else {
+              trangThai = 'CHO_XAC_NHAN';
+            }
+            khachHang = matchedBooking.ten_khach_hang || 'Khách đặt qua hệ thống';
+            maDon = matchedBooking.id;
+          }
+
+          // Tính giá áp dụng dựa trên giá cơ bản của sân trong CSDL
+          const giaCoBan = san.gia_co_ban || 200000;
+          const giaApDung = slot.isGold ? Math.round(giaCoBan * 1.35) : giaCoBan;
+
+          newGrid[key] = {
+            ma_san: san.id,
+            gio_bat_dau: slot.start,
+            gio_ket_thuc: slot.end,
+            trang_thai: trangThai,
+            ten_khach_hang: khachHang,
+            ma_don_dat: maDon,
+            gia_ap_dung: giaApDung,
+          };
+        });
+      });
+
+      setGridSlots(newGrid);
+    } catch (err) {
+      console.error('Lỗi khi tải lịch đặt sân từ SQL Server:', err);
+    }
+  }, []);
+
+  // Tải toàn bộ dữ liệu ban đầu từ Backend SQL Server khi Component khởi tạo
+  useEffect(() => {
+    const loadAllInitialData = async () => {
+      setIsLoadingData(true);
+      await Promise.all([
+        fetchLoaiSan(),
+        fetchSanBong(),
+        fetchDichVu(),
+        fetchKhungGioGia()
+      ]);
+      setIsLoadingData(false);
+    };
+
+    loadAllInitialData();
+  }, []);
+
+  // Cập nhật ma trận lịch sân khi danh sách sân bóng hoặc ngày đá thay đổi
+  useEffect(() => {
+    if (sanBongList.length > 0) {
+      fetchLichSan(filterNgayDa, sanBongList);
+    }
+  }, [filterNgayDa, sanBongList, fetchLichSan]);
+
+  // -------------------------------------------------------------
+  // C. CÁC HÀM XỬ LÝ SỰ KIỆN TƯƠNG TÁC GIAO DIỆN
+  // -------------------------------------------------------------
+
+  // Lọc danh sách sân theo loại sân và từ khóa tìm kiếm tên sân
   const filteredSanList = useMemo(() => {
-    let list = MOCK_SAN_BONG;
+    let list = sanBongList;
     if (filterLoaiSan !== 'ALL') {
       list = list.filter((s) => s.ma_loai_san === Number(filterLoaiSan));
     }
     if (searchCourtName.trim()) {
       const q = searchCourtName.toLowerCase().trim();
-      list = list.filter((s) => s.ten_san.toLowerCase().includes(q) || s.ten_loai.toLowerCase().includes(q));
+      list = list.filter((s) => s.ten_san.toLowerCase().includes(q) || (s.ten_loai && s.ten_loai.toLowerCase().includes(q)));
     }
     return list;
-  }, [filterLoaiSan, searchCourtName]);
+  }, [sanBongList, filterLoaiSan, searchCourtName]);
 
   // Lọc danh sách khung giờ hiển thị trên ma trận
   const filteredTimeSlots = useMemo(() => {
-    if (filterKhungGio === 'ALL') return MOCK_TIME_SLOTS;
-    return MOCK_TIME_SLOTS.filter((s) => s.start === filterKhungGio);
+    if (filterKhungGio === 'ALL') return TIME_SLOTS;
+    return TIME_SLOTS.filter((s) => s.start === filterKhungGio);
   }, [filterKhungGio]);
+
+  // Nhóm bảng giá theo từng loại sân từ SQL Server
+  const groupedBangGia = useMemo(() => {
+    return loaiSanList.map((loai) => {
+      const giaCoBan = loai.gia_co_ban;
+      const giaVang = Math.round(giaCoBan * 1.4);
+      const giaCuoiTuan = Math.round(giaCoBan * 1.5);
+      return {
+        id: loai.id,
+        ten_loai: loai.ten_loai,
+        mo_ta: loai.mo_ta,
+        gio_thuong: '06:00 - 16:30 & 21:00 - 23:00',
+        gia_thuong: giaCoBan,
+        gio_vang: '16:30 - 21:00 (Khung Giờ Vàng)',
+        gia_vang: giaVang,
+        gia_cuoi_tuan: giaCuoiTuan,
+      };
+    });
+  }, [loaiSanList]);
 
   // Xử lý khi bấm nút "🔍 TÌM SÂN TRỐNG" tại Hero Section
   const handleSearchAvailableSlots = (e: React.FormEvent) => {
     e.preventDefault();
+    fetchLichSan(filterNgayDa, sanBongList);
     setToastMessage({
       type: 'info',
-      message: `Đang cập nhật lịch sân ngày ${filterNgayDa}...`,
+      message: `Đang cập nhật lịch sân thực tế từ CSDL cho ngày ${filterNgayDa}...`,
     });
 
-    // Cuộn mượt xuống khu vực ma trận lịch sân
     const matrixElement = document.getElementById('ma-tran-lich-san');
     if (matrixElement) {
       matrixElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
-  // Mở Modal đặt sân khi click vào ô Slot Xanh Lá
+  // Mở Modal đặt sân khi click vào ô Slot Sân Trống
   const handleSlotClick = (san: SanBong, slot: { start: string; end: string; isGold: boolean }) => {
     const slotData = gridSlots[`${san.id}_${slot.start}`];
 
     if (!slotData || slotData.trang_thai === 'TRONG') {
-      const loai = MOCK_LOAI_SAN.find((l) => l.id === san.ma_loai_san);
-      const giaCoBan = loai ? loai.gia_co_ban : 200000;
+      const giaCoBan = san.gia_co_ban || 200000;
       const giaTien = slot.isGold ? Math.round(giaCoBan * 1.35) : giaCoBan;
 
       setSelectedSlot({
@@ -346,25 +420,26 @@ export default function HomePage() {
         giaTien,
       });
       setShowQR(false);
-      // Reset dịch vụ chọn
       setBookingForm((prev) => ({
         ...prev,
+        ho_ten: currentUser?.ho_ten || prev.ho_ten || '',
+        so_dien_thoai: currentUser?.so_dien_thoai || prev.so_dien_thoai || '',
         dich_vu_chon: {},
       }));
     } else if (slotData.trang_thai === 'CHO_XAC_NHAN') {
       setToastMessage({
         type: 'info',
-        message: `Khung giờ ${slot.start} - ${slot.end} của ${san.ten_san} đang có người giữ chỗ cọc. Vui lòng chọn ô khác hoặc quay lại sau 15 phút!`,
+        message: `Khung giờ ${slot.start} - ${slot.end} của ${san.ten_san} đang có người giữ chỗ cọc. Vui lòng chọn ô khác!`,
       });
     } else {
       setToastMessage({
         type: 'error',
-        message: `Khung giờ ${slot.start} - ${slot.end} của ${san.ten_san} đã được chốt đặt. Vui lòng chọn khung giờ khác!`,
+        message: `Khung giờ ${slot.start} - ${slot.end} của ${san.ten_san} đã được chốt lịch trong CSDL. Vui lòng chọn khung giờ khác!`,
       });
     }
   };
 
-  // Thay đổi số lượng dịch vụ chọn trong Modal
+  // Thay đổi số lượng dịch vụ chọn thêm
   const handleQuantityChange = (dichVuId: number, delta: number) => {
     setBookingForm((prev) => {
       const current = prev.dich_vu_chon[dichVuId] || 0;
@@ -379,13 +454,13 @@ export default function HomePage() {
     });
   };
 
-  // Tính toán tổng tiền: Tiền sân + Tổng tiền dịch vụ chọn thêm
+  // Tính toán tổng tiền: Tiền sân + Tiền dịch vụ
   const { tongTienDichVu, tongTienDon, soTienThanhToan } = useMemo(() => {
     if (!selectedSlot) return { tongTienDichVu: 0, tongTienDon: 0, soTienThanhToan: 0 };
 
     let tienDv = 0;
     Object.entries(bookingForm.dich_vu_chon).forEach(([dvId, qty]) => {
-      const dv = MOCK_DICH_VU.find((d) => d.id === Number(dvId));
+      const dv = dichVuList.find((d) => d.id === Number(dvId));
       if (dv) {
         tienDv += dv.don_gia * qty;
       }
@@ -393,7 +468,6 @@ export default function HomePage() {
 
     const tienSan = selectedSlot.giaTien;
     const tong = tienSan + tienDv;
-    // Cọc 30% tổng đơn hoặc thanh toán đủ 100%
     const thanhToan = bookingForm.loai_thanh_toan === 'DAT_COC' ? Math.round(tong * 0.3) : tong;
 
     return {
@@ -401,9 +475,9 @@ export default function HomePage() {
       tongTienDon: tong,
       soTienThanhToan: thanhToan,
     };
-  }, [selectedSlot, bookingForm.dich_vu_chon, bookingForm.loai_thanh_toan]);
+  }, [selectedSlot, bookingForm.dich_vu_chon, bookingForm.loai_thanh_toan, dichVuList]);
 
-  // Chuyển sang màn hình Quét mã QR thanh toán khi bấm "XÁC NHẬN ĐẶT SÂN NGAY"
+  // Chuyển sang màn hình Quét mã QR thanh toán
   const handleProceedToQR = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSlot) return;
@@ -419,28 +493,42 @@ export default function HomePage() {
     setShowQR(true);
   };
 
-  // Xử lý gửi đơn đặt sân khi khách xác nhận "Tôi đã chuyển khoản thành công" (Giao tiếp API Backend Express -> sp_DatSan & sp_TaoThanhToan)
+  // Xử lý gửi đơn đặt sân LƯU TRỰC TIẾP VÀO SQL SERVER (Stored Procedure sp_DatSan)
   const handleConfirmPayment = async () => {
     if (!selectedSlot) return;
 
     setIsSubmitting(true);
 
-    // Giả lập độ trễ mạng xử lý gọi API 800ms
-    setTimeout(() => {
-      const slotKey = `${selectedSlot.san.id}_${selectedSlot.slot.start}`;
-
-      // Cập nhật trạng thái slot thành VÀNG (Chờ duyệt cọc) hoặc ĐỎ nếu chuyển khoản đủ
-      setGridSlots((prev) => ({
-        ...prev,
-        [slotKey]: {
+    try {
+      // Gửi yêu cầu POST lên API Backend Express -> Thực thi sp_DatSan trong SQL Server
+      const res = await fetch(`${API_BASE_URL}/dat-san`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ma_nguoi_dung: currentUser?.id || 1,
           ma_san: selectedSlot.san.id,
+          ngay_da: filterNgayDa,
           gio_bat_dau: selectedSlot.slot.start,
           gio_ket_thuc: selectedSlot.slot.end,
-          trang_thai: bookingForm.loai_thanh_toan === 'DAT_COC' ? 'CHO_XAC_NHAN' : 'DA_CHOT',
-          ten_khach_hang: bookingForm.ho_ten,
-          gia_ap_dung: selectedSlot.giaTien,
-        },
-      }));
+          tien_san: selectedSlot.giaTien,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setToastMessage({
+          type: 'error',
+          message: data.message || '⚠️ Lỗi khi lưu đơn đặt sân vào CSDL!',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Đặt sân thành công -> Tải lại lịch sân trực tiếp từ CSDL SQL Server
+      await fetchLichSan(filterNgayDa, sanBongList);
 
       setIsSubmitting(false);
       setShowQR(false);
@@ -448,9 +536,27 @@ export default function HomePage() {
 
       setToastMessage({
         type: 'success',
-        message: `🎉 Đặt sân & chuyển khoản thành công! Mã đơn của bạn đã được ghi nhận cho ${bookingForm.ho_ten}.`,
+        message: `🎉 Đặt sân thành công và đã lưu vào CSDL SQL Server cho khách hàng ${bookingForm.ho_ten}!`,
       });
-    }, 800);
+    } catch (err) {
+      console.error('Lỗi khi gửi đơn đặt sân lên SQL Server:', err);
+      setToastMessage({
+        type: 'error',
+        message: '❌ Không thể kết nối đến máy chủ Backend SQL Server để lưu đơn đặt!',
+      });
+      setIsSubmitting(false);
+    }
+  };
+
+  // Xử lý Đăng xuất
+  const handleLogout = () => {
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('soccer_current_user');
+    setCurrentUser(null);
+    setUserDropdownOpen(false);
+    setIsProfileModalOpen(false);
+    setToastMessage({ type: 'info', message: 'Đã đăng xuất tài khoản thành công.' });
   };
 
   return (
@@ -460,7 +566,7 @@ export default function HomePage() {
         <title>Soccer247 - Hệ Thống Đặt Sân Thể Thao Trực Tuyến 24/7</title>
         <meta
           name="description"
-          content="Đặt sân bóng đá cỏ nhân tạo 5 người, 7 người, Pickleball và Cầu lông chuyên nghiệp. Kiểm tra lịch sân trống thời gian thực, bảng giá minh bạch, cọc an toàn nhanh chóng."
+          content="Đặt sân bóng đá cỏ nhân tạo 5 người, 7 người, Pickleball và Cầu lông trực tuyến kết nối CSDL SQL Server thời gian thực."
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
@@ -538,16 +644,16 @@ export default function HomePage() {
                 ) : (
                   <kbd className={`hidden lg:inline-block absolute right-3 px-1.5 py-0.5 rounded text-[10px] font-mono border ${isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-200 text-slate-600 border-slate-300'
                     }`}>
-                    Live
+                    SQL Live
                   </kbd>
                 )}
               </div>
             </div>
 
-            {/* CỤM NÚT PHẢI: NÚT SÁNG/TỐI (TẠI VỊ TRÍ KHOANH TRÒN) + ĐẶT SÂN NHANH + ĐĂNG NHẬP */}
+            {/* CỤM NÚT PHẢI: NÚT SÁNG/TỐI + ĐẶT SÂN NHANH + ĐĂNG NHẬP (SQL SERVER) */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
 
-              {/* NÚT CHUYỂN ĐỔI CHẾ ĐỘ SÁNG / TỐI (THEME TOGGLE) */}
+              {/* Nút Chuyển đổi Theme Sáng / Tối */}
               <button
                 type="button"
                 onClick={() => setIsDarkMode(!isDarkMode)}
@@ -573,22 +679,22 @@ export default function HomePage() {
                 <span>Đặt Sân Nhanh</span>
               </a>
 
-              {/* Khu vực User Profile / Đăng nhập (Xác thực JWT Express) */}
+              {/* Khu vực Người Dùng / Đăng nhập (Xác thực trực tiếp từ SQL Server) */}
               {currentUser ? (
                 <div className="relative">
                   <button
                     onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                    className={`flex items-center gap-2 p-1 sm:pr-3 rounded-full border transition-all ${isDarkMode
+                    className={`flex items-center gap-2 p-1 sm:pr-3 rounded-full border transition-all cursor-pointer ${isDarkMode
                       ? 'bg-slate-900 border-emerald-800/50 hover:border-emerald-500/60'
                       : 'bg-slate-100 border-slate-300 hover:border-emerald-500'
                       }`}
                   >
                     <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center font-bold text-slate-950 text-xs shadow-inner">
-                      {currentUser.ho_ten.charAt(0)}
+                      {currentUser.ho_ten ? currentUser.ho_ten.charAt(0).toUpperCase() : 'U'}
                     </div>
                     <div className="text-left hidden xl:block">
                       <p className={`text-xs font-semibold leading-tight ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{currentUser.ho_ten}</p>
-                      <p className="text-[10px] text-emerald-500 font-mono leading-none">Khách hàng VIP</p>
+                      <p className="text-[10px] text-emerald-500 font-mono leading-none">{currentUser.vai_tro || 'Khách hàng'}</p>
                     </div>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
                   </button>
@@ -598,38 +704,23 @@ export default function HomePage() {
                     <div className={`absolute right-0 mt-3 w-56 rounded-2xl border shadow-2xl p-2 z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
                       }`}>
                       <div className={`px-3 py-2.5 border-b mb-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                        <p className="text-[11px] text-slate-400">Đã đăng nhập email:</p>
+                        <p className="text-[11px] text-slate-400">Đã đăng nhập email CSDL:</p>
                         <p className="text-xs font-bold text-emerald-500 truncate">{currentUser.email}</p>
                       </div>
                       <button
                         onClick={() => {
                           setUserDropdownOpen(false);
-                          setToastMessage({ type: 'info', message: 'Mở trang Lịch sử đặt sân' });
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-colors text-left ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-800/60' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-100'
-                          }`}
-                      >
-                        <History className="w-4 h-4 text-emerald-500" />
-                        Lịch sử đặt sân
-                      </button>
-                      <button
-                        onClick={() => {
-                          setUserDropdownOpen(false);
                           setIsProfileModalOpen(true);
                         }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-colors text-left ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-800/60' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-100'
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-colors text-left cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-800/60' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-100'
                           }`}
                       >
                         <User className="w-4 h-4 text-emerald-500" />
                         Thông tin tài khoản
                       </button>
                       <button
-                        onClick={() => {
-                          setCurrentUser(null);
-                          setUserDropdownOpen(false);
-                          setToastMessage({ type: 'info', message: 'Đã đăng xuất tài khoản thành công.' });
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-500 rounded-xl transition-colors text-left mt-1 border-t ${isDarkMode ? 'hover:bg-rose-950/40 border-slate-800/60' : 'hover:bg-rose-50 border-slate-100'
+                        onClick={handleLogout}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-500 rounded-xl transition-colors text-left mt-1 border-t cursor-pointer ${isDarkMode ? 'hover:bg-rose-950/40 border-slate-800/60' : 'hover:bg-rose-50 border-slate-100'
                           }`}
                       >
                         <LogOut className="w-4 h-4 text-rose-500" />
@@ -641,16 +732,10 @@ export default function HomePage() {
               ) : (
                 <Login
                   onLoginSuccess={(user) => {
-                    setCurrentUser({
-                      id: 1,
-                      ho_ten: user.hoTen || user.email.split('@')[0],
-                      email: user.email,
-                      so_dien_thoai: '0988776655',
-                      vai_tro: 'KHACH_HANG',
-                    });
+                    setCurrentUser(user);
                     setToastMessage({
                       type: 'success',
-                      message: `🎉 Đăng nhập thành công! Chào mừng ${user.hoTen || user.email}.`,
+                      message: `🎉 Đăng nhập thành công từ CSDL SQL Server! Chào mừng ${user.ho_ten || user.email}.`,
                     });
                   }}
                 />
@@ -706,7 +791,7 @@ export default function HomePage() {
               </a>
             </nav>
 
-            {/* Thông tin hỗ trợ nhanh bên phải menu tầng 2 */}
+            {/* Thông tin hỗ trợ nhanh */}
             <div className="hidden md:flex items-center gap-4 text-[11px] font-semibold text-slate-400 shrink-0">
               <span className={`flex items-center gap-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                 <Phone className="w-3.5 h-3.5 text-emerald-500" />
@@ -731,17 +816,14 @@ export default function HomePage() {
           ? 'bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/40 via-slate-950 to-slate-950 border-emerald-950/40'
           : 'bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-100/60 via-slate-50 to-white border-slate-200'
           }`}>
-          {/* Hiệu ứng nền thể thao */}
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#0596690a_1px,transparent_1px),linear-gradient(to_bottom,#0596690a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none" />
-
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            {/* Tag thông báo nổi bật */}
+            {/* Tag thông báo */}
             <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider mb-6 backdrop-blur-md border ${isDarkMode
               ? 'bg-emerald-900/30 border-emerald-500/30 text-emerald-400'
               : 'bg-emerald-100 border-emerald-300 text-emerald-800'
               }`}>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              Hệ Thống Đặt Sân Thể Thao Trực Tuyến Hàng Đầu
+              Dữ Liệu Trực Tuyến Kết Nối SQL Server 24/7
             </div>
 
             {/* Headline chính */}
@@ -757,7 +839,7 @@ export default function HomePage() {
 
             <p className={`mt-6 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'
               }`}>
-              Trực quan hóa lịch đặt sân thời gian thực. Cỏ nhân tạo FIFA chuẩn thi đấu, đèn chiếu sáng 1000 Lux, giữ chỗ tự động không lo trùng lịch.
+              Trực quan hóa lịch đặt sân thời gian thực từ CSDL SQL Server. Hệ thống tự động đồng bộ trạng thái, giữ chỗ an toàn, không lo trùng lịch.
             </p>
 
             {/* BOOKING BAR NỔI BẬT Ở GIỮA */}
@@ -768,7 +850,7 @@ export default function HomePage() {
                 }`}>
                 <form onSubmit={handleSearchAvailableSlots} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-center">
 
-                  {/* Dropdown 1: Chọn Loại Sân (Bảng Loai_San) */}
+                  {/* Dropdown 1: Chọn Loại Sân (Bảng Loai_San thật từ SQL Server) */}
                   <div className={`flex flex-col text-left p-3 rounded-2xl border transition-colors ${isDarkMode ? 'bg-slate-950/80 border-slate-800 focus-within:border-emerald-500' : 'bg-slate-50 border-slate-200 focus-within:border-emerald-600'
                     }`}>
                     <label className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -781,8 +863,8 @@ export default function HomePage() {
                       className={`mt-1 bg-transparent text-sm font-semibold focus:outline-none cursor-pointer ${isDarkMode ? 'text-slate-100' : 'text-slate-900'
                         }`}
                     >
-                      <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>Tất cả môn (Sân 5, 7, Pickleball...)</option>
-                      {MOCK_LOAI_SAN.map((loai) => (
+                      <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>Tất cả loại sân ({loaiSanList.length} loại)</option>
+                      {loaiSanList.map((loai) => (
                         <option key={loai.id} value={loai.id} className={isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
                           {loai.ten_loai}
                         </option>
@@ -790,12 +872,12 @@ export default function HomePage() {
                     </select>
                   </div>
 
-                  {/* Input 2: Ô chọn Ngày đá (ngay_da) */}
+                  {/* Input 2: Ô chọn Ngày đá */}
                   <div className={`flex flex-col text-left p-3 rounded-2xl border transition-colors ${isDarkMode ? 'bg-slate-950/80 border-slate-800 focus-within:border-emerald-500' : 'bg-slate-50 border-slate-200 focus-within:border-emerald-600'
                     }`}>
                     <label className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Calendar className="w-3.5 h-3.5" />
-                      Ngày Đá (ngay_da)
+                      Ngày Đá
                     </label>
                     <input
                       type="date"
@@ -807,7 +889,7 @@ export default function HomePage() {
                     />
                   </div>
 
-                  {/* Dropdown 3: Dropdown chọn Khung giờ */}
+                  {/* Dropdown 3: Chọn Khung giờ */}
                   <div className={`flex flex-col text-left p-3 rounded-2xl border transition-colors ${isDarkMode ? 'bg-slate-950/80 border-slate-800 focus-within:border-emerald-500' : 'bg-slate-50 border-slate-200 focus-within:border-emerald-600'
                     }`}>
                     <label className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -820,8 +902,8 @@ export default function HomePage() {
                       className={`mt-1 bg-transparent text-sm font-semibold focus:outline-none cursor-pointer ${isDarkMode ? 'text-slate-100' : 'text-slate-900'
                         }`}
                     >
-                      <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>Tất cả khung giờ trong ngày</option>
-                      {MOCK_TIME_SLOTS.map((t) => (
+                      <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>Tất cả khung giờ</option>
+                      {TIME_SLOTS.map((t) => (
                         <option key={t.start} value={t.start} className={isDarkMode ? 'bg-slate-900 text-slate-100' : 'bg-white text-slate-900'}>
                           {t.start} - {t.end} {t.isGold ? '🔥 (Giờ Vàng)' : ''}
                         </option>
@@ -841,7 +923,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Thống kê nhanh dưới Booking Bar */}
+            {/* Thống kê cam kết */}
             <div className={`mt-8 flex flex-wrap items-center justify-center gap-6 sm:gap-12 text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'
               }`}>
               <div className="flex items-center gap-2">
@@ -850,35 +932,35 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                <span>Thanh toán bảo mật VNPay / MoMo</span>
+                <span>Thanh toán tự động VietQR</span>
               </div>
               <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-emerald-500" />
-                <span>Xác nhận tức thì không chờ đợi</span>
+                <span>Xác nhận tức thì qua Stored Procedure</span>
               </div>
             </div>
           </div>
         </section>
 
         {/* =====================================================================
-            3. MA TRẬN LỊCH SÂN THEO THỜI GIAN THỰC (SLOT GRID VISUALIZATION)
+            3. MA TRẬN LỊCH SÂN THEO THỜI GIAN THỰC TỪ SQL SERVER
             ===================================================================== */}
         <section id="ma-tran-lich-san" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
             <div>
               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">
                 <Activity className="w-4 h-4" />
-                Tính Năng Cốt Lõi Hệ Thống
+                Dữ Liệu Thực Tế SQL Server ({filterNgayDa})
               </div>
               <h2 className={`text-2xl sm:text-4xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                 Ma Trận Lịch Sân Theo Thời Gian Thực
               </h2>
               <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Đặt sân ngay.
+                Bấm vào các ô màu xanh lá để tiến hành chọn dịch vụ và đặt sân ngay.
               </p>
             </div>
 
-            {/* Bảng chú giải màu sắc trạng thái */}
+            {/* Bảng chú giải trạng thái */}
             <div className={`flex flex-wrap items-center gap-3 p-2.5 rounded-2xl border text-xs font-semibold ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
               }`}>
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-300">
@@ -896,144 +978,156 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* KHUNG BẢNG MA TRẬN GRID SYSTEM */}
+          {/* KHUNG BẢNG MA TRẬN GRID */}
           <div className={`overflow-x-auto rounded-3xl border shadow-2xl backdrop-blur-xl ${isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-white/90'
             }`}>
-            <table className="w-full text-left border-collapse min-w-[760px]">
-              <thead>
-                <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950/80' : 'border-slate-200 bg-slate-100/90'
-                  }`}>
-                  <th className={`p-4 sm:p-5 text-xs font-black uppercase tracking-wider w-56 sticky left-0 z-20 backdrop-blur-md ${isDarkMode ? 'text-slate-300 bg-slate-950/95' : 'text-slate-700 bg-slate-100/95'
+            {isLoadingData ? (
+              <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
+                <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
+                <p className="text-sm font-semibold">Đang tải dữ liệu thực từ CSDL SQL Server...</p>
+              </div>
+            ) : filteredSanList.length === 0 ? (
+              <div className="p-12 text-center text-slate-400">
+                <AlertCircle className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+                <p className="text-base font-bold">Không tìm thấy sân bóng nào phù hợp với bộ lọc!</p>
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse min-w-[760px]">
+                <thead>
+                  <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950/80' : 'border-slate-200 bg-slate-100/90'
                     }`}>
-                    Sân Bóng / Khung Giờ
-                  </th>
-                  {filteredTimeSlots.map((slot) => (
-                    <th key={slot.start} className={`p-4 text-center border-l ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
+                    <th className={`p-4 sm:p-5 text-xs font-black uppercase tracking-wider w-56 sticky left-0 z-20 backdrop-blur-md ${isDarkMode ? 'text-slate-300 bg-slate-950/95' : 'text-slate-700 bg-slate-100/95'
                       }`}>
-                      <div className={`text-sm font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{slot.start} - {slot.end}</div>
-                      {slot.isGold ? (
-                        <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30">
-                          🔥 Giờ Vàng
-                        </span>
-                      ) : (
-                        <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${isDarkMode ? 'text-slate-400 bg-slate-800/60' : 'text-slate-600 bg-slate-200'
-                          }`}>
-                          Giờ thường
-                        </span>
-                      )}
+                      Sân Bóng / Khung Giờ
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/60' : 'divide-slate-200'}`}>
-                {filteredSanList.map((san) => (
-                  <tr key={san.id} className={isDarkMode ? 'hover:bg-slate-800/20 transition-colors' : 'hover:bg-slate-50 transition-colors'}>
-                    {/* Cột Trục Dọc: Danh sách sân (San_Bong) */}
-                    <td className={`p-4 sm:p-5 sticky left-0 z-10 border-r backdrop-blur-md ${isDarkMode ? 'bg-slate-900/95 border-slate-800/80' : 'bg-white/95 border-slate-200'
-                      }`}>
-                      <div className={`font-extrabold text-sm sm:text-base flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-slate-900'
+                    {filteredTimeSlots.map((slot) => (
+                      <th key={slot.start} className={`p-4 text-center border-l ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
                         }`}>
-                        {san.ten_san}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{san.ten_loai}</span>
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        <span className="text-[11px] text-slate-400">Sẵn sàng</span>
-                      </div>
-                    </td>
-
-                    {/* Cột Trục Ngang: Các ô Slot ma trận thời gian */}
-                    {filteredTimeSlots.map((slot) => {
-                      const slotKey = `${san.id}_${slot.start}`;
-                      const slotData = gridSlots[slotKey];
-                      const status = slotData ? slotData.trang_thai : 'TRONG';
-
-                      return (
-                        <td key={slot.start} className={`p-2 sm:p-3 border-l text-center ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'
-                          }`}>
-                          {status === 'TRONG' && (
-                            <button
-                              onClick={() => handleSlotClick(san, slot)}
-                              className={`w-full h-20 p-2 rounded-2xl border transition-all duration-200 flex flex-col items-center justify-center gap-1 group shadow-sm hover:scale-[1.02] cursor-pointer ${isDarkMode
-                                ? 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-600/40 hover:border-emerald-400'
-                                : 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-300 hover:border-emerald-500'
-                                }`}
-                            >
-                              <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
-                                SÂN TRỐNG
-                              </span>
-                              <span className={`text-[11px] font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                {slotData ? `${slotData.gia_ap_dung.toLocaleString('vi-VN')} đ` : 'Chọn đặt'}
-                              </span>
-                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity font-bold">
-                                + Bấm Đặt Ngay
-                              </span>
-                            </button>
-                          )}
-
-                          {status === 'CHO_XAC_NHAN' && (
-                            <div
-                              onClick={() => handleSlotClick(san, slot)}
-                              className={`w-full h-20 p-2 rounded-2xl border flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${isDarkMode ? 'bg-amber-950/40 border-amber-500/40 hover:bg-amber-950/60' : 'bg-amber-50 border-amber-300 hover:bg-amber-100'
-                                }`}
-                            >
-                              <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-amber-600 dark:text-amber-400">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-                                GIỮ CHỖ
-                              </span>
-                              <span className={`text-[10px] font-medium truncate max-w-[110px] ${isDarkMode ? 'text-amber-200' : 'text-amber-800'
-                                }`}>
-                                {slotData.ten_khach_hang || 'Chờ duyệt cọc'}
-                              </span>
-                              <span className="text-[9px] text-amber-600 dark:text-amber-400/80 font-mono">15p giữ chỗ</span>
-                            </div>
-                          )}
-
-                          {status === 'DA_CHOT' && (
-                            <div className={`w-full h-20 p-2 rounded-2xl border flex flex-col items-center justify-center gap-1 opacity-70 cursor-not-allowed ${isDarkMode ? 'bg-rose-950/30 border-rose-900/40' : 'bg-rose-50 border-rose-200'
-                              }`}>
-                              <span className="text-[11px] font-bold text-rose-500 flex items-center gap-1">
-                                <XCircle className="w-3.5 h-3.5" />
-                                ĐÃ CHỐT
-                              </span>
-                              <span className="text-[10px] font-medium text-slate-500 truncate max-w-[110px]">
-                                {slotData.ten_khach_hang || 'Đang thi đấu'}
-                              </span>
-                              <span className="text-[9px] text-slate-400 font-mono">Không khả dụng</span>
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
+                        <div className={`text-sm font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{slot.start} - {slot.end}</div>
+                        {slot.isGold ? (
+                          <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30">
+                            🔥 Giờ Vàng
+                          </span>
+                        ) : (
+                          <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${isDarkMode ? 'text-slate-400 bg-slate-800/60' : 'text-slate-600 bg-slate-200'
+                            }`}>
+                            Giờ thường
+                          </span>
+                        )}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/60' : 'divide-slate-200'}`}>
+                  {filteredSanList.map((san) => (
+                    <tr key={san.id} className={isDarkMode ? 'hover:bg-slate-800/20 transition-colors' : 'hover:bg-slate-50 transition-colors'}>
+                      {/* Cột Danh sách sân */}
+                      <td className={`p-4 sm:p-5 sticky left-0 z-10 border-r backdrop-blur-md ${isDarkMode ? 'bg-slate-900/95 border-slate-800/80' : 'bg-white/95 border-slate-200'
+                        }`}>
+                        <div className={`font-extrabold text-sm sm:text-base flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-slate-900'
+                          }`}>
+                          {san.ten_san}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{san.ten_loai || 'Sân bóng'}</span>
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span className="text-[11px] text-slate-400">{san.trang_thai === 'SAN_SANG' ? 'Sẵn sàng' : 'Bảo trì'}</span>
+                        </div>
+                      </td>
+
+                      {/* Các ô Slot trên dòng của sân */}
+                      {filteredTimeSlots.map((slot) => {
+                        const slotKey = `${san.id}_${slot.start}`;
+                        const slotData = gridSlots[slotKey];
+                        const status = slotData ? slotData.trang_thai : 'TRONG';
+
+                        return (
+                          <td key={slot.start} className={`p-2 sm:p-3 border-l text-center ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'
+                            }`}>
+                            {status === 'TRONG' && (
+                              <button
+                                onClick={() => handleSlotClick(san, slot)}
+                                className={`w-full h-20 p-2 rounded-2xl border transition-all duration-200 flex flex-col items-center justify-center gap-1 group shadow-sm hover:scale-[1.02] cursor-pointer ${isDarkMode
+                                  ? 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-600/40 hover:border-emerald-400'
+                                  : 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-300 hover:border-emerald-500'
+                                  }`}
+                              >
+                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                                  SÂN TRỐNG
+                                </span>
+                                <span className={`text-[11px] font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                                  {slotData ? `${slotData.gia_ap_dung.toLocaleString('vi-VN')} đ` : `${(san.gia_co_ban || 200000).toLocaleString('vi-VN')} đ`}
+                                </span>
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity font-bold">
+                                  + Bấm Đặt Ngay
+                                </span>
+                              </button>
+                            )}
+
+                            {status === 'CHO_XAC_NHAN' && (
+                              <div
+                                onClick={() => handleSlotClick(san, slot)}
+                                className={`w-full h-20 p-2 rounded-2xl border flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${isDarkMode ? 'bg-amber-950/40 border-amber-500/40 hover:bg-amber-950/60' : 'bg-amber-50 border-amber-300 hover:bg-amber-100'
+                                  }`}
+                              >
+                                <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-amber-600 dark:text-amber-400">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                                  GIỮ CHỖ
+                                </span>
+                                <span className={`text-[10px] font-medium truncate max-w-[110px] ${isDarkMode ? 'text-amber-200' : 'text-amber-800'
+                                  }`}>
+                                  {slotData?.ten_khach_hang || 'Chờ duyệt cọc'}
+                                </span>
+                                <span className="text-[9px] text-amber-600 dark:text-amber-400/80 font-mono">Đang chờ cọc</span>
+                              </div>
+                            )}
+
+                            {status === 'DA_CHOT' && (
+                              <div className={`w-full h-20 p-2 rounded-2xl border flex flex-col items-center justify-center gap-1 opacity-70 cursor-not-allowed ${isDarkMode ? 'bg-rose-950/30 border-rose-900/40' : 'bg-rose-50 border-rose-200'
+                                }`}>
+                                <span className="text-[11px] font-bold text-rose-500 flex items-center gap-1">
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  ĐÃ CHỐT
+                                </span>
+                                <span className="text-[10px] font-medium text-slate-500 truncate max-w-[110px]">
+                                  {slotData?.ten_khach_hang || 'Đang thi đấu'}
+                                </span>
+                                <span className="text-[9px] text-slate-400 font-mono">Không khả dụng</span>
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
 
         {/* =====================================================================
-            4. BẢNG GIÁ CÔNG KHAI & DỊCH VỤ TẠI SÂN
+            4. BẢNG GIÁ NIÊM YẾT TỪ SQL SERVER & DỊCH VỤ TẠI SÂN
             ===================================================================== */}
         <section id="bang-gia" className={`py-20 border-y transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-100/60 border-slate-200'
           }`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-            {/* 4.1. BẢNG GIÁ KHUNG GIỜ (Bảng Khung_Gio_Gia) */}
+            {/* 4.1. BẢNG GIÁ KHUNG GIỜ (Bảng Loai_San & Khung_Gio_Gia từ SQL Server) */}
             <div className="text-center max-w-3xl mx-auto mb-16">
               <div className="text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">
-                Minh Bạch & Niêm Yết
+                Niêm Yết Trực Tiếp Từ CSDL SQL Server
               </div>
               <h2 className={`text-3xl sm:text-4xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                 Bảng Giá Thuê Sân Theo Khung Giờ
               </h2>
               <p className={`text-sm mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Không phụ thu ẩn, đã bao gồm nước uống khởi động.
+                Minh bạch, tự động cập nhật theo cấu hình giá mới nhất từ hệ thống.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {MOCK_BANG_GIA.map((item) => (
+              {groupedBangGia.map((item) => (
                 <div
                   key={item.id}
                   className={`rounded-3xl border p-6 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 shadow-xl ${isDarkMode
@@ -1046,7 +1140,8 @@ export default function HomePage() {
                       }`}>
                       <DollarSign className="w-6 h-6" />
                     </div>
-                    <h3 className={`text-lg font-black mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{item.ten_loai}</h3>
+                    <h3 className={`text-lg font-black mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{item.ten_loai}</h3>
+                    <p className="text-xs text-slate-400 line-clamp-2 mb-4">{item.mo_ta}</p>
 
                     <div className="space-y-4 my-6">
                       <div className={`p-3 rounded-2xl border ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'
@@ -1092,22 +1187,22 @@ export default function HomePage() {
               ))}
             </div>
 
-            {/* 4.2. DỊCH VỤ TẠI SÂN (Bảng Dich_Vu & Chi_Tiet_Dich_Vu) */}
+            {/* 4.2. DỊCH VỤ TẠI SÂN (Bảng Dich_Vu từ SQL Server) */}
             <div id="dich-vu" className="mt-28">
               <div className="text-center max-w-3xl mx-auto mb-16">
                 <div className="text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">
-                  Tiện Ích Đi Kèm Đầy Đủ
+                  Kho Dịch Vụ & Trang Thiết Bị (Bảng Dich_Vu SQL Server)
                 </div>
                 <h2 className={`text-3xl sm:text-4xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                  Dịch Vụ & Trang Thiết Bị Tại Sân
+                  Dịch Vụ & Phụ Kiện Tại Sân
                 </h2>
                 <p className={`text-sm mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-
+                  Số lượng tồn kho và đơn giá được đồng bộ theo dữ liệu thực tế.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {MOCK_DICH_VU.map((dv) => (
+                {dichVuList.map((dv) => (
                   <div
                     key={dv.id}
                     className={`p-5 rounded-3xl border flex items-center justify-between transition-all group ${isDarkMode
@@ -1118,10 +1213,13 @@ export default function HomePage() {
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform ${isDarkMode ? 'bg-emerald-950/70 border-emerald-600/30' : 'bg-emerald-50 border-emerald-200'
                         }`}>
-                        {dv.icon === 'water' && <Coffee className="w-6 h-6" />}
-                        {dv.icon === 'coffee' && <Zap className="w-6 h-6" />}
-                        {dv.icon === 'shirt' && <Shirt className="w-6 h-6" />}
-                        {dv.icon === 'award' && <Award className="w-6 h-6" />}
+                        {dv.ten_dich_vu.toLowerCase().includes('áo') || dv.ten_dich_vu.toLowerCase().includes('giày') ? (
+                          <Shirt className="w-6 h-6" />
+                        ) : dv.ten_dich_vu.toLowerCase().includes('trọng tài') ? (
+                          <Award className="w-6 h-6" />
+                        ) : (
+                          <Coffee className="w-6 h-6" />
+                        )}
                       </div>
                       <div>
                         <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{dv.ten_dich_vu}</h4>
@@ -1145,14 +1243,14 @@ export default function HomePage() {
         </section>
 
         {/* =====================================================================
-            5. FOOTER (CHÂN TRANG, BẢN ĐỒ GOOGLE MAPS & CHÍNH SÁCH HOÀN TIỀN)
+            5. FOOTER & THÔNG TIN LIÊN HỆ
             ===================================================================== */}
         <footer id="chinh-sach-lien-he" className={`border-t pt-20 pb-12 transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-900 text-slate-100 border-slate-800'
           }`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 pb-16 border-b border-slate-800/80">
 
-              {/* Cột 1: Thông tin thương hiệu & Hotline */}
+              {/* Cột 1: Thông tin thương hiệu */}
               <div className="lg:col-span-4 space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center">
@@ -1163,7 +1261,7 @@ export default function HomePage() {
                   </span>
                 </div>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  Trung tâm liên hợp thể thao hiện đại bậc nhất. Cung cấp hệ thống sân bóng đá, Pickleball và Cầu lông với mặt sân tiêu chuẩn thi đấu quốc tế.
+                  Trung tâm thể thao đa năng hiện đại. Toàn bộ quy trình đặt sân, tính giá và thanh toán được quản lý bởi Stored Procedures SQL Server.
                 </p>
 
                 <div className="space-y-3 pt-2">
@@ -1172,7 +1270,7 @@ export default function HomePage() {
                       <Phone className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="text-xs text-slate-400">Hotline đặt kèo & CSKH 24/7:</div>
+                      <div className="text-xs text-slate-400">Hotline đặt sân:</div>
                       <div className="font-bold text-white text-base">0909.123.456 - 0988.789.789</div>
                     </div>
                   </div>
@@ -1182,7 +1280,7 @@ export default function HomePage() {
                       <Mail className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="text-xs text-slate-400">Email hợp tác & sự kiện:</div>
+                      <div className="text-xs text-slate-400">Email:</div>
                       <div className="font-bold text-white">contact@soccer247.vn</div>
                     </div>
                   </div>
@@ -1193,41 +1291,34 @@ export default function HomePage() {
                     </div>
                     <div>
                       <div className="text-xs text-slate-400">Địa chỉ cụm sân:</div>
-                      <div className="font-bold text-white">Khu Thể Thao Đa Năng, Đường D1, TP. Hồ Chí Minh</div>
+                      <div className="font-bold text-white">Khu Thể Thao Đa Năng, TP. Hồ Chí Minh</div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Cột 2: Chính sách hủy đơn & hoàn cọc (Lich_Su_Hoan_Tien) */}
+              {/* Cột 2: Chính sách hủy đơn */}
               <div className="lg:col-span-4 space-y-4">
                 <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  Chính Sách Hủy Đơn & Hoàn Tiền Cọc
+                  Chính Sách Hủy Đơn & Hoàn Tiền
                 </h3>
-                <p className="text-xs text-slate-400">
-                  Quy định thời gian hủy lịch và chính sách hoàn tiền cọc:
-                </p>
-
                 <div className="space-y-3">
                   <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
                     <div className="flex items-center justify-between text-xs font-bold text-emerald-400">
                       <span>Hủy trước &gt; 12 Giờ</span>
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300">Hoàn 100% Tiền Cọc</span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300">Hoàn 100% Cọc</span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Hoàn tiền tự động về tài khoản VNPay/MoMo trong vòng 5 - 10 phút.
+                      Hoàn tiền tự động theo Stored Procedure sp_HuyDonVaHoanCoc.
                     </p>
                   </div>
 
                   <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
                     <div className="flex items-center justify-between text-xs font-bold text-amber-400">
                       <span>Hủy trước 6 - 12 Giờ</span>
-                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300">Hoàn 50% Tiền Cọc</span>
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300">Hoàn 50% Cọc</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Khấu trừ 50% chi phí giữ sân và hỗ trợ tìm đội đối khác.
-                    </p>
                   </div>
 
                   <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
@@ -1235,14 +1326,11 @@ export default function HomePage() {
                       <span>Hủy dưới 6 Giờ</span>
                       <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300">Không Hoàn Cọc (0%)</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Tiền cọc được sử dụng để đền bù khung giờ trống cho ban quản lý.
-                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Cột 3: Bản đồ Google Maps nhúng trực tiếp */}
+              {/* Cột 3: Bản đồ Google Maps */}
               <div className="lg:col-span-4 space-y-4">
                 <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-emerald-400" />
@@ -1257,24 +1345,19 @@ export default function HomePage() {
                     style={{ border: 0 }}
                     allowFullScreen={false}
                     loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
                     className="w-full h-full grayscale contrast-125 opacity-80 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
                   />
                 </div>
-                <p className="text-xs text-slate-400 text-center">
-                  Bãi giữ xe ô tô & xe máy rộng rãi, an ninh 24/24.
-                </p>
               </div>
 
             </div>
 
-            {/* Dòng bản quyền dưới cùng */}
+            {/* Bản quyền */}
             <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-              <p>© 2026 Soccer247 - Hệ Thống Quản Lý Sân Bóng Toàn Diện. Phát triển trên Express.js & SQL Server.</p>
+              <p>© 2026 Soccer247 - Hệ Thống Quản Lý Sân Bóng Kết Nối SQL Server.</p>
               <div className="flex items-center gap-6">
-                <a href="#" className="hover:text-emerald-400 transition-colors">Điều khoản sử dụng</a>
-                <a href="#" className="hover:text-emerald-400 transition-colors">Chính sách bảo mật</a>
-                <a href="#" className="hover:text-emerald-400 transition-colors">API Đối tác</a>
+                <a href="#" className="hover:text-emerald-400 transition-colors">Điều khoản dịch vụ</a>
+                <a href="#" className="hover:text-emerald-400 transition-colors">Bảo mật thông tin</a>
               </div>
             </div>
           </div>
@@ -1282,7 +1365,7 @@ export default function HomePage() {
       </main>
 
       {/* =====================================================================
-          6. MODAL ĐẶT SÂN TƯƠNG TÁC (INTERACTIVE BOOKING MODAL)
+          6. MODAL ĐẶT SÂN TƯƠNG TÁC (GIAO TIẾP VỚI CSDL SQL SERVER)
           ===================================================================== */}
       {selectedSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
@@ -1306,7 +1389,7 @@ export default function HomePage() {
                   setSelectedSlot(null);
                   setShowQR(false);
                 }}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${isDarkMode ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer ${isDarkMode ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
                   }`}
               >
                 <X className="w-5 h-5" />
@@ -1315,22 +1398,22 @@ export default function HomePage() {
 
             {/* Modal Body */}
             {showQR ? (
-              /* ======================= 3. GIAO DIỆN QUÉT MÃ QR (showQR === true) ======================= */
+              /* GIAO DIỆN QUÉT MÃ QR VIETQR */
               <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
                 <div className="text-center">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/30 mb-2">
                     <QrCode className="w-3.5 h-3.5" />
-                    Thanh Toán Chuyển Khoản Tự Động VietQR
+                    Thanh Toán Tự Động VietQR
                   </div>
                   <h3 className={`text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                     Quét mã QR để thanh toán
                   </h3>
                   <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Mở app Ngân hàng (Mobile Banking) hoặc Ví điện tử để quét mã VietQR bên dưới
+                    Mở ứng dụng Ngân hàng (Mobile Banking) để quét mã QR chuyển tiền
                   </p>
                 </div>
 
-                {/* Thẻ img hiển thị mã QR VietQR động */}
+                {/* Mã QR VietQR */}
                 <div className="flex flex-col items-center justify-center">
                   <div className="p-4 bg-white rounded-3xl border-2 border-emerald-500/40 shadow-2xl shadow-emerald-500/10 inline-block">
                     <img
@@ -1341,36 +1424,36 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Khối thông tin dạng text (chữ to, in đậm) */}
+                {/* Thông tin chuyển khoản */}
                 <div className={`p-5 rounded-2xl border space-y-3 text-sm ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
                     <span className="text-slate-400">Ngân hàng:</span>
                     <span className={`text-base font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>MB Bank</span>
                   </div>
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                    <span className="text-slate-400">Chủ TK:</span>
+                    <span className="text-slate-400">Chủ tài khoản:</span>
                     <span className={`text-base font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>NGUYEN VAN A</span>
                   </div>
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                    <span className="text-slate-400">STK:</span>
+                    <span className="text-slate-400">Số tài khoản:</span>
                     <span className="text-base font-extrabold text-emerald-500 tracking-wider">123456789</span>
                   </div>
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                    <span className="text-slate-400">Số tiền:</span>
+                    <span className="text-slate-400">Số tiền cần thanh toán:</span>
                     <span className="text-xl font-black text-emerald-500">{soTienThanhToan.toLocaleString('vi-VN')} đ</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Nội dung:</span>
+                    <span className="text-slate-400">Nội dung chuyển khoản:</span>
                     <span className="text-base font-black px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">DatSan</span>
                   </div>
                 </div>
 
-                {/* Dưới cùng có 2 nút: "Quay lại" và "Tôi đã chuyển khoản thành công" */}
+                {/* Nút bấm xác nhận */}
                 <div className="flex items-center gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowQR(false)}
-                    className={`w-1/3 py-3.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-1.5 ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                    className={`w-1/3 py-3.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
                       }`}
                   >
                     <ArrowLeft className="w-4 h-4" />
@@ -1385,7 +1468,7 @@ export default function HomePage() {
                     {isSubmitting ? (
                       <>
                         <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                        <span>Đang Xử Lý Lưu Đơn...</span>
+                        <span>Đang Lưu Vào SQL Server...</span>
                       </>
                     ) : (
                       <>
@@ -1397,10 +1480,10 @@ export default function HomePage() {
                 </div>
               </div>
             ) : (
-              /* ======================= FORM ĐIỀN THÔNG TIN ĐẶT SÂN ======================= */
+              /* FORM ĐIỀN THÔNG TIN ĐẶT SÂN & CHỌN DỊCH VỤ */
               <form onSubmit={handleProceedToQR} className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
 
-                {/* Tóm tắt thông tin khung giờ & đơn giá sân */}
+                {/* Tóm tắt thông tin khung giờ */}
                 <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border text-xs ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
                   <div>
@@ -1421,7 +1504,7 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Thông tin người đặt (Họ tên & SĐT) */}
+                {/* Thông tin người đặt */}
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                     <User className="w-4 h-4" />
@@ -1444,7 +1527,7 @@ export default function HomePage() {
                     </div>
                     <div>
                       <label className={`text-xs font-semibold block mb-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                        Số điện thoại nhận tin nhắn <span className="text-rose-500">*</span>
+                        Số điện thoại liên hệ <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="tel"
@@ -1459,39 +1542,45 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Chọn thêm dịch vụ tại sân (Chi_Tiet_Dich_Vu) */}
+                {/* Danh sách dịch vụ đi kèm nạp từ CSDL SQL Server */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                     <Coffee className="w-4 h-4" />
-                    Chọn Thêm Dịch Vụ & Trang Thiết Bị (Tùy chọn)
+                    Dịch Vụ Chọn Thêm Tại Sân (Từ CSDL SQL Server)
                   </h4>
-                  <div className="space-y-2">
-                    {MOCK_DICH_VU.map((dv) => {
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {dichVuList.map((dv) => {
                       const qty = bookingForm.dich_vu_chon[dv.id] || 0;
                       return (
                         <div
                           key={dv.id}
-                          className={`flex items-center justify-between p-3 rounded-xl border text-xs ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                          className={`p-3 rounded-2xl border flex items-center justify-between transition-colors ${qty > 0
+                            ? isDarkMode ? 'bg-emerald-950/30 border-emerald-500/50' : 'bg-emerald-50 border-emerald-400'
+                            : isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                             }`}
                         >
                           <div>
-                            <div className={`font-semibold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{dv.ten_dich_vu}</div>
-                            <div className="text-slate-400">{dv.don_gia.toLocaleString('vi-VN')} đ / {dv.don_vi_tinh}</div>
+                            <div className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{dv.ten_dich_vu}</div>
+                            <div className="text-[11px] text-emerald-500 font-semibold">
+                              {dv.don_gia.toLocaleString('vi-VN')} đ <span className="text-slate-400 font-normal">/{dv.don_vi_tinh}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
                             <button
                               type="button"
                               onClick={() => handleQuantityChange(dv.id, -1)}
-                              className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-base ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                              disabled={qty === 0}
+                              className={`w-7 h-7 rounded-lg border flex items-center justify-center font-bold text-xs disabled:opacity-30 cursor-pointer ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-200 border-slate-300 text-slate-900'
                                 }`}
                             >
                               -
                             </button>
-                            <span className={`w-5 text-center font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{qty}</span>
+                            <span className="text-xs font-bold w-4 text-center">{qty}</span>
                             <button
                               type="button"
                               onClick={() => handleQuantityChange(dv.id, 1)}
-                              className="w-7 h-7 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center font-bold text-base cursor-pointer"
+                              className={`w-7 h-7 rounded-lg border flex items-center justify-center font-bold text-xs cursor-pointer ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-200 border-slate-300 text-slate-900'
+                                }`}
                             >
                               +
                             </button>
@@ -1502,113 +1591,112 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Phương thức thanh toán & Loại thanh toán (Bảng Thanh_Toan) */}
-                <div className={`space-y-4 pt-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                {/* Chọn hình thức thanh toán */}
+                <div className="space-y-3">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                    <CreditCard className="w-4 h-4" />
-                    Hình Thức Đặt Cọc & Thanh Toán
+                    <DollarSign className="w-4 h-4" />
+                    Hình Thức Thanh Toán Cọc
                   </h4>
-
-                  {/* Loại thanh toán: Đặt cọc 30% vs Trả hết 100% */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <label
-                      onClick={() => setBookingForm({ ...bookingForm, loai_thanh_toan: 'DAT_COC' })}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${bookingForm.loai_thanh_toan === 'DAT_COC'
-                        ? isDarkMode ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300' : 'bg-emerald-50 border-emerald-500 text-emerald-800'
-                        : isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                      className={`p-4 rounded-2xl border cursor-pointer flex items-center justify-between transition-all ${bookingForm.loai_thanh_toan === 'DAT_COC'
+                        ? isDarkMode ? 'bg-emerald-950/40 border-emerald-500' : 'bg-emerald-50 border-emerald-500 shadow-sm'
+                        : isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                         }`}
                     >
-                      <div className="font-bold text-sm">Đặt Cọc 30%</div>
-                      <div className="text-xs mt-1">Giữ chỗ nhanh, trả phần còn lại khi đến sân</div>
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="loai_thanh_toan"
+                            value="DAT_COC"
+                            checked={bookingForm.loai_thanh_toan === 'DAT_COC'}
+                            onChange={() => setBookingForm({ ...bookingForm, loai_thanh_toan: 'DAT_COC' })}
+                            className="text-emerald-500 focus:ring-emerald-500"
+                          />
+                          <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>Đặt Cọc 30%</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">Giữ chỗ trước, thanh toán số còn lại khi đến sân</p>
+                      </div>
+                      <span className="text-sm font-black text-emerald-500">
+                        {Math.round(tongTienDon * 0.3).toLocaleString('vi-VN')} đ
+                      </span>
                     </label>
 
                     <label
-                      onClick={() => setBookingForm({ ...bookingForm, loai_thanh_toan: 'TRA_HET' })}
-                      className={`p-3.5 rounded-2xl border cursor-pointer transition-all ${bookingForm.loai_thanh_toan === 'TRA_HET'
-                        ? isDarkMode ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300' : 'bg-emerald-50 border-emerald-500 text-emerald-800'
-                        : isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                      className={`p-4 rounded-2xl border cursor-pointer flex items-center justify-between transition-all ${bookingForm.loai_thanh_toan === 'TRA_HET'
+                        ? isDarkMode ? 'bg-emerald-950/40 border-emerald-500' : 'bg-emerald-50 border-emerald-500 shadow-sm'
+                        : isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
                         }`}
                     >
-                      <div className="font-bold text-sm">Thanh Toán Đủ 100%</div>
-                      <div className="text-xs mt-1">Vào sân đá ngay, không cần thanh toán tại quầy</div>
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="loai_thanh_toan"
+                            value="TRA_HET"
+                            checked={bookingForm.loai_thanh_toan === 'TRA_HET'}
+                            onChange={() => setBookingForm({ ...bookingForm, loai_thanh_toan: 'TRA_HET' })}
+                            className="text-emerald-500 focus:ring-emerald-500"
+                          />
+                          <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>Thanh Toán 100%</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">Vào sân thi đấu ngay không cần trả thêm</p>
+                      </div>
+                      <span className="text-sm font-black text-emerald-500">
+                        {tongTienDon.toLocaleString('vi-VN')} đ
+                      </span>
                     </label>
                   </div>
                 </div>
 
-                {/* Tổng kết chi phí thanh toán */}
-                <div className={`p-4 rounded-2xl border space-y-2 text-xs ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
+                {/* Bảng tổng tiền */}
+                <div className={`p-4 rounded-2xl border space-y-2 text-xs ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="flex justify-between text-slate-400">
-                    <span>Tiền sân:</span>
-                    <span>{selectedSlot.giaTien.toLocaleString('vi-VN')} đ</span>
+                    <span>Tiền thuê sân (90 phút):</span>
+                    <span className="font-semibold text-slate-200">{selectedSlot.giaTien.toLocaleString('vi-VN')} đ</span>
                   </div>
                   {tongTienDichVu > 0 && (
                     <div className="flex justify-between text-slate-400">
-                      <span>Tiền dịch vụ thêm:</span>
-                      <span>{tongTienDichVu.toLocaleString('vi-VN')} đ</span>
+                      <span>Dịch vụ & Nước uống chọn thêm:</span>
+                      <span className="font-semibold text-slate-200">{tongTienDichVu.toLocaleString('vi-VN')} đ</span>
                     </div>
                   )}
-                  <div className={`flex justify-between font-bold border-t pt-2 ${isDarkMode ? 'text-slate-300 border-slate-800' : 'text-slate-700 border-slate-200'
-                    }`}>
-                    <span>Tổng giá trị đơn:</span>
-                    <span>{tongTienDon.toLocaleString('vi-VN')} đ</span>
-                  </div>
-                  <div className="flex justify-between text-base font-black text-emerald-500 pt-1">
-                    <span>Số tiền cần thanh toán ngay:</span>
-                    <span>{soTienThanhToan.toLocaleString('vi-VN')} đ</span>
+                  <div className="flex justify-between pt-2 border-t border-slate-800 text-sm font-bold">
+                    <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>Tổng giá trị đơn:</span>
+                    <span className="text-emerald-500 text-base">{tongTienDon.toLocaleString('vi-VN')} đ</span>
                   </div>
                 </div>
 
-                {/* Nút bấm Submit Form -> Chuyển sang quét mã QR */}
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedSlot(null);
-                      setShowQR(false);
-                    }}
-                    className={`w-1/3 py-3.5 rounded-xl font-bold text-sm transition-colors ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
-                      }`}
-                  >
-                    Hủy Bỏ
-                  </button>
-                  <button
-                    type="submit"
-                    className="w-2/3 py-3.5 rounded-xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Zap className="w-4 h-4 fill-slate-950" />
-                    <span>XÁC NHẬN ĐẶT SÂN NGAY</span>
-                  </button>
-                </div>
-
+                {/* Nút Tiếp tục quét mã QR */}
+                <button
+                  type="submit"
+                  className="w-full py-4 rounded-2xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <QrCode className="w-5 h-5" />
+                  <span>XÁC NHẬN & QUÉT MÃ QR ({soTienThanhToan.toLocaleString('vi-VN')} đ)</span>
+                </button>
               </form>
             )}
+
           </div>
         </div>
       )}
 
-      {/* =========================================================
-          MODAL POPUP TRANG THÔNG TIN CÁ NHÂN (PROFILE)
-          ========================================================= */}
+      {/* MODAL PROFILE THÔNG TIN CÁ NHÂN */}
       {isProfileModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto animate-in fade-in duration-200">
-          <div className="relative w-full max-w-5xl my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="relative w-full max-w-4xl animate-in fade-in zoom-in-95 duration-200 my-8">
             <Profile
               onClose={() => setIsProfileModalOpen(false)}
-              onLogout={() => {
-                setIsProfileModalOpen(false);
-                setCurrentUser(null);
-                setToastMessage({ type: 'info', message: 'Đã đăng xuất tài khoản thành công.' });
+              onLogout={handleLogout}
+              initialData={{
+                hoTen: currentUser?.ho_ten || '',
+                email: currentUser?.email || '',
+                soDienThoai: currentUser?.so_dien_thoai || '',
+                diaChi: 'Hà Nội',
+                avatarUrl: currentUser?.anh_dai_dien,
               }}
-              initialData={
-                currentUser
-                  ? {
-                    hoTen: currentUser.ho_ten,
-                    email: currentUser.email,
-                    soDienThoai: currentUser.so_dien_thoai,
-                  }
-                  : undefined
-              }
             />
           </div>
         </div>
@@ -1617,4 +1705,3 @@ export default function HomePage() {
     </div>
   );
 }
-

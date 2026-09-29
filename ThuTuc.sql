@@ -22,6 +22,23 @@ GO
 -- 3. TỰ ĐỘNG TẠO BẢNG NẾU CHƯA TỒN TẠI
 -- =====================================================================
 
+-- 3.0. Bảng Vai_Tro (Vai trò người dùng: Admin, Nhân viên, Khách hàng)
+IF OBJECT_ID('Vai_Tro', 'U') IS NULL
+BEGIN
+    CREATE TABLE Vai_Tro (
+        MaVaiTro INT IDENTITY(1,1) PRIMARY KEY,
+        TenVaiTro NVARCHAR(50) UNIQUE NOT NULL,
+        MoTa NVARCHAR(255) NULL
+    );
+
+    -- Chèn vai trò mặc định
+    INSERT INTO Vai_Tro (TenVaiTro, MoTa) VALUES
+    ('ADMIN', N'Quản trị viên toàn quyền hệ thống'),
+    ('NHAN_VIEN', N'Nhân viên quản lý sân và bán hàng'),
+    ('KHACH_HANG', N'Khách hàng đặt sân');
+END;
+GO
+
 -- 3.1. Bảng Nguoi_Dung
 IF OBJECT_ID('Nguoi_Dung', 'U') IS NULL
 BEGIN
@@ -32,8 +49,9 @@ BEGIN
         so_dien_thoai VARCHAR(15),
         mat_khau VARCHAR(255),
         anh_dai_dien VARCHAR(255) NULL,
-        vai_tro VARCHAR(20) CHECK (vai_tro IN ('ADMIN', 'NHAN_VIEN', 'KHACH_HANG')) DEFAULT 'KHACH_HANG',
-        ngay_tao DATETIME DEFAULT GETDATE()
+        MaVaiTro INT NOT NULL DEFAULT 3,
+        ngay_tao DATETIME DEFAULT GETDATE(),
+        FOREIGN KEY (MaVaiTro) REFERENCES Vai_Tro(MaVaiTro) ON DELETE NO ACTION
     );
 END;
 GO
@@ -80,7 +98,7 @@ BEGIN
 END;
 GO
 
--- 3.5. Bảng Don_Dat_San
+-- 3.5. Bảng Don_Dat_San (Cố định & Linh hoạt theo phút)
 IF OBJECT_ID('Don_Dat_San', 'U') IS NULL
 BEGIN
     CREATE TABLE Don_Dat_San (
@@ -92,6 +110,9 @@ BEGIN
         gio_ket_thuc TIME NOT NULL,
         tien_san DECIMAL(10, 2) NOT NULL,
         tong_tien DECIMAL(10, 2) NOT NULL,
+        kieu_dat VARCHAR(20) CHECK (kieu_dat IN ('CO_DINH', 'LINH_HOAT')) DEFAULT 'CO_DINH',
+        so_phut_da INT NULL,
+        ghi_chu NVARCHAR(255) NULL,
         trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_XAC_NHAN', 'DA_CHOT', 'HOAN_THANH', 'DA_HUY')) DEFAULT 'CHO_XAC_NHAN',
         ngay_tao DATETIME DEFAULT GETDATE(),
         FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
@@ -179,7 +200,7 @@ GO
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- 4.1. THỦ TỤC XÁC THỰC & QUẢN LÝ NGƯỜI DÙNG (AUTH & USER MANAGEMENT)
+-- 4.1. THỦ TỤC XÁC THỰC & QUẢN LÝ NGƯỜI DÙNG & VAI TRÒ
 -- ---------------------------------------------------------------------
 
 -- Thủ tục Thêm/Đăng ký người dùng
@@ -188,7 +209,8 @@ CREATE OR ALTER PROCEDURE sp_ThemNguoiDung
     @email VARCHAR(255),
     @so_dien_thoai VARCHAR(15),
     @mat_khau VARCHAR(255),
-    @vai_tro VARCHAR(20) = 'KHACH_HANG'
+    @vai_tro VARCHAR(50) = 'KHACH_HANG',
+    @MaVaiTro INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -198,13 +220,24 @@ BEGIN
             ;THROW 50001, N'Email này đã được đăng ký trong hệ thống.', 1;
         END;
 
-        INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, mat_khau, vai_tro, ngay_tao)
-        VALUES (@ho_ten, @email, @so_dien_thoai, @mat_khau, @vai_tro, GETDATE());
+        -- Xác định MaVaiTro phù hợp
+        DECLARE @v_MaVaiTro INT = @MaVaiTro;
+        IF @v_MaVaiTro IS NULL
+        BEGIN
+            SELECT @v_MaVaiTro = MaVaiTro FROM Vai_Tro WHERE TenVaiTro = @vai_tro;
+            IF @v_MaVaiTro IS NULL SET @v_MaVaiTro = 3; -- Mặc định là Khách hàng
+        END;
+
+        INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, mat_khau, MaVaiTro, ngay_tao)
+        VALUES (@ho_ten, @email, @so_dien_thoai, @mat_khau, @v_MaVaiTro, GETDATE());
 
         SELECT 
-            id, ho_ten, email, so_dien_thoai, vai_tro, anh_dai_dien, ngay_tao 
-        FROM Nguoi_Dung 
-        WHERE id = SCOPE_IDENTITY();
+            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, 
+            nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
+            nd.anh_dai_dien, nd.ngay_tao 
+        FROM Nguoi_Dung nd
+        LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+        WHERE nd.id = SCOPE_IDENTITY();
     END TRY
     BEGIN CATCH
         ;THROW;
@@ -225,9 +258,12 @@ BEGIN
         END;
 
         SELECT 
-            id, ho_ten, email, so_dien_thoai, mat_khau, vai_tro, anh_dai_dien, ngay_tao
-        FROM Nguoi_Dung 
-        WHERE email = @email;
+            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.mat_khau, 
+            nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
+            nd.anh_dai_dien, nd.ngay_tao
+        FROM Nguoi_Dung nd
+        LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+        WHERE nd.email = @email;
     END TRY
     BEGIN CATCH
         ;THROW;
@@ -248,9 +284,12 @@ BEGIN
         END;
 
         SELECT 
-            id, ho_ten, email, so_dien_thoai, vai_tro, anh_dai_dien, ngay_tao
-        FROM Nguoi_Dung 
-        WHERE id = @ma_nguoi_dung;
+            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, 
+            nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
+            nd.anh_dai_dien, nd.ngay_tao
+        FROM Nguoi_Dung nd
+        LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+        WHERE nd.id = @ma_nguoi_dung;
     END TRY
     BEGIN CATCH
         ;THROW;
@@ -264,9 +303,13 @@ AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
-        SELECT id, ho_ten, email, so_dien_thoai, vai_tro, anh_dai_dien, ngay_tao
-        FROM Nguoi_Dung
-        ORDER BY id DESC;
+        SELECT 
+            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, 
+            nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
+            nd.anh_dai_dien, nd.ngay_tao
+        FROM Nguoi_Dung nd
+        LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+        ORDER BY nd.id DESC;
     END TRY
     BEGIN CATCH
         ;THROW;
@@ -280,7 +323,8 @@ CREATE OR ALTER PROCEDURE sp_SuaNguoiDung
     @ho_ten NVARCHAR(100),
     @email VARCHAR(255),
     @so_dien_thoai VARCHAR(15),
-    @vai_tro VARCHAR(20),
+    @vai_tro VARCHAR(50) = NULL,
+    @MaVaiTro INT = NULL,
     @mat_khau VARCHAR(255) = NULL
 AS
 BEGIN
@@ -296,17 +340,28 @@ BEGIN
             ;THROW 50005, N'Email này đã được sử dụng bởi tài khoản khác.', 1;
         END;
 
+        -- Xác định MaVaiTro nếu truyền @vai_tro dạng chữ
+        DECLARE @v_MaVaiTro INT = @MaVaiTro;
+        IF @v_MaVaiTro IS NULL AND @vai_tro IS NOT NULL
+        BEGIN
+            SELECT @v_MaVaiTro = MaVaiTro FROM Vai_Tro WHERE TenVaiTro = @vai_tro;
+        END;
+
         UPDATE Nguoi_Dung
         SET ho_ten = @ho_ten,
             email = @email,
             so_dien_thoai = @so_dien_thoai,
-            vai_tro = @vai_tro,
+            MaVaiTro = ISNULL(@v_MaVaiTro, MaVaiTro),
             mat_khau = CASE WHEN @mat_khau IS NOT NULL AND LEN(@mat_khau) > 0 THEN @mat_khau ELSE mat_khau END
         WHERE id = @id;
 
-        SELECT id, ho_ten, email, so_dien_thoai, vai_tro, anh_dai_dien, ngay_tao
-        FROM Nguoi_Dung
-        WHERE id = @id;
+        SELECT 
+            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, 
+            nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
+            nd.anh_dai_dien, nd.ngay_tao
+        FROM Nguoi_Dung nd
+        LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+        WHERE nd.id = @id;
     END TRY
     BEGIN CATCH
         ;THROW;
@@ -327,6 +382,82 @@ BEGIN
         END;
 
         DELETE FROM Nguoi_Dung WHERE id = @id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- Thủ tục Lấy danh sách vai trò
+CREATE OR ALTER PROCEDURE sp_LayDanhSachVaiTro
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT MaVaiTro, TenVaiTro, MoTa
+        FROM Vai_Tro
+        ORDER BY MaVaiTro ASC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- Thủ tục Thêm vai trò mới
+CREATE OR ALTER PROCEDURE sp_ThemVaiTro
+    @TenVaiTro NVARCHAR(50),
+    @MoTa NVARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF EXISTS (SELECT 1 FROM Vai_Tro WHERE TenVaiTro = @TenVaiTro)
+        BEGIN
+            ;THROW 50007, N'Tên vai trò này đã tồn tại trong hệ thống.', 1;
+        END;
+
+        INSERT INTO Vai_Tro (TenVaiTro, MoTa)
+        VALUES (@TenVaiTro, @MoTa);
+
+        SELECT MaVaiTro, TenVaiTro, MoTa
+        FROM Vai_Tro
+        WHERE MaVaiTro = SCOPE_IDENTITY();
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- Thủ tục Sửa vai trò
+CREATE OR ALTER PROCEDURE sp_SuaVaiTro
+    @MaVaiTro INT,
+    @TenVaiTro NVARCHAR(50),
+    @MoTa NVARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Vai_Tro WHERE MaVaiTro = @MaVaiTro)
+        BEGIN
+            ;THROW 50008, N'Vai trò không tồn tại.', 1;
+        END;
+
+        IF EXISTS (SELECT 1 FROM Vai_Tro WHERE TenVaiTro = @TenVaiTro AND MaVaiTro <> @MaVaiTro)
+        BEGIN
+            ;THROW 50009, N'Tên vai trò này đã được sử dụng.', 1;
+        END;
+
+        UPDATE Vai_Tro
+        SET TenVaiTro = @TenVaiTro,
+            MoTa = @MoTa
+        WHERE MaVaiTro = @MaVaiTro;
+
+        SELECT MaVaiTro, TenVaiTro, MoTa
+        FROM Vai_Tro
+        WHERE MaVaiTro = @MaVaiTro;
     END TRY
     BEGIN CATCH
         ;THROW;
@@ -839,6 +970,9 @@ BEGIN
             CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
             d.tien_san,
             d.tong_tien,
+            d.kieu_dat,
+            d.so_phut_da,
+            d.ghi_chu,
             ISNULL(
                 (SELECT SUM(so_tien) FROM Thanh_Toan WHERE ma_don_dat = d.id AND trang_thai_gd = 'THANH_CONG' AND loai_thanh_toan = 'DAT_COC'),
                 0
@@ -878,6 +1012,9 @@ BEGIN
             CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
             d.tien_san,
             d.tong_tien,
+            d.kieu_dat,
+            d.so_phut_da,
+            d.ghi_chu,
             d.trang_thai
         FROM Don_Dat_San d
         INNER JOIN San_Bong sb ON d.ma_san = sb.id
@@ -894,7 +1031,7 @@ BEGIN
 END;
 GO
 
--- Đặt sân bóng
+-- Đặt sân bóng tiêu chuẩn
 CREATE OR ALTER PROCEDURE sp_DatSan
     @ma_nguoi_dung INT,
     @ma_san INT,
@@ -946,12 +1083,8 @@ BEGIN
             DECLARE @ma_loai_san INT;
             SELECT @ma_loai_san = ma_loai_san FROM San_Bong WHERE id = @ma_san;
 
-            DECLARE @la_cuoi_tuan BIT;
-            SET @la_cuoi_tuan = 0;
-            IF DATEPART(dw, @ngay_da) IN (1, 7)
-            BEGIN
-                SET @la_cuoi_tuan = 1;
-            END;
+            DECLARE @la_cuoi_tuan BIT = 0;
+            IF DATEPART(dw, @ngay_da) IN (1, 7) SET @la_cuoi_tuan = 1;
 
             SELECT TOP 1 @gia_tinh_duoc = don_gia
             FROM Khung_Gio_Gia
@@ -967,10 +1100,12 @@ BEGIN
         END;
 
         INSERT INTO Don_Dat_San (
-            ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, trang_thai, ngay_tao
+            ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, 
+            tien_san, tong_tien, kieu_dat, so_phut_da, trang_thai, ngay_tao
         )
         VALUES (
-            @ma_nguoi_dung, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc, @gia_tinh_duoc, @gia_tinh_duoc, 'CHO_XAC_NHAN', GETDATE()
+            @ma_nguoi_dung, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc, 
+            @gia_tinh_duoc, @gia_tinh_duoc, 'CO_DINH', 90, 'CHO_XAC_NHAN', GETDATE()
         );
 
         DECLARE @ma_don_moi INT;
@@ -982,10 +1117,362 @@ BEGIN
             d.id, d.ma_nguoi_dung, d.ma_san, sb.ten_san, d.ngay_da,
             CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
             CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
-            d.tien_san, d.tong_tien, d.trang_thai, d.ngay_tao
+            d.tien_san, d.tong_tien, d.kieu_dat, d.so_phut_da, d.trang_thai, d.ngay_tao
         FROM Don_Dat_San d
         INNER JOIN San_Bong sb ON d.ma_san = sb.id
         WHERE d.id = @ma_don_moi;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- ---------------------------------------------------------------------
+-- THỦ TỤC TÍNH GIỜ & ĐẶT SÂN LINH HOẠT THEO PHÚT (FLEXIBLE BOOKING)
+-- ---------------------------------------------------------------------
+
+-- 1. Thủ tục Tính giá sân linh hoạt theo phút (VD: 85 phút * 350.000 / 60 = 496.000 đ)
+CREATE OR ALTER PROCEDURE sp_TinhGiaSanLinhHoat
+    @ma_san INT,
+    @ngay_da DATE,
+    @gio_bat_dau TIME,
+    @gio_ket_thuc TIME
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM San_Bong WHERE id = @ma_san)
+        BEGIN
+            ;THROW 50010, N'Sân bóng không tồn tại trong hệ thống.', 1;
+        END;
+
+        IF @gio_bat_dau >= @gio_ket_thuc
+        BEGIN
+            ;THROW 50011, N'Giờ bắt đầu phải nhỏ hơn giờ kết thúc.', 1;
+        END;
+
+        DECLARE @ma_loai_san INT, @ten_san NVARCHAR(50), @ten_loai NVARCHAR(50), @gia_co_ban DECIMAL(10,2);
+        SELECT 
+            @ma_loai_san = sb.ma_loai_san,
+            @ten_san = sb.ten_san,
+            @ten_loai = ls.ten_loai,
+            @gia_co_ban = ls.gia_co_ban
+        FROM San_Bong sb
+        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        WHERE sb.id = @ma_san;
+
+        -- Xác định ngày cuối tuần
+        DECLARE @la_cuoi_tuan BIT = 0;
+        IF DATEPART(dw, @ngay_da) IN (1, 7) SET @la_cuoi_tuan = 1;
+
+        -- Tìm đơn giá theo giờ từ bảng Khung_Gio_Gia
+        DECLARE @don_gia_gio DECIMAL(10,2);
+        SELECT TOP 1 @don_gia_gio = don_gia
+        FROM Khung_Gio_Gia
+        WHERE ma_loai_san = @ma_loai_san
+          AND la_cuoi_tuan = @la_cuoi_tuan
+          AND (
+              (@gio_bat_dau >= gio_bat_dau AND @gio_bat_dau < gio_ket_thuc) OR
+              (@gio_ket_thuc > gio_bat_dau AND @gio_ket_thuc <= gio_ket_thuc)
+          );
+
+        IF @don_gia_gio IS NULL SET @don_gia_gio = @gia_co_ban;
+
+        -- Tính tổng số phút đá
+        DECLARE @so_phut INT;
+        SET @so_phut = DATEDIFF(MINUTE, CAST(@gio_bat_dau AS TIME), CAST(@gio_ket_thuc AS TIME));
+
+        -- Đơn giá mỗi phút
+        DECLARE @don_gia_phut DECIMAL(10,2);
+        SET @don_gia_phut = @don_gia_gio / 60.0;
+
+        -- Tiền sân = (Số phút * Đơn giá giờ) / 60, làm tròn hàng nghìn đồng
+        DECLARE @tien_san DECIMAL(10,2);
+        SET @tien_san = ROUND((@so_phut * @don_gia_gio) / 60.0, -3);
+
+        SELECT 
+            @ma_san AS ma_san,
+            @ten_san AS ten_san,
+            @ten_loai AS ten_loai,
+            @ngay_da AS ngay_da,
+            CONVERT(VARCHAR(5), @gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), @gio_ket_thuc, 108) AS gio_ket_thuc,
+            @so_phut AS so_phut,
+            @don_gia_gio AS don_gia_gio,
+            CAST(@don_gia_phut AS DECIMAL(10,2)) AS don_gia_phut,
+            @tien_san AS tien_san,
+            CONCAT(@so_phut, N' phút × ', FORMAT(@don_gia_gio, '#,##0'), N' đ / 60 = ', FORMAT(@tien_san, '#,##0'), N' đ') AS cong_thuc_tinh;
+
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 2. Thủ tục Đặt sân tính giờ linh hoạt
+CREATE OR ALTER PROCEDURE sp_DatSanLinhHoat
+    @ma_nguoi_dung INT,
+    @ma_san INT,
+    @ngay_da DATE,
+    @gio_bat_dau TIME,
+    @gio_ket_thuc TIME,
+    @ghi_chu NVARCHAR(255) = NULL,
+    @tien_coc DECIMAL(10, 2) = 0
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM San_Bong WHERE id = @ma_san AND trang_thai = 'SAN_SANG')
+        BEGIN
+            ;THROW 50010, N'Sân bóng không tồn tại hoặc đang trong thời gian bảo trì.', 1;
+        END;
+
+        IF @gio_bat_dau >= @gio_ket_thuc
+        BEGIN
+            ;THROW 50011, N'Giờ bắt đầu phải nhỏ hơn giờ kết thúc.', 1;
+        END;
+
+        IF @ngay_da < CAST(GETDATE() AS DATE)
+        BEGIN
+            ;THROW 50012, N'Không thể đặt sân cho ngày trong quá khứ.', 1;
+        END;
+
+        -- Kiểm tra trùng lịch
+        IF EXISTS (
+            SELECT 1 
+            FROM Don_Dat_San 
+            WHERE ma_san = @ma_san 
+              AND ngay_da = @ngay_da 
+              AND trang_thai IN ('CHO_XAC_NHAN', 'DA_CHOT')
+              AND (
+                  (@gio_bat_dau >= gio_bat_dau AND @gio_bat_dau < gio_ket_thuc) OR
+                  (@gio_ket_thuc > gio_bat_dau AND @gio_ket_thuc <= gio_ket_thuc) OR
+                  (@gio_bat_dau <= gio_bat_dau AND @gio_ket_thuc >= gio_ket_thuc)
+              )
+        )
+        BEGIN
+            ;THROW 50013, N'Khung giờ này sân đã có người đặt. Vui lòng chọn khung giờ khác!', 1;
+        END;
+
+        -- Tính số phút và tiền sân theo đơn giá giờ
+        DECLARE @ma_loai_san INT, @gia_co_ban DECIMAL(10,2);
+        SELECT @ma_loai_san = sb.ma_loai_san, @gia_co_ban = ls.gia_co_ban
+        FROM San_Bong sb
+        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        WHERE sb.id = @ma_san;
+
+        DECLARE @la_cuoi_tuan BIT = 0;
+        IF DATEPART(dw, @ngay_da) IN (1, 7) SET @la_cuoi_tuan = 1;
+
+        DECLARE @don_gia_gio DECIMAL(10,2);
+        SELECT TOP 1 @don_gia_gio = don_gia
+        FROM Khung_Gio_Gia
+        WHERE ma_loai_san = @ma_loai_san
+          AND la_cuoi_tuan = @la_cuoi_tuan
+          AND (
+              (@gio_bat_dau >= gio_bat_dau AND @gio_bat_dau < gio_ket_thuc) OR
+              (@gio_ket_thuc > gio_bat_dau AND @gio_ket_thuc <= gio_ket_thuc)
+          );
+
+        IF @don_gia_gio IS NULL SET @don_gia_gio = @gia_co_ban;
+
+        DECLARE @so_phut INT = DATEDIFF(MINUTE, CAST(@gio_bat_dau AS TIME), CAST(@gio_ket_thuc AS TIME));
+        DECLARE @tien_san DECIMAL(10,2) = ROUND((@so_phut * @don_gia_gio) / 60.0, -3);
+
+        DECLARE @trang_thai VARCHAR(20) = 'CHO_XAC_NHAN';
+        IF @tien_coc > 0 SET @trang_thai = 'DA_CHOT';
+
+        INSERT INTO Don_Dat_San (
+            ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, 
+            tien_san, tong_tien, kieu_dat, so_phut_da, ghi_chu, trang_thai, ngay_tao
+        )
+        VALUES (
+            @ma_nguoi_dung, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc, 
+            @tien_san, @tien_san, 'LINH_HOAT', @so_phut, @ghi_chu, @trang_thai, GETDATE()
+        );
+
+        DECLARE @ma_don_moi INT = SCOPE_IDENTITY();
+
+        IF @tien_coc > 0
+        BEGIN
+            INSERT INTO Thanh_Toan (
+                ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ngay_thanh_toan
+            )
+            VALUES (
+                @ma_don_moi, 'TIEN_MAT', 'DAT_COC', @tien_coc, 'THANH_CONG', GETDATE()
+            );
+        END;
+
+        COMMIT TRANSACTION;
+
+        SELECT 
+            d.id, d.ma_nguoi_dung, nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai,
+            d.ma_san, sb.ten_san, ls.ten_loai, d.ngay_da,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+            d.so_phut_da, d.kieu_dat, d.ghi_chu,
+            d.tien_san, d.tong_tien, @tien_coc AS tien_coc_da_tra,
+            d.trang_thai, d.ngay_tao
+        FROM Don_Dat_San d
+        INNER JOIN San_Bong sb ON d.ma_san = sb.id
+        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        WHERE d.id = @ma_don_moi;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 3. Thủ tục Bắt đầu tính giờ linh hoạt ngay tại quầy (Check-in Realtime)
+CREATE OR ALTER PROCEDURE sp_BatDauDaLinhHoat
+    @ma_nguoi_dung INT = 3,
+    @ma_san INT,
+    @ten_khach_hang NVARCHAR(100) = NULL,
+    @so_dien_thoai VARCHAR(15) = NULL,
+    @ghi_chu NVARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM San_Bong WHERE id = @ma_san AND trang_thai = 'SAN_SANG')
+        BEGIN
+            ;THROW 50010, N'Sân bóng không tồn tại hoặc đang trong thời gian bảo trì.', 1;
+        END;
+
+        DECLARE @ngay_hien_tai DATE = CAST(GETDATE() AS DATE);
+        DECLARE @gio_hien_tai TIME = CAST(GETDATE() AS TIME);
+        DECLARE @gio_tam_tinh TIME = CAST(DATEADD(MINUTE, 60, GETDATE()) AS TIME);
+
+        INSERT INTO Don_Dat_San (
+            ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, 
+            tien_san, tong_tien, kieu_dat, so_phut_da, ghi_chu, trang_thai, ngay_tao
+        )
+        VALUES (
+            @ma_nguoi_dung, @ma_san, @ngay_hien_tai, @gio_hien_tai, @gio_tam_tinh, 
+            0, 0, 'LINH_HOAT', 0, ISNULL(@ghi_chu, N'Đang đá tính giờ trực tiếp tại quầy'), 'DA_CHOT', GETDATE()
+        );
+
+        DECLARE @ma_don_moi INT = SCOPE_IDENTITY();
+        COMMIT TRANSACTION;
+
+        SELECT 
+            d.id, d.ma_nguoi_dung, 
+            ISNULL(@ten_khach_hang, nd.ho_ten) AS ten_khach_hang, 
+            ISNULL(@so_dien_thoai, nd.so_dien_thoai) AS so_dien_thoai,
+            d.ma_san, sb.ten_san, ls.ten_loai, d.ngay_da,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+            d.so_phut_da, d.kieu_dat, d.ghi_chu,
+            d.tien_san, d.tong_tien, d.trang_thai, d.ngay_tao
+        FROM Don_Dat_San d
+        INNER JOIN San_Bong sb ON d.ma_san = sb.id
+        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        WHERE d.id = @ma_don_moi;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 4. Thủ tục Kết thúc đá linh hoạt và chốt tiền sân theo phút thực tế
+CREATE OR ALTER PROCEDURE sp_KetThucDaLinhHoat
+    @ma_don_dat INT,
+    @gio_ket_thuc TIME = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Don_Dat_San WHERE id = @ma_don_dat)
+        BEGIN
+            ;THROW 50020, N'Không tìm thấy thông tin đơn đặt sân.', 1;
+        END;
+
+        DECLARE @ma_san INT, @ngay_da DATE, @gio_bat_dau TIME;
+        SELECT @ma_san = ma_san, @ngay_da = ngay_da, @gio_bat_dau = gio_bat_dau
+        FROM Don_Dat_San
+        WHERE id = @ma_don_dat;
+
+        DECLARE @gio_ket_thuc_chot TIME = ISNULL(@gio_ket_thuc, CAST(GETDATE() AS TIME));
+        DECLARE @so_phut_thuc_te INT = DATEDIFF(MINUTE, CAST(@gio_bat_dau AS TIME), CAST(@gio_ket_thuc_chot AS TIME));
+        IF @so_phut_thuc_te <= 0 SET @so_phut_thuc_te = 15; -- Tối thiểu 15 phút
+
+        -- Lấy đơn giá theo giờ
+        DECLARE @ma_loai_san INT, @gia_co_ban DECIMAL(10,2);
+        SELECT @ma_loai_san = sb.ma_loai_san, @gia_co_ban = ls.gia_co_ban
+        FROM San_Bong sb
+        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        WHERE sb.id = @ma_san;
+
+        DECLARE @la_cuoi_tuan BIT = 0;
+        IF DATEPART(dw, @ngay_da) IN (1, 7) SET @la_cuoi_tuan = 1;
+
+        DECLARE @don_gia_gio DECIMAL(10,2);
+        SELECT TOP 1 @don_gia_gio = don_gia
+        FROM Khung_Gio_Gia
+        WHERE ma_loai_san = @ma_loai_san
+          AND la_cuoi_tuan = @la_cuoi_tuan
+          AND (
+              (@gio_bat_dau >= gio_bat_dau AND @gio_bat_dau < gio_ket_thuc) OR
+              (@gio_ket_thuc_chot > gio_bat_dau AND @gio_ket_thuc_chot <= gio_ket_thuc)
+          );
+
+        IF @don_gia_gio IS NULL SET @don_gia_gio = @gia_co_ban;
+
+        DECLARE @tien_san DECIMAL(10,2) = ROUND((@so_phut_thuc_te * @don_gia_gio) / 60.0, -3);
+
+        -- Tính tổng tiền dịch vụ phát sinh
+        DECLARE @tien_dich_vu DECIMAL(10,2) = 0;
+        SELECT @tien_dich_vu = ISNULL(SUM(so_luong * gia_luc_ban), 0)
+        FROM Chi_Tiet_Dich_Vu
+        WHERE ma_don_dat = @ma_don_dat;
+
+        UPDATE Don_Dat_San
+        SET gio_ket_thuc = @gio_ket_thuc_chot,
+            so_phut_da = @so_phut_thuc_te,
+            tien_san = @tien_san,
+            tong_tien = @tien_san + @tien_dich_vu,
+            trang_thai = 'HOAN_THANH'
+        WHERE id = @ma_don_dat;
+
+        COMMIT TRANSACTION;
+
+        SELECT 
+            d.id, d.ma_nguoi_dung, nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai,
+            d.ma_san, sb.ten_san, ls.ten_loai, d.ngay_da,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+            d.so_phut_da, d.kieu_dat, d.ghi_chu,
+            @don_gia_gio AS don_gia_gio,
+            d.tien_san, @tien_dich_vu AS tien_dich_vu, d.tong_tien,
+            d.trang_thai, d.ngay_tao
+        FROM Don_Dat_San d
+        INNER JOIN San_Bong sb ON d.ma_san = sb.id
+        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        WHERE d.id = @ma_don_dat;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
 
     END TRY
     BEGIN CATCH
@@ -1026,8 +1513,11 @@ BEGIN
             ;THROW 50020, N'Không tìm thấy thông tin đơn đặt sân.', 1;
         END;
 
-        DECLARE @vai_tro VARCHAR(20);
-        SELECT @vai_tro = vai_tro FROM Nguoi_Dung WHERE id = @ma_nguoi_dung;
+        DECLARE @vai_tro VARCHAR(50);
+        SELECT @vai_tro = vt.TenVaiTro 
+        FROM Nguoi_Dung nd
+        LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+        WHERE nd.id = @ma_nguoi_dung;
         
         IF @nguoi_so_huu <> @ma_nguoi_dung AND @vai_tro NOT IN ('ADMIN', 'NHAN_VIEN')
         BEGIN
@@ -1232,8 +1722,124 @@ BEGIN
     BEGIN CATCH
         ;THROW;
     END CATCH;
+-- ---------------------------------------------------------------------
+-- 4.7. CÁC THỦ TỤC TRUY VẤN LỊCH SỬ GIAO DỊCH, NHẬP KHO, HOÀN TIỀN & BÁN HÀNG
+-- ---------------------------------------------------------------------
+
+-- Lấy danh sách phiếu nhập kho
+CREATE OR ALTER PROCEDURE sp_LayDanhSachPhieuNhapKho
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT 
+            p.id,
+            p.ma_dich_vu,
+            dv.ten_dich_vu,
+            dv.don_vi_tinh,
+            p.so_luong_nhap,
+            p.gia_nhap,
+            (p.so_luong_nhap * p.gia_nhap) AS tong_tien_nhap,
+            p.ngay_nhap
+        FROM Phieu_Nhap_Kho p
+        LEFT JOIN Dich_Vu dv ON p.ma_dich_vu = dv.id
+        ORDER BY p.ngay_nhap DESC, p.id DESC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
 END;
 GO
 
-PRINT N'✅ ĐÃ NẠP TOÀN BỘ 18 STORED PROCEDURES THÀNH CÔNG CHO CSDL QuanLySanBong!';
+-- Lấy danh sách lịch sử thanh toán
+CREATE OR ALTER PROCEDURE sp_LayDanhSachThanhToan
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT 
+            tt.id,
+            tt.ma_don_dat,
+            nd.ho_ten AS ten_khach_hang,
+            nd.so_dien_thoai,
+            sb.ten_san,
+            d.ngay_da,
+            tt.so_tien,
+            tt.phuong_thuc,
+            tt.loai_thanh_toan,
+            tt.ma_giao_dich,
+            tt.ngay_thanh_toan
+        FROM Thanh_Toan tt
+        LEFT JOIN Don_Dat_San d ON tt.ma_don_dat = d.id
+        LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        ORDER BY tt.ngay_thanh_toan DESC, tt.id DESC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- Lấy danh sách lịch sử hoàn tiền / hủy đơn
+CREATE OR ALTER PROCEDURE sp_LayDanhSachHoanTien
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT 
+            ht.id,
+            ht.ma_don_dat,
+            nd.ho_ten AS ten_khach_hang,
+            nd.so_dien_thoai,
+            sb.ten_san,
+            d.ngay_da,
+            ht.so_tien_hoan,
+            ht.ty_le_hoan,
+            ht.ly_do_huy,
+            ht.ngay_hoan
+        FROM Lich_Su_Hoan_Tien ht
+        LEFT JOIN Don_Dat_San d ON ht.ma_don_dat = d.id
+        LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        ORDER BY ht.ngay_hoan DESC, ht.id DESC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- Lấy toàn bộ danh sách chi tiết dịch vụ đã bán tại quầy POS
+CREATE OR ALTER PROCEDURE sp_LayDanhSachChiTietDichVu
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT 
+            ct.id,
+            ct.ma_don_dat,
+            nd.ho_ten AS ten_khach_hang,
+            sb.ten_san,
+            ct.ma_dich_vu,
+            dv.ten_dich_vu,
+            dv.don_vi_tinh,
+            ct.so_luong,
+            ct.gia_luc_ban,
+            (ct.so_luong * ct.gia_luc_ban) AS thanh_tien,
+            ct.ngay_tao
+        FROM Chi_Tiet_Dich_Vu ct
+        LEFT JOIN Dich_Vu dv ON ct.ma_dich_vu = dv.id
+        LEFT JOIN Don_Dat_San d ON ct.ma_don_dat = d.id
+        LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        ORDER BY ct.ngay_tao DESC, ct.id DESC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+PRINT N'✅ ĐÃ NẠP TOÀN BỘ STORED PROCEDURES CHO 11 BẢNG CSDL QuanLySanBong THÀNH CÔNG!';
 GO
