@@ -54,7 +54,7 @@ import {
   ShieldAlert,
   ArrowLeft
 } from 'lucide-react';
-import { AuthUser } from '../Login/login';
+import { AuthUser } from './Login/login';
 
 // =====================================================================
 // 1. ĐỊNH NGHĨA KIỂU DỮ LIỆU & TABS (ÁNH XẠ 11 BẢNG CSDL)

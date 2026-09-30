@@ -1,6 +1,7 @@
 import "@/styles/globals.css";
 import "@/styles/login.css";
 import "@/styles/profile.css";
+import "@/styles/history.css";
 import type { AppProps } from "next/app";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";

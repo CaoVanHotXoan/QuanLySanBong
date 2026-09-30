@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
+import { io, Socket } from 'socket.io-client';
 import {
   Calendar,
   Clock,
@@ -33,9 +35,10 @@ import {
   QrCode,
   RefreshCw
 } from 'lucide-react';
-import Login, { AuthUser } from '../Login/login';
+import Login, { AuthUser } from './Login/login';
 import Profile from '../profile/profile';
 import SoccerLoader from '../components/SoccerLoader';
+import DateNavigationBar from '../components/DateNavigationBar';
 
 // =====================================================================
 // 1. ĐỊNH NGHĨA INTERFACES & KIỂU DỮ LIỆU (MAPPING TỪ CSDL SQL SERVER)
@@ -95,7 +98,9 @@ interface DichVu {
 }
 
 // Cấu hình URL Backend API Express kết nối trực tiếp CSDL SQL Server
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+// Cấu hình URL Socket.io Real-time
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
 
 // Danh sách các khung giờ đá tiêu chuẩn trong ngày
 const TIME_SLOTS = [
@@ -111,9 +116,20 @@ const TIME_SLOTS = [
 // =====================================================================
 
 export default function HomePage() {
+  const router = useRouter();
+
   // -------------------------------------------------------------
   // A. CÁC STATE QUẢN LÝ DỮ LIỆU THỰC TỪ SQL SERVER
   // -------------------------------------------------------------
+
+  // Ref kết nối Socket.io Real-time
+  const socketRef = useRef<Socket | null>(null);
+
+  // Danh sách các ID slot đang bị khóa trên hệ thống Real-time
+  const [lockedSlots, setLockedSlots] = useState<string[]>([]);
+
+  // SlotId do CHÍNH user hiện tại đang giữ chỗ thao tác
+  const [myLockedSlotId, setMyLockedSlotId] = useState<string | null>(null);
 
   // Chuyển đổi Giao diện Sáng / Tối
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
@@ -122,7 +138,7 @@ export default function HomePage() {
   const [loaiSanList, setLoaiSanList] = useState<LoaiSan[]>([]);
   const [sanBongList, setSanBongList] = useState<SanBong[]>([]);
   const [dichVuList, setDichVuList] = useState<DichVu[]>([]);
-  
+
   // Lưới ma trận slot lịch sân (Được tổng hợp từ San_Bong + sp_LayLichSan SQL Server)
   const [gridSlots, setGridSlots] = useState<Record<string, SlotLichSan>>({});
 
@@ -325,6 +341,27 @@ export default function HomePage() {
     loadAllInitialData();
   }, []);
 
+  // Khởi tạo kết nối Real-time Socket.io Client
+  useEffect(() => {
+    const socket: Socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('⚡ Đã kết nối Real-time Socket server:', socket.id);
+    });
+
+    // Lắng nghe danh sách slot đang bị khóa trên toàn hệ thống
+    socket.on('slots_updated', (updatedSlots: string[]) => {
+      setLockedSlots(updatedSlots || []);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
   // Cập nhật ma trận lịch sân khi danh sách sân bóng hoặc ngày đá thay đổi
   useEffect(() => {
     if (sanBongList.length > 0) {
@@ -335,6 +372,16 @@ export default function HomePage() {
   // -------------------------------------------------------------
   // C. CÁC HÀM XỬ LÝ SỰ KIỆN TƯƠNG TÁC GIAO DIỆN
   // -------------------------------------------------------------
+
+  // Hàm đóng Modal đặt sân và giải phóng ô đang giữ chỗ Real-time
+  const handleCloseBookingModal = () => {
+    if (myLockedSlotId) {
+      socketRef.current?.emit('unlock_slot', myLockedSlotId);
+      setMyLockedSlotId(null);
+    }
+    setSelectedSlot(null);
+    setShowQR(false);
+  };
 
   // Lọc danh sách sân theo loại sân và từ khóa tìm kiếm tên sân
   const filteredSanList = useMemo(() => {
@@ -388,11 +435,31 @@ export default function HomePage() {
     }
   };
 
-  // Mở Modal đặt sân khi click vào ô Slot Sân Trống
+  // Mở Modal đặt sân khi click vào ô Slot Sân Trống (Kèm Khóa Real-time)
   const handleSlotClick = (san: SanBong, slot: { start: string; end: string; isGold: boolean }) => {
+    const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
     const slotData = gridSlots[`${san.id}_${slot.start}`];
 
+    // 1. Kiểm tra nếu ô đang bị người khác giữ Real-time
+    if (lockedSlots.includes(slotKeyRealtime) && myLockedSlotId !== slotKeyRealtime) {
+      triggerToast({
+        type: 'info',
+        message: `Khung giờ ${slot.start} - ${slot.end} của ${san.ten_san} đang có người khác giữ chỗ điền thông tin!`,
+      });
+      return;
+    }
+
+    // 2. Nếu ô hoàn toàn trống
     if (!slotData || slotData.trang_thai === 'TRONG') {
+      // Nếu trước đó đang giữ ô khác, nhả ô cũ
+      if (myLockedSlotId && myLockedSlotId !== slotKeyRealtime) {
+        socketRef.current?.emit('unlock_slot', myLockedSlotId);
+      }
+
+      // Phát sự kiện khóa ô này lên server
+      socketRef.current?.emit('lock_slot', slotKeyRealtime);
+      setMyLockedSlotId(slotKeyRealtime);
+
       const [h1, m1] = slot.start.split(':').map(Number);
       const [h2, m2] = slot.end.split(':').map(Number);
       const soPhut = (h2 * 60 + m2) - (h1 * 60 + m1);
@@ -514,6 +581,11 @@ export default function HomePage() {
 
       // Đặt sân thành công -> Tải lại lịch sân trực tiếp từ CSDL SQL Server
       await fetchLichSan(filterNgayDa, sanBongList);
+
+      if (myLockedSlotId) {
+        socketRef.current?.emit('unlock_slot', myLockedSlotId);
+        setMyLockedSlotId(null);
+      }
 
       setIsSubmitting(false);
       setShowQR(false);
@@ -709,6 +781,17 @@ export default function HomePage() {
                       >
                         <User className="w-4 h-4 text-emerald-500" />
                         Thông tin tài khoản
+                      </button>
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          router.push('/history');
+                        }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl transition-colors text-left cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-800/60' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-100'
+                          }`}
+                      >
+                        <History className="w-4 h-4 text-emerald-500" />
+                        Lịch sử đặt sân
                       </button>
                       <button
                         onClick={handleLogout}
@@ -962,8 +1045,12 @@ export default function HomePage() {
                 <span className="w-3 h-3 rounded-md bg-emerald-500 shadow-sm shadow-emerald-500/50" />
                 <span>Sân Trống (Click Đặt)</span>
               </div>
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-gray-500/10 border border-gray-500/40 text-gray-400">
+                <span className="w-3 h-3 rounded-md bg-gray-500 shadow-sm shadow-gray-500/50 animate-pulse" />
+                <span>Đang Giữ Chỗ (Realtime)</span>
+              </div>
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-300">
-                <span className="w-3 h-3 rounded-md bg-amber-500 shadow-sm shadow-amber-500/50 animate-pulse" />
+                <span className="w-3 h-3 rounded-md bg-amber-500 shadow-sm shadow-amber-500/50" />
                 <span>Đang Giữ Chỗ Cọc</span>
               </div>
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/40 text-rose-600 dark:text-rose-300">
@@ -971,6 +1058,22 @@ export default function HomePage() {
                 <span>Đã Chốt / Đang Đá</span>
               </div>
             </div>
+          </div>
+
+          {/* THANH ĐIỀU HƯỚNG NGÀY (DATE NAVIGATION BAR) */}
+          <div className={`mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl border shadow-lg backdrop-blur-md relative z-30 ${isDarkMode ? 'bg-slate-900/80 border-slate-800 shadow-slate-950/40' : 'bg-white border-slate-200 shadow-slate-200/50'
+            }`}>
+            <div className="flex items-center gap-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className={`text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                Xem Lịch Ngày:
+              </span>
+            </div>
+
+            <DateNavigationBar
+              value={filterNgayDa}
+              onChange={(_date, formattedDateStr) => setFilterNgayDa(formattedDateStr)}
+            />
           </div>
 
           {/* KHUNG BẢNG MA TRẬN GRID */}
@@ -1033,13 +1136,33 @@ export default function HomePage() {
                       {/* Các ô Slot trên dòng của sân */}
                       {filteredTimeSlots.map((slot) => {
                         const slotKey = `${san.id}_${slot.start}`;
+                        const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
                         const slotData = gridSlots[slotKey];
                         const status = slotData ? slotData.trang_thai : 'TRONG';
+
+                        // Kiểm tra nếu ô đang bị người khác giữ chỗ Real-time
+                        const isLockedByOther =
+                          lockedSlots.includes(slotKeyRealtime) && myLockedSlotId !== slotKeyRealtime;
 
                         return (
                           <td key={slot.start} className={`p-2 sm:p-3 border-l text-center ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'
                             }`}>
-                            {status === 'TRONG' && (
+                            {/* 1. TRƯỜNG HỢP: ĐANG CÓ NGƯỜI KHÁC GIỮ CHỖ REALTIME (HIỂN THỊ MÀU XÁM) */}
+                            {isLockedByOther ? (
+                              <div
+                                title="Đang có người khác thao tác giữ chỗ ô giờ này"
+                                className="w-full h-20 p-2 rounded-2xl border border-gray-600/50 bg-gray-800/70 text-gray-400 flex flex-col items-center justify-center gap-1 opacity-70 cursor-not-allowed select-none pointer-events-none transition-all"
+                              >
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-300">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-pulse" />
+                                  ĐANG GIỮ CHỖ
+                                </span>
+                                <span className="text-[10px] text-gray-400 font-medium truncate max-w-[110px]">
+                                  Có người đang đặt...
+                                </span>
+                                <span className="text-[9px] text-gray-500 font-mono">Vui lòng chờ</span>
+                              </div>
+                            ) : status === 'TRONG' ? (
                               <button
                                 onClick={() => handleSlotClick(san, slot)}
                                 className={`w-full h-20 p-2 rounded-2xl border transition-all duration-200 flex flex-col items-center justify-center gap-1 group shadow-sm hover:scale-[1.02] cursor-pointer ${isDarkMode
@@ -1057,9 +1180,7 @@ export default function HomePage() {
                                   + Bấm Đặt Ngay
                                 </span>
                               </button>
-                            )}
-
-                            {status === 'CHO_XAC_NHAN' && (
+                            ) : status === 'CHO_XAC_NHAN' ? (
                               <div
                                 onClick={() => handleSlotClick(san, slot)}
                                 className={`w-full h-20 p-2 rounded-2xl border flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${isDarkMode ? 'bg-amber-950/40 border-amber-500/40 hover:bg-amber-950/60' : 'bg-amber-50 border-amber-300 hover:bg-amber-100'
@@ -1075,9 +1196,7 @@ export default function HomePage() {
                                 </span>
                                 <span className="text-[9px] text-amber-600 dark:text-amber-400/80 font-mono">Đang chờ cọc</span>
                               </div>
-                            )}
-
-                            {status === 'DA_CHOT' && (
+                            ) : (
                               <div className={`w-full h-20 p-2 rounded-2xl border flex flex-col items-center justify-center gap-1 opacity-70 cursor-not-allowed ${isDarkMode ? 'bg-rose-950/30 border-rose-900/40' : 'bg-rose-50 border-rose-200'
                                 }`}>
                                 <span className="text-[11px] font-bold text-rose-500 flex items-center gap-1">
@@ -1382,10 +1501,7 @@ export default function HomePage() {
                 </h3>
               </div>
               <button
-                onClick={() => {
-                  setSelectedSlot(null);
-                  setShowQR(false);
-                }}
+                onClick={handleCloseBookingModal}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer ${isDarkMode ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900'
                   }`}
               >
