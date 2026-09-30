@@ -1,10 +1,12 @@
 /**
  * =====================================================================
- * MÁY CHỦ CHÍNH (EXPRESS SERVER) - QUẢN LÝ SÂN BÓNG BACKEND
+ * MÁY CHỦ CHÍNH (EXPRESS + SOCKET.IO REALTIME) - QUẢN LÝ SÂN BÓNG BACKEND
  * =====================================================================
  */
 
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -66,10 +68,80 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Khởi chạy máy chủ
-app.listen(PORT, () => {
+// =====================================================================
+// KHỞI TẠO HTTP SERVER & SOCKET.IO CHO TÍNH NĂNG GIỮ CHỖ REAL-TIME
+// =====================================================================
+const server = http.createServer(app);
+
+const io = new Server(server, {
+    cors: {
+        origin: '*',
+        methods: ['GET', 'POST']
+    }
+});
+
+/**
+ * In-memory Map lưu danh sách các ô slot đang bị giữ chỗ tạm thời
+ * Key: slotId (Ví dụ: "2026-09-30_1_16:30" hoặc "1_16:30")
+ * Value: socket.id của người đang thao tác giữ chỗ
+ */
+const lockedSlots = new Map();
+
+io.on('connection', (socket) => {
+    console.log(`⚡ [Socket Connected]: ${socket.id}`);
+
+    // Gửi danh sách các slot đang bị khóa cho Client vừa kết nối
+    socket.emit('slots_updated', Array.from(lockedSlots.keys()));
+
+    // 1. SỰ KIỆN KHÓA SÂN (lock_slot)
+    socket.on('lock_slot', (slotId) => {
+        if (!slotId) return;
+
+        // Nếu ô này chưa bị ai khác khóa
+        if (!lockedSlots.has(slotId)) {
+            lockedSlots.set(slotId, socket.id);
+            console.log(`🔒 [Lock]: Slot ${slotId} được giữ bởi ${socket.id}`);
+            // Broadcast toàn bộ danh sách cập nhật cho TẤT CẢ clients
+            io.emit('slots_updated', Array.from(lockedSlots.keys()));
+        }
+    });
+
+    // 2. SỰ KIỆN NHẢ SÂN (unlock_slot)
+    socket.on('unlock_slot', (slotId) => {
+        if (!slotId) return;
+
+        // Chỉ cho phép chính socket đang giữ ô đó nhả ra
+        if (lockedSlots.get(slotId) === socket.id) {
+            lockedSlots.delete(slotId);
+            console.log(`🔓 [Unlock]: Slot ${slotId} đã được nhả bởi ${socket.id}`);
+            io.emit('slots_updated', Array.from(lockedSlots.keys()));
+        }
+    });
+
+    // 3. SỰ KIỆN NGẮT KẾT NỐI (disconnect)
+    // Tự động giải phóng toàn bộ ô mà user này đang giữ khi tắt tab/rớt mạng
+    socket.on('disconnect', () => {
+        console.log(`❌ [Socket Disconnected]: ${socket.id}`);
+        let hasChanges = false;
+
+        for (const [slotId, holderSocketId] of lockedSlots.entries()) {
+            if (holderSocketId === socket.id) {
+                lockedSlots.delete(slotId);
+                hasChanges = true;
+                console.log(`🧹 [Auto-Release]: Đã tự động nhả slot ${slotId} do ${socket.id} ngắt kết nối.`);
+            }
+        }
+
+        if (hasChanges) {
+            io.emit('slots_updated', Array.from(lockedSlots.keys()));
+        }
+    });
+});
+
+// Khởi chạy máy chủ HTTP + Socket.io
+server.listen(PORT, () => {
     console.log(`====================================================`);
-    console.log(`🚀 Máy chủ Backend đang lắng nghe tại: http://localhost:${PORT}`);
+    console.log(`🚀 Máy chủ Backend + Socket.io đang lắng nghe tại: http://localhost:${PORT}`);
     console.log(`📌 Môi trường: ${process.env.NODE_ENV || 'development'}`);
     console.log(`====================================================`);
 });
