@@ -102,13 +102,21 @@ const layDanhSachThanhToan = async (req, res) => {
 const layDanhSachHoanTien = async (req, res) => {
     try {
         const pool = await poolPromise;
-        const result = await pool.request().execute('sp_LayDanhSachHoanTien');
+        const result = await pool.request().query(`
+            SELECT h.id, h.ma_don_dat, h.so_tien_hoan, h.ty_le_hoan, h.ly_do_huy, h.ngay_hoan,
+                   u.ho_ten AS ten_khach_hang, u.so_dien_thoai, s.ten_san, d.ngay_da
+            FROM Lich_Su_Hoan_Tien h
+            LEFT JOIN Don_Dat_San d ON h.ma_don_dat = d.id
+            LEFT JOIN Nguoi_Dung u ON d.ma_nguoi_dung = u.id
+            LEFT JOIN San_Bong s ON d.ma_san = s.id
+            ORDER BY h.id DESC
+        `);
         return res.status(200).json({
             success: true,
             data: result.recordset
         });
     } catch (error) {
-        console.error('Lỗi sp_LayDanhSachHoanTien:', error.message);
+        console.error('Lỗi layDanhSachHoanTien:', error.message);
         return res.status(400).json({
             success: false,
             message: error.message || 'Lỗi khi lấy danh sách hoàn tiền'
@@ -116,8 +124,114 @@ const layDanhSachHoanTien = async (req, res) => {
     }
 };
 
+/**
+ * Thêm bản ghi hoàn tiền
+ * Method: POST /api/thanh-toan/hoan-tien
+ */
+const themHoanTien = async (req, res) => {
+    try {
+        const { ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy } = req.body;
+        if (!ma_don_dat || so_tien_hoan === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp mã đơn đặt và số tiền hoàn!'
+            });
+        }
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+            .input('so_tien_hoan', sql.Decimal(10, 2), parseFloat(so_tien_hoan) || 0)
+            .input('ty_le_hoan', sql.Int, parseInt(ty_le_hoan, 10) || 100)
+            .input('ly_do_huy', sql.NVarChar(255), ly_do_huy || 'Hủy sân hoàn cọc')
+            .query(`
+                INSERT INTO Lich_Su_Hoan_Tien (ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy, ngay_hoan)
+                OUTPUT inserted.*
+                VALUES (@ma_don_dat, @so_tien_hoan, @ty_le_hoan, @ly_do_huy, GETDATE())
+            `);
+
+        return res.status(201).json({
+            success: true,
+            message: 'Thêm bản ghi hoàn tiền thành công!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi themHoanTien:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi thêm bản ghi hoàn tiền'
+        });
+    }
+};
+
+/**
+ * Sửa bản ghi hoàn tiền
+ * Method: PUT /api/thanh-toan/hoan-tien/:id
+ */
+const suaHoanTien = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { so_tien_hoan, ty_le_hoan, ly_do_huy } = req.body;
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .input('so_tien_hoan', sql.Decimal(10, 2), parseFloat(so_tien_hoan) || 0)
+            .input('ty_le_hoan', sql.Int, parseInt(ty_le_hoan, 10) || 100)
+            .input('ly_do_huy', sql.NVarChar(255), ly_do_huy || '')
+            .query(`
+                UPDATE Lich_Su_Hoan_Tien
+                SET so_tien_hoan = @so_tien_hoan,
+                    ty_le_hoan = @ty_le_hoan,
+                    ly_do_huy = @ly_do_huy
+                OUTPUT inserted.*
+                WHERE id = @id
+            `);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật bản ghi hoàn tiền thành công!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi suaHoanTien:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi sửa bản ghi hoàn tiền'
+        });
+    }
+};
+
+/**
+ * Xóa bản ghi hoàn tiền
+ * Method: DELETE /api/thanh-toan/hoan-tien/:id
+ */
+const xoaHoanTien = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await poolPromise;
+        await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .query('DELETE FROM Lich_Su_Hoan_Tien WHERE id = @id');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Xóa bản ghi hoàn tiền thành công!'
+        });
+    } catch (error) {
+        console.error('Lỗi xoaHoanTien:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xóa bản ghi hoàn tiền'
+        });
+    }
+};
+
 module.exports = {
     thanhToanDon,
     layDanhSachThanhToan,
-    layDanhSachHoanTien
+    layDanhSachHoanTien,
+    themHoanTien,
+    suaHoanTien,
+    xoaHoanTien
 };

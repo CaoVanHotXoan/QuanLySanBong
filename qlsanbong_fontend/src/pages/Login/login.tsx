@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { User, Mail, Phone, Lock, Eye, EyeOff, X, Sparkles, LogIn, UserPlus } from "lucide-react";
 
-// Định nghĩa kiểu dữ liệu người dùng khi xác thực thành công
+// Định nghĩa kiểu dữ liệu người dùng khi xác thực thành công từ CSDL SQL Server
 export interface AuthUser {
   id?: number;
   ho_ten: string;
@@ -12,9 +13,16 @@ export interface AuthUser {
   anh_dai_dien?: string;
 }
 
-interface LoginProps {
+export interface LoginProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  initialRegister?: boolean;
   onLoginSuccess?: (userData: AuthUser) => void;
+  // Các props tương thích ngược
   showRegisterButton?: boolean;
+  isOpenControlled?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onCloseControlled?: () => void;
 }
 
 // Địa chỉ API Backend kết nối trực tiếp với SQL Server
@@ -22,20 +30,34 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
   ? `${process.env.NEXT_PUBLIC_API_URL}/auth` 
   : "http://localhost:5000/api/auth";
 
-export default function Login({ onLoginSuccess, showRegisterButton = true }: LoginProps = {}) {
-  // Trạng thái đóng / mở Modal Popup
-  const [isOpen, setIsOpen] = useState<boolean>(false);
+export default function Login({
+  isOpen: isOpenProp,
+  onClose,
+  initialRegister = false,
+  onLoginSuccess,
+  showRegisterButton,
+  isOpenControlled,
+  onOpenChange,
+  onCloseControlled,
+}: LoginProps) {
+  // Trạng thái mở modal: ưu tiên isOpenProp hoặc isOpenControlled
+  const isControlled = isOpenProp !== undefined || isOpenControlled !== undefined;
+  const [internalIsOpen, setInternalIsOpen] = useState<boolean>(false);
+  const isOpen = isControlled ? Boolean(isOpenProp ?? isOpenControlled) : internalIsOpen;
 
   // Trạng thái chuyển đổi form: false = "Đăng nhập", true = "Đăng ký"
-  const [isRegister, setIsRegister] = useState<boolean>(false);
+  const [isRegister, setIsRegister] = useState<boolean>(Boolean(initialRegister));
 
   // Trạng thái đang gửi yêu cầu lên Backend (Loading spinner)
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // Trạng thái ẩn / hiện mật khẩu
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
+
   // Khai báo các State lưu trữ dữ liệu người dùng nhập vào
   const [hoTen, setHoTen] = useState<string>("");
-  // Tên tài khoản email (Phần trước đuôi @gmail.com)
-  const [emailUsername, setEmailUsername] = useState<string>("");
+  const [emailInput, setEmailInput] = useState<string>("");
   const [soDienThoai, setSoDienThoai] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
@@ -44,7 +66,28 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [successMessage, setSuccessMessage] = useState<string>("");
 
-  // Hàm chuẩn hóa email và ghép nối với đuôi @gmail.com nếu chưa có
+  // Đồng bộ initialRegister mỗi khi mở Modal
+  useEffect(() => {
+    if (isOpen) {
+      setIsRegister(Boolean(initialRegister));
+      setErrorMessage("");
+      setSuccessMessage("");
+    }
+  }, [isOpen, initialRegister]);
+
+  // Lắng nghe phím ESC để đóng Modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleCloseModal();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
+  // Hàm chuẩn hóa email và ghép nối với đuôi @gmail.com nếu người dùng chỉ nhập username
   const getFullEmail = (input: string): string => {
     const clean = (input || "").trim();
     if (!clean) return "";
@@ -54,35 +97,29 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
     return `${clean}@gmail.com`;
   };
 
-  // Hàm mở Modal (chọn chế độ Đăng nhập hoặc Đăng ký)
+  // Hàm mở Modal từ trigger nội bộ (nếu có dùng nút kích hoạt nội bộ)
   const handleOpenModal = (registerMode: boolean = false) => {
     setIsRegister(registerMode);
     setErrorMessage("");
     setSuccessMessage("");
-    setIsOpen(true);
+    setInternalIsOpen(true);
+    if (onOpenChange) onOpenChange(true);
   };
 
-  // Hàm đóng Modal (Xóa sạch toàn bộ dữ liệu đã nhập)
+  // Hàm đóng Modal an toàn
   const handleCloseModal = () => {
-    setIsOpen(false);
-    setIsRegister(false);
-    setHoTen("");
-    setEmailUsername("");
-    setSoDienThoai("");
-    setPassword("");
-    setConfirmPassword("");
+    setInternalIsOpen(false);
+    if (onClose) onClose();
+    if (onCloseControlled) onCloseControlled();
+    if (onOpenChange) onOpenChange(false);
     setErrorMessage("");
     setSuccessMessage("");
     setIsLoading(false);
   };
 
   // Hàm chuyển đổi qua lại giữa form Đăng nhập và Đăng ký
-  const toggleForm = (e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    setIsRegister((prev) => !prev);
+  const switchFormTab = (registerMode: boolean) => {
+    setIsRegister(registerMode);
     setErrorMessage("");
     setSuccessMessage("");
     setPassword("");
@@ -96,25 +133,21 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
     setErrorMessage("");
     setSuccessMessage("");
 
-    const fullEmail = getFullEmail(emailUsername);
+    const fullEmail = getFullEmail(emailInput);
 
-    // =========================================================================
-    // 1. KIỂM TRA DỮ LIỆU ĐẦU VÀO (VALIDATION)
-    // =========================================================================
-    if (!emailUsername.trim()) {
-      setErrorMessage("⚠️ Vui lòng nhập tên tài khoản Email.");
+    // 1. Kiểm tra Email
+    if (!emailInput.trim()) {
+      setErrorMessage("⚠️ Vui lòng nhập tên tài khoản hoặc địa chỉ Email.");
       return;
     }
 
-    // Yêu cầu: Đăng ký / Đăng nhập mật khẩu tối thiểu 6 ký tự
+    // 2. Kiểm tra Mật khẩu tối thiểu 6 ký tự
     if (password.length < 6) {
       setErrorMessage("⚠️ Mật khẩu bắt buộc phải có tối thiểu 6 ký tự.");
       return;
     }
 
-    // =========================================================================
-    // 2. XỬ LÝ ĐĂNG KÝ TÀI KHOẢN MỚI (LƯU TRỰC TIẾP VÀO CSDL SQL SERVER)
-    // =========================================================================
+    // 3. Xử lý ĐĂNG KÝ
     if (isRegister) {
       if (!hoTen.trim()) {
         setErrorMessage("⚠️ Vui lòng nhập họ và tên của bạn.");
@@ -129,7 +162,6 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
       setIsLoading(true);
 
       try {
-        // Gửi Request POST lên API Backend Express -> Thực thi Stored Procedure sp_ThemNguoiDung trong SQL Server
         const response = await fetch(`${API_BASE_URL}/register`, {
           method: "POST",
           headers: {
@@ -147,13 +179,13 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
         const data = await response.json();
 
         if (!response.ok || !data.success) {
-          setErrorMessage(data.message || "⚠️ Đăng ký thất bại. Vui lòng thử lại!");
+          setErrorMessage(data.message || "⚠️ Đăng ký thất bại. Email có thể đã được sử dụng!");
           setIsLoading(false);
           return;
         }
 
-        // Đăng ký thành công vào SQL Server -> KHÔNG đóng modal, chuyển sang form Đăng nhập
-        setSuccessMessage(`🎉 Đăng ký tài khoản thành công cho: ${hoTen.trim()}! Bạn có thể nhập mật khẩu để đăng nhập ngay.`);
+        // Đăng ký thành công -> Chuyển sang form Đăng nhập để người dùng đăng nhập
+        setSuccessMessage(`🎉 Đăng ký thành công tài khoản "${fullEmail}"! Bạn có thể nhập mật khẩu để đăng nhập ngay.`);
         setIsLoading(false);
         setIsRegister(false);
         setPassword("");
@@ -161,17 +193,14 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
 
       } catch (error) {
         console.error("Lỗi khi kết nối máy chủ SQL Server:", error);
-        setErrorMessage("❌ Không thể kết nối đến máy chủ Backend SQL Server. Vui lòng kiểm tra lại kết nối mạng hoặc server!");
+        setErrorMessage("❌ Không thể kết nối đến máy chủ Backend SQL Server. Vui lòng kiểm tra lại kết nối!");
         setIsLoading(false);
       }
     } else {
-      // =========================================================================
-      // 3. XỬ LÝ ĐĂNG NHẬP TÀI KHOẢN (XÁC THỰC QUA CSDL SQL SERVER)
-      // =========================================================================
+      // 4. Xử lý ĐĂNG NHẬP
       setIsLoading(true);
 
       try {
-        // Gửi Request POST lên API Backend Express -> Thực thi Stored Procedure sp_DangNhap trong SQL Server
         const response = await fetch(`${API_BASE_URL}/login`, {
           method: "POST",
           headers: {
@@ -217,7 +246,7 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
 
         setIsLoading(false);
 
-        // Kích hoạt callback thông báo đăng nhập thành công cho Component cha
+        // Kích hoạt callback thông báo đăng nhập thành công
         if (onLoginSuccess) {
           onLoginSuccess(userFromDb);
         }
@@ -233,32 +262,34 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
 
   return (
     <>
-      {/* Nút bấm kích hoạt mở Modal trên thanh Header Navbar */}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="login-trigger-btn"
-          onClick={() => handleOpenModal(false)}
-        >
-          Đăng nhập
-        </button>
-        {showRegisterButton && (
+      {/* Nút bấm kích hoạt mở Modal nội bộ (chỉ render khi không điều khiển từ bên ngoài) */}
+      {!isControlled && (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            className="register-trigger-btn"
-            onClick={() => handleOpenModal(true)}
+            className="login-trigger-btn"
+            onClick={() => handleOpenModal(false)}
           >
-            Đăng ký
+            Đăng nhập
           </button>
-        )}
-      </div>
+          {showRegisterButton !== false && (
+            <button
+              type="button"
+              className="register-trigger-btn"
+              onClick={() => handleOpenModal(true)}
+            >
+              Đăng ký
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Khung Modal Popup & Lớp phủ mờ (Overlay) */}
       {isOpen && (
         <div
           className="login-modal-overlay"
-          onClick={(e) => {
-            // Chỉ đóng khi click trực tiếp vào nền mờ bên ngoài
+          onMouseDown={(e) => {
+            // Chỉ đóng khi click chuột trực tiếp vào nền mờ bên ngoài
             if (e.target === e.currentTarget) {
               handleCloseModal();
             }
@@ -266,11 +297,11 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
           role="dialog"
           aria-modal="true"
         >
-          {/* Khung nội dung Modal (Chặn nổi bọt sự kiện click & mousedown) */}
+          {/* Khung nội dung Modal (Chặn nổi bọt mọi sự kiện chuột & phím) */}
           <div
             className="login-modal-container"
-            onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Nút X ở góc trên cùng để đóng popup */}
             <button
@@ -279,55 +310,54 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
               onClick={handleCloseModal}
               aria-label="Đóng popup"
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
 
             {/* Header Modal */}
             <div className="login-header">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-3 shadow-lg shadow-emerald-500/10">
+                {isRegister ? <UserPlus className="w-6 h-6" /> : <LogIn className="w-6 h-6" />}
+              </div>
               <h2 className="login-title">
                 {isRegister ? "Đăng Ký Tài Khoản" : "Đăng Nhập"}
               </h2>
               <p className="login-subtitle">
                 {isRegister
-                  ? "Tạo tài khoản mới trực tiếp vào CSDL để đặt sân nhanh chóng"
-                  : "Chào mừng bạn quay trở lại với hệ thống"}
+                  ? "Tạo tài khoản thành viên để đặt sân nhanh chóng & quản lý lịch đá"
+                  : "Chào mừng bạn quay trở lại với Hệ thống Quản lý Sân Bóng"}
               </p>
+            </div>
+
+            {/* Tabs chuyển đổi giữa Đăng Nhập & Đăng Ký */}
+            <div className="login-tab-container">
+              <button
+                type="button"
+                className={`login-tab-btn ${!isRegister ? "active" : ""}`}
+                onClick={() => switchFormTab(false)}
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Đăng Nhập</span>
+              </button>
+              <button
+                type="button"
+                className={`login-tab-btn ${isRegister ? "active" : ""}`}
+                onClick={() => switchFormTab(true)}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Đăng Ký</span>
+              </button>
             </div>
 
             {/* Thông báo lỗi nếu có */}
             {errorMessage && (
-              <div
-                style={{
-                  backgroundColor: "rgba(239, 68, 68, 0.15)",
-                  border: "1px solid rgba(239, 68, 68, 0.4)",
-                  borderRadius: "10px",
-                  padding: "10px 14px",
-                  marginBottom: "16px",
-                  color: "#fca5a5",
-                  fontSize: "13px",
-                  lineHeight: "1.4",
-                  textAlign: "left",
-                }}
-              >
+              <div className="login-alert-error">
                 {errorMessage}
               </div>
             )}
 
             {/* Thông báo thành công nếu có */}
             {successMessage && (
-              <div
-                style={{
-                  backgroundColor: "rgba(16, 185, 129, 0.15)",
-                  border: "1px solid rgba(16, 185, 129, 0.4)",
-                  borderRadius: "10px",
-                  padding: "10px 14px",
-                  marginBottom: "16px",
-                  color: "#6ee7b7",
-                  fontSize: "13px",
-                  lineHeight: "1.4",
-                  textAlign: "left",
-                }}
-              >
+              <div className="login-alert-success">
                 {successMessage}
               </div>
             )}
@@ -338,15 +368,17 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
               {isRegister && (
                 <div className="login-input-group">
                   <label className="login-label" htmlFor="input-hoten">
-                    Họ và tên <span style={{ color: "#ef4444" }}>*</span>
+                    <User className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Họ và tên <span className="text-rose-500">*</span></span>
                   </label>
                   <input
                     id="input-hoten"
                     type="text"
                     className="login-input"
-                    placeholder="Nhập họ và tên của bạn"
+                    placeholder="Ví dụ: Nguyễn Văn An"
                     value={hoTen}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    autoComplete="name"
+                    onChange={(e) => {
                       setHoTen(e.target.value);
                       if (errorMessage) setErrorMessage("");
                     }}
@@ -355,19 +387,21 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
                 </div>
               )}
 
-              {/* Trường Số điện thoại (Tùy chọn khi Đăng ký) */}
+              {/* Trường Số điện thoại (Chỉ hiển thị khi Đăng ký) */}
               {isRegister && (
                 <div className="login-input-group">
                   <label className="login-label" htmlFor="input-phone">
-                    Số điện thoại
+                    <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Số điện thoại</span>
                   </label>
                   <input
                     id="input-phone"
                     type="tel"
                     className="login-input"
-                    placeholder="Nhập số điện thoại (ví dụ: 0912345678)"
+                    placeholder="Ví dụ: 0912345678"
                     value={soDienThoai}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    autoComplete="tel"
+                    onChange={(e) => {
                       setSoDienThoai(e.target.value);
                       if (errorMessage) setErrorMessage("");
                     }}
@@ -375,10 +409,11 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
                 </div>
               )}
 
-              {/* Trường Địa chỉ Email với đuôi sẵn @gmail.com */}
+              {/* Trường Địa chỉ Email */}
               <div className="login-input-group">
                 <label className="login-label" htmlFor="input-email">
-                  Địa chỉ Email <span style={{ color: "#ef4444" }}>*</span>
+                  <Mail className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Địa chỉ Email hoặc Tên tài khoản <span className="text-rose-500">*</span></span>
                 </label>
                 <div className="login-email-box">
                   <input
@@ -386,15 +421,15 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
                     type="text"
                     className="login-email-input"
                     placeholder="Nhập tên tài khoản hoặc email..."
-                    value={emailUsername}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      setEmailUsername(e.target.value);
+                    value={emailInput}
+                    autoComplete="email"
+                    onChange={(e) => {
+                      setEmailInput(e.target.value);
                       if (errorMessage) setErrorMessage("");
                     }}
                     required
                   />
-                  {/* Hiển thị đuôi @gmail.com nếu người dùng chỉ gõ tên tài khoản */}
-                  {!emailUsername.includes("@") && (
+                  {!emailInput.includes("@") && emailInput.trim().length > 0 && (
                     <span className="login-email-addon">@gmail.com</span>
                   )}
                 </div>
@@ -403,42 +438,68 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
               {/* Trường Mật khẩu: Tối thiểu 6 ký tự */}
               <div className="login-input-group">
                 <label className="login-label" htmlFor="input-password">
-                  Mật khẩu (Tối thiểu 6 ký tự) <span style={{ color: "#ef4444" }}>*</span>
+                  <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Mật khẩu (Tối thiểu 6 ký tự) <span className="text-rose-500">*</span></span>
                 </label>
-                <input
-                  id="input-password"
-                  type="password"
-                  className="login-input"
-                  placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
-                  minLength={6}
-                  value={password}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    setPassword(e.target.value);
-                    if (errorMessage) setErrorMessage("");
-                  }}
-                  required
-                />
+                <div className="login-password-box">
+                  <input
+                    id="input-password"
+                    type={showPassword ? "text" : "password"}
+                    className="login-password-input"
+                    placeholder="Nhập mật khẩu..."
+                    minLength={6}
+                    value={password}
+                    autoComplete={isRegister ? "new-password" : "current-password"}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errorMessage) setErrorMessage("");
+                    }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="login-password-toggle-btn"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label="Ẩn hiện mật khẩu"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               {/* Trường Nhập lại mật khẩu (Chỉ hiển thị khi ở form Đăng ký) */}
               {isRegister && (
                 <div className="login-input-group">
                   <label className="login-label" htmlFor="input-confirm-password">
-                    Nhập lại mật khẩu <span style={{ color: "#ef4444" }}>*</span>
+                    <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Nhập lại mật khẩu <span className="text-rose-500">*</span></span>
                   </label>
-                  <input
-                    id="input-confirm-password"
-                    type="password"
-                    className="login-input"
-                    placeholder="Nhập lại mật khẩu trên"
-                    minLength={6}
-                    value={confirmPassword}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      setConfirmPassword(e.target.value);
-                      if (errorMessage) setErrorMessage("");
-                    }}
-                    required
-                  />
+                  <div className="login-password-box">
+                    <input
+                      id="input-confirm-password"
+                      type={showConfirmPassword ? "text" : "password"}
+                      className="login-password-input"
+                      placeholder="Xác nhận lại mật khẩu..."
+                      minLength={6}
+                      value={confirmPassword}
+                      autoComplete="new-password"
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        if (errorMessage) setErrorMessage("");
+                      }}
+                      required
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      className="login-password-toggle-btn"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label="Ẩn hiện xác nhận mật khẩu"
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -447,34 +508,48 @@ export default function Login({ onLoginSuccess, showRegisterButton = true }: Log
                 type="submit" 
                 className="login-submit-btn" 
                 disabled={isLoading}
-                style={{ opacity: isLoading ? 0.7 : 1, cursor: isLoading ? "not-allowed" : "pointer" }}
               >
-                {isLoading ? "Đang xử lý..." : isRegister ? "Đăng Ký Tài Khoản" : "Đăng Nhập"}
+                {isLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    <span>Đang xử lý kết nối SQL Server...</span>
+                  </span>
+                ) : isRegister ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <UserPlus className="w-4 h-4" />
+                    <span>ĐĂNG KÝ TÀI KHOẢN NGAY</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <LogIn className="w-4 h-4" />
+                    <span>ĐĂNG NHẬP HỆ THỐNG</span>
+                  </span>
+                )}
               </button>
             </form>
 
-            {/* Chuyển đổi giữa Đăng nhập và Đăng ký */}
+            {/* Chuyển đổi chân trang giữa Đăng nhập và Đăng ký */}
             <div className="login-footer">
               {!isRegister ? (
                 <span>
-                  Chưa có tài khoản?{" "}
+                  Chưa có tài khoản thành viên?{" "}
                   <button
                     type="button"
                     className="login-toggle-link"
-                    onClick={toggleForm}
+                    onClick={() => switchFormTab(true)}
                   >
                     Đăng ký ngay
                   </button>
                 </span>
               ) : (
                 <span>
-                  Đã có tài khoản?{" "}
+                  Đã có tài khoản hệ thống?{" "}
                   <button
                     type="button"
                     className="login-toggle-link"
-                    onClick={toggleForm}
+                    onClick={() => switchFormTab(false)}
                   >
-                    Đăng nhập
+                    Đăng nhập tại đây
                   </button>
                 </span>
               )}

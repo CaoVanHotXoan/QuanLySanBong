@@ -1,29 +1,29 @@
 /* =========================================================
-   LOGIN & REGISTER MODAL STYLES (PURE CSS - DARK THEME)
+   LOGIN & REGISTER MODAL STYLES (PURE CSS - MODERN DARK THEME)
    ========================================================= */
 
-/* Nút bấm kích hoạt mở Modal */
+/* Nút bấm kích hoạt mở Modal trên Navbar */
 .login-trigger-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 24px;
-  font-size: 15px;
-  font-weight: 600;
+  padding: 9px 20px;
+  font-size: 14px;
+  font-weight: 700;
   font-family: inherit;
-  color: #ffffff;
-  background: linear-gradient(135deg, #0ea5e9 0%, #10b981 100%);
+  color: #022c22;
+  background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
-  transition: all 0.25s ease;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   outline: none;
 }
 
 .login-trigger-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
   filter: brightness(1.1);
 }
 
@@ -40,44 +40,32 @@
   font-size: 14px;
   font-weight: 700;
   font-family: inherit;
-  color: #047857;
+  color: #34d399;
   background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.35);
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.25s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   outline: none;
 }
 
 .register-trigger-btn:hover {
   background: rgba(16, 185, 129, 0.22);
   border-color: #10b981;
-  color: #065f46;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
-}
-
-.dark .register-trigger-btn {
   color: #6ee7b7;
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
 }
 
-.dark .register-trigger-btn:hover {
-  color: #a7f3d0;
-  background: rgba(16, 185, 129, 0.25);
-  border-color: #34d399;
-}
-
-/* Lớp phủ mờ toàn màn hình (Overlay) - Căn giữa tuyệt đối bằng Flexbox */
+/* Lớp phủ mờ toàn màn hình (Overlay) */
 .login-modal-overlay {
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(3, 7, 18, 0.82);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(3, 7, 18, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -85,27 +73,27 @@
   padding: 16px;
   box-sizing: border-box;
   overflow-y: auto;
-  animation: modalFadeIn 0.25s ease-out forwards;
+  animation: loginModalFadeIn 0.2s ease-out forwards;
 }
 
-/* Khung popup Modal (Nền xanh đen đậm Dark Theme) */
+/* Khung popup Modal */
 .login-modal-container {
   position: relative;
   width: 100%;
-  max-width: 440px;
-  max-height: calc(100vh - 32px);
+  max-width: 460px;
+  max-height: calc(100vh - 40px);
   overflow-y: auto;
-  background: linear-gradient(145deg, #0f1c2e 0%, #080e18 100%);
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  border-radius: 20px;
-  padding: 24px 24px 20px 24px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7),
-              0 0 35px rgba(14, 165, 233, 0.15);
-  color: #ffffff;
+  background: linear-gradient(165deg, #0f172a 0%, #090e17 100%);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: 24px;
+  padding: 28px 28px 24px 28px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85),
+              0 0 40px rgba(16, 185, 129, 0.15);
+  color: #f8fafc;
   box-sizing: border-box;
-  animation: modalScaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: loginModalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   scrollbar-width: thin;
-  scrollbar-color: rgba(56, 189, 248, 0.3) transparent;
+  scrollbar-color: rgba(52, 211, 153, 0.3) transparent;
 }
 
 .login-modal-container::-webkit-scrollbar {
@@ -113,22 +101,21 @@
 }
 
 .login-modal-container::-webkit-scrollbar-thumb {
-  background: rgba(56, 189, 248, 0.3);
+  background: rgba(52, 211, 153, 0.3);
   border-radius: 10px;
 }
 
 /* Nút đóng (X) ở góc trên cùng */
 .login-close-btn {
   position: absolute;
-  top: 14px;
-  right: 14px;
-  width: 30px;
-  height: 30px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 50%;
   color: #94a3b8;
-  font-size: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -145,60 +132,126 @@
   transform: rotate(90deg);
 }
 
-/* Tiêu đề Modal Header */
+/* Header Modal */
 .login-header {
   text-align: center;
-  margin-bottom: 16px;
-  padding-right: 20px;
-  padding-left: 20px;
+  margin-bottom: 20px;
 }
 
 .login-title {
   font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 4px 0;
-  color: #f8fafc;
+  font-weight: 800;
+  margin: 0 0 6px 0;
+  color: #ffffff;
   letter-spacing: -0.5px;
 }
 
 .login-subtitle {
-  font-size: 12.5px;
+  font-size: 13px;
   color: #94a3b8;
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.45;
+}
+
+/* Tabs chuyển đổi giữa Đăng Nhập & Đăng Ký */
+.login-tab-container {
+  display: flex;
+  background: rgba(15, 23, 42, 0.8);
+  padding: 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  margin-bottom: 20px;
+  gap: 4px;
+}
+
+.login-tab-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #94a3b8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.login-tab-btn:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.login-tab-btn.active {
+  color: #022c22;
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35);
+}
+
+/* Alert Box Lỗi */
+.login-alert-error {
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  color: #fca5a5;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+/* Alert Box Thành Công */
+.login-alert-success {
+  background-color: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  color: #6ee7b7;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
 }
 
 /* Form Container */
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 /* Nhóm Input & Label */
 .login-input-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   text-align: left;
 }
 
 .login-label {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-/* Ô Input: Nền tối, viền mỏng, phát sáng khi focus */
+/* Ô Input chuẩn */
 .login-input {
   width: 100%;
-  padding: 10px 14px;
-  font-size: 13.5px;
+  padding: 11px 14px;
+  font-size: 14px;
   font-family: inherit;
   color: #ffffff;
-  background-color: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 10px;
+  background-color: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 12px;
   outline: none;
   box-sizing: border-box;
   transition: all 0.2s ease;
@@ -206,128 +259,181 @@
 
 .login-input::placeholder {
   color: #64748b;
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
 .login-input:focus {
-  border-color: #38bdf8;
+  border-color: #34d399;
   background-color: rgba(15, 23, 42, 1);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2),
-              0 0 15px rgba(56, 189, 248, 0.15);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
 }
 
-/* Khung ô nhập Email tích hợp đuôi sẵn @gmail.com */
+/* Ô nhập Email */
 .login-email-box {
   display: flex;
   align-items: center;
-  position: relative;
   width: 100%;
-  background-color: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 10px;
+  background-color: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 12px;
   overflow: hidden;
   transition: all 0.2s ease;
   box-sizing: border-box;
 }
 
 .login-email-box:focus-within {
-  border-color: #38bdf8;
+  border-color: #34d399;
   background-color: rgba(15, 23, 42, 1);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2),
-              0 0 15px rgba(56, 189, 248, 0.15);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
 }
 
-/* Input bên trong khung email */
 .login-email-input {
   flex: 1;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  padding: 10px 12px;
+  padding: 11px 14px;
   color: #ffffff;
-  font-size: 13.5px;
+  font-size: 14px;
   outline: none;
   min-width: 0;
 }
 
 .login-email-input::placeholder {
   color: #64748b;
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
-/* Nhãn đuôi @gmail.com hiển thị trực quan, phong cách hiện đại */
 .login-email-addon {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 8px 12px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.12);
-  border-left: 1px solid rgba(56, 189, 248, 0.25);
+  font-size: 12px;
+  font-weight: 700;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+  border-left: 1px solid rgba(16, 185, 129, 0.2);
   user-select: none;
   white-space: nowrap;
-  letter-spacing: 0.2px;
 }
 
-/* Nút Submit Form màu xanh ngọc nổi bật */
-.login-submit-btn {
+/* Ô nhập Mật khẩu kèm nút Ẩn/Hiện */
+.login-password-box {
+  display: flex;
+  align-items: center;
   width: 100%;
-  padding: 13px;
-  margin-top: 6px;
-  font-size: 15px;
-  font-weight: 600;
-  font-family: inherit;
-  color: #022c22;
-  background: linear-gradient(135deg, #2dd4bf 0%, #10b981 100%);
-  border: none;
+  background-color: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(71, 85, 105, 0.5);
   border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.login-password-box:focus-within {
+  border-color: #34d399;
+  background-color: rgba(15, 23, 42, 1);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.login-password-input {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 11px 14px;
+  color: #ffffff;
+  font-size: 14px;
+  outline: none;
+  min-width: 0;
+}
+
+.login-password-input::placeholder {
+  color: #64748b;
+  font-size: 13.5px;
+}
+
+.login-password-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(20, 184, 166, 0.35);
-  transition: all 0.25s ease;
+  transition: color 0.2s ease;
   outline: none;
 }
 
-.login-submit-btn:hover {
+.login-password-toggle-btn:hover {
+  color: #34d399;
+}
+
+/* Nút Submit Form */
+.login-submit-btn {
+  width: 100%;
+  padding: 13px;
+  margin-top: 8px;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  font-family: inherit;
+  color: #022c22;
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.login-submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(20, 184, 166, 0.5);
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.55);
   filter: brightness(1.08);
 }
 
-.login-submit-btn:active {
+.login-submit-btn:active:not(:disabled) {
   transform: translateY(0);
 }
 
-/* Chuyển đổi qua lại giữa Đăng nhập & Đăng ký */
+.login-submit-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Chuyển đổi chân trang */
 .login-footer {
-  margin-top: 22px;
+  margin-top: 20px;
   text-align: center;
-  font-size: 13.5px;
+  font-size: 13px;
   color: #94a3b8;
 }
 
 .login-toggle-link {
-  color: #2dd4bf;
+  color: #34d399;
   background: none;
   border: none;
   padding: 0;
-  margin-left: 6px;
-  font-size: 13.5px;
-  font-weight: 600;
+  margin-left: 5px;
+  font-size: 13px;
+  font-weight: 700;
   font-family: inherit;
   cursor: pointer;
   text-decoration: none;
-  transition: color 0.2s ease, text-decoration 0.2s ease;
+  transition: color 0.2s ease;
 }
 
 .login-toggle-link:hover {
-  color: #38bdf8;
+  color: #6ee7b7;
   text-decoration: underline;
 }
 
-/* Hiệu ứng mờ dần (Fade In) */
-@keyframes modalFadeIn {
+/* Keyframes */
+@keyframes loginModalFadeIn {
   from {
     opacity: 0;
   }
@@ -336,11 +442,10 @@
   }
 }
 
-/* Hiệu ứng phóng to mượt mà (Scale Up) */
-@keyframes modalScaleUp {
+@keyframes loginModalScaleUp {
   from {
     opacity: 0;
-    transform: scale(0.92) translateY(12px);
+    transform: scale(0.94) translateY(10px);
   }
   to {
     opacity: 1;
@@ -348,13 +453,13 @@
   }
 }
 
-/* Tối ưu hiển thị trên màn hình nhỏ / điện thoại */
+/* Mobile responsive */
 @media (max-width: 480px) {
   .login-modal-container {
-    padding: 28px 20px;
-    border-radius: 16px;
+    padding: 24px 20px;
+    border-radius: 20px;
   }
   .login-title {
-    font-size: 22px;
+    font-size: 20px;
   }
 }

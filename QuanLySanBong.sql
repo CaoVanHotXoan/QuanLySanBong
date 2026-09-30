@@ -19,6 +19,7 @@ IF OBJECT_ID('Lich_Su_Hoan_Tien', 'U') IS NOT NULL DROP TABLE Lich_Su_Hoan_Tien;
 IF OBJECT_ID('Thanh_Toan', 'U') IS NOT NULL DROP TABLE Thanh_Toan;
 IF OBJECT_ID('Don_Dat_San', 'U') IS NOT NULL DROP TABLE Don_Dat_San;
 IF OBJECT_ID('San_Bong', 'U') IS NOT NULL DROP TABLE San_Bong;
+IF OBJECT_ID('Khung_Gio', 'U') IS NOT NULL DROP TABLE Khung_Gio;
 IF OBJECT_ID('Khung_Gio_Gia', 'U') IS NOT NULL DROP TABLE Khung_Gio_Gia;
 IF OBJECT_ID('Loai_San', 'U') IS NOT NULL DROP TABLE Loai_San;
 IF OBJECT_ID('Nguoi_Dung', 'U') IS NOT NULL DROP TABLE Nguoi_Dung;
@@ -70,36 +71,33 @@ CREATE TABLE San_Bong (
 );
 GO
 
+-- 4.4. Bảng Khung_Gio (Ma trận các mốc giờ bắt đầu đá 6h - 19h)
+CREATE TABLE Khung_Gio (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    gio_bat_dau VARCHAR(5) NOT NULL,
+    gio_ket_thuc VARCHAR(5) NOT NULL,
+    nhan_hien_thi NVARCHAR(50) NOT NULL,
+    thu_tu INT NOT NULL,
+    trang_thai BIT DEFAULT 1
+);
+GO
+
 -- 4.5. Bảng Don_Dat_San (Đơn đặt lịch thi đấu: Cố định hoặc Linh hoạt theo phút)
 CREATE TABLE Don_Dat_San (
     id INT IDENTITY(1,1) PRIMARY KEY,
-    ma_nguoi_dung INT NOT NULL,
+    ma_nguoi_dung INT Not NULL,
     ma_san INT NOT NULL,
     ngay_da DATE NOT NULL,
     gio_bat_dau TIME NOT NULL,
     gio_ket_thuc TIME NOT NULL,
     tien_san DECIMAL(10, 2) NOT NULL,
     tong_tien DECIMAL(10, 2) NOT NULL,
-    kieu_dat VARCHAR(20) CHECK (kieu_dat IN ('CO_DINH', 'LINH_HOAT')) DEFAULT 'CO_DINH',
+    phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'CHUYEN_KHOAN')) NOT NULL,
     ghi_chu NVARCHAR(255) NULL,
-    trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_XAC_NHAN', 'DA_CHOT', 'HOAN_THANH', 'DA_HUY')) DEFAULT 'CHO_XAC_NHAN',
+    trang_thai VARCHAR(20) CHECK (trang_thai IN ('DA_COC', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY')) DEFAULT 'DA_COC',
     ngay_tao DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
     FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE NO ACTION
-);
-GO
-
--- 4.6. Bảng Thanh_Toan (Giao dịch cọc / thanh toán đủ qua Chuyển khoản / Tiền mặt)
-CREATE TABLE Thanh_Toan (
-    id INT IDENTITY(1,1) PRIMARY KEY,
-    ma_don_dat INT NOT NULL,
-    phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'CHUYEN_KHOAN')) NOT NULL,
-    loai_thanh_toan VARCHAR(20) CHECK (loai_thanh_toan IN ('DAT_COC', 'TRA_HET')) NOT NULL,
-    so_tien DECIMAL(10, 2) NOT NULL,
-    ma_giao_dich VARCHAR(100), 
-    trang_thai_gd VARCHAR(20) CHECK (trang_thai_gd IN ('DANG_CHO', 'THANH_CONG', 'THAT_BAI', 'HOAN_TIEN')) DEFAULT 'DANG_CHO',
-    ngay_thanh_toan DATETIME NULL,
-    FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id) ON DELETE CASCADE
 );
 GO
 
@@ -184,6 +182,36 @@ INSERT INTO Dich_Vu (ten_dich_vu, don_gia, ton_kho) VALUES
 (N'Nước tăng lực RedBull (Bò Húc)', 20000.00, 100),
 (N'Thuê áo bít tập luyện (Bộ 10 áo)', 50000.00, 20),
 (N'Thuê trọng tài bắt chính (90 phút)', 200000.00, 5);
+
+-- 5.5. Danh mục khung giờ đá chuẩn (6h - 19h)
+INSERT INTO Khung_Gio (gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai) VALUES
+('06:00', '06:30', N'6h', 1, 1),
+('06:30', '07:00', N'6h30', 2, 1),
+('07:00', '07:30', N'7h', 3, 1),
+('07:30', '08:00', N'7h30', 4, 1),
+('08:00', '08:30', N'8h', 5, 1),
+('08:30', '09:00', N'8h30', 6, 1),
+('09:00', '09:30', N'9h', 7, 1),
+('09:30', '10:00', N'9h30', 8, 1),
+('10:00', '10:30', N'10h', 9, 1),
+('10:30', '11:00', N'10h30', 10, 1),
+('11:00', '11:30', N'11h', 11, 1),
+('11:30', '12:00', N'11h30', 12, 1),
+('12:00', '12:30', N'12h', 13, 1),
+('12:30', '13:00', N'12h30', 14, 1),
+('13:00', '13:30', N'13h', 15, 1),
+('13:30', '14:00', N'13h30', 16, 1),
+('14:00', '14:30', N'14h', 17, 1),
+('14:30', '15:00', N'14h30', 18, 1),
+('15:00', '15:30', N'15h', 19, 1),
+('15:30', '16:00', N'15h30', 20, 1),
+('16:00', '16:30', N'16h', 21, 1),
+('16:30', '17:00', N'16h30', 22, 1),
+('17:00', '17:30', N'17h', 23, 1),
+('17:30', '18:00', N'17h30', 24, 1),
+('18:00', '18:30', N'18h', 25, 1),
+('18:30', '19:00', N'18h30', 26, 1),
+('19:00', '19:30', N'19h', 27, 1);
 
 PRINT N'✅ ĐÃ KHỞI TẠO XONG CƠ SỞ DỮ LIỆU VÀ TOÀN BỘ BẢNG CHO QuanLySanBong!';
 GO

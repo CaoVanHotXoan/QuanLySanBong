@@ -291,15 +291,33 @@ const xoaKhungGioGia = async (req, res) => {
 const layTatCaDonDat = async (req, res) => {
     try {
         const pool = await poolPromise;
-        const result = await pool.request()
-            .execute('sp_LayTatCaDonDat');
-
-        return res.status(200).json({
-            success: true,
-            data: result.recordset
-        });
+        try {
+            const result = await pool.request().execute('sp_LayTatCaDonDat');
+            return res.status(200).json({
+                success: true,
+                data: result.recordset
+            });
+        } catch (procErr) {
+            const queryRes = await pool.request().query(`
+                SELECT d.id, d.ma_nguoi_dung, nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai,
+                       d.ma_san, sb.ten_san, ls.ten_loai,
+                       d.ngay_da,
+                       CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+                       CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+                       d.tien_san, d.tong_tien, d.phuong_thuc, d.ghi_chu, d.trang_thai, d.ngay_tao
+                FROM Don_Dat_San d
+                LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+                LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+                LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+                ORDER BY d.id DESC
+            `);
+            return res.status(200).json({
+                success: true,
+                data: queryRes.recordset
+            });
+        }
     } catch (error) {
-        console.error('Lỗi sp_LayTatCaDonDat:', error.message);
+        console.error('Lỗi layTatCaDonDat:', error.message);
         return res.status(400).json({
             success: false,
             message: error.message || 'Lỗi khi lấy danh sách tất cả đơn đặt sân'
@@ -349,14 +367,12 @@ const layLichSan = async (req, res) => {
 };
 
 /**
- * 12. Đặt sân bóng
+ * 12. Đặt sân bóng (Lưu trạng thái DA_COC hoặc DA_THANH_TOAN vào bảng Don_Dat_San)
  * Method: POST /api/dat-san
- * Procedure: sp_DatSan
  */
 const datSan = async (req, res) => {
     try {
-        const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung || 1);
-        const { ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san } = req.body;
+        const { ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, phuong_thuc, loai_thanh_toan, trang_thai, ghi_chu, ho_ten, so_dien_thoai } = req.body;
 
         if (!ma_san || !ngay_da || !gio_bat_dau || !gio_ket_thuc) {
             return res.status(400).json({
@@ -366,27 +382,301 @@ const datSan = async (req, res) => {
         }
 
         const pool = await poolPromise;
-        const result = await pool.request()
-            .input('ma_nguoi_dung', sql.Int, parseInt(ma_nguoi_dung, 10))
-            .input('ma_san', sql.Int, parseInt(ma_san, 10))
-            .input('ngay_da', sql.Date, ngay_da)
-            .input('gio_bat_dau', sql.VarChar(8), gio_bat_dau)
-            .input('gio_ket_thuc', sql.VarChar(8), gio_ket_thuc)
-            .input('tien_san', sql.Decimal(10, 2), tien_san ? parseFloat(tien_san) : null)
-            .execute('sp_DatSan');
 
-        const booking = result.recordset[0];
+        // 1. Xác định hoặc tạo mới người dùng theo đúng Tên và Số điện thoại khách đặt sân
+        let ma_nd = null;
+        const ten_khach = (ho_ten && ho_ten.trim()) ? ho_ten.trim() : '';
+        const sdt_khach = (so_dien_thoai && so_dien_thoai.trim()) ? so_dien_thoai.trim() : '';
+
+        if (sdt_khach || ten_khach) {
+            // Tìm theo số điện thoại trước
+            if (sdt_khach) {
+                const userByPhone = await pool.request()
+                    .input('sdt', sql.VarChar(20), sdt_khach)
+                    .query('SELECT TOP 1 id, ho_ten FROM Nguoi_Dung WHERE so_dien_thoai = @sdt');
+
+                if (userByPhone.recordset && userByPhone.recordset.length > 0) {
+                    ma_nd = userByPhone.recordset[0].id;
+                    if (ten_khach && userByPhone.recordset[0].ho_ten !== ten_khach) {
+                        await pool.request()
+                            .input('uid', sql.Int, ma_nd)
+                            .input('ten', sql.NVarChar(100), ten_khach)
+                            .query('UPDATE Nguoi_Dung SET ho_ten = @ten WHERE id = @uid');
+                    }
+                }
+            }
+
+            // Nếu chưa có theo SĐT, tìm theo họ tên
+            if (!ma_nd && ten_khach) {
+                const userByName = await pool.request()
+                    .input('ten', sql.NVarChar(100), ten_khach)
+                    .query('SELECT TOP 1 id FROM Nguoi_Dung WHERE ho_ten = @ten');
+
+                if (userByName.recordset && userByName.recordset.length > 0) {
+                    ma_nd = userByName.recordset[0].id;
+                    if (sdt_khach) {
+                        await pool.request()
+                            .input('uid', sql.Int, ma_nd)
+                            .input('sdt', sql.VarChar(20), sdt_khach)
+                            .query('UPDATE Nguoi_Dung SET so_dien_thoai = @sdt WHERE id = @uid');
+                    }
+                }
+            }
+
+            // Nếu vẫn chưa có, tạo mới bản ghi khách hàng chuẩn
+            if (!ma_nd) {
+                const cleanPhone = sdt_khach || `09${Math.floor(10000000 + Math.random() * 90000000)}`;
+                const uniqueEmail = `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@soccer247.vn`;
+                const insU = await pool.request()
+                    .input('ho_ten', sql.NVarChar(100), ten_khach || 'Khách Đặt Sân')
+                    .input('email', sql.VarChar(255), uniqueEmail)
+                    .input('sdt', sql.VarChar(20), cleanPhone)
+                    .query(`
+                        INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, MaVaiTro)
+                        OUTPUT inserted.id
+                        VALUES (@ho_ten, @email, @sdt, 3)
+                    `);
+                ma_nd = insU.recordset && insU.recordset[0] ? insU.recordset[0].id : null;
+            }
+        }
+
+        // Fallback nếu không có tên/SĐT được truyền vào
+        if (!ma_nd) {
+            const checkU = req.user ? req.user.id : (req.body.ma_nguoi_dung ? parseInt(req.body.ma_nguoi_dung, 10) : null);
+            if (checkU) {
+                const checkDb = await pool.request().input('uid', sql.Int, checkU).query('SELECT id FROM Nguoi_Dung WHERE id = @uid');
+                if (checkDb.recordset && checkDb.recordset.length > 0) ma_nd = checkU;
+            }
+        }
+
+        if (!ma_nd) {
+            const firstU = await pool.request().query('SELECT TOP 1 id FROM Nguoi_Dung ORDER BY id ASC');
+            if (firstU.recordset && firstU.recordset.length > 0) {
+                ma_nd = firstU.recordset[0].id;
+            }
+        }
+
+        // 2. Chuẩn hóa trạng thái và phương thức thanh toán
+        const isTraHet = (loai_thanh_toan === 'TRA_HET' || trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan');
+        const trang_thai_chuan = isTraHet ? 'DA_THANH_TOAN' : 'DA_COC';
+        const phuong_thuc_chuan = (phuong_thuc === 'TIEN_MAT') ? 'TIEN_MAT' : 'CHUYEN_KHOAN';
+        const tien_san_val = tien_san ? parseFloat(tien_san) : (tong_tien ? parseFloat(tong_tien) : 0);
+        const tong_tien_val = tong_tien ? parseFloat(tong_tien) : tien_san_val;
+        const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '06:00:00');
+        const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '07:30:00');
+
+        // 3. Thực hiện lưu trực tiếp vào bảng Don_Dat_San
+        let booking = null;
+        try {
+            const insertRes = await pool.request()
+                .input('ma_nguoi_dung', sql.Int, ma_nd)
+                .input('ma_san', sql.Int, parseInt(ma_san, 10))
+                .input('ngay_da', sql.Date, ngay_da)
+                .input('gio_bat_dau', sql.VarChar(8), gio_bd_clean)
+                .input('gio_ket_thuc', sql.VarChar(8), gio_kt_clean)
+                .input('tien_san', sql.Decimal(10, 2), tien_san_val)
+                .input('tong_tien', sql.Decimal(10, 2), tong_tien_val)
+                .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
+                .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+                .input('trang_thai', sql.VarChar(30), trang_thai_chuan)
+                .query(`
+                    INSERT INTO Don_Dat_San (
+                        ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, 
+                        tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao
+                    )
+                    OUTPUT inserted.*
+                    VALUES (
+                        @ma_nguoi_dung, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc, 
+                        @tien_san, @tong_tien, @phuong_thuc, @ghi_chu, @trang_thai, GETDATE()
+                    )
+                `);
+            booking = insertRes.recordset && insertRes.recordset[0];
+        } catch (insertErr) {
+            console.warn('Thử fallback lưu Don_Dat_San:', insertErr.message);
+            const fallbackTrangThai = isTraHet ? 'Da Thanh Toan' : 'DA_COC';
+            const fallbackRes = await pool.request()
+                .input('ma_nguoi_dung', sql.Int, ma_nd)
+                .input('ma_san', sql.Int, parseInt(ma_san, 10))
+                .input('ngay_da', sql.Date, ngay_da)
+                .input('gio_bat_dau', sql.VarChar(8), gio_bd_clean)
+                .input('gio_ket_thuc', sql.VarChar(8), gio_kt_clean)
+                .input('tien_san', sql.Decimal(10, 2), tien_san_val)
+                .input('tong_tien', sql.Decimal(10, 2), tong_tien_val)
+                .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
+                .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+                .input('trang_thai', sql.VarChar(30), fallbackTrangThai)
+                .query(`
+                    INSERT INTO Don_Dat_San (
+                        ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, 
+                        tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao
+                    )
+                    OUTPUT inserted.*
+                    VALUES (
+                        @ma_nguoi_dung, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc, 
+                        @tien_san, @tong_tien, @phuong_thuc, @ghi_chu, @trang_thai, GETDATE()
+                    )
+                `);
+            booking = fallbackRes.recordset && fallbackRes.recordset[0];
+        }
+
+        // 4. Lưu chi tiết dịch vụ vào bảng Chi_Tiet_Dich_Vu và trừ tồn kho Dich_Vu
+        const donDatId = booking ? (booking.id || booking.ma_don_dat) : null;
+        const selectedServices = req.body.dich_vu_chon || req.body.dich_vu || {};
+
+        if (donDatId && selectedServices) {
+            let serviceItems = [];
+            if (Array.isArray(selectedServices)) {
+                serviceItems = selectedServices;
+            } else if (typeof selectedServices === 'object') {
+                Object.entries(selectedServices).forEach(([dvId, qty]) => {
+                    const numQty = parseInt(qty, 10);
+                    if (numQty > 0) {
+                        serviceItems.push({ ma_dich_vu: parseInt(dvId, 10), so_luong: numQty });
+                    }
+                });
+            }
+
+            for (const item of serviceItems) {
+                try {
+                    const dvId = item.ma_dich_vu || item.id;
+                    const sl = parseInt(item.so_luong, 10) || 1;
+                    if (!dvId || sl <= 0) continue;
+
+                    // Lấy đơn giá và tồn kho hiện tại của dịch vụ
+                    const dvRes = await pool.request()
+                        .input('dvid', sql.Int, dvId)
+                        .query('SELECT id, don_gia, ton_kho FROM Dich_Vu WHERE id = @dvid');
+
+                    if (dvRes.recordset && dvRes.recordset.length > 0) {
+                        const donGia = parseFloat(dvRes.recordset[0].don_gia) || 0;
+                        const tongTienDv = sl * donGia;
+
+                        // Chèn / Cập nhật vào bảng Chi_Tiet_Dich_Vu
+                        await pool.request()
+                            .input('madon', sql.Int, donDatId)
+                            .input('madv', sql.Int, dvId)
+                            .input('sl', sql.Int, sl)
+                            .input('tongtien', sql.Decimal(10, 2), tongTienDv)
+                            .query(`
+                                IF EXISTS (SELECT 1 FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat = @madon AND ma_dich_vu = @madv)
+                                BEGIN
+                                    UPDATE Chi_Tiet_Dich_Vu 
+                                    SET so_luong = so_luong + @sl, tongtien_dichvu = tongtien_dichvu + @tongtien
+                                    WHERE ma_don_dat = @madon AND ma_dich_vu = @madv
+                                END
+                                ELSE
+                                BEGIN
+                                    INSERT INTO Chi_Tiet_Dich_Vu (ma_don_dat, ma_dich_vu, so_luong, tongtien_dichvu)
+                                    VALUES (@madon, @madv, @sl, @tongtien)
+                                END
+                            `);
+
+                        // Trừ số lượng tồn tương ứng trong bảng Dich_Vu
+                        await pool.request()
+                            .input('madv', sql.Int, dvId)
+                            .input('sl', sql.Int, sl)
+                            .query(`
+                                UPDATE Dich_Vu 
+                                SET ton_kho = CASE WHEN ton_kho >= @sl THEN ton_kho - @sl ELSE 0 END
+                                WHERE id = @madv
+                            `);
+                    }
+                } catch (serviceErr) {
+                    console.error('Lỗi khi chèn Chi_Tiet_Dich_Vu và trừ kho:', serviceErr.message);
+                }
+            }
+        }
 
         return res.status(201).json({
             success: true,
-            message: 'Đặt sân thành công! Đơn đang ở trạng thái chờ xác nhận.',
+            message: `Đặt sân thành công! Trạng thái đơn: ${isTraHet ? 'Đã thanh toán' : 'Đã cọc'}`,
             data: booking
         });
     } catch (error) {
-        console.error('Lỗi sp_DatSan:', error.message);
+        console.error('Lỗi datSan:', error.message);
         return res.status(400).json({
             success: false,
             message: error.message || 'Lỗi khi thực hiện đặt sân'
+        });
+    }
+};
+
+/**
+ * 12b. Lấy lịch sử đặt sân của khách hàng (Đúng dữ liệu CSDL SQL Server)
+ * Method: GET /api/dat-san/lich-su-khach-hang
+ */
+const layLichSuKhachHang = async (req, res) => {
+    try {
+        const { ma_nguoi_dung, so_dien_thoai, email } = req.query;
+        const pool = await poolPromise;
+
+        const request = pool.request();
+        let userCondition = '';
+
+        if (ma_nguoi_dung && parseInt(ma_nguoi_dung, 10)) {
+            request.input('ma_nd', sql.Int, parseInt(ma_nguoi_dung, 10));
+            userCondition = 'd.ma_nguoi_dung = @ma_nd';
+        } else if (so_dien_thoai && so_dien_thoai.trim()) {
+            request.input('sdt', sql.VarChar(20), so_dien_thoai.trim());
+            userCondition = 'nd.so_dien_thoai = @sdt';
+        } else if (email && email.trim()) {
+            request.input('email', sql.VarChar(255), email.trim());
+            userCondition = 'nd.email = @email';
+        }
+
+        const query = `
+            SELECT 
+                d.id,
+                'DDS-' + CAST(YEAR(d.ngay_tao) AS VARCHAR) + '-' + RIGHT('000' + CAST(d.id AS VARCHAR), 3) AS ma_don,
+                d.ma_san,
+                sb.ten_san,
+                ls.ten_loai,
+                CONVERT(VARCHAR(10), d.ngay_da, 120) AS ngay_da,
+                CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+                CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+                d.tien_san,
+                d.tong_tien,
+                d.phuong_thuc,
+                d.ghi_chu,
+                d.trang_thai,
+                d.ngay_tao,
+                nd.ho_ten AS ten_khach_hang,
+                nd.so_dien_thoai AS sdt_khach_hang,
+                (
+                    SELECT 
+                        ct.ma_dich_vu,
+                        dv.ten_dich_vu,
+                        ct.so_luong,
+                        ct.tongtien_dichvu
+                    FROM Chi_Tiet_Dich_Vu ct
+                    INNER JOIN Dich_Vu dv ON ct.ma_dich_vu = dv.id
+                    WHERE ct.ma_don_dat = d.id
+                    FOR JSON PATH
+                ) AS chi_tiet_dich_vu
+            FROM Don_Dat_San d
+            LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+            LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+            LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+            ${userCondition ? `WHERE ${userCondition}` : ''}
+            ORDER BY d.id DESC
+        `;
+
+        const result = await request.query(query);
+
+        const data = result.recordset.map((row) => ({
+            ...row,
+            chi_tiet_dich_vu: row.chi_tiet_dich_vu ? JSON.parse(row.chi_tiet_dich_vu) : [],
+        }));
+
+        return res.status(200).json({
+            success: true,
+            data
+        });
+    } catch (error) {
+        console.error('Lỗi layLichSuKhachHang:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy lịch sử đặt sân của khách hàng'
         });
     }
 };
@@ -586,6 +876,402 @@ const ketThucDaLinhHoat = async (req, res) => {
     }
 };
 
+/**
+ * 15. Lấy danh sách khung giờ từ CSDL (Bảng Khung_Gio)
+ * Method: GET /api/dat-san/khung-gio
+ */
+const layDanhSachKhungGio = async (req, res) => {
+    try {
+        const pool = await poolPromise;
+
+        // Kiểm tra và tự động khởi tạo bảng Khung_Gio nếu chưa có
+        await pool.request().query(`
+            IF OBJECT_ID('Khung_Gio', 'U') IS NULL
+            BEGIN
+                CREATE TABLE Khung_Gio (
+                    id INT IDENTITY(1,1) PRIMARY KEY,
+                    gio_bat_dau VARCHAR(5) NOT NULL,
+                    gio_ket_thuc VARCHAR(5) NOT NULL,
+                    nhan_hien_thi NVARCHAR(50) NOT NULL,
+                    thu_tu INT NOT NULL,
+                    trang_thai BIT DEFAULT 1
+                );
+
+                INSERT INTO Khung_Gio (gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai) VALUES
+                ('06:00', '06:30', N'6h', 1, 1),
+                ('06:30', '07:00', N'6h30', 2, 1),
+                ('07:00', '07:30', N'7h', 3, 1),
+                ('07:30', '08:00', N'7h30', 4, 1),
+                ('08:00', '08:30', N'8h', 5, 1),
+                ('08:30', '09:00', N'8h30', 6, 1),
+                ('09:00', '09:30', N'9h', 7, 1),
+                ('09:30', '10:00', N'9h30', 8, 1),
+                ('10:00', '10:30', N'10h', 9, 1),
+                ('10:30', '11:00', N'10h30', 10, 1),
+                ('11:00', '11:30', N'11h', 11, 1),
+                ('11:30', '12:00', N'11h30', 12, 1),
+                ('12:00', '12:30', N'12h', 13, 1),
+                ('12:30', '13:00', N'12h30', 14, 1),
+                ('13:00', '13:30', N'13h', 15, 1),
+                ('13:30', '14:00', N'13h30', 16, 1),
+                ('14:00', '14:30', N'14h', 17, 1),
+                ('14:30', '15:00', N'14h30', 18, 1),
+                ('15:00', '15:30', N'15h', 19, 1),
+                ('15:30', '16:00', N'15h30', 20, 1),
+                ('16:00', '16:30', N'16h', 21, 1),
+                ('16:30', '17:00', N'16h30', 22, 1),
+                ('17:00', '17:30', N'17h', 23, 1),
+                ('17:30', '18:00', N'17h30', 24, 1),
+                ('18:00', '18:30', N'18h', 25, 1),
+                ('18:30', '19:00', N'18h30', 26, 1),
+                ('19:00', '19:30', N'19h', 27, 1);
+            END
+        `);
+
+        const result = await pool.request().query(`
+            SELECT id, gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai
+            FROM Khung_Gio
+            WHERE trang_thai = 1 AND gio_bat_dau <= '19:00'
+            ORDER BY thu_tu ASC
+        `);
+
+        return res.status(200).json({
+            success: true,
+            data: result.recordset
+        });
+    } catch (error) {
+        console.error('Lỗi layDanhSachKhungGio:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách khung giờ'
+        });
+    }
+};
+
+/**
+ * Lấy tất cả khung giờ cho Admin Dashboard (Bao gồm cả đang khóa)
+ * Method: GET /api/dat-san/khung-gio/all
+ */
+const layTatCaKhungGioAdmin = async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            SELECT id, gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai
+            FROM Khung_Gio
+            ORDER BY thu_tu ASC
+        `);
+
+        return res.status(200).json({
+            success: true,
+            data: result.recordset
+        });
+    } catch (error) {
+        console.error('Lỗi layTatCaKhungGioAdmin:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách khung giờ cho Admin'
+        });
+    }
+};
+
+/**
+ * Thêm mới khung giờ
+ * Method: POST /api/dat-san/khung-gio
+ */
+const themKhungGio = async (req, res) => {
+    try {
+        const { gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai } = req.body;
+        if (!gio_bat_dau || !gio_ket_thuc || !nhan_hien_thi) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ gio_bat_dau, gio_ket_thuc, nhan_hien_thi!'
+            });
+        }
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('gio_bat_dau', sql.VarChar(5), gio_bat_dau)
+            .input('gio_ket_thuc', sql.VarChar(5), gio_ket_thuc)
+            .input('nhan_hien_thi', sql.NVarChar(50), nhan_hien_thi)
+            .input('thu_tu', sql.Int, parseInt(thu_tu, 10) || 1)
+            .input('trang_thai', sql.Bit, trang_thai === undefined || trang_thai === null || trang_thai === true || trang_thai === 1 ? 1 : 0)
+            .query(`
+                INSERT INTO Khung_Gio (gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai)
+                OUTPUT inserted.*
+                VALUES (@gio_bat_dau, @gio_ket_thuc, @nhan_hien_thi, @thu_tu, @trang_thai)
+            `);
+
+        return res.status(201).json({
+            success: true,
+            message: 'Thêm khung giờ mới thành công!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi themKhungGio:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi thêm khung giờ'
+        });
+    }
+};
+
+/**
+ * Cập nhật khung giờ
+ * Method: PUT /api/dat-san/khung-gio/:id
+ */
+const suaKhungGio = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai } = req.body;
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .input('gio_bat_dau', sql.VarChar(5), gio_bat_dau)
+            .input('gio_ket_thuc', sql.VarChar(5), gio_ket_thuc)
+            .input('nhan_hien_thi', sql.NVarChar(50), nhan_hien_thi)
+            .input('thu_tu', sql.Int, parseInt(thu_tu, 10) || 1)
+            .input('trang_thai', sql.Bit, trang_thai ? 1 : 0)
+            .query(`
+                UPDATE Khung_Gio
+                SET gio_bat_dau = @gio_bat_dau,
+                    gio_ket_thuc = @gio_ket_thuc,
+                    nhan_hien_thi = @nhan_hien_thi,
+                    thu_tu = @thu_tu,
+                    trang_thai = @trang_thai
+                OUTPUT inserted.*
+                WHERE id = @id
+            `);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật khung giờ thành công!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi suaKhungGio:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi cập nhật khung giờ'
+        });
+    }
+};
+
+/**
+ * Xóa khung giờ
+ * Method: DELETE /api/dat-san/khung-gio/:id
+ */
+const xoaKhungGio = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await poolPromise;
+        await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .query('DELETE FROM Khung_Gio WHERE id = @id');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Xóa khung giờ thành công!'
+        });
+    } catch (error) {
+        console.error('Lỗi xoaKhungGio:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xóa khung giờ'
+        });
+    }
+};
+
+/**
+ * Đặt lại 27 khung giờ mặc định (6h - 19h30)
+ * Method: POST /api/dat-san/khung-gio/reset
+ */
+const resetKhungGio = async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        await pool.request().query(`
+            DELETE FROM Khung_Gio;
+            DBCC CHECKIDENT ('Khung_Gio', RESEED, 0);
+
+            INSERT INTO Khung_Gio (gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai) VALUES
+            ('06:00', '06:30', N'6h', 1, 1),
+            ('06:30', '07:00', N'6h30', 2, 1),
+            ('07:00', '07:30', N'7h', 3, 1),
+            ('07:30', '08:00', N'7h30', 4, 1),
+            ('08:00', '08:30', N'8h', 5, 1),
+            ('08:30', '09:00', N'8h30', 6, 1),
+            ('09:00', '09:30', N'9h', 7, 1),
+            ('09:30', '10:00', N'9h30', 8, 1),
+            ('10:00', '10:30', N'10h', 9, 1),
+            ('10:30', '11:00', N'10h30', 10, 1),
+            ('11:00', '11:30', N'11h', 11, 1),
+            ('11:30', '12:00', N'11h30', 12, 1),
+            ('12:00', '12:30', N'12h', 13, 1),
+            ('12:30', '13:00', N'12h30', 14, 1),
+            ('13:00', '13:30', N'13h', 15, 1),
+            ('13:30', '14:00', N'13h30', 16, 1),
+            ('14:00', '14:30', N'14h', 17, 1),
+            ('14:30', '15:00', N'14h30', 18, 1),
+            ('15:00', '15:30', N'15h', 19, 1),
+            ('15:30', '16:00', N'15h30', 20, 1),
+            ('16:00', '16:30', N'16h', 21, 1),
+            ('16:30', '17:00', N'16h30', 22, 1),
+            ('17:00', '17:30', N'17h', 23, 1),
+            ('17:30', '18:00', N'17h30', 24, 1),
+            ('18:00', '18:30', N'18h', 25, 1),
+            ('18:30', '19:00', N'18h30', 26, 1),
+            ('19:00', '19:30', N'19h', 27, 1);
+        `);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đã nạp lại 27 khung giờ mặc định thành công!'
+        });
+    } catch (error) {
+        console.error('Lỗi resetKhungGio:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi đặt lại khung giờ'
+        });
+    }
+};
+
+/**
+ * Thêm Đơn Đặt Sân (Admin Dashboard)
+ * Method: POST /api/dat-san/don-dat-thanh-toan
+ */
+const themDonDatVaThanhToan = async (req, res) => {
+    try {
+        const { ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan } = req.body;
+
+        const pool = await poolPromise;
+        const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan' || loai_thanh_toan === 'TRA_HET') ? 'DA_THANH_TOAN' : (trang_thai || 'DA_COC');
+        const phuong_thuc_chuan = (phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT';
+        const tien_san_val = parseFloat(tien_san) || parseFloat(tong_tien) || 0;
+        const tong_tien_val = parseFloat(tong_tien) || tien_san_val;
+
+        const insertDon = await pool.request()
+            .input('ma_nguoi_dung', sql.Int, parseInt(ma_nguoi_dung, 10) || 1)
+            .input('ma_san', sql.Int, parseInt(ma_san, 10))
+            .input('ngay_da', sql.Date, ngay_da)
+            .input('gio_bat_dau', sql.VarChar(8), gio_bat_dau)
+            .input('gio_ket_thuc', sql.VarChar(8), gio_ket_thuc)
+            .input('tien_san', sql.Decimal(10, 2), tien_san_val)
+            .input('tong_tien', sql.Decimal(10, 2), tong_tien_val)
+            .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
+            .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+            .input('trang_thai', sql.VarChar(30), trang_thai_chuan)
+            .query(`
+                INSERT INTO Don_Dat_San (ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao)
+                OUTPUT inserted.*
+                VALUES (@ma_nguoi_dung, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc, @tien_san, @tong_tien, @phuong_thuc, @ghi_chu, @trang_thai, GETDATE())
+            `);
+
+        const newDon = insertDon.recordset[0];
+
+        return res.status(201).json({
+            success: true,
+            message: 'Thêm đơn đặt sân thành công!',
+            data: newDon
+        });
+    } catch (error) {
+        console.error('Lỗi themDonDatVaThanhToan:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi thêm đơn đặt sân'
+        });
+    }
+};
+
+/**
+ * Sửa Đơn Đặt Sân
+ * Method: PUT /api/dat-san/don-dat-thanh-toan/:id
+ */
+const suaDonDatVaThanhToan = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc } = req.body;
+
+        const pool = await poolPromise;
+        const phuong_thuc_chuan = phuong_thuc ? ((phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT') : 'TIEN_MAT';
+        const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan') ? 'DA_THANH_TOAN' : (trang_thai || 'DA_COC');
+
+        const request = pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .input('ma_san', sql.Int, parseInt(ma_san, 10))
+            .input('ngay_da', sql.Date, ngay_da)
+            .input('gio_bat_dau', sql.VarChar(8), gio_bat_dau)
+            .input('gio_ket_thuc', sql.VarChar(8), gio_ket_thuc)
+            .input('tien_san', sql.Decimal(10, 2), parseFloat(tien_san) || 0)
+            .input('tong_tien', sql.Decimal(10, 2), parseFloat(tong_tien) || 0)
+            .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
+            .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+            .input('trang_thai', sql.VarChar(30), trang_thai_chuan);
+
+        let queryStr = `
+            UPDATE Don_Dat_San
+            SET ma_san = @ma_san,
+                ngay_da = @ngay_da,
+                gio_bat_dau = @gio_bat_dau,
+                gio_ket_thuc = @gio_ket_thuc,
+                tien_san = @tien_san,
+                tong_tien = @tong_tien,
+                phuong_thuc = @phuong_thuc,
+                ghi_chu = @ghi_chu,
+                trang_thai = @trang_thai
+        `;
+
+        if (ma_nguoi_dung) {
+            request.input('ma_nguoi_dung', sql.Int, parseInt(ma_nguoi_dung, 10));
+            queryStr += `, ma_nguoi_dung = @ma_nguoi_dung `;
+        }
+
+        queryStr += `
+            OUTPUT inserted.*
+            WHERE id = @id
+        `;
+
+        const updateDon = await request.query(queryStr);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật đơn đặt sân thành công!',
+            data: updateDon.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi suaDonDatVaThanhToan:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi sửa đơn đặt sân'
+        });
+    }
+};
+
+/**
+ * Xóa Đơn Đặt Sân & Thanh Toán
+ * Method: DELETE /api/dat-san/don-dat-thanh-toan/:id
+ */
+const xoaDonDatVaThanhToan = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await poolPromise;
+        await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .query('DELETE FROM Don_Dat_San WHERE id = @id');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Xóa đơn đặt sân thành công!'
+        });
+    } catch (error) {
+        console.error('Lỗi xoaDonDatVaThanhToan:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xóa đơn đặt sân'
+        });
+    }
+};
+
 module.exports = {
     layDanhSachSan,
     layDanhSachLoaiSan,
@@ -599,9 +1285,20 @@ module.exports = {
     layTatCaDonDat,
     layLichSan,
     datSan,
+    layLichSuKhachHang,
     huyDonVaHoanCoc,
     tinhGiaLinhHoat,
     datSanLinhHoat,
     batDauDaLinhHoat,
-    ketThucDaLinhHoat
+    ketThucDaLinhHoat,
+    layDanhSachKhungGio,
+    layTatCaKhungGioAdmin,
+    themKhungGio,
+    suaKhungGio,
+    xoaKhungGio,
+    resetKhungGio,
+    themDonDatVaThanhToan,
+    suaDonDatVaThanhToan,
+    xoaDonDatVaThanhToan
 };
+

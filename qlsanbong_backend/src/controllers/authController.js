@@ -23,7 +23,7 @@ require('dotenv').config();
  */
 const dangKy = async (req, res) => {
     try {
-        const { ho_ten, email, so_dien_thoai, mat_khau, vai_tro } = req.body;
+        const { ho_ten, email, so_dien_thoai, mat_khau, vai_tro, anh_dai_dien } = req.body;
 
         // Kiểm tra dữ liệu đầu vào bắt buộc
         if (!ho_ten || !email || !mat_khau) {
@@ -50,23 +50,57 @@ const dangKy = async (req, res) => {
 
         // Gọi Stored Procedure sp_ThemNguoiDung để lưu vào CSDL SQL Server
         const pool = await poolPromise;
-        const result = await pool.request()
-            .input('ho_ten', sql.NVarChar(100), ho_ten.trim())
-            .input('email', sql.VarChar(255), normalizedEmail)
-            .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
-            .input('mat_khau', sql.VarChar(255), hashedPassword)
-            .input('vai_tro', sql.VarChar(20), vai_tro || 'KHACH_HANG')
-            .execute('sp_ThemNguoiDung');
+        try {
+            const result = await pool.request()
+                .input('ho_ten', sql.NVarChar(100), ho_ten.trim())
+                .input('email', sql.VarChar(255), normalizedEmail)
+                .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
+                .input('mat_khau', sql.VarChar(255), hashedPassword)
+                .input('vai_tro', sql.VarChar(20), vai_tro || 'KHACH_HANG')
+                .execute('sp_ThemNguoiDung');
 
-        const newUser = result.recordset[0];
+            const newUser = result.recordset[0];
+            if (newUser && anh_dai_dien) {
+                await pool.request()
+                    .input('id', sql.Int, newUser.id)
+                    .input('anh', sql.VarChar(255), anh_dai_dien)
+                    .query(`UPDATE Nguoi_Dung SET anh_dai_dien = @anh WHERE id = @id`);
+                newUser.anh_dai_dien = anh_dai_dien;
+            }
 
-        return res.status(201).json({
-            success: true,
-            message: 'Tạo tài khoản thành công và đã lưu vào CSDL SQL Server!',
-            data: newUser
-        });
+            return res.status(201).json({
+                success: true,
+                message: 'Tạo tài khoản thành công và đã lưu vào CSDL SQL Server!',
+                data: newUser
+            });
+        } catch (procErr) {
+            let vaiTroId = 3;
+            if (vai_tro) {
+                const vtRes = await pool.request().input('ten', sql.NVarChar(50), vai_tro).query(`SELECT MaVaiTro FROM Vai_Tro WHERE TenVaiTro = @ten`);
+                if (vtRes.recordset.length > 0) vaiTroId = vtRes.recordset[0].MaVaiTro;
+            }
+
+            const insRes = await pool.request()
+                .input('ho_ten', sql.NVarChar(100), ho_ten.trim())
+                .input('email', sql.VarChar(255), normalizedEmail)
+                .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
+                .input('mat_khau', sql.VarChar(255), hashedPassword)
+                .input('MaVaiTro', sql.Int, vaiTroId)
+                .input('anh_dai_dien', sql.VarChar(255), anh_dai_dien || null)
+                .query(`
+                    INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, mat_khau, MaVaiTro, anh_dai_dien)
+                    OUTPUT INSERTED.id, INSERTED.ho_ten, INSERTED.email, INSERTED.so_dien_thoai, INSERTED.MaVaiTro, INSERTED.anh_dai_dien
+                    VALUES (@ho_ten, @email, @so_dien_thoai, @mat_khau, @MaVaiTro, @anh_dai_dien)
+                `);
+
+            return res.status(201).json({
+                success: true,
+                message: 'Tạo tài khoản thành công và đã lưu vào CSDL SQL Server!',
+                data: { ...insRes.recordset[0], vai_tro: vai_tro || 'KHACH_HANG' }
+            });
+        }
     } catch (error) {
-        console.error('Lỗi sp_ThemNguoiDung:', error.message);
+        console.error('Lỗi dangKy:', error.message);
         return res.status(400).json({
             success: false,
             message: error.message || 'Lỗi khi đăng ký tài khoản vào cơ sở dữ liệu'
@@ -107,15 +141,27 @@ const dangNhap = async (req, res) => {
 
         // Nếu Stored Procedure không tìm thấy hoặc throw lỗi, thử tìm trực tiếp bằng query
         if (!user) {
+            const emailVariants = [
+                normalizedEmail,
+                normalizedEmail.includes('@') ? normalizedEmail : `${normalizedEmail}@gmail.com`,
+                normalizedEmail.replace('@gmail.com', '')
+            ];
+
             const queryRes = await pool.request()
-                .input('email', sql.VarChar(255), normalizedEmail)
+                .input('email1', sql.VarChar(255), emailVariants[0])
+                .input('email2', sql.VarChar(255), emailVariants[1])
+                .input('email3', sql.VarChar(255), emailVariants[2])
                 .query(`
-                    SELECT nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.mat_khau, 
+                    SELECT TOP 1 nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.mat_khau, 
                            nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
-                           nd.anh_dai_dien, nd.ngay_tao
+                           nd.anh_dai_dien
                     FROM Nguoi_Dung nd
                     LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
-                    WHERE LOWER(nd.email) = LOWER(@email)
+                    WHERE LOWER(nd.email) = LOWER(@email1)
+                       OR LOWER(nd.email) = LOWER(@email2)
+                       OR LOWER(nd.email) LIKE LOWER('%' + @email3 + '%')
+                       OR LOWER(nd.ho_ten) = LOWER(@email3)
+                       OR nd.so_dien_thoai = @email1
                 `);
             user = queryRes.recordset && queryRes.recordset[0];
         }
@@ -287,7 +333,7 @@ const layDanhSachNguoiDung = async (req, res) => {
 const suaNguoiDung = async (req, res) => {
     try {
         const { id } = req.params;
-        const { ho_ten, email, so_dien_thoai, vai_tro, mat_khau } = req.body;
+        const { ho_ten, email, so_dien_thoai, vai_tro, mat_khau, anh_dai_dien } = req.body;
 
         let hashedPassword = null;
         if (mat_khau && mat_khau.trim() !== '') {
@@ -296,20 +342,62 @@ const suaNguoiDung = async (req, res) => {
         }
 
         const pool = await poolPromise;
-        const result = await pool.request()
-            .input('id', sql.Int, parseInt(id, 10))
-            .input('ho_ten', sql.NVarChar(100), ho_ten)
-            .input('email', sql.VarChar(255), email)
-            .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
-            .input('vai_tro', sql.VarChar(20), vai_tro || 'KHACH_HANG')
-            .input('mat_khau', sql.VarChar(255), hashedPassword)
-            .execute('sp_SuaNguoiDung');
+        try {
+            const result = await pool.request()
+                .input('id', sql.Int, parseInt(id, 10))
+                .input('ho_ten', sql.NVarChar(100), ho_ten)
+                .input('email', sql.VarChar(255), email)
+                .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
+                .input('vai_tro', sql.VarChar(20), vai_tro || 'KHACH_HANG')
+                .input('mat_khau', sql.VarChar(255), hashedPassword)
+                .execute('sp_SuaNguoiDung');
 
-        return res.status(200).json({
-            success: true,
-            message: 'Cập nhật tài khoản thành công!',
-            data: result.recordset[0]
-        });
+            if (anh_dai_dien !== undefined) {
+                await pool.request()
+                    .input('id', sql.Int, parseInt(id, 10))
+                    .input('anh', sql.VarChar(255), anh_dai_dien)
+                    .query(`UPDATE Nguoi_Dung SET anh_dai_dien = @anh WHERE id = @id`);
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Cập nhật tài khoản thành công!',
+                data: { ...result.recordset[0], anh_dai_dien: anh_dai_dien !== undefined ? anh_dai_dien : result.recordset[0]?.anh_dai_dien }
+            });
+        } catch (procErr) {
+            let vaiTroId = 3;
+            if (vai_tro) {
+                const vtRes = await pool.request().input('ten', sql.NVarChar(50), vai_tro).query(`SELECT MaVaiTro FROM Vai_Tro WHERE TenVaiTro = @ten`);
+                if (vtRes.recordset.length > 0) vaiTroId = vtRes.recordset[0].MaVaiTro;
+            }
+
+            let q = `UPDATE Nguoi_Dung SET ho_ten = @ho_ten, email = @email, so_dien_thoai = @so_dien_thoai, MaVaiTro = @MaVaiTro`;
+            if (hashedPassword) q += `, mat_khau = @mat_khau`;
+            if (anh_dai_dien !== undefined) q += `, anh_dai_dien = @anh_dai_dien`;
+            q += ` WHERE id = @id`;
+
+            const reqDb = pool.request()
+                .input('id', sql.Int, parseInt(id, 10))
+                .input('ho_ten', sql.NVarChar(100), ho_ten)
+                .input('email', sql.VarChar(255), email)
+                .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
+                .input('MaVaiTro', sql.Int, vaiTroId);
+            if (hashedPassword) reqDb.input('mat_khau', sql.VarChar(255), hashedPassword);
+            if (anh_dai_dien !== undefined) reqDb.input('anh_dai_dien', sql.VarChar(255), anh_dai_dien);
+
+            await reqDb.query(q);
+
+            const updatedRes = await pool.request().input('id', sql.Int, parseInt(id, 10)).query(`
+                SELECT nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.MaVaiTro, vt.TenVaiTro AS vai_tro, nd.anh_dai_dien
+                FROM Nguoi_Dung nd LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro WHERE nd.id = @id
+            `);
+
+            return res.status(200).json({
+                success: true,
+                message: 'Cập nhật tài khoản thành công!',
+                data: updatedRes.recordset[0]
+            });
+        }
     } catch (error) {
         console.error('Lỗi sp_SuaNguoiDung:', error.message);
         return res.status(400).json({

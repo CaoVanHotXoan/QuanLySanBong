@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import SoccerLoader from '../components/SoccerLoader';
 import {
   LayoutDashboard,
@@ -69,9 +70,10 @@ export type TabType =
   // 3. Dịch Vụ & Kho (Dich_Vu, Phieu_Nhap_Kho)
   | 'DICH_VU'
   | 'PHIEU_NHAP_KHO'
-  // 4. Tài Chính & Giao Dịch (Thanh_Toan, Lich_Su_Hoan_Tien)
-  | 'THANH_TOAN'
+  // 4. Tài Chính & Giao Dịch (Don_Dat_San & Thanh_Toan, Lich_Su_Hoan_Tien, Khung_Gio)
+  | 'DON_DAT_THANH_TOAN'
   | 'HOAN_TIEN'
+  | 'KHUNG_GIO'
   // 5. Hệ Thống & Phân Quyền (Nguoi_Dung, Vai_Tro)
   | 'NGUOI_DUNG'
   | 'VAI_TRO';
@@ -95,6 +97,16 @@ export interface LoaiSan {
   trang_thai?: boolean;
 }
 
+// 3. Khung_Gio (CSDL SQL Server)
+export interface KhungGio {
+  id: number;
+  gio_bat_dau: string;
+  gio_ket_thuc: string;
+  nhan_hien_thi: string;
+  thu_tu: number;
+  trang_thai: boolean;
+}
+
 // 4. Don_Dat_San
 export interface DonDatSan {
   id: number;
@@ -108,12 +120,13 @@ export interface DonDatSan {
   gio_ket_thuc: string;
   tien_san: number;
   tong_tien: number;
-  tien_coc_da_tra: number;
+  phuong_thuc?: 'TIEN_MAT' | 'CHUYEN_KHOAN' | string;
+  tien_coc_da_tra?: number;
   kieu_dat?: 'CO_DINH' | 'LINH_HOAT';
   so_phut_da?: number;
   ghi_chu?: string;
-  trang_thai: 'CHO_XAC_NHAN' | 'DA_CHOT' | 'HOAN_THANH' | 'DA_HUY';
-  dich_vu_da_dung: {
+  trang_thai: 'DA_COC' | 'DA_THANH_TOAN' | 'CHO_XAC_NHAN' | 'DA_CHOT' | 'HOAN_THANH' | 'DA_HUY' | string;
+  dich_vu_da_dung?: {
     ma_dich_vu: number;
     ten_dich_vu: string;
     so_luong: number;
@@ -371,6 +384,36 @@ interface SidebarGroup {
   items: SidebarItem[];
 }
 
+const INITIAL_KHUNG_GIO: KhungGio[] = [
+  { id: 1, gio_bat_dau: '06:00', gio_ket_thuc: '06:30', nhan_hien_thi: '6h', thu_tu: 1, trang_thai: true },
+  { id: 2, gio_bat_dau: '06:30', gio_ket_thuc: '07:00', nhan_hien_thi: '6h30', thu_tu: 2, trang_thai: true },
+  { id: 3, gio_bat_dau: '07:00', gio_ket_thuc: '07:30', nhan_hien_thi: '7h', thu_tu: 3, trang_thai: true },
+  { id: 4, gio_bat_dau: '07:30', gio_ket_thuc: '08:00', nhan_hien_thi: '7h30', thu_tu: 4, trang_thai: true },
+  { id: 5, gio_bat_dau: '08:00', gio_ket_thuc: '08:30', nhan_hien_thi: '8h', thu_tu: 5, trang_thai: true },
+  { id: 6, gio_bat_dau: '08:30', gio_ket_thuc: '09:00', nhan_hien_thi: '8h30', thu_tu: 6, trang_thai: true },
+  { id: 7, gio_bat_dau: '09:00', gio_ket_thuc: '09:30', nhan_hien_thi: '9h', thu_tu: 7, trang_thai: true },
+  { id: 8, gio_bat_dau: '09:30', gio_ket_thuc: '10:00', nhan_hien_thi: '9h30', thu_tu: 8, trang_thai: true },
+  { id: 9, gio_bat_dau: '10:00', gio_ket_thuc: '10:30', nhan_hien_thi: '10h', thu_tu: 9, trang_thai: true },
+  { id: 10, gio_bat_dau: '10:30', gio_ket_thuc: '11:00', nhan_hien_thi: '10h30', thu_tu: 10, trang_thai: true },
+  { id: 11, gio_bat_dau: '11:00', gio_ket_thuc: '11:30', nhan_hien_thi: '11h', thu_tu: 11, trang_thai: true },
+  { id: 12, gio_bat_dau: '11:30', gio_ket_thuc: '12:00', nhan_hien_thi: '11h30', thu_tu: 12, trang_thai: true },
+  { id: 13, gio_bat_dau: '12:00', gio_ket_thuc: '12:30', nhan_hien_thi: '12h', thu_tu: 13, trang_thai: true },
+  { id: 14, gio_bat_dau: '12:30', gio_ket_thuc: '13:00', nhan_hien_thi: '12h30', thu_tu: 14, trang_thai: true },
+  { id: 15, gio_bat_dau: '13:00', gio_ket_thuc: '13:30', nhan_hien_thi: '13h', thu_tu: 15, trang_thai: true },
+  { id: 16, gio_bat_dau: '13:30', gio_ket_thuc: '14:00', nhan_hien_thi: '13h30', thu_tu: 16, trang_thai: true },
+  { id: 17, gio_bat_dau: '14:00', gio_ket_thuc: '14:30', nhan_hien_thi: '14h', thu_tu: 17, trang_thai: true },
+  { id: 18, gio_bat_dau: '14:30', gio_ket_thuc: '15:00', nhan_hien_thi: '14h30', thu_tu: 18, trang_thai: true },
+  { id: 19, gio_bat_dau: '15:00', gio_ket_thuc: '15:30', nhan_hien_thi: '15h', thu_tu: 19, trang_thai: true },
+  { id: 20, gio_bat_dau: '15:30', gio_ket_thuc: '16:00', nhan_hien_thi: '15h30', thu_tu: 20, trang_thai: true },
+  { id: 21, gio_bat_dau: '16:00', gio_ket_thuc: '16:30', nhan_hien_thi: '16h', thu_tu: 21, trang_thai: true },
+  { id: 22, gio_bat_dau: '16:30', gio_ket_thuc: '17:00', nhan_hien_thi: '16h30', thu_tu: 22, trang_thai: true },
+  { id: 23, gio_bat_dau: '17:00', gio_ket_thuc: '17:30', nhan_hien_thi: '17h', thu_tu: 23, trang_thai: true },
+  { id: 24, gio_bat_dau: '17:30', gio_ket_thuc: '18:00', nhan_hien_thi: '17h30', thu_tu: 24, trang_thai: true },
+  { id: 25, gio_bat_dau: '18:00', gio_ket_thuc: '18:30', nhan_hien_thi: '18h', thu_tu: 25, trang_thai: true },
+  { id: 26, gio_bat_dau: '18:30', gio_ket_thuc: '19:00', nhan_hien_thi: '18h30', thu_tu: 26, trang_thai: true },
+  { id: 27, gio_bat_dau: '19:00', gio_ket_thuc: '19:30', nhan_hien_thi: '19h', thu_tu: 27, trang_thai: true },
+];
+
 // Cấu trúc cây Menu Sidebar chuẩn
 const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
@@ -400,8 +443,9 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     groupTitle: 'TÀI CHÍNH & GIAO DỊCH',
     groupIcon: CreditCard,
     items: [
-      { id: 'THANH_TOAN', label: 'Lịch Sử Thanh Toán', icon: Receipt, tableHint: 'Thanh_Toan' },
-      { id: 'HOAN_TIEN', label: 'Quản Lý Hủy / Hoàn Tiền', icon: RefreshCw, tableHint: 'Lich_Su_Hoan_Tien' }
+      { id: 'DON_DAT_THANH_TOAN', label: 'Đơn Đặt Sân & Thanh Toán', icon: Receipt, tableHint: 'Don_Dat_San, Thanh_Toan' },
+      { id: 'HOAN_TIEN', label: 'Lịch Sử Hoàn Tiền', icon: RefreshCw, tableHint: 'Lich_Su_Hoan_Tien' },
+      { id: 'KHUNG_GIO', label: 'Bảng Khung Giờ', icon: Clock, tableHint: 'Khung_Gio' }
     ]
   },
   {
@@ -415,6 +459,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
 ];
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<TabType>('OVERVIEW');
 
@@ -438,6 +483,7 @@ export default function AdminDashboard() {
   const [inventoryList, setInventoryList] = useState<PhieuNhapKho[]>(INITIAL_PHIEU_NHAP);
   const [paymentList, setPaymentList] = useState<ThanhToan[]>(INITIAL_THANH_TOAN);
   const [refundList, setRefundList] = useState<LichSuHoanTien[]>(INITIAL_HOAN_TIEN);
+  const [khungGioList, setKhungGioList] = useState<KhungGio[]>(INITIAL_KHUNG_GIO);
   const [userList, setUserList] = useState<NguoiDung[]>(INITIAL_NGUOI_DUNG);
   const [roleList, setRoleList] = useState<VaiTro[]>(INITIAL_VAI_TRO);
 
@@ -549,14 +595,14 @@ export default function AdminDashboard() {
     }
   };
 
-  // Xử lý Đăng xuất Admin
+  // Xử lý Đăng xuất Admin -> Chuyển hướng ngay về Trang chủ Khách hàng
   const handleAdminLogout = () => {
     localStorage.removeItem('auth_user');
     localStorage.removeItem('auth_token');
     localStorage.removeItem('soccer_current_user');
     setCurrentAdminUser(null);
     setIsAuthorized(false);
-    setToastMessage({ type: 'info', message: 'Đã đăng xuất tài khoản quản trị thành công!' });
+    router.push('/');
   };
 
   // Đồng bộ toàn bộ 11 bảng từ Backend CSDL Stored Procedures
@@ -613,6 +659,12 @@ export default function AdminDashboard() {
         if (data.success && Array.isArray(data.data) && data.data.length > 0) setRefundList(data.data);
       }
 
+      const resKhung = await fetch(`${API_BASE}/dat-san/khung-gio/all`);
+      if (resKhung.ok) {
+        const data = await resKhung.json();
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) setKhungGioList(data.data);
+      }
+
       const resUsers = await fetch(`${API_BASE}/auth/users`);
       if (resUsers.ok) {
         const data = await resUsers.json();
@@ -636,18 +688,54 @@ export default function AdminDashboard() {
   }, []);
 
   // =====================================================================
-  // MODAL STATES (ĐẦY ĐỦ THÊM / SỬA / XÓA CHO TẤT CẢ 11 BẢNG)
+  // MODAL STATES (ĐẦY ĐỦ THÊM / SỬA / XÓA CHO TẤT CẢ CÁC BẢNG)
   // =====================================================================
 
   const [courtModal, setCourtModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<SanBong> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [loaiSanModal, setLoaiSanModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<LoaiSan> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [serviceModal, setServiceModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<DichVu> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [importStockModal, setImportStockModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<PhieuNhapKho> }>({ isOpen: false, mode: 'ADD', data: { ma_dich_vu: 1, so_luong_nhap: 50, gia_nhap: 12000 } });
-  const [paymentModal, setPaymentModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<ThanhToan> }>({ isOpen: false, mode: 'ADD', data: { phuong_thuc: 'TIEN_MAT', loai_thanh_toan: 'DAT_COC' } });
-  const [refundModal, setRefundModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<LichSuHoanTien> }>({ isOpen: false, mode: 'ADD', data: { ty_le_hoan: 100 } });
+  const [bookingModal, setBookingModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: any }>({
+    isOpen: false,
+    mode: 'ADD',
+    data: { ma_san: 1, ma_nguoi_dung: 1, ngay_da: new Date().toISOString().split('T')[0], gio_bat_dau: '17:00', gio_ket_thuc: '18:30', tien_san: 350000, tong_tien: 350000, trang_thai: 'DA_CHOT', phuong_thuc: 'TIEN_MAT', loai_thanh_toan: 'TRA_HET', so_tien: 350000, trang_thai_gd: 'THANH_CONG' }
+  });
+  const [refundModal, setRefundModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<LichSuHoanTien> }>({ isOpen: false, mode: 'ADD', data: { ma_don_dat: 101, so_tien_hoan: 150000, ty_le_hoan: 100, ly_do_huy: 'Báo hủy trước 24h' } });
+  const [khungGioModal, setKhungGioModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<KhungGio> }>({
+    isOpen: false,
+    mode: 'ADD',
+    data: { gio_bat_dau: '19:30', gio_ket_thuc: '20:00', nhan_hien_thi: '19h30', thu_tu: 28, trang_thai: true }
+  });
   const [userModal, setUserModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<NguoiDung> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [roleModal, setRoleModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<VaiTro> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [bookingEditModal, setBookingEditModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<DonDatSan> }>({ isOpen: false, mode: 'ADD', data: {} });
+
+  // Bộ lọc vai trò người dùng trong tab NGUOI_DUNG
+  const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | 'ADMIN' | 'NHAN_VIEN' | 'KHACH_HANG'>('ALL');
+
+  // Modal xác nhận xóa chuẩn đẹp cho TẤT CẢ các bảng
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    itemDescription?: string;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const openDeleteConfirm = (title: string, message: string, itemDescription: string, onConfirm: () => void | Promise<void>) => {
+    setDeleteConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      itemDescription,
+      onConfirm
+    });
+  };
 
   const [checkoutModal, setCheckoutModal] = useState<{ isOpen: boolean; booking: DonDatSan | null; paymentMethod: 'TIEN_MAT' | 'CHUYEN_KHOAN'; discount: number }>({ isOpen: false, booking: null, paymentMethod: 'TIEN_MAT', discount: 0 });
   const [miniPosModal, setMiniPosModal] = useState<{ isOpen: boolean; booking: DonDatSan | null; maDichVuChon: number; soLuong: number }>({ isOpen: false, booking: null, maDichVuChon: 1, soLuong: 1 });
@@ -829,19 +917,25 @@ export default function AdminDashboard() {
     setCourtModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
-  const handleDeleteCourt = async (courtId: number) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa sân bóng này?')) return;
-    try {
-      const res = await fetch(`${API_BASE}/dat-san/san-bong/${courtId}`, { method: 'DELETE', headers: getAuthHeaders() });
-      const data = await res.json();
-      if (data.success) {
-        setToastMessage({ type: 'success', message: '🗑️ Đã xóa sân bóng thành công!' });
-        loadAllDataFromBackend();
-        return;
+  const handleDeleteCourt = (courtId: number, courtName?: string) => {
+    openDeleteConfirm(
+      'Xóa Sân Bóng',
+      'Bạn có chắc chắn muốn xóa sân bóng này khỏi hệ thống? Dữ liệu lịch đặt và doanh thu liên quan có thể bị ảnh hưởng.',
+      `⚽ Sân bóng: ${courtName || `ID #${courtId}`}`,
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dat-san/san-bong/${courtId}`, { method: 'DELETE', headers: getAuthHeaders() });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã xóa sân bóng thành công!' });
+            loadAllDataFromBackend();
+            return;
+          }
+        } catch (err) {}
+        setCourtList((prev) => prev.filter((c) => c.id !== courtId));
+        setToastMessage({ type: 'success', message: '🗑️ Đã xóa sân bóng!' });
       }
-    } catch (err) {}
-    setCourtList(courtList.filter((c) => c.id !== courtId));
-    setToastMessage({ type: 'success', message: '🗑️ Đã xóa sân bóng!' });
+    );
   };
 
   // 3. Thêm/Sửa Loại Sân (Loai_San)
@@ -863,10 +957,16 @@ export default function AdminDashboard() {
     setLoaiSanModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
-  const handleDeleteLoaiSan = (id: number) => {
-    if (!window.confirm('Xác nhận xóa loại sân này?')) return;
-    setCategoryList(categoryList.filter(l => l.id !== id));
-    setToastMessage({ type: 'success', message: '🗑️ Đã xóa loại sân!' });
+  const handleDeleteLoaiSan = (id: number, tenLoai?: string) => {
+    openDeleteConfirm(
+      'Xóa Loại Sân',
+      'Bạn có chắc chắn muốn xóa loại sân này?',
+      `🏟️ Loại sân: ${tenLoai || `ID #${id}`}`,
+      () => {
+        setCategoryList((prev) => prev.filter(l => l.id !== id));
+        setToastMessage({ type: 'success', message: '🗑️ Đã xóa loại sân!' });
+      }
+    );
   };
 
   // 4. Thêm/Sửa Dịch Vụ (Dich_Vu)
@@ -919,10 +1019,16 @@ export default function AdminDashboard() {
     setServiceModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
-  const handleDeleteService = (id: number) => {
-    if (!window.confirm('Xác nhận xóa dịch vụ này?')) return;
-    setServiceList(serviceList.filter(s => s.id !== id));
-    setToastMessage({ type: 'success', message: '🗑️ Đã xóa dịch vụ!' });
+  const handleDeleteService = (id: number, tenDichVu?: string) => {
+    openDeleteConfirm(
+      'Xóa Mặt Hàng Dịch Vụ',
+      'Bạn có chắc chắn muốn xóa mặt hàng dịch vụ này?',
+      `🥤 Dịch vụ: ${tenDichVu || `ID #${id}`}`,
+      () => {
+        setServiceList((prev) => prev.filter(s => s.id !== id));
+        setToastMessage({ type: 'success', message: '🗑️ Đã xóa dịch vụ!' });
+      }
+    );
   };
 
   // 6. Nhập Kho Dịch Vụ (Phieu_Nhap_Kho)
@@ -967,16 +1073,22 @@ export default function AdminDashboard() {
     setImportStockModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
-  const handleDeleteInventory = (id: number) => {
-    if (!window.confirm('Xác nhận xóa phiếu nhập kho này?')) return;
-    setInventoryList(inventoryList.filter(p => p.id !== id));
-    setToastMessage({ type: 'success', message: '🗑️ Đã xóa phiếu nhập kho!' });
+  const handleDeleteInventory = (id: number, tenDichVu?: string) => {
+    openDeleteConfirm(
+      'Xóa Phiếu Nhập Kho',
+      'Bạn có chắc chắn muốn xóa phiếu nhập kho này?',
+      `📦 Phiếu nhập: #${id} ${tenDichVu ? `(${tenDichVu})` : ''}`,
+      () => {
+        setInventoryList((prev) => prev.filter(p => p.id !== id));
+        setToastMessage({ type: 'success', message: '🗑️ Đã xóa phiếu nhập kho!' });
+      }
+    );
   };
 
   // 7. Thêm/Sửa Người Dùng (Nguoi_Dung)
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ho_ten, email, so_dien_thoai, vai_tro, mat_khau } = userModal.data;
+    const { id, ho_ten, email, so_dien_thoai, vai_tro, mat_khau, anh_dai_dien } = userModal.data;
     if (!ho_ten || !email) {
       setToastMessage({ type: 'error', message: 'Vui lòng nhập họ tên và email người dùng!' });
       return;
@@ -987,7 +1099,14 @@ export default function AdminDashboard() {
         const res = await fetch(`${API_BASE}/auth/register`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ho_ten, email, so_dien_thoai: so_dien_thoai || '', mat_khau: mat_khau || '123456', vai_tro: vai_tro || 'KHACH_HANG' })
+          body: JSON.stringify({
+            ho_ten,
+            email,
+            so_dien_thoai: so_dien_thoai || '',
+            mat_khau: mat_khau || '123456',
+            vai_tro: vai_tro || 'KHACH_HANG',
+            anh_dai_dien: anh_dai_dien || ''
+          })
         });
         const data = await res.json();
         if (data.success) {
@@ -1000,7 +1119,14 @@ export default function AdminDashboard() {
         const res = await fetch(`${API_BASE}/auth/users/${id}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ho_ten, email, so_dien_thoai: so_dien_thoai || '', vai_tro: vai_tro || 'KHACH_HANG', mat_khau: mat_khau || '' })
+          body: JSON.stringify({
+            ho_ten,
+            email,
+            so_dien_thoai: so_dien_thoai || '',
+            vai_tro: vai_tro || 'KHACH_HANG',
+            mat_khau: mat_khau || '',
+            anh_dai_dien: anh_dai_dien || ''
+          })
         });
         const data = await res.json();
         if (data.success) {
@@ -1014,19 +1140,49 @@ export default function AdminDashboard() {
 
     if (userModal.mode === 'ADD') {
       const newId = Math.max(...userList.map((u) => u.id), 0) + 1;
-      setUserList([...userList, { id: newId, ho_ten, email, so_dien_thoai: so_dien_thoai || '', vai_tro: vai_tro || 'KHACH_HANG', ngay_tao: new Date().toISOString().split('T')[0] }]);
+      setUserList([...userList, {
+        id: newId,
+        ho_ten,
+        email,
+        so_dien_thoai: so_dien_thoai || '',
+        vai_tro: vai_tro || 'KHACH_HANG',
+        anh_dai_dien: anh_dai_dien || '',
+        ngay_tao: new Date().toISOString().split('T')[0]
+      }]);
       setToastMessage({ type: 'success', message: `👤 Đã tạo tài khoản mới [${ho_ten}]!` });
     } else {
-      setUserList(userList.map((u) => (u.id === id ? { ...u, ho_ten, email, so_dien_thoai: so_dien_thoai || '', vai_tro: vai_tro || u.vai_tro } : u)));
+      setUserList(userList.map((u) => (u.id === id ? {
+        ...u,
+        ho_ten,
+        email,
+        so_dien_thoai: so_dien_thoai || '',
+        vai_tro: vai_tro || u.vai_tro,
+        anh_dai_dien: anh_dai_dien !== undefined ? anh_dai_dien : u.anh_dai_dien
+      } : u)));
       setToastMessage({ type: 'success', message: `👤 Đã cập nhật tài khoản [${ho_ten}]!` });
     }
     setUserModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
-  const handleDeleteUser = (id: number) => {
-    if (!window.confirm('Xác nhận xóa tài khoản người dùng này?')) return;
-    setUserList(userList.filter(u => u.id !== id));
-    setToastMessage({ type: 'success', message: '🗑️ Đã xóa tài khoản!' });
+  const handleDeleteUser = (id: number, userName?: string) => {
+    openDeleteConfirm(
+      'Xóa Tài Khoản Người Dùng',
+      'Bạn có chắc chắn muốn xóa tài khoản này khỏi hệ thống? Hành động này không thể hoàn tác.',
+      `👤 Người dùng: ${userName || `ID #${id}`}`,
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/auth/users/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã xóa tài khoản người dùng!' });
+            loadAllDataFromBackend();
+            return;
+          }
+        } catch (err) {}
+        setUserList((prev) => prev.filter(u => u.id !== id));
+        setToastMessage({ type: 'success', message: '🗑️ Đã xóa tài khoản!' });
+      }
+    );
   };
 
   // 8. Thêm/Sửa Vai Trò (Vai_Tro)
@@ -1079,51 +1235,162 @@ export default function AdminDashboard() {
     setRoleModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
-  const handleDeleteRole = (id: number) => {
-    if (!window.confirm('Xác nhận xóa vai trò này?')) return;
-    setRoleList(roleList.filter(r => r.MaVaiTro !== id));
-    setToastMessage({ type: 'success', message: '🗑️ Đã xóa vai trò!' });
+  const handleDeleteRole = (id: number, roleName?: string) => {
+    openDeleteConfirm(
+      'Xóa Vai Trò Phân Quyền',
+      'Bạn có chắc chắn muốn xóa vai trò này khỏi hệ thống?',
+      `🛡️ Vai trò: ${roleName || `ID #${id}`}`,
+      () => {
+        setRoleList((prev) => prev.filter(r => r.MaVaiTro !== id));
+        setToastMessage({ type: 'success', message: '🗑️ Đã xóa vai trò!' });
+      }
+    );
   };
 
-  // 9. Thêm/Sửa Thanh Toán (Thanh_Toan)
-  const handleSavePayment = (e: React.FormEvent) => {
+  // 9. Thêm/Sửa Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan)
+  const handleSaveDonDatThanhToan = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ma_don_dat, ten_khach_hang, so_tien, phuong_thuc, loai_thanh_toan, ma_giao_dich } = paymentModal.data;
-    if (paymentModal.mode === 'ADD') {
-      const newPay: ThanhToan = {
-        id: Math.max(...paymentList.map(p => p.id), 0) + 1,
-        ma_don_dat: Number(ma_don_dat || 101),
-        ten_khach_hang: ten_khach_hang || 'Khách Hàng',
-        so_tien: Number(so_tien || 200000),
-        phuong_thuc: (phuong_thuc as any) || 'TIEN_MAT',
-        loai_thanh_toan: (loai_thanh_toan as any) || 'DAT_COC',
-        ma_giao_dich: ma_giao_dich || `GD_${Date.now()}`,
-        ngay_thanh_toan: new Date().toISOString().replace('T', ' ').substring(0, 16)
+    const { id, ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd } = bookingModal.data;
+
+    try {
+      if (bookingModal.mode === 'ADD') {
+        const res = await fetch(`${API_BASE}/dat-san/don-dat-thanh-toan`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setToastMessage({ type: 'success', message: '✅ Đã tạo đơn đặt sân & thanh toán thành công!' });
+          loadAllDataFromBackend();
+          setBookingModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        }
+      } else {
+        const res = await fetch(`${API_BASE}/dat-san/don-dat-thanh-toan/${id}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setToastMessage({ type: 'success', message: '✅ Đã cập nhật đơn đặt sân & thanh toán!' });
+          loadAllDataFromBackend();
+          setBookingModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        }
+      }
+    } catch (err) {}
+
+    // Fallback local update
+    const selectedSan = courtList.find(s => s.id === Number(ma_san));
+    const selectedUser = userList.find(u => u.id === Number(ma_nguoi_dung));
+    if (bookingModal.mode === 'ADD') {
+      const newId = Math.max(...bookingList.map(b => b.id), 0) + 1;
+      const newBooking: DonDatSan = {
+        id: newId,
+        ma_nguoi_dung: Number(ma_nguoi_dung || 1),
+        ten_khach_hang: selectedUser?.ho_ten || 'Khách Hàng',
+        so_dien_thoai: selectedUser?.so_dien_thoai || '0909000111',
+        ma_san: Number(ma_san || 1),
+        ten_san: selectedSan?.ten_san || 'Sân Bóng',
+        ngay_da: ngay_da || new Date().toISOString().split('T')[0],
+        gio_bat_dau: gio_bat_dau || '17:00',
+        gio_ket_thuc: gio_ket_thuc || '18:30',
+        tien_san: Number(tien_san || 350000),
+        tong_tien: Number(tong_tien || 350000),
+        phuong_thuc: phuong_thuc || 'CHUYEN_KHOAN',
+        trang_thai: trang_thai || 'DA_COC',
+        ghi_chu: ghi_chu || '',
+        dich_vu_da_dung: []
       };
-      setPaymentList([newPay, ...paymentList]);
-      setToastMessage({ type: 'success', message: '✅ Đã thêm giao dịch thanh toán!' });
+      setBookingList([newBooking, ...bookingList]);
+      setToastMessage({ type: 'success', message: '✅ Đã thêm đơn đặt sân thành công!' });
     } else {
-      setPaymentList(paymentList.map(p => p.id === id ? { ...p, so_tien: Number(so_tien), phuong_thuc: phuong_thuc as any, loai_thanh_toan: loai_thanh_toan as any } : p));
-      setToastMessage({ type: 'success', message: '✅ Đã cập nhật giao dịch thanh toán!' });
+      setBookingList(bookingList.map(b => b.id === id ? {
+        ...b,
+        ma_san: Number(ma_san || b.ma_san),
+        ten_san: selectedSan?.ten_san || b.ten_san,
+        ngay_da: ngay_da || b.ngay_da,
+        gio_bat_dau: gio_bat_dau || b.gio_bat_dau,
+        gio_ket_thuc: gio_ket_thuc || b.gio_ket_thuc,
+        tien_san: Number(tien_san ?? b.tien_san),
+        tong_tien: Number(tong_tien ?? b.tong_tien),
+        phuong_thuc: phuong_thuc || b.phuong_thuc || 'CHUYEN_KHOAN',
+        trang_thai: trang_thai || b.trang_thai,
+        ghi_chu: ghi_chu ?? b.ghi_chu
+      } : b));
+      setToastMessage({ type: 'success', message: '✅ Đã cập nhật đơn đặt sân!' });
     }
-    setPaymentModal({ isOpen: false, mode: 'ADD', data: {} });
+    setBookingModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
-  const handleDeletePayment = (id: number) => {
-    if (!window.confirm('Xác nhận xóa bản ghi thanh toán này?')) return;
-    setPaymentList(paymentList.filter(p => p.id !== id));
-    setToastMessage({ type: 'success', message: '🗑️ Đã xóa bản ghi thanh toán!' });
+  const handleDeleteDonDatThanhToan = (id: number, info?: string) => {
+    openDeleteConfirm(
+      'Xóa Đơn Đặt Sân & Thanh Toán',
+      'Bạn có chắc chắn muốn xóa đơn đặt sân này cùng toàn bộ giao dịch thanh toán liên quan?',
+      `📋 Đơn đặt sân: #${id} ${info ? `(${info})` : ''}`,
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dat-san/don-dat-thanh-toan/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: `🗑️ Đã xóa đơn đặt sân #${id}!` });
+            loadAllDataFromBackend();
+            return;
+          }
+        } catch (err) {}
+
+        setBookingList((prev) => prev.filter(b => b.id !== id));
+        setPaymentList((prev) => prev.filter(p => p.ma_don_dat !== id));
+        setToastMessage({ type: 'success', message: `🗑️ Đã xóa đơn đặt sân #${id}!` });
+      }
+    );
   };
 
   // 10. Thêm/Sửa Hoàn Tiền (Lich_Su_Hoan_Tien)
-  const handleSaveRefund = (e: React.FormEvent) => {
+  const handleSaveRefund = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ma_don_dat, ten_khach_hang, so_tien_hoan, ty_le_hoan, ly_do_huy } = refundModal.data;
+    const { id, ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy } = refundModal.data;
+
+    try {
+      if (refundModal.mode === 'ADD') {
+        const res = await fetch(`${API_BASE}/thanh-toan/hoan-tien`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setToastMessage({ type: 'success', message: '✅ Đã tạo phiếu hoàn tiền cọc!' });
+          loadAllDataFromBackend();
+          setRefundModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        }
+      } else {
+        const res = await fetch(`${API_BASE}/thanh-toan/hoan-tien/${id}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ so_tien_hoan, ty_le_hoan, ly_do_huy })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setToastMessage({ type: 'success', message: '✅ Đã cập nhật phiếu hoàn tiền!' });
+          loadAllDataFromBackend();
+          setRefundModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        }
+      }
+    } catch (err) {}
+
     if (refundModal.mode === 'ADD') {
       const newRef: LichSuHoanTien = {
         id: Math.max(...refundList.map(r => r.id), 0) + 1,
         ma_don_dat: Number(ma_don_dat || 101),
-        ten_khach_hang: ten_khach_hang || 'Khách Hủy Sân',
+        ten_khach_hang: 'Khách Hủy Sân',
         so_tien_hoan: Number(so_tien_hoan || 100000),
         ty_le_hoan: Number(ty_le_hoan || 100),
         ly_do_huy: ly_do_huy || 'Hủy theo yêu cầu khách',
@@ -1138,10 +1405,140 @@ export default function AdminDashboard() {
     setRefundModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
-  const handleDeleteRefund = (id: number) => {
-    if (!window.confirm('Xác nhận xóa phiếu hoàn tiền này?')) return;
-    setRefundList(refundList.filter(r => r.id !== id));
-    setToastMessage({ type: 'success', message: '🗑️ Đã xóa phiếu hoàn tiền!' });
+  const handleDeleteRefund = (id: number, info?: string) => {
+    openDeleteConfirm(
+      'Xóa Phiếu Hoàn Tiền',
+      'Bạn có chắc chắn muốn xóa bản ghi lịch sử hoàn tiền này?',
+      `💸 Phiếu hoàn tiền: #${id} ${info ? `(${info})` : ''}`,
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/thanh-toan/hoan-tien/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã xóa phiếu hoàn tiền!' });
+            loadAllDataFromBackend();
+            return;
+          }
+        } catch (err) {}
+
+        setRefundList((prev) => prev.filter(r => r.id !== id));
+        setToastMessage({ type: 'success', message: '🗑️ Đã xóa phiếu hoàn tiền!' });
+      }
+    );
+  };
+
+  // 11. Thêm/Sửa Khung Giờ (Khung_Gio)
+  const handleSaveKhungGio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { id, gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai } = khungGioModal.data;
+
+    try {
+      if (khungGioModal.mode === 'ADD') {
+        const res = await fetch(`${API_BASE}/dat-san/khung-gio`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setToastMessage({ type: 'success', message: `⏰ Đã thêm khung giờ [${nhan_hien_thi}]!` });
+          loadAllDataFromBackend();
+          setKhungGioModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        }
+      } else {
+        const res = await fetch(`${API_BASE}/dat-san/khung-gio/${id}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setToastMessage({ type: 'success', message: `⏰ Đã cập nhật khung giờ [${nhan_hien_thi}]!` });
+          loadAllDataFromBackend();
+          setKhungGioModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        }
+      }
+    } catch (err) {}
+
+    if (khungGioModal.mode === 'ADD') {
+      const newId = Math.max(...khungGioList.map(k => k.id), 0) + 1;
+      const newKG: KhungGio = {
+        id: newId,
+        gio_bat_dau: gio_bat_dau || '19:30',
+        gio_ket_thuc: gio_ket_thuc || '20:00',
+        nhan_hien_thi: nhan_hien_thi || '19h30',
+        thu_tu: Number(thu_tu || 28),
+        trang_thai: trang_thai !== false
+      };
+      setKhungGioList([...khungGioList, newKG]);
+      setToastMessage({ type: 'success', message: `⏰ Đã thêm khung giờ [${nhan_hien_thi}]!` });
+    } else {
+      setKhungGioList(khungGioList.map(k => k.id === id ? {
+        ...k,
+        gio_bat_dau: gio_bat_dau || k.gio_bat_dau,
+        gio_ket_thuc: gio_ket_thuc || k.gio_ket_thuc,
+        nhan_hien_thi: nhan_hien_thi || k.nhan_hien_thi,
+        thu_tu: Number(thu_tu ?? k.thu_tu),
+        trang_thai: trang_thai !== false
+      } : k));
+      setToastMessage({ type: 'success', message: `⏰ Đã cập nhật khung giờ [${nhan_hien_thi}]!` });
+    }
+    setKhungGioModal({ isOpen: false, mode: 'ADD', data: {} });
+  };
+
+  const handleDeleteKhungGio = (id: number, slotName?: string) => {
+    openDeleteConfirm(
+      'Xóa Khung Giờ',
+      'Bạn có chắc chắn muốn xóa khung giờ này khỏi hệ thống CSDL?',
+      `⏰ Khung giờ: ${slotName || `ID #${id}`}`,
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dat-san/khung-gio/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã xóa khung giờ!' });
+            loadAllDataFromBackend();
+            return;
+          }
+        } catch (err) {}
+
+        setKhungGioList((prev) => prev.filter(k => k.id !== id));
+        setToastMessage({ type: 'success', message: '🗑️ Đã xóa khung giờ!' });
+      }
+    );
+  };
+
+  // Nạp lại danh sách 27 khung giờ mặc định
+  const handleResetKhungGio = () => {
+    openDeleteConfirm(
+      'Khôi Phục Khung Giờ Mặc Định',
+      'Hệ thống sẽ nạp lại toàn bộ 27 mốc thời gian chuẩn từ 6h00 đến 19h30.',
+      '🔄 27 Khung giờ từ 06:00 đến 19:30',
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dat-san/khung-gio/reset`, {
+            method: 'POST',
+            headers: getAuthHeaders()
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🔄 Đã khôi phục 27 khung giờ mặc định!' });
+            loadAllDataFromBackend();
+            return;
+          }
+        } catch (err) {}
+        setKhungGioList(INITIAL_KHUNG_GIO);
+        setToastMessage({ type: 'success', message: '🔄 Đã đặt lại 27 khung giờ mặc định!' });
+      }
+    );
   };
 
   // 11. Bán Thêm Dịch Vụ POS (Chi_Tiet_Dich_Vu)
@@ -1206,10 +1603,16 @@ export default function AdminDashboard() {
     setMiniPosModal({ isOpen: false, booking: null, maDichVuChon: 1, soLuong: 1 });
   };
 
-  const handleDeleteServiceDetail = (id: number) => {
-    if (!window.confirm('Xác nhận xóa chi tiết dịch vụ này khỏi hóa đơn?')) return;
-    setServiceDetailList(serviceDetailList.filter(d => d.id !== id));
-    setToastMessage({ type: 'success', message: '🗑️ Đã xóa chi tiết dịch vụ!' });
+  const handleDeleteServiceDetail = (id: number, info?: string) => {
+    openDeleteConfirm(
+      'Xóa Chi Tiết Dịch Vụ',
+      'Bạn có chắc chắn muốn xóa chi tiết dịch vụ này khỏi hóa đơn?',
+      `🥤 Chi tiết dịch vụ #${id} ${info ? `(${info})` : ''}`,
+      () => {
+        setServiceDetailList((prev) => prev.filter(d => d.id !== id));
+        setToastMessage({ type: 'success', message: '🗑️ Đã xóa chi tiết dịch vụ!' });
+      }
+    );
   };
 
   // 12. Trả Sân & Xuất Hóa Đơn (Thanh_Toan)
@@ -1218,7 +1621,7 @@ export default function AdminDashboard() {
     if (!checkoutModal.booking) return;
 
     const b = checkoutModal.booking;
-    const conLai = Math.max(0, b.tong_tien - b.tien_coc_da_tra - checkoutModal.discount);
+    const conLai = Math.max(0, (b.tong_tien || 0) - (b.tien_coc_da_tra || 0) - (checkoutModal.discount || 0));
 
     try {
       const res = await fetch(`${API_BASE}/thanh-toan`, {
@@ -1585,25 +1988,40 @@ export default function AdminDashboard() {
                 {activeTab === 'LOAI_SAN_GIA' && 'Loại Sân & Bảng Giá Khung Giờ (Loai_San, Khung_Gio_Gia)'}
                 {activeTab === 'DICH_VU' && 'Danh Mục Dịch Vụ & Kho Nước (Bảng Dich_Vu)'}
                 {activeTab === 'PHIEU_NHAP_KHO' && 'Quản Lý Nhập Kho (Bảng Phieu_Nhap_Kho)'}
-                {activeTab === 'THANH_TOAN' && 'Lịch Sử Thanh Toán (Bảng Thanh_Toan)'}
+                {activeTab === 'DON_DAT_THANH_TOAN' && 'Đơn Đặt Sân & Chi Tiết Thanh Toán (Don_Dat_San, Thanh_Toan)'}
                 {activeTab === 'HOAN_TIEN' && 'Quản Lý Hủy Sân & Hoàn Tiền (Bảng Lich_Su_Hoan_Tien)'}
+                {activeTab === 'KHUNG_GIO' && 'Quản Lý Danh Sách Khung Giờ (Bảng Khung_Gio)'}
                 {activeTab === 'NGUOI_DUNG' && 'Danh Sách Người Dùng (Bảng Nguoi_Dung)'}
                 {activeTab === 'VAI_TRO' && 'Phân Quyền & Vai Trò (Bảng Vai_Tro)'}
               </h2>
             </div>
 
             <div className="flex items-center gap-2.5">
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-black ${isDarkMode ? 'bg-[#0e2116] border-emerald-800/40 text-emerald-200' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
-                <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              {/* Ô chọn & hiển thị ngày theo định dạng DD/MM/YYYY chuẩn Việt Nam */}
+              <div className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-black shadow-sm transition-all hover:border-emerald-500 cursor-pointer ${
+                isDarkMode ? 'bg-[#0e2116] border-emerald-800/60 text-emerald-200' : 'bg-white border-slate-300 text-[#0f172a]'
+              }`}>
+                <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="font-black tracking-wide font-mono text-xs">
+                  {(() => {
+                    if (!selectedDate) return 'Chọn ngày';
+                    const parts = selectedDate.split('-');
+                    if (parts.length === 3) {
+                      return `${parts[2]}/${parts[1]}/${parts[0]}`; // DD/MM/YYYY
+                    }
+                    return selectedDate;
+                  })()}
+                </span>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => {
+                    if (!e.target.value) return;
                     setSelectedDate(e.target.value);
                     const calcs = recalculateBookingPrice(bookingForm.ma_san, e.target.value, bookingForm.gio_bat_dau, bookingForm.gio_ket_thuc);
                     setBookingForm({ ...bookingForm, ngay_da: e.target.value, ...calcs });
                   }}
-                  className={`bg-transparent font-bold focus:outline-none cursor-pointer ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                 />
               </div>
 
@@ -1651,7 +2069,7 @@ export default function AdminDashboard() {
                       {kpiStats.totalOrders} <span className="text-base font-bold">Đơn</span>
                     </h3>
                     <div className="mt-2 text-xs font-bold text-[#1e293b] dark:text-slate-300">
-                      <span className="text-emerald-900 dark:text-emerald-300 font-black bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded mr-1">Đã cọc: {bookingList.filter(b => b.tien_coc_da_tra > 0).length}</span> đang hoạt động
+                      <span className="text-emerald-900 dark:text-emerald-300 font-black bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded mr-1">Đã cọc: {bookingList.filter(b => (b.tien_coc_da_tra || 0) > 0).length}</span> đang hoạt động
                     </div>
                   </div>
 
@@ -1683,42 +2101,6 @@ export default function AdminDashboard() {
                     <div className="w-full bg-slate-200 dark:bg-emerald-950 rounded-full h-2 mt-3 overflow-hidden">
                       <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${kpiStats.occupancyRate}%` }} />
                     </div>
-                  </div>
-                </div>
-
-                {/* Danh sách Bảng CSDL Quick Navigator */}
-                <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                  <h3 className="text-base font-black flex items-center gap-2 mb-3">
-                    <FolderTree className="w-5 h-5 text-emerald-600" />
-                    Bản Đồ Các Bảng Cơ Sở Dữ Liệu SQL Server
-                  </h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {[
-                      { tab: 'SAN_BONG', name: 'San_Bong', count: courtList.length, label: 'Sân Bóng' },
-                      { tab: 'LOAI_SAN_GIA', name: 'Loai_San', count: categoryList.length, label: 'Loại Sân' },
-                      { tab: 'DICH_VU', name: 'Dich_Vu', count: serviceList.length, label: 'Danh Mục Dịch Vụ' },
-                      { tab: 'PHIEU_NHAP_KHO', name: 'Phieu_Nhap_Kho', count: inventoryList.length, label: 'Phiếu Nhập Kho' },
-                      { tab: 'THANH_TOAN', name: 'Thanh_Toan', count: paymentList.length, label: 'Thanh Toán' },
-                      { tab: 'HOAN_TIEN', name: 'Lich_Su_Hoan_Tien', count: refundList.length, label: 'Hoàn Tiền' },
-                      { tab: 'NGUOI_DUNG', name: 'Nguoi_Dung', count: userList.length, label: 'Người Dùng' },
-                      { tab: 'VAI_TRO', name: 'Vai_Tro', count: roleList.length, label: 'Vai Trò' }
-                    ].map((tbl, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setActiveTab(tbl.tab as TabType)}
-                        className={`p-3 rounded-xl border text-left cursor-pointer transition-all hover:scale-102 flex items-center justify-between ${
-                          isDarkMode ? 'bg-[#0f2416] border-emerald-900/60 hover:bg-emerald-900/40' : 'bg-slate-50 border-slate-200 hover:bg-emerald-50 hover:border-emerald-300'
-                        }`}
-                      >
-                        <div>
-                          <div className="font-mono text-xs font-black text-emerald-700 dark:text-emerald-400">{tbl.name}</div>
-                          <div className="text-[11px] font-bold text-slate-500">{tbl.label}</div>
-                        </div>
-                        <span className="px-2 py-0.5 rounded bg-emerald-600 text-white font-mono font-black text-xs">
-                          {tbl.count}
-                        </span>
-                      </button>
-                    ))}
                   </div>
                 </div>
               </div>
@@ -1928,50 +2310,135 @@ export default function AdminDashboard() {
             )}
 
             {/* =================================================================
-                TAB 9: BẢNG 8 - THANH_TOAN (CÓ ĐỦ THÊM SỬA XÓA)
+                TAB: DON_DAT_THANH_TOAN - ĐƠN ĐẶT SÂN & THANH TOÁN (CÓ ĐỦ THÊM SỬA XÓA)
                 ================================================================= */}
-            {activeTab === 'THANH_TOAN' && (
+            {activeTab === 'DON_DAT_THANH_TOAN' && (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
-                      <Receipt className="w-5 h-5 text-emerald-600" /> Bảng 8: Thanh_Toan (Lịch Sử Giao Dịch)
+                      <Receipt className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      Bảng Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan)
                     </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Quản lý toàn bộ thông tin lịch đặt sân, khách hàng và giao dịch thanh toán / cọc sân.
+                    </p>
                   </div>
-                  <button onClick={() => setPaymentModal({ isOpen: true, mode: 'ADD', data: { ma_don_dat: 101, so_tien: 200000, phuong_thuc: 'TIEN_MAT', loai_thanh_toan: 'DAT_COC' } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
-                    <Plus className="w-4 h-4 stroke-[3]" /> Thêm Giao Dịch
+                  <button
+                    onClick={() => setBookingModal({
+                      isOpen: true,
+                      mode: 'ADD',
+                      data: {
+                        ma_san: courtList[0]?.id || 1,
+                        ma_nguoi_dung: userList[0]?.id || 1,
+                        ngay_da: selectedDate,
+                        gio_bat_dau: '17:00',
+                        gio_ket_thuc: '18:30',
+                        tien_san: 350000,
+                        tong_tien: 350000,
+                        trang_thai: 'DA_CHOT',
+                        phuong_thuc: 'TIEN_MAT',
+                        loai_thanh_toan: 'TRA_HET',
+                        so_tien: 350000,
+                        trang_thai_gd: 'THANH_CONG',
+                        ghi_chu: 'Đặt trực tiếp tại quầy'
+                      }
+                    })}
+                    className="px-4 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" /> Thêm Đơn & Thanh Toán
                   </button>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-left text-xs min-w-[950px]">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4">MÃ ĐƠN</th>
-                        <th className="p-4">KHÁCH HÀNG</th>
-                        <th className="p-4">SỐ TIỀN</th>
+                        <th className="p-4">KHÁCH HÀNG / SĐT</th>
+                        <th className="p-4">SÂN BÓNG</th>
+                        <th className="p-4">NGÀY & GIỜ ĐÁ</th>
+                        <th className="p-4">TỔNG TIỀN</th>
                         <th className="p-4">PHƯƠNG THỨC</th>
-                        <th className="p-4">LOẠI GD</th>
-                        <th className="p-4">MÃ GIAO DỊCH</th>
-                        <th className="p-4">NGÀY GD</th>
+                        <th className="p-4">TRẠNG THÁI</th>
+                        <th className="p-4">GHI CHÚ</th>
                         <th className="p-4 text-right">THAO TÁC</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {paymentList.map((t) => (
-                        <tr key={t.id}>
-                          <td className="p-4 font-mono font-bold">#{t.ma_don_dat}</td>
-                          <td className="p-4 font-black">{t.ten_khach_hang}</td>
-                          <td className="p-4 font-black text-emerald-700">{Number(t.so_tien).toLocaleString('vi-VN')} đ</td>
-                          <td className="p-4"><span className="px-2 py-0.5 rounded font-black bg-emerald-100 text-emerald-800">{t.phuong_thuc}</span></td>
-                          <td className="p-4">{t.loai_thanh_toan === 'DAT_COC' ? 'Cọc Sân' : 'Thanh Toán Hết'}</td>
-                          <td className="p-4 font-mono text-[11px] text-slate-500">{t.ma_giao_dich}</td>
-                          <td className="p-4 font-mono text-slate-500">{t.ngay_thanh_toan}</td>
-                          <td className="p-4 text-right space-x-2">
-                            <button onClick={() => setPaymentModal({ isOpen: true, mode: 'EDIT', data: t })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 cursor-pointer font-bold inline-flex items-center gap-1"><Edit2 className="w-3.5 h-3.5" /> Sửa</button>
-                            <button onClick={() => handleDeletePayment(t.id)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
-                          </td>
-                        </tr>
-                      ))}
+                      {bookingList.map((b) => {
+                        return (
+                          <tr key={b.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
+                            <td className="p-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">#{b.id}</td>
+                            <td className="p-4">
+                              <div className="font-black text-sm">{b.ten_khach_hang || 'Khách Hàng'}</div>
+                              <div className="text-[11px] text-slate-400 font-mono">{b.so_dien_thoai}</div>
+                            </td>
+                            <td className="p-4 font-bold">{b.ten_san}</td>
+                            <td className="p-4">
+                              <div className="font-bold">{b.ngay_da ? (b.ngay_da.includes('T') ? b.ngay_da.split('T')[0] : b.ngay_da) : ''}</div>
+                              <div className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-black">{b.gio_bat_dau} - {b.gio_ket_thuc}</div>
+                            </td>
+                            <td className="p-4 font-black text-sm text-emerald-600 dark:text-emerald-400">
+                              {Number(b.tong_tien || b.tien_san || 0).toLocaleString('vi-VN')} đ
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase ${
+                                b.phuong_thuc === 'CHUYEN_KHOAN' ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                              }`}>
+                                {b.phuong_thuc === 'CHUYEN_KHOAN' ? 'Chuyển Khoản' : 'Tiền Mặt'}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                                (b.trang_thai === 'DA_THANH_TOAN' || b.trang_thai === 'Da Thanh Toan') ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' :
+                                (b.trang_thai === 'DA_COC' || b.trang_thai === 'DA_CHOT') ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30' :
+                                b.trang_thai === 'HOAN_THANH' ? 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30' :
+                                b.trang_thai === 'DA_HUY' ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30' :
+                                'bg-slate-500/20 text-slate-400 border border-slate-500/30'
+                              }`}>
+                                {(b.trang_thai === 'DA_THANH_TOAN' || b.trang_thai === 'Da Thanh Toan') ? 'Đã Thanh Toán' :
+                                 (b.trang_thai === 'DA_COC' || b.trang_thai === 'DA_CHOT') ? 'Đã Cọc' :
+                                 b.trang_thai === 'HOAN_THANH' ? 'Hoàn Thành' :
+                                 b.trang_thai === 'DA_HUY' ? 'Đã Hủy' : b.trang_thai}
+                              </span>
+                            </td>
+                            <td className="p-4 text-slate-500 dark:text-slate-400 text-[11px] max-w-[150px] truncate">
+                              {b.ghi_chu || '—'}
+                            </td>
+                            <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                              <button
+                                onClick={() => setBookingModal({
+                                  isOpen: true,
+                                  mode: 'EDIT',
+                                  data: {
+                                    id: b.id,
+                                    ma_san: b.ma_san,
+                                    ma_nguoi_dung: b.ma_nguoi_dung,
+                                    ngay_da: b.ngay_da,
+                                    gio_bat_dau: b.gio_bat_dau,
+                                    gio_ket_thuc: b.gio_ket_thuc,
+                                    tien_san: b.tien_san,
+                                    tong_tien: b.tong_tien,
+                                    trang_thai: b.trang_thai || 'DA_COC',
+                                    ghi_chu: b.ghi_chu,
+                                    phuong_thuc: b.phuong_thuc || 'CHUYEN_KHOAN',
+                                    loai_thanh_toan: b.trang_thai === 'DA_THANH_TOAN' ? 'TRA_HET' : 'DAT_COC'
+                                  }
+                                })}
+                                className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" /> Sửa
+                              </button>
+                              <button
+                                onClick={() => handleDeleteDonDatThanhToan(b.id)}
+                                className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Xóa
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1979,25 +2446,36 @@ export default function AdminDashboard() {
             )}
 
             {/* =================================================================
-                TAB 10: BẢNG 9 - LICH_SU_HOAN_TIEN (CÓ ĐỦ THÊM SỬA XÓA)
+                TAB: HOAN_TIEN - LỊCH SỬ HOÀN TIỀN (CÓ ĐỦ THÊM SỬA XÓA)
                 ================================================================= */}
             {activeTab === 'HOAN_TIEN' && (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
-                      <RefreshCw className="w-5 h-5 text-rose-500" /> Bảng 9: Lich_Su_Hoan_Tien (Hủy Sân & Hoàn Cọc)
+                      <RefreshCw className="w-5 h-5 text-rose-500" /> Bảng Lịch Sử Hoàn Tiền (Lich_Su_Hoan_Tien)
                     </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Ghi nhận và quản lý các giao dịch hoàn cọc do khách hủy lịch hoặc thay đổi sân.
+                    </p>
                   </div>
-                  <button onClick={() => setRefundModal({ isOpen: true, mode: 'ADD', data: { ma_don_dat: 101, so_tien_hoan: 150000, ty_le_hoan: 100, ly_do_huy: 'Báo hủy trước 24h' } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
+                  <button
+                    onClick={() => setRefundModal({
+                      isOpen: true,
+                      mode: 'ADD',
+                      data: { ma_don_dat: bookingList[0]?.id || 101, so_tien_hoan: 150000, ty_le_hoan: 100, ly_do_huy: 'Báo hủy trước 24h theo quy định' }
+                    })}
+                    className="px-4 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
                     <Plus className="w-4 h-4 stroke-[3]" /> Thêm Phiếu Hoàn
                   </button>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-left text-xs min-w-[750px]">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4">MÃ ĐƠN</th>
+                        <th className="p-4">MÃ HOÀN</th>
+                        <th className="p-4">MÃ ĐƠN ĐẶT</th>
                         <th className="p-4">KHÁCH HÀNG</th>
                         <th className="p-4">TIỀN HOÀN</th>
                         <th className="p-4">TỶ LỆ</th>
@@ -2008,16 +2486,127 @@ export default function AdminDashboard() {
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {refundList.map((h) => (
-                        <tr key={h.id}>
-                          <td className="p-4 font-mono font-bold">#{h.ma_don_dat}</td>
-                          <td className="p-4 font-black">{h.ten_khach_hang}</td>
-                          <td className="p-4 font-black text-rose-600">{Number(h.so_tien_hoan).toLocaleString('vi-VN')} đ</td>
-                          <td className="p-4 font-bold">{h.ty_le_hoan}%</td>
+                        <tr key={h.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
+                          <td className="p-4 font-mono font-bold text-slate-400">#{h.id}</td>
+                          <td className="p-4 font-mono font-bold text-rose-500">#{h.ma_don_dat}</td>
+                          <td className="p-4 font-black">{h.ten_khach_hang || 'Khách Đặt'}</td>
+                          <td className="p-4 font-black text-rose-600 dark:text-rose-400 text-sm">
+                            {Number(h.so_tien_hoan).toLocaleString('vi-VN')} đ
+                          </td>
+                          <td className="p-4 font-black">
+                            <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-500">{h.ty_le_hoan}%</span>
+                          </td>
                           <td className="p-4 text-slate-600 dark:text-slate-300">{h.ly_do_huy}</td>
-                          <td className="p-4 font-mono text-slate-500">{h.ngay_hoan}</td>
-                          <td className="p-4 text-right space-x-2">
-                            <button onClick={() => setRefundModal({ isOpen: true, mode: 'EDIT', data: h })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 cursor-pointer font-bold inline-flex items-center gap-1"><Edit2 className="w-3.5 h-3.5" /> Sửa</button>
-                            <button onClick={() => handleDeleteRefund(h.id)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
+                          <td className="p-4 font-mono text-slate-400">{h.ngay_hoan}</td>
+                          <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                            <button
+                              onClick={() => setRefundModal({ isOpen: true, mode: 'EDIT', data: h })}
+                              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" /> Sửa
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRefund(h.id)}
+                              className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Xóa
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* =================================================================
+                TAB: KHUNG_GIO - BẢNG KHUNG GIỜ (CÓ ĐỦ THÊM SỬA XÓA)
+                ================================================================= */}
+            {activeTab === 'KHUNG_GIO' && (
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                  <div>
+                    <h3 className="text-base font-black flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      Bảng Khung Giờ Hoạt Động (Khung_Gio)
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Quản lý danh sách các mốc thời gian đá bóng (6h00 - 19h30). Dữ liệu được đồng bộ trực tiếp với CSDL SQL Server.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleResetKhungGio}
+                      className="px-3.5 py-2.5 rounded-xl text-xs font-black bg-slate-700 hover:bg-slate-600 text-slate-100 shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Nạp Mặc Định (27 Mốc)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setKhungGioModal({
+                        isOpen: true,
+                        mode: 'ADD',
+                        data: {
+                          gio_bat_dau: '19:30',
+                          gio_ket_thuc: '20:00',
+                          nhan_hien_thi: '19h30',
+                          thu_tu: (khungGioList.length || 27) + 1,
+                          trang_thai: true
+                        }
+                      })}
+                      className="px-4 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-4 h-4 stroke-[3]" /> Thêm Khung Giờ
+                    </button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[700px]">
+                    <thead>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                        <th className="p-4">STT / THỨ TỰ</th>
+                        <th className="p-4">NHÃN HIỂN THỊ</th>
+                        <th className="p-4">GIỜ BẮT ĐẦU</th>
+                        <th className="p-4">GIỜ KẾT THÚC</th>
+                        <th className="p-4">TRẠNG THÁI</th>
+                        <th className="p-4 text-right">THAO TÁC</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
+                      {khungGioList.map((k, index) => (
+                        <tr key={k.id || index} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
+                          <td className="p-4 font-mono font-bold text-slate-400">
+                            #{k.thu_tu || index + 1}
+                          </td>
+                          <td className="p-4">
+                            <span className="font-black text-sm text-emerald-600 dark:text-emerald-400 font-mono px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                              {k.nhan_hien_thi}
+                            </span>
+                          </td>
+                          <td className="p-4 font-mono font-bold text-slate-200 text-sm">{k.gio_bat_dau}</td>
+                          <td className="p-4 font-mono font-bold text-slate-200 text-sm">{k.gio_ket_thuc}</td>
+                          <td className="p-4">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                              k.trang_thai !== false ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {k.trang_thai !== false ? '● Đang Sử Dụng' : '○ Tạm Khóa'}
+                            </span>
+                          </td>
+                          <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                            <button
+                              onClick={() => setKhungGioModal({ isOpen: true, mode: 'EDIT', data: k })}
+                              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" /> Sửa
+                            </button>
+                            <button
+                              onClick={() => handleDeleteKhungGio(k.id)}
+                              className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Xóa
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -2030,50 +2619,132 @@ export default function AdminDashboard() {
             {/* =================================================================
                 TAB 11: BẢNG 10 - NGUOI_DUNG (CÓ ĐỦ THÊM SỬA XÓA)
                 ================================================================= */}
+            {/* =================================================================
+                TAB 11: BẢNG 10 - NGUOI_DUNG (CÓ ĐỦ THÊM SỬA XÓA, ẢNH, MẬT KHẨU, LỌC VAI TRÒ)
+                ================================================================= */}
             {activeTab === 'NGUOI_DUNG' && (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                <div className={`p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
-                      <User className="w-5 h-5 text-emerald-600" /> Bảng 10: Nguoi_Dung (Tài Khoản Hệ Thống)
+                      <User className="w-5 h-5 text-emerald-600" /> Bảng 10: Nguoi_Dung (Tài Khoản & Người Dùng)
                     </h3>
+                    <p className="text-xs text-slate-500 mt-1">Quản lý danh sách người dùng, mật khẩu, phân quyền và ảnh đại diện</p>
                   </div>
-                  <button onClick={() => setUserModal({ isOpen: true, mode: 'ADD', data: { vai_tro: 'KHACH_HANG' } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
-                    <Plus className="w-4 h-4 stroke-[3]" /> Thêm Tài Khoản
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Bộ lọc vai trò */}
+                    <div className="flex items-center bg-slate-200/70 dark:bg-[#060e09] p-1 rounded-xl gap-1 text-xs">
+                      {([
+                        { key: 'ALL', label: 'Tất cả' },
+                        { key: 'ADMIN', label: '🛡️ Admin' },
+                        { key: 'NHAN_VIEN', label: '💼 Nhân viên' },
+                        { key: 'KHACH_HANG', label: '⚽ Khách hàng' },
+                      ] as const).map((tab) => (
+                        <button
+                          key={tab.key}
+                          onClick={() => setUserRoleFilter(tab.key)}
+                          className={`px-3 py-1.5 rounded-lg font-black transition-all cursor-pointer ${
+                            userRoleFilter === tab.key
+                              ? 'bg-emerald-600 text-white shadow-md'
+                              : 'text-slate-600 dark:text-slate-300 hover:bg-white/50 dark:hover:bg-emerald-900/40'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setUserModal({ isOpen: true, mode: 'ADD', data: { vai_tro: 'KHACH_HANG', mat_khau: '123456' } })}
+                      className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 stroke-[3]" /> Thêm Tài Khoản
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4">HỌ VÀ TÊN</th>
-                        <th className="p-4">EMAIL</th>
+                      <tr className={`border-b font-black uppercase text-[11px] tracking-wider ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                        <th className="p-4">ẢNH & HỌ TÊN</th>
+                        <th className="p-4">EMAIL ĐĂNG NHẬP</th>
                         <th className="p-4">SỐ ĐIỆN THOẠI</th>
+                        <th className="p-4">MẬT KHẨU</th>
                         <th className="p-4">VAI TRÒ</th>
                         <th className="p-4 text-right">THAO TÁC</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {userList.map((u) => (
-                        <tr key={u.id}>
-                          <td className="p-4 font-black text-sm">👤 {u.ho_ten}</td>
-                          <td className="p-4 font-mono text-slate-500">{u.email}</td>
-                          <td className="p-4 font-bold">{u.so_dien_thoai}</td>
-                          <td className="p-4">
-                            <span className={`px-2.5 py-1 rounded-full font-black text-[11px] ${
-                              u.vai_tro === 'ADMIN' ? 'bg-purple-100 text-purple-900' : u.vai_tro === 'NHAN_VIEN' ? 'bg-blue-100 text-blue-900' : 'bg-slate-100 text-slate-800'
-                            }`}>
-                              {u.vai_tro}
-                            </span>
-                          </td>
-                          <td className="p-4 text-right space-x-2">
-                            <button onClick={() => setUserModal({ isOpen: true, mode: 'EDIT', data: u })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 cursor-pointer font-bold inline-flex items-center gap-1"><Edit2 className="w-3.5 h-3.5" /> Sửa</button>
-                            <button onClick={() => handleDeleteUser(u.id)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
-                          </td>
-                        </tr>
-                      ))}
+                      {userList
+                        .filter((u) => userRoleFilter === 'ALL' || u.vai_tro === userRoleFilter)
+                        .map((u) => (
+                          <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-emerald-950/30 transition-colors">
+                            <td className="p-4 font-black text-sm whitespace-nowrap">
+                              <div className="flex items-center gap-3">
+                                {u.anh_dai_dien ? (
+                                  <img
+                                    src={u.anh_dai_dien}
+                                    alt={u.ho_ten}
+                                    className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shadow-md ring-2 ring-emerald-500/20"
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(u.ho_ten || 'User') + '&background=059669&color=fff';
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-emerald-600/15 border-2 border-emerald-500/60 text-emerald-600 dark:text-emerald-300 font-black flex items-center justify-center text-sm shadow-inner">
+                                    {(u.ho_ten || 'U').charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-black text-slate-900 dark:text-white text-sm">{u.ho_ten}</div>
+                                  <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                                    <span className="px-1.5 py-0.2 bg-slate-100 dark:bg-[#060e09] rounded border border-slate-200 dark:border-emerald-900/50">ID #{u.id}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4 font-mono text-slate-600 dark:text-slate-300 font-semibold whitespace-nowrap">{u.email}</td>
+                            <td className="p-4 font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">{u.so_dien_thoai || '—'}</td>
+                            <td className="p-4 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1.5 font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950 px-2.5 py-1 rounded-lg text-xs font-black shadow-inner">
+                                <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                                ••••••••
+                              </span>
+                            </td>
+                            <td className="p-4 whitespace-nowrap">
+                              <span className={`whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-xs shadow-sm tracking-wide border ${
+                                u.vai_tro === 'ADMIN'
+                                  ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-400/40'
+                                  : u.vai_tro === 'NHAN_VIEN'
+                                  ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-400/40'
+                                  : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-400/40'
+                              }`}>
+                                <span>{u.vai_tro === 'ADMIN' ? '🛡️' : u.vai_tro === 'NHAN_VIEN' ? '💼' : '⚽'}</span>
+                                <span>{u.vai_tro === 'ADMIN' ? 'ADMIN' : u.vai_tro === 'NHAN_VIEN' ? 'NHÂN VIÊN' : 'KHÁCH HÀNG'}</span>
+                              </span>
+                            </td>
+                            <td className="p-4 text-right whitespace-nowrap space-x-2">
+                              <button
+                                onClick={() => setUserModal({ isOpen: true, mode: 'EDIT', data: { ...u, mat_khau: '' } })}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-[#0e2116] dark:hover:bg-emerald-900/50 dark:text-emerald-200 border border-slate-200 dark:border-emerald-900/40 cursor-pointer shadow-sm transition-all"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" /> Sửa
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(u.id, u.ho_ten)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-200 dark:border-rose-900/50 cursor-pointer shadow-sm transition-all"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Xóa
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
+                  {userList.filter((u) => userRoleFilter === 'ALL' || u.vai_tro === userRoleFilter).length === 0 && (
+                    <div className="p-8 text-center text-slate-400 font-bold">
+                      Không có người dùng nào thuộc vai trò này.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2329,59 +3000,213 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* 6. Modal Thanh Toán (Thanh_Toan) */}
-      {paymentModal.isOpen && (
+      {/* 6. Modal Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan) */}
+      {bookingModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            <div className="flex items-center justify-between pb-3 border-b mb-4">
+              <h3 className="font-black text-base">{bookingModal.mode === 'ADD' ? '📋 Thêm Đơn Đặt Sân & Thanh Toán' : '✏️ Cập Nhật Đơn Đặt Sân'}</h3>
+              <button onClick={() => setBookingModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleSaveDonDatThanhToan} className="space-y-3.5 text-xs max-h-[80vh] overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-black uppercase mb-1">Chọn Sân Bóng *</label>
+                  <select
+                    value={bookingModal.data.ma_san || 1}
+                    onChange={(e) => {
+                      const ms = Number(e.target.value);
+                      const s = courtList.find(c => c.id === ms);
+                      setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ma_san: ms, ten_san: s?.ten_san } });
+                    }}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  >
+                    {courtList.map((c) => (
+                      <option key={c.id} value={c.id}>{c.ten_san}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-black uppercase mb-1">Người Đặt (Tài Khoản) *</label>
+                  <select
+                    value={bookingModal.data.ma_nguoi_dung || 1}
+                    onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ma_nguoi_dung: Number(e.target.value) } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  >
+                    {userList.map((u) => (
+                      <option key={u.id} value={u.id}>{u.ho_ten} ({u.so_dien_thoai || u.email})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-black uppercase mb-1">Ngày Đá *</label>
+                  <input
+                    type="date"
+                    required
+                    value={bookingModal.data.ngay_da ? bookingModal.data.ngay_da.split('T')[0] : new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ngay_da: e.target.value } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-black uppercase mb-1">Giờ Bắt Đầu *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="17:00"
+                    value={bookingModal.data.gio_bat_dau || '17:00'}
+                    onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, gio_bat_dau: e.target.value } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-black uppercase mb-1">Giờ Kết Thúc *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="18:30"
+                    value={bookingModal.data.gio_ket_thuc || '18:30'}
+                    onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, gio_ket_thuc: e.target.value } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-black uppercase mb-1">Tiền Sân (VNĐ) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="10000"
+                    value={bookingModal.data.tien_san || 350000}
+                    onChange={(e) => {
+                      const ts = Number(e.target.value);
+                      setBookingModal({ ...bookingModal, data: { ...bookingModal.data, tien_san: ts, tong_tien: ts } });
+                    }}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-black uppercase mb-1">Phương Thức Thanh Toán</label>
+                  <select
+                    value={bookingModal.data.phuong_thuc || 'CHUYEN_KHOAN'}
+                    onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, phuong_thuc: e.target.value } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  >
+                    <option value="CHUYEN_KHOAN">Chuyển Khoản</option>
+                    <option value="TIEN_MAT">Tiền Mặt</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-black uppercase mb-1">Trạng Thái Đơn</label>
+                <select
+                  value={bookingModal.data.trang_thai || 'DA_COC'}
+                  onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, trang_thai: e.target.value } })}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                >
+                  <option value="DA_COC">Đã Cọc (30%)</option>
+                  <option value="DA_THANH_TOAN">Đã Thanh Toán (100%)</option>
+                  <option value="HOAN_THANH">Hoàn Thành (Đã đá xong)</option>
+                  <option value="DA_HUY">Đã Hủy</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-black uppercase mb-1">Ghi Chú</label>
+                <input
+                  type="text"
+                  placeholder="Ghi chú thêm cho đơn..."
+                  value={bookingModal.data.ghi_chu || ''}
+                  onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ghi_chu: e.target.value } })}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button type="button" onClick={() => setBookingModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
+                <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer hover:bg-emerald-500">Lưu Đơn Đặt Sân</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6b. Modal Khung Giờ (Khung_Gio) */}
+      {khungGioModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
           <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
-              <h3 className="font-black text-base">{paymentModal.mode === 'ADD' ? '💳 Thêm Giao Dịch Thanh Toán' : '✏️ Cập Nhật Giao Dịch'}</h3>
-              <button onClick={() => setPaymentModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
+              <h3 className="font-black text-base">{khungGioModal.mode === 'ADD' ? '⏰ Thêm Khung Giờ Mới' : '✏️ Cập Nhật Khung Giờ'}</h3>
+              <button onClick={() => setKhungGioModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleSavePayment} className="space-y-4 text-xs">
+            <form onSubmit={handleSaveKhungGio} className="space-y-4 text-xs">
               <div>
-                <label className="block font-black uppercase mb-1">Mã Đơn Đặt Sân</label>
+                <label className="block font-black uppercase mb-1">Nhãn Hiển Thị (Ví dụ: 6h, 6h30, 19h30...) *</label>
                 <input
-                  type="number"
-                  value={paymentModal.data.ma_don_dat || 101}
-                  onChange={(e) => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, ma_don_dat: Number(e.target.value) } })}
+                  type="text"
+                  required
+                  placeholder="Ví dụ: 19h30"
+                  value={khungGioModal.data.nhan_hien_thi || ''}
+                  onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, nhan_hien_thi: e.target.value } })}
                   className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Số Tiền Thanh Toán (VNĐ) *</label>
-                <input
-                  type="number"
-                  value={paymentModal.data.so_tien || 200000}
-                  onChange={(e) => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, so_tien: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-black uppercase mb-1">Giờ Bắt Đầu (HH:mm) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="19:30"
+                    value={khungGioModal.data.gio_bat_dau || ''}
+                    onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, gio_bat_dau: e.target.value } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-black uppercase mb-1">Giờ Kết Thúc (HH:mm) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="20:00"
+                    value={khungGioModal.data.gio_ket_thuc || ''}
+                    onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, gio_ket_thuc: e.target.value } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Phương Thức Thanh Toán</label>
-                <select
-                  value={paymentModal.data.phuong_thuc || 'TIEN_MAT'}
-                  onChange={(e) => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, phuong_thuc: e.target.value as any } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                >
-                  <option value="TIEN_MAT">Tiền Mặt</option>
-                  <option value="VNPAY">VNPay</option>
-                  <option value="MOMO">MoMo</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-black uppercase mb-1">Thứ Tự Sắp Xếp</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={khungGioModal.data.thu_tu || 1}
+                    onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, thu_tu: Number(e.target.value) } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-black uppercase mb-1">Trạng Thái</label>
+                  <select
+                    value={khungGioModal.data.trang_thai === false ? '0' : '1'}
+                    onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, trang_thai: e.target.value === '1' } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  >
+                    <option value="1">🟢 Hoạt động (Hiển thị)</option>
+                    <option value="0">🔴 Tạm tắt (Ẩn)</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Loại Thanh Toán</label>
-                <select
-                  value={paymentModal.data.loai_thanh_toan || 'DAT_COC'}
-                  onChange={(e) => setPaymentModal({ ...paymentModal, data: { ...paymentModal.data, loai_thanh_toan: e.target.value as any } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                >
-                  <option value="DAT_COC">Đặt Cọc</option>
-                  <option value="TRA_HET">Thanh Toán Hoàn Tất</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setPaymentModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
-                <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer">Lưu Giao Dịch</button>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <button type="button" onClick={() => setKhungGioModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
+                <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer hover:bg-emerald-500">Lưu Khung Giờ</button>
               </div>
             </form>
           </div>
@@ -2446,54 +3271,114 @@ export default function AdminDashboard() {
       {/* 8. Modal Người Dùng (Nguoi_Dung) */}
       {userModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
-              <h3 className="font-black text-base">{userModal.mode === 'ADD' ? '👤 Thêm Tài Khoản Mới' : '✏️ Cập Nhật Tài Khoản'}</h3>
-              <button onClick={() => setUserModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
+              <h3 className="font-black text-base flex items-center gap-2">
+                <User className="w-5 h-5 text-emerald-600" />
+                {userModal.mode === 'ADD' ? 'Thêm Tài Khoản Mới' : 'Cập Nhật Tài Khoản Người Dùng'}
+              </h3>
+              <button onClick={() => setUserModal({ isOpen: false, mode: 'ADD', data: {} })} className="cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-white"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleSaveUser} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-black uppercase mb-1">Họ Và Tên *</label>
-                <input
-                  type="text"
-                  value={userModal.data.ho_ten || ''}
-                  onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, ho_ten: e.target.value } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
+              {/* Preview & Avatar URL */}
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950 flex items-center gap-4">
+                <div className="shrink-0">
+                  {userModal.data.anh_dai_dien ? (
+                    <img
+                      src={userModal.data.anh_dai_dien}
+                      alt="Preview"
+                      className="w-14 h-14 rounded-full object-cover border-2 border-emerald-500 shadow-md"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(userModal.data.ho_ten || 'User') + '&background=059669&color=fff';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-emerald-600/20 border-2 border-emerald-500 text-emerald-600 dark:text-emerald-300 font-black flex items-center justify-center text-lg shadow-inner">
+                      {(userModal.data.ho_ten || 'U').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <label className="block font-black uppercase mb-1">Đường Dẫn Ảnh Đại Diện (Avatar URL)</label>
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/... hoặc link ảnh"
+                    value={userModal.data.anh_dai_dien || ''}
+                    onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, anh_dai_dien: e.target.value } })}
+                    className={`w-full p-2 rounded-xl border font-mono text-[11px] ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                  <span className="text-[10px] text-slate-400">Có thể dán link ảnh từ Unsplash, Imgur hoặc Google</span>
+                </div>
               </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Email *</label>
-                <input
-                  type="email"
-                  value={userModal.data.email || ''}
-                  onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, email: e.target.value } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-black uppercase mb-1">Họ Và Tên *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ví dụ: Nguyễn Văn A"
+                    value={userModal.data.ho_ten || ''}
+                    onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, ho_ten: e.target.value } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-black uppercase mb-1">Email (Đăng Nhập) *</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="user@example.com"
+                    value={userModal.data.email || ''}
+                    onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, email: e.target.value } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Số Điện Thoại</label>
-                <input
-                  type="text"
-                  value={userModal.data.so_dien_thoai || ''}
-                  onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, so_dien_thoai: e.target.value } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-black uppercase mb-1">Số Điện Thoại</label>
+                  <input
+                    type="text"
+                    placeholder="0987654321"
+                    value={userModal.data.so_dien_thoai || ''}
+                    onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, so_dien_thoai: e.target.value } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-black uppercase mb-1">Vai Trò Hệ Thống</label>
+                  <select
+                    value={userModal.data.vai_tro || 'KHACH_HANG'}
+                    onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, vai_tro: e.target.value as any } })}
+                    className={`w-full p-2.5 rounded-xl border font-black ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  >
+                    <option value="ADMIN">🛡️ ADMIN (Toàn quyền)</option>
+                    <option value="NHAN_VIEN">💼 NHÂN VIÊN (Quản lý sân)</option>
+                    <option value="KHACH_HANG">⚽ KHÁCH HÀNG</option>
+                  </select>
+                </div>
               </div>
+
               <div>
-                <label className="block font-black uppercase mb-1">Vai Trò</label>
-                <select
-                  value={userModal.data.vai_tro || 'KHACH_HANG'}
-                  onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, vai_tro: e.target.value as any } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                >
-                  <option value="ADMIN">ADMIN (Toàn quyền)</option>
-                  <option value="NHAN_VIEN">NHAN_VIEN (Quầy)</option>
-                  <option value="KHACH_HANG">KHACH_HANG</option>
-                </select>
+                <label className="block font-black uppercase mb-1">
+                  Mật Khẩu {userModal.mode === 'EDIT' ? '(Để trống nếu giữ nguyên)' : '* (Mặc định: 123456)'}
+                </label>
+                <div className="relative">
+                  <input
+                    type="password"
+                    placeholder={userModal.mode === 'EDIT' ? 'Nhập mật khẩu mới nếu muốn đổi...' : 'Nhập mật khẩu...'}
+                    value={userModal.data.mat_khau !== undefined ? userModal.data.mat_khau : ''}
+                    onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, mat_khau: e.target.value } })}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setUserModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
-                <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer">Lưu Tài Khoản</button>
+
+              <div className="flex justify-end gap-2 pt-3 border-t">
+                <button type="button" onClick={() => setUserModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-200 cursor-pointer">Hủy</button>
+                <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-lg">Lưu Tài Khoản</button>
               </div>
             </form>
           </div>
@@ -2594,7 +3479,7 @@ export default function AdminDashboard() {
                 <div className="flex justify-between"><span>Đã cọc:</span><strong className="text-emerald-600">-{Number(checkoutModal.booking.tien_coc_da_tra).toLocaleString('vi-VN')} đ</strong></div>
                 <div className="flex justify-between pt-2 border-t text-sm font-black text-rose-600">
                   <span>CÒN LẠI CẦN THU:</span>
-                  <span>{Math.max(0, checkoutModal.booking.tong_tien - checkoutModal.booking.tien_coc_da_tra).toLocaleString('vi-VN')} đ</span>
+                  <span>{Math.max(0, (checkoutModal.booking.tong_tien || 0) - (checkoutModal.booking.tien_coc_da_tra || 0)).toLocaleString('vi-VN')} đ</span>
                 </div>
               </div>
               <div>
@@ -2619,6 +3504,60 @@ export default function AdminDashboard() {
                 <button type="submit" className="px-5 py-2 rounded-xl font-black bg-rose-600 text-white cursor-pointer">Xác Nhận Thu Tiền & Trả Sân</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 12. Modal Xác Nhận Xóa Chung (Universal Delete Confirmation Modal) */}
+      {deleteConfirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl transition-all scale-100 ${isDarkMode ? 'bg-[#0a150e] border-rose-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            <div className="flex items-start gap-4 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0 text-rose-600 dark:text-rose-400">
+                <Trash2 className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center gap-1.5">
+                  {deleteConfirmModal.title || 'Xác nhận xóa'}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                  {deleteConfirmModal.message}
+                </p>
+              </div>
+            </div>
+
+            {deleteConfirmModal.itemDescription && (
+              <div className="p-3.5 rounded-2xl bg-rose-50/70 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 mb-5">
+                <div className="text-[11px] font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>Dữ liệu bị xóa: <strong className="underline decoration-rose-400 underline-offset-2">{deleteConfirmModal.itemDescription}</strong></span>
+                </div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 pl-5">
+                  Hành động này không thể hoàn tác sau khi thực hiện.
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end items-center gap-2 pt-2 border-t border-slate-100 dark:border-emerald-950">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 dark:bg-[#060e09] dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const onConfirm = deleteConfirmModal.onConfirm;
+                  setDeleteConfirmModal((prev) => ({ ...prev, isOpen: false }));
+                  if (onConfirm) await onConfirm();
+                }}
+                className="px-5 py-2.5 rounded-xl font-black text-xs bg-rose-600 hover:bg-rose-500 text-white cursor-pointer shadow-lg shadow-rose-600/30 flex items-center gap-1.5 transition-all"
+              >
+                <Trash2 className="w-4 h-4 stroke-[2.5]" /> Xác Nhận Xóa
+              </button>
+            </div>
           </div>
         </div>
       )}
