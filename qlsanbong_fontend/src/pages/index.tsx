@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import Login, { AuthUser } from '../Login/login';
 import Profile from '../profile/profile';
+import SoccerLoader from '../components/SoccerLoader';
 
 // =====================================================================
 // 1. ĐỊNH NGHĨA INTERFACES & KIỂU DỮ LIỆU (MAPPING TỪ CSDL SQL SERVER)
@@ -47,7 +48,6 @@ interface LoaiSan {
   id: number;
   ten_loai: string;
   mo_ta: string;
-  gia_co_ban: number;
   trang_thai?: boolean;
 }
 
@@ -59,9 +59,9 @@ interface SanBong {
   ma_loai_san: number;
   ten_san: string;
   ten_loai: string;
+  don_gia_phut: number;
   hinh_anh?: string;
   mo_ta?: string;
-  gia_co_ban?: number;
   trang_thai: 'SAN_SANG' | 'BAO_TRI';
 }
 
@@ -94,19 +94,6 @@ interface DichVu {
   ton_kho: number;
 }
 
-/**
- * Interface Khung Giờ & Bảng Giá - Tương ứng bảng Khung_Gio_Gia trong SQL Server
- */
-interface KhungGioGiaItem {
-  id: number;
-  ma_loai_san: number;
-  ten_loai: string;
-  gio_bat_dau: string;
-  gio_ket_thuc: string;
-  la_cuoi_tuan: boolean;
-  don_gia: number;
-}
-
 // Cấu hình URL Backend API Express kết nối trực tiếp CSDL SQL Server
 const API_BASE_URL = 'http://localhost:5000/api';
 
@@ -135,7 +122,6 @@ export default function HomePage() {
   const [loaiSanList, setLoaiSanList] = useState<LoaiSan[]>([]);
   const [sanBongList, setSanBongList] = useState<SanBong[]>([]);
   const [dichVuList, setDichVuList] = useState<DichVu[]>([]);
-  const [khungGioGiaList, setKhungGioGiaList] = useState<KhungGioGiaItem[]>([]);
   
   // Lưới ma trận slot lịch sân (Được tổng hợp từ San_Bong + sp_LayLichSan SQL Server)
   const [gridSlots, setGridSlots] = useState<Record<string, SlotLichSan>>({});
@@ -181,6 +167,14 @@ export default function HomePage() {
   // State thông báo Toast & Trạng thái gửi đơn
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // Hàm hiển thị Toast: Khi là Admin thì không cần hiện thông báo theo yêu cầu
+  const triggerToast = (toast: { type: 'success' | 'error' | 'info'; message: string }) => {
+    if (currentUser && (currentUser.vai_tro || '').toUpperCase() === 'ADMIN') {
+      return;
+    }
+    setToastMessage(toast);
+  };
 
   // Tự động đóng Toast sau 4 giây
   useEffect(() => {
@@ -257,20 +251,7 @@ export default function HomePage() {
     }
   };
 
-  // 4. Tải danh sách Khung giờ giá (sp_LayKhungGioGia)
-  const fetchKhungGioGia = async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/dat-san/khung-gio-gia`);
-      const data = await res.json();
-      if (data.success && Array.isArray(data.data)) {
-        setKhungGioGiaList(data.data);
-      }
-    } catch (err) {
-      console.error('Lỗi fetch khung giờ giá từ SQL Server:', err);
-    }
-  };
-
-  // 5. Tải ma trận Lịch đặt sân theo ngày thực từ SQL Server (sp_LayLichSan)
+  // 4. Tải ma trận Lịch đặt sân theo ngày thực từ SQL Server (sp_LayLichSan)
   const fetchLichSan = useCallback(async (ngay: string, currentSanList: SanBong[]) => {
     try {
       const res = await fetch(`${API_BASE_URL}/dat-san/lich-san?ngay_da=${ngay}`);
@@ -304,9 +285,12 @@ export default function HomePage() {
             maDon = matchedBooking.id;
           }
 
-          // Tính giá áp dụng dựa trên giá cơ bản của sân trong CSDL
-          const giaCoBan = san.gia_co_ban || 200000;
-          const giaApDung = slot.isGold ? Math.round(giaCoBan * 1.35) : giaCoBan;
+          // Tính giá sân theo công thức: số phút * đơn giá phút của sân
+          const [h1, m1] = slot.start.split(':').map(Number);
+          const [h2, m2] = slot.end.split(':').map(Number);
+          const soPhut = (h2 * 60 + m2) - (h1 * 60 + m1);
+          const donGiaPhut = Number(san.don_gia_phut) || 5000;
+          const giaApDung = soPhut * donGiaPhut;
 
           newGrid[key] = {
             ma_san: san.id,
@@ -333,8 +317,7 @@ export default function HomePage() {
       await Promise.all([
         fetchLoaiSan(),
         fetchSanBong(),
-        fetchDichVu(),
-        fetchKhungGioGia()
+        fetchDichVu()
       ]);
       setIsLoadingData(false);
     };
@@ -372,30 +355,29 @@ export default function HomePage() {
     return TIME_SLOTS.filter((s) => s.start === filterKhungGio);
   }, [filterKhungGio]);
 
-  // Nhóm bảng giá theo từng loại sân từ SQL Server
+  // Nhóm bảng giá theo từng sân bóng từ SQL Server
   const groupedBangGia = useMemo(() => {
-    return loaiSanList.map((loai) => {
-      const giaCoBan = loai.gia_co_ban;
-      const giaVang = Math.round(giaCoBan * 1.4);
-      const giaCuoiTuan = Math.round(giaCoBan * 1.5);
+    return sanBongList.map((san) => {
+      const donGiaPhut = Number(san.don_gia_phut) || 5000;
+      const gia90Phut = donGiaPhut * 90;
+      const gia60Phut = donGiaPhut * 60;
       return {
-        id: loai.id,
-        ten_loai: loai.ten_loai,
-        mo_ta: loai.mo_ta,
-        gio_thuong: '06:00 - 16:30 & 21:00 - 23:00',
-        gia_thuong: giaCoBan,
-        gio_vang: '16:30 - 21:00 (Khung Giờ Vàng)',
-        gia_vang: giaVang,
-        gia_cuoi_tuan: giaCuoiTuan,
+        id: san.id,
+        ten_san: san.ten_san,
+        ten_loai: san.ten_loai,
+        mo_ta: san.mo_ta || `Sân bóng ${san.ten_san} mặt cỏ tiêu chuẩn chất lượng cao`,
+        don_gia_phut: donGiaPhut,
+        gia_60phut: gia60Phut,
+        gia_90phut: gia90Phut,
       };
     });
-  }, [loaiSanList]);
+  }, [sanBongList]);
 
   // Xử lý khi bấm nút "🔍 TÌM SÂN TRỐNG" tại Hero Section
   const handleSearchAvailableSlots = (e: React.FormEvent) => {
     e.preventDefault();
     fetchLichSan(filterNgayDa, sanBongList);
-    setToastMessage({
+    triggerToast({
       type: 'info',
       message: `Đang cập nhật lịch sân thực tế từ CSDL cho ngày ${filterNgayDa}...`,
     });
@@ -411,8 +393,11 @@ export default function HomePage() {
     const slotData = gridSlots[`${san.id}_${slot.start}`];
 
     if (!slotData || slotData.trang_thai === 'TRONG') {
-      const giaCoBan = san.gia_co_ban || 200000;
-      const giaTien = slot.isGold ? Math.round(giaCoBan * 1.35) : giaCoBan;
+      const [h1, m1] = slot.start.split(':').map(Number);
+      const [h2, m2] = slot.end.split(':').map(Number);
+      const soPhut = (h2 * 60 + m2) - (h1 * 60 + m1);
+      const donGiaPhut = Number(san.don_gia_phut) || 5000;
+      const giaTien = soPhut * donGiaPhut;
 
       setSelectedSlot({
         san,
@@ -427,12 +412,12 @@ export default function HomePage() {
         dich_vu_chon: {},
       }));
     } else if (slotData.trang_thai === 'CHO_XAC_NHAN') {
-      setToastMessage({
+      triggerToast({
         type: 'info',
         message: `Khung giờ ${slot.start} - ${slot.end} của ${san.ten_san} đang có người giữ chỗ cọc. Vui lòng chọn ô khác!`,
       });
     } else {
-      setToastMessage({
+      triggerToast({
         type: 'error',
         message: `Khung giờ ${slot.start} - ${slot.end} của ${san.ten_san} đã được chốt lịch trong CSDL. Vui lòng chọn khung giờ khác!`,
       });
@@ -483,7 +468,7 @@ export default function HomePage() {
     if (!selectedSlot) return;
 
     if (!bookingForm.ho_ten.trim() || !bookingForm.so_dien_thoai.trim()) {
-      setToastMessage({
+      triggerToast({
         type: 'error',
         message: 'Vui lòng điền đầy đủ Họ tên và Số điện thoại liên hệ!',
       });
@@ -519,7 +504,7 @@ export default function HomePage() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setToastMessage({
+        triggerToast({
           type: 'error',
           message: data.message || '⚠️ Lỗi khi lưu đơn đặt sân vào CSDL!',
         });
@@ -534,13 +519,13 @@ export default function HomePage() {
       setShowQR(false);
       setSelectedSlot(null);
 
-      setToastMessage({
+      triggerToast({
         type: 'success',
         message: `🎉 Đặt sân thành công và đã lưu vào CSDL SQL Server cho khách hàng ${bookingForm.ho_ten}!`,
       });
     } catch (err) {
       console.error('Lỗi khi gửi đơn đặt sân lên SQL Server:', err);
-      setToastMessage({
+      triggerToast({
         type: 'error',
         message: '❌ Không thể kết nối đến máy chủ Backend SQL Server để lưu đơn đặt!',
       });
@@ -556,7 +541,7 @@ export default function HomePage() {
     setCurrentUser(null);
     setUserDropdownOpen(false);
     setIsProfileModalOpen(false);
-    setToastMessage({ type: 'info', message: 'Đã đăng xuất tài khoản thành công.' });
+    triggerToast({ type: 'info', message: 'Đã đăng xuất tài khoản thành công.' });
   };
 
   return (
@@ -571,6 +556,11 @@ export default function HomePage() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
+
+      {/* HIỆU ỨNG LOADING VÒNG 12 TRÁI BANH XOAY TRÒN KHI ĐANG TẢI DỮ LIỆU */}
+      {isLoadingData && (
+        <SoccerLoader message="Đang kết nối CSDL và tải dữ liệu sân bóng..." fullScreen={true} />
+      )}
 
       {/* TOAST THÔNG BÁO NỔI */}
       {toastMessage && (
@@ -620,7 +610,7 @@ export default function HomePage() {
               </div>
             </a>
 
-            {/* KHUNG TÌM KIẾM TÊN SÂN Ở GIỮA */}
+            {/* KHUNG TÌM KIẾM TÊN SÂN Ở GIỮA (ĐÃ BỎ CHỮ SQL LIVE THEO YÊU CẦU) */}
             <div className="flex-1 max-w-lg mx-1 sm:mx-4">
               <div className="relative flex items-center">
                 <Search className="w-4 h-4 text-emerald-500 absolute left-3.5 pointer-events-none" />
@@ -634,23 +624,18 @@ export default function HomePage() {
                     : 'bg-slate-100/90 border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-emerald-600 focus:ring-emerald-600'
                     }`}
                 />
-                {searchCourtName ? (
+                {searchCourtName && (
                   <button
                     onClick={() => setSearchCourtName('')}
                     className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-white"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
-                ) : (
-                  <kbd className={`hidden lg:inline-block absolute right-3 px-1.5 py-0.5 rounded text-[10px] font-mono border ${isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-200 text-slate-600 border-slate-300'
-                    }`}>
-                    SQL Live
-                  </kbd>
                 )}
               </div>
             </div>
 
-            {/* CỤM NÚT PHẢI: NÚT SÁNG/TỐI + ĐẶT SÂN NHANH + ĐĂNG NHẬP (SQL SERVER) */}
+            {/* CỤM NÚT PHẢI: NÚT SÁNG/TỐI + ĐĂNG NHẬP (ĐÃ BỎ 2 NÚT ĐẶT SÂN NHANH & TRANG QUẢN TRỊ THEO YÊU CẦU) */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
 
               {/* Nút Chuyển đổi Theme Sáng / Tối */}
@@ -669,15 +654,6 @@ export default function HomePage() {
                   <Moon className="w-4 h-4 text-emerald-600 group-hover:-rotate-12 transition-transform duration-300" />
                 )}
               </button>
-
-              {/* Nút Đặt sân nhanh */}
-              <a
-                href="#ma-tran-lich-san"
-                className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 shadow-md shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all"
-              >
-                <Zap className="w-3.5 h-3.5 fill-slate-950" />
-                <span>Đặt Sân Nhanh</span>
-              </a>
 
               {/* Khu vực Người Dùng / Đăng nhập (Xác thực trực tiếp từ SQL Server) */}
               {currentUser ? (
@@ -701,12 +677,28 @@ export default function HomePage() {
 
                   {/* Dropdown Menu User */}
                   {userDropdownOpen && (
-                    <div className={`absolute right-0 mt-3 w-56 rounded-2xl border shadow-2xl p-2 z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                    <div className={`absolute right-0 mt-3 w-60 rounded-2xl border shadow-2xl p-2 z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
                       }`}>
                       <div className={`px-3 py-2.5 border-b mb-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
                         <p className="text-[11px] text-slate-400">Đã đăng nhập email CSDL:</p>
                         <p className="text-xs font-bold text-emerald-500 truncate">{currentUser.email}</p>
+                        <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          Vai trò: {currentUser.vai_tro || 'Khách hàng'}
+                        </span>
                       </div>
+
+                      {/* Nút đi tới Dashboard cho Admin trong Dropdown */}
+                      {(currentUser.vai_tro || '').toUpperCase() === 'ADMIN' && (
+                        <a
+                          href="/Dashboard"
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold rounded-xl transition-colors text-left cursor-pointer mb-1 ${isDarkMode ? 'text-purple-300 hover:text-white hover:bg-purple-900/40 bg-purple-950/30' : 'text-purple-700 hover:text-purple-900 hover:bg-purple-50 bg-purple-50/50'
+                            }`}
+                        >
+                          <ShieldCheck className="w-4 h-4 text-purple-500" />
+                          <span>🛡️ Trang Quản Trị Dashboard</span>
+                        </a>
+                      )}
+
                       <button
                         onClick={() => {
                           setUserDropdownOpen(false);
@@ -731,12 +723,15 @@ export default function HomePage() {
                 </div>
               ) : (
                 <Login
+                  showRegisterButton={true}
                   onLoginSuccess={(user) => {
                     setCurrentUser(user);
-                    setToastMessage({
-                      type: 'success',
-                      message: `🎉 Đăng nhập thành công từ CSDL SQL Server! Chào mừng ${user.ho_ten || user.email}.`,
-                    });
+                    if ((user.vai_tro || '').toUpperCase() !== 'ADMIN') {
+                      triggerToast({
+                        type: 'success',
+                        message: `🎉 Đăng nhập thành công từ CSDL SQL Server! Chào mừng ${user.ho_ten || user.email}.`,
+                      });
+                    }
                   }}
                 />
               )}
@@ -745,7 +740,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* TẦNG 2: THANH MENU ĐIỀU HƯỚNG CHÍNH (SUB-NAVBAR) */}
+        {/* TẦNG 2: THANH MENU ĐIỀU HƯỚNG CHÍNH (SUB-NAVBAR - ĐÃ BỎ NÚT TRANG QUẢN TRỊ THEO YÊU CẦU) */}
         <div className={`transition-colors duration-300 border-t ${isDarkMode ? 'bg-slate-950/70 border-slate-900' : 'bg-slate-100/80 border-slate-200'
           }`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-11 flex items-center justify-between overflow-x-auto">
@@ -1056,7 +1051,7 @@ export default function HomePage() {
                                   SÂN TRỐNG
                                 </span>
                                 <span className={`text-[11px] font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                                  {slotData ? `${slotData.gia_ap_dung.toLocaleString('vi-VN')} đ` : `${(san.gia_co_ban || 200000).toLocaleString('vi-VN')} đ`}
+                                  {slotData ? `${slotData.gia_ap_dung.toLocaleString('vi-VN')} đ` : `${((san.don_gia_phut || 5000) * 90).toLocaleString('vi-VN')} đ`}
                                 </span>
                                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity font-bold">
                                   + Bấm Đặt Ngay
@@ -1140,34 +1135,36 @@ export default function HomePage() {
                       }`}>
                       <DollarSign className="w-6 h-6" />
                     </div>
-                    <h3 className={`text-lg font-black mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{item.ten_loai}</h3>
+                    <h3 className={`text-lg font-black mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{item.ten_san}</h3>
+                    <div className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-3">
+                      {item.ten_loai}
+                    </div>
                     <p className="text-xs text-slate-400 line-clamp-2 mb-4">{item.mo_ta}</p>
 
                     <div className="space-y-4 my-6">
                       <div className={`p-3 rounded-2xl border ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'
                         }`}>
-                        <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Giờ thường (T2 - T6)</div>
-                        <div className="text-xs text-slate-400 dark:text-slate-500">{item.gio_thuong}</div>
+                        <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Đơn giá theo phút</div>
                         <div className="text-lg font-black text-emerald-500 mt-1">
-                          {item.gia_thuong.toLocaleString('vi-VN')} đ <span className="text-xs font-normal text-slate-400">/ 90 phút</span>
+                          {item.don_gia_phut.toLocaleString('vi-VN')} đ <span className="text-xs font-normal text-slate-400">/ phút</span>
                         </div>
                       </div>
 
-                      <div className={`p-3 rounded-2xl border ${isDarkMode ? 'bg-amber-950/30 border-amber-500/30' : 'bg-amber-50 border-amber-200'
+                      <div className={`p-3 rounded-2xl border ${isDarkMode ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'
                         }`}>
-                        <div className="text-[11px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                          🔥 Giờ Vàng (16:30 - 21:00)
+                        <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          ⚡ Trận 90 phút tiêu chuẩn
                         </div>
-                        <div className="text-lg font-black text-amber-600 dark:text-amber-300 mt-1">
-                          {item.gia_vang.toLocaleString('vi-VN')} đ <span className="text-xs font-normal text-slate-400">/ 90 phút</span>
+                        <div className="text-lg font-black text-emerald-600 dark:text-emerald-300 mt-1">
+                          {item.gia_90phut.toLocaleString('vi-VN')} đ <span className="text-xs font-normal text-slate-400">/ 90 phút</span>
                         </div>
                       </div>
 
                       <div className={`p-3 rounded-2xl border ${isDarkMode ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'
                         }`}>
-                        <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Cuối tuần (Thứ 7 - CN)</div>
+                        <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Khung 60 phút</div>
                         <div className={`text-lg font-black mt-1 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                          {item.gia_cuoi_tuan.toLocaleString('vi-VN')} đ <span className="text-xs font-normal text-slate-400">/ 90 phút</span>
+                          {item.gia_60phut.toLocaleString('vi-VN')} đ <span className="text-xs font-normal text-slate-400">/ 60 phút</span>
                         </div>
                       </div>
                     </div>

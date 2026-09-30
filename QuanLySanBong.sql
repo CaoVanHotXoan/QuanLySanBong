@@ -42,43 +42,29 @@ CREATE TABLE Nguoi_Dung (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ho_ten NVARCHAR(100) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    so_dien_thoai VARCHAR(15),
+    so_dien_thoai VARCHAR(10),
     mat_khau VARCHAR(255),
     anh_dai_dien VARCHAR(255) NULL,
     MaVaiTro INT NOT NULL DEFAULT 3,
-    ngay_tao DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (MaVaiTro) REFERENCES Vai_Tro(MaVaiTro) ON DELETE NO ACTION
 );
 GO
 
--- 4.2. Bảng Loai_San (Loại sân: Sân 5, Sân 7, Pickleball, Cầu lông)
+-- 4.2. Bảng Loai_San 
 CREATE TABLE Loai_San (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ten_loai NVARCHAR(50) NOT NULL, 
     mo_ta NVARCHAR(MAX),
-    gia_co_ban DECIMAL(10, 2) NOT NULL,
     trang_thai BIT DEFAULT 1
 );
 GO
-
--- 4.3. Bảng Khung_Gio_Gia (Bảng giá theo giờ thường / giờ vàng / cuối tuần)
-CREATE TABLE Khung_Gio_Gia (
-    id INT IDENTITY(1,1) PRIMARY KEY,
-    ma_loai_san INT NOT NULL,
-    gio_bat_dau TIME NOT NULL,
-    gio_ket_thuc TIME NOT NULL,
-    la_cuoi_tuan BIT DEFAULT 0, -- 0: Ngày thường (T2-T6), 1: Cuối tuần (T7-CN)
-    don_gia DECIMAL(10, 2) NOT NULL,
-    FOREIGN KEY (ma_loai_san) REFERENCES Loai_San(id) ON DELETE CASCADE
-);
-GO
-
--- 4.4. Bảng San_Bong (Chi tiết từng sân bóng cụ thể)
+-- 4.3. Bảng San_Bong (Chi tiết từng sân bóng cụ thể)
 CREATE TABLE San_Bong (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ma_loai_san INT NOT NULL,
     ten_san NVARCHAR(50) NOT NULL, 
     hinh_anh VARCHAR(255),
+    don_gia_phut DECIMAL(10, 2) NOT NULL,
     trang_thai VARCHAR(20) CHECK (trang_thai IN ('SAN_SANG', 'BAO_TRI')) DEFAULT 'SAN_SANG',
     FOREIGN KEY (ma_loai_san) REFERENCES Loai_San(id) ON DELETE NO ACTION
 );
@@ -95,7 +81,6 @@ CREATE TABLE Don_Dat_San (
     tien_san DECIMAL(10, 2) NOT NULL,
     tong_tien DECIMAL(10, 2) NOT NULL,
     kieu_dat VARCHAR(20) CHECK (kieu_dat IN ('CO_DINH', 'LINH_HOAT')) DEFAULT 'CO_DINH',
-    so_phut_da INT NULL,
     ghi_chu NVARCHAR(255) NULL,
     trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_XAC_NHAN', 'DA_CHOT', 'HOAN_THANH', 'DA_HUY')) DEFAULT 'CHO_XAC_NHAN',
     ngay_tao DATETIME DEFAULT GETDATE(),
@@ -104,11 +89,11 @@ CREATE TABLE Don_Dat_San (
 );
 GO
 
--- 4.6. Bảng Thanh_Toan (Giao dịch cọc / thanh toán đủ qua VNPay/MoMo/Tiền mặt)
+-- 4.6. Bảng Thanh_Toan (Giao dịch cọc / thanh toán đủ qua Chuyển khoản / Tiền mặt)
 CREATE TABLE Thanh_Toan (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ma_don_dat INT NOT NULL,
-    phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'VNPAY', 'MOMO')) NOT NULL,
+    phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'CHUYEN_KHOAN')) NOT NULL,
     loai_thanh_toan VARCHAR(20) CHECK (loai_thanh_toan IN ('DAT_COC', 'TRA_HET')) NOT NULL,
     so_tien DECIMAL(10, 2) NOT NULL,
     ma_giao_dich VARCHAR(100), 
@@ -135,7 +120,6 @@ CREATE TABLE Dich_Vu (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ten_dich_vu NVARCHAR(100) NOT NULL,
     don_gia DECIMAL(10, 2) NOT NULL,
-    don_vi_tinh NVARCHAR(20) NOT NULL, 
     ton_kho INT DEFAULT 0
 );
 GO
@@ -156,7 +140,7 @@ CREATE TABLE Chi_Tiet_Dich_Vu (
     ma_don_dat INT NOT NULL,
     ma_dich_vu INT NOT NULL,
     so_luong INT NOT NULL DEFAULT 1,
-    gia_luc_ban DECIMAL(10, 2) NOT NULL, 
+    tongtien_dichvu DECIMAL(10, 2) NOT NULL, 
     PRIMARY KEY (ma_don_dat, ma_dich_vu),
     FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id) ON DELETE CASCADE,
     FOREIGN KEY (ma_dich_vu) REFERENCES Dich_Vu(id) ON DELETE NO ACTION
@@ -175,60 +159,31 @@ INSERT INTO Vai_Tro (TenVaiTro, MoTa) VALUES
 
 -- 5.1. Người dùng mẫu (Admin, Nhân viên, Khách hàng)
 INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, mat_khau, MaVaiTro) VALUES
-(N'Quản Trị Viên Hệ Thống', 'admin@soccer247.vn', '0909123456', '$2b$10$wE8eJ5.lK6xT8GzZz3lG..zM1bZ0v6O2D1aB3c4e5f6g7h8i9j0k', 1),
-(N'Nhân Viên Quản Lý Sân', 'staff@soccer247.vn', '0909789789', '$2b$10$wE8eJ5.lK6xT8GzZz3lG..zM1bZ0v6O2D1aB3c4e5f6g7h8i9j0k', 2),
-(N'Nguyễn Văn Đạt', 'vandat.soccer@gmail.com', '0988776655', '$2b$10$wE8eJ5.lK6xT8GzZz3lG..zM1bZ0v6O2D1aB3c4e5f6g7h8i9j0k', 3);
+(N'Quản Trị Viên Hệ Thống', 'Admin@gmail.com', '0909123456', '$2a$10$XwJkh09J4g1aUonHEMVhM.87Nd5qqBLSTC6G1XUQacB0F6RySPQJi', 1),
+(N'Nhân Viên Quản Lý Sân', 'staff@soccer247.vn', '0909789789', '$2a$10$XwJkh09J4g1aUonHEMVhM.87Nd5qqBLSTC6G1XUQacB0F6RySPQJi', 2),
+(N'Nguyễn Văn Đạt', 'vandat.soccer@gmail.com', '0988776655', '$2a$10$XwJkh09J4g1aUonHEMVhM.87Nd5qqBLSTC6G1XUQacB0F6RySPQJi', 3);
 
--- 5.2. Loại sân
-INSERT INTO Loai_San (ten_loai, mo_ta, gia_co_ban, trang_thai) VALUES
-(N'Sân 5 người', N'Cỏ nhân tạo FIFA tiêu chuẩn, hệ thống đèn LED chống chói 1000 Lux', 250000, 1),
-(N'Sân 7 người', N'Mặt cỏ mềm cao cấp tiêu chuẩn thi đấu giao hữu', 450000, 1),
-(N'Sân Pickleball', N'Mặt sân cao su chuẩn quốc tế, lưới và vạch kẻ chuẩn thi đấu', 180000, 1),
-(N'Sân Cầu lông', N'Sàn gỗ chuyên dụng trong nhà, chống trơn trượt tối đa', 120000, 1);
+-- 5.2. Loại sân mẫu
+INSERT INTO Loai_San (ten_loai, mo_ta, trang_thai) VALUES
+(N'Sân 5 Người (Tiêu chuẩn)', N'Mặt cỏ nhân tạo cao cấp FIFA 2 sao, có đèn LED cao áp', 1),
+(N'Sân 7 Người (Mở rộng)', N'Kích thước chuẩn thi đấu giải đấu phủi và phong trào', 1),
+(N'Sân 11 Người (Chuyên nghiệp)', N'Sân cỏ tự nhiên tiêu chuẩn quốc tế có khán đài', 1);
 
--- 5.3. Danh sách sân bóng
-INSERT INTO San_Bong (ma_loai_san, ten_san, hinh_anh, trang_thai) VALUES
-(1, N'Sân 5A (Cỏ nhân tạo)', '/images/san-5a.jpg', 'SAN_SANG'),
-(1, N'Sân 5B (Cỏ nhân tạo)', '/images/san-5b.jpg', 'SAN_SANG'),
-(1, N'Sân 5C (VIP)', '/images/san-5c.jpg', 'SAN_SANG'),
-(2, N'Sân 7A (Sân lớn)', '/images/san-7a.jpg', 'SAN_SANG'),
-(2, N'Sân 7B (Sân lớn)', '/images/san-7b.jpg', 'SAN_SANG'),
-(3, N'Pickleball 01 (Indoor)', '/images/pickleball-1.jpg', 'SAN_SANG'),
-(3, N'Pickleball 02 (Outdoor)', '/images/pickleball-2.jpg', 'SAN_SANG'),
-(4, N'Cầu lông 01 (Trong nhà)', '/images/caulong-1.jpg', 'SAN_SANG');
+-- 5.3. Sân bóng mẫu (Kèm don_gia_phut: Đơn giá theo từng phút)
+INSERT INTO San_Bong (ma_loai_san, ten_san, hinh_anh, don_gia_phut, trang_thai) VALUES
+(1, N'Sân 5A (Cỏ nhân tạo VIP)', 'https://images.unsplash.com/photo-1529900240041-dd2c1bb50c1e?q=80&w=800&auto=format&fit=crop', 5000.00, 'SAN_SANG'),
+(1, N'Sân 5B (Khung thành nhôm)', 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=800&auto=format&fit=crop', 5000.00, 'SAN_SANG'),
+(2, N'Sân 7A (Sân Đèn LED Pro)', 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=800&auto=format&fit=crop', 8000.00, 'SAN_SANG'),
+(2, N'Sân 7B (Khán đài A)', 'https://images.unsplash.com/photo-1551958219-acbc608c6377?q=80&w=800&auto=format&fit=crop', 8500.00, 'SAN_SANG'),
+(3, N'Sân 11 Quốc Tế', 'https://images.unsplash.com/photo-1459865264687-595d652de67e?q=80&w=800&auto=format&fit=crop', 15000.00, 'SAN_SANG');
 
--- 5.4. Dịch vụ tại sân
-INSERT INTO Dich_Vu (ten_dich_vu, don_gia, don_vi_tinh, ton_kho) VALUES
-(N'Nước lọc Aquafina 500ml', 10000, N'Chai', 200),
-(N'Nước tăng lực Revive chanh muối', 20000, N'Chai', 100),
-(N'Nước điện giải Pocari Sweat 500ml', 25000, N'Chai', 80),
-(N'Thuê bộ áo Bib phân đội (10 áo)', 30000, N'Bộ / Trận', 25),
-(N'Thuê giày đá bóng cỏ nhân tạo', 40000, N'Đôi / Trận', 40),
-(N'Thuê trọng tài bắt trận chuyên nghiệp', 200000, N'Người / Trận', 5);
-
--- 5.5. Bảng giá khung giờ
-INSERT INTO Khung_Gio_Gia (ma_loai_san, gio_bat_dau, gio_ket_thuc, la_cuoi_tuan, don_gia) VALUES
--- Sân 5 người
-(1, '06:00', '16:30', 0, 250000),
-(1, '16:30', '21:00', 0, 350000),
-(1, '21:00', '23:00', 0, 250000),
-(1, '06:00', '23:00', 1, 380000),
--- Sân 7 người
-(2, '06:00', '16:30', 0, 450000),
-(2, '16:30', '21:00', 0, 650000),
-(2, '21:00', '23:00', 0, 450000),
-(2, '06:00', '23:00', 1, 700000),
--- Sân Pickleball
-(3, '06:00', '16:30', 0, 180000),
-(3, '16:30', '21:00', 0, 260000),
-(3, '21:00', '23:00', 0, 180000),
-(3, '06:00', '23:00', 1, 280000),
--- Sân Cầu lông
-(4, '06:00', '16:30', 0, 120000),
-(4, '16:30', '21:00', 0, 180000),
-(4, '21:00', '23:00', 0, 120000),
-(4, '06:00', '23:00', 1, 200000);
-GO
+-- 5.4. Dịch vụ kèm theo mẫu
+INSERT INTO Dich_Vu (ten_dich_vu, don_gia, ton_kho) VALUES
+(N'Nước khoáng Aquafina 500ml', 10000.00, 200),
+(N'Nước tăng lực Revive Chanh Muối', 15000.00, 150),
+(N'Nước tăng lực RedBull (Bò Húc)', 20000.00, 100),
+(N'Thuê áo bít tập luyện (Bộ 10 áo)', 50000.00, 20),
+(N'Thuê trọng tài bắt chính (90 phút)', 200000.00, 5);
 
 PRINT N'✅ ĐÃ KHỞI TẠO XONG CƠ SỞ DỮ LIỆU VÀ TOÀN BỘ BẢNG CHO QuanLySanBong!';
 GO

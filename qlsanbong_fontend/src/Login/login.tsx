@@ -14,12 +14,15 @@ export interface AuthUser {
 
 interface LoginProps {
   onLoginSuccess?: (userData: AuthUser) => void;
+  showRegisterButton?: boolean;
 }
 
 // Địa chỉ API Backend kết nối trực tiếp với SQL Server
-const API_BASE_URL = "http://localhost:5000/api/auth";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL 
+  ? `${process.env.NEXT_PUBLIC_API_URL}/auth` 
+  : "http://localhost:5000/api/auth";
 
-export default function Login({ onLoginSuccess }: LoginProps = {}) {
+export default function Login({ onLoginSuccess, showRegisterButton = true }: LoginProps = {}) {
   // Trạng thái đóng / mở Modal Popup
   const [isOpen, setIsOpen] = useState<boolean>(false);
 
@@ -41,19 +44,19 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [successMessage, setSuccessMessage] = useState<string>("");
 
-  // Hàm chuẩn hóa email và ghép nối với đuôi @gmail.com cố định
-  const getFullEmail = (username: string): string => {
-    let clean = username.trim().toLowerCase();
-    // Nếu người dùng lỡ gõ hoặc dán cả chuỗi có chứa đuôi @gmail.com thì tách ra
+  // Hàm chuẩn hóa email và ghép nối với đuôi @gmail.com nếu chưa có
+  const getFullEmail = (input: string): string => {
+    const clean = (input || "").trim();
+    if (!clean) return "";
     if (clean.includes("@")) {
-      clean = clean.split("@")[0];
+      return clean;
     }
-    return clean ? `${clean}@gmail.com` : "";
+    return `${clean}@gmail.com`;
   };
 
-  // Hàm mở Modal
-  const handleOpenModal = () => {
-    setIsRegister(false);
+  // Hàm mở Modal (chọn chế độ Đăng nhập hoặc Đăng ký)
+  const handleOpenModal = (registerMode: boolean = false) => {
+    setIsRegister(registerMode);
     setErrorMessage("");
     setSuccessMessage("");
     setIsOpen(true);
@@ -74,8 +77,12 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
   };
 
   // Hàm chuyển đổi qua lại giữa form Đăng nhập và Đăng ký
-  const toggleForm = () => {
-    setIsRegister(!isRegister);
+  const toggleForm = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setIsRegister((prev) => !prev);
     setErrorMessage("");
     setSuccessMessage("");
     setPassword("");
@@ -85,6 +92,7 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
   // Xử lý gửi Form (Đăng ký / Đăng nhập trực tiếp với Cơ sở dữ liệu SQL Server)
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     setErrorMessage("");
     setSuccessMessage("");
 
@@ -144,17 +152,12 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
           return;
         }
 
-        // Đăng ký thành công vào SQL Server
-        setSuccessMessage(`🎉 Đăng ký tài khoản thành công cho: ${hoTen.trim()}! Vui lòng nhập mật khẩu để đăng nhập.`);
+        // Đăng ký thành công vào SQL Server -> KHÔNG đóng modal, chuyển sang form Đăng nhập
+        setSuccessMessage(`🎉 Đăng ký tài khoản thành công cho: ${hoTen.trim()}! Bạn có thể nhập mật khẩu để đăng nhập ngay.`);
         setIsLoading(false);
-
-        // Tự động chuyển sang form Đăng nhập sau 1.2s và giữ lại email vừa đăng ký
-        setTimeout(() => {
-          setIsRegister(false);
-          setPassword("");
-          setConfirmPassword("");
-          setSuccessMessage("");
-        }, 1200);
+        setIsRegister(false);
+        setPassword("");
+        setConfirmPassword("");
 
       } catch (error) {
         console.error("Lỗi khi kết nối máy chủ SQL Server:", error);
@@ -230,27 +233,44 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
 
   return (
     <>
-      {/* Nút bấm Đăng nhập hiển thị trên thanh Header Navbar */}
-      <button
-        type="button"
-        className="login-trigger-btn"
-        onClick={handleOpenModal}
-      >
-        Đăng nhập
-      </button>
+      {/* Nút bấm kích hoạt mở Modal trên thanh Header Navbar */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="login-trigger-btn"
+          onClick={() => handleOpenModal(false)}
+        >
+          Đăng nhập
+        </button>
+        {showRegisterButton && (
+          <button
+            type="button"
+            className="register-trigger-btn"
+            onClick={() => handleOpenModal(true)}
+          >
+            Đăng ký
+          </button>
+        )}
+      </div>
 
       {/* Khung Modal Popup & Lớp phủ mờ (Overlay) */}
       {isOpen && (
         <div
           className="login-modal-overlay"
-          onClick={handleCloseModal}
+          onClick={(e) => {
+            // Chỉ đóng khi click trực tiếp vào nền mờ bên ngoài
+            if (e.target === e.currentTarget) {
+              handleCloseModal();
+            }
+          }}
           role="dialog"
           aria-modal="true"
         >
-          {/* Khung nội dung Modal (Chặn nổi bọt sự kiện click) */}
+          {/* Khung nội dung Modal (Chặn nổi bọt sự kiện click & mousedown) */}
           <div
             className="login-modal-container"
             onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
           >
             {/* Nút X ở góc trên cùng để đóng popup */}
             <button
@@ -355,7 +375,7 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
                 </div>
               )}
 
-              {/* Trường Địa chỉ Email với đuôi sẵn @gmail.com cố định */}
+              {/* Trường Địa chỉ Email với đuôi sẵn @gmail.com */}
               <div className="login-input-group">
                 <label className="login-label" htmlFor="input-email">
                   Địa chỉ Email <span style={{ color: "#ef4444" }}>*</span>
@@ -365,21 +385,18 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
                     id="input-email"
                     type="text"
                     className="login-email-input"
-                    placeholder="Nhập tên tài khoản"
+                    placeholder="Nhập tên tài khoản hoặc email..."
                     value={emailUsername}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      let val = e.target.value;
-                      // Nếu người dùng paste email đầy đủ dạng name@gmail.com -> tách lấy phần username
-                      if (val.includes("@")) {
-                        val = val.split("@")[0];
-                      }
-                      setEmailUsername(val.trim());
+                      setEmailUsername(e.target.value);
                       if (errorMessage) setErrorMessage("");
                     }}
                     required
                   />
-                  {/* Đuôi email @gmail.com hiển thị cố định sẵn cho người dùng */}
-                  <span className="login-email-addon">@gmail.com</span>
+                  {/* Hiển thị đuôi @gmail.com nếu người dùng chỉ gõ tên tài khoản */}
+                  {!emailUsername.includes("@") && (
+                    <span className="login-email-addon">@gmail.com</span>
+                  )}
                 </div>
               </div>
 
@@ -440,7 +457,7 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
             <div className="login-footer">
               {!isRegister ? (
                 <span>
-                  Chưa có tài khoản?
+                  Chưa có tài khoản?{" "}
                   <button
                     type="button"
                     className="login-toggle-link"
@@ -451,7 +468,7 @@ export default function Login({ onLoginSuccess }: LoginProps = {}) {
                 </span>
               ) : (
                 <span>
-                  Đã có tài khoản?
+                  Đã có tài khoản?{" "}
                   <button
                     type="button"
                     className="login-toggle-link"

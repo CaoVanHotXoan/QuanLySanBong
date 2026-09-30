@@ -75,7 +75,7 @@ const layDanhSachLoaiSan = async (req, res) => {
  */
 const themSanBong = async (req, res) => {
     try {
-        const { ten_san, ma_loai_san, hinh_anh, trang_thai } = req.body;
+        const { ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai } = req.body;
 
         if (!ten_san || !ma_loai_san) {
             return res.status(400).json({
@@ -89,6 +89,7 @@ const themSanBong = async (req, res) => {
             .input('ten_san', sql.NVarChar(50), ten_san)
             .input('ma_loai_san', sql.Int, parseInt(ma_loai_san, 10))
             .input('hinh_anh', sql.VarChar(255), hinh_anh || null)
+            .input('don_gia_phut', sql.Decimal(10, 2), don_gia_phut ? parseFloat(don_gia_phut) : 5000.00)
             .input('trang_thai', sql.VarChar(20), trang_thai || 'SAN_SANG')
             .execute('sp_ThemSanBong');
 
@@ -114,7 +115,7 @@ const themSanBong = async (req, res) => {
 const suaSanBong = async (req, res) => {
     try {
         const { id } = req.params;
-        const { ten_san, ma_loai_san, hinh_anh, trang_thai } = req.body;
+        const { ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai } = req.body;
 
         const pool = await poolPromise;
         const result = await pool.request()
@@ -122,6 +123,7 @@ const suaSanBong = async (req, res) => {
             .input('ten_san', sql.NVarChar(50), ten_san)
             .input('ma_loai_san', sql.Int, parseInt(ma_loai_san, 10))
             .input('hinh_anh', sql.VarChar(255), hinh_anh || null)
+            .input('don_gia_phut', sql.Decimal(10, 2), don_gia_phut ? parseFloat(don_gia_phut) : null)
             .input('trang_thai', sql.VarChar(20), trang_thai || 'SAN_SANG')
             .execute('sp_SuaSanBong');
 

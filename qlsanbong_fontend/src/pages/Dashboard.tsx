@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Head from 'next/head';
+import SoccerLoader from '../components/SoccerLoader';
 import {
   LayoutDashboard,
   Calendar,
@@ -48,8 +49,12 @@ import {
   Shield,
   ShoppingCart,
   Percent,
-  FolderTree
+  FolderTree,
+  Lock,
+  ShieldAlert,
+  ArrowLeft
 } from 'lucide-react';
+import { AuthUser } from '../Login/login';
 
 // =====================================================================
 // 1. ĐỊNH NGHĨA KIỂU DỮ LIỆU & TABS (ÁNH XẠ 11 BẢNG CSDL)
@@ -58,13 +63,10 @@ import {
 export type TabType =
   // 1. Tổng Quan
   | 'OVERVIEW'
-  // 2. Quản Lý Sân Bóng (San_Bong, Loai_San, Khung_Gio_Gia, Don_Dat_San)
-  | 'TIMELINE_GRID'
+  // 2. Quản Lý Sân Bóng (San_Bong, Loai_San, Khung_Gio_Gia)
   | 'SAN_BONG'
   | 'LOAI_SAN_GIA'
-  | 'DON_DAT_SAN'
-  // 3. Dịch Vụ & Bán Hàng POS (Chi_Tiet_Dich_Vu, Dich_Vu, Phieu_Nhap_Kho)
-  | 'POS_ORDER'
+  // 3. Dịch Vụ & Kho (Dich_Vu, Phieu_Nhap_Kho)
   | 'DICH_VU'
   | 'PHIEU_NHAP_KHO'
   // 4. Tài Chính & Giao Dịch (Thanh_Toan, Lich_Su_Hoan_Tien)
@@ -81,6 +83,7 @@ export interface SanBong {
   ten_san: string;
   ten_loai?: string;
   hinh_anh: string;
+  don_gia_phut: number;
   trang_thai: 'SAN_SANG' | 'BAO_TRI';
 }
 
@@ -89,18 +92,7 @@ export interface LoaiSan {
   id: number;
   ten_loai: string;
   mo_ta: string;
-  gia_co_ban: number;
-}
-
-// 3. Khung_Gio_Gia
-export interface KhungGioGia {
-  id: number;
-  ma_loai_san: number;
-  ten_loai?: string;
-  gio_bat_dau: string;
-  gio_ket_thuc: string;
-  la_cuoi_tuan: boolean;
-  don_gia: number;
+  trang_thai?: boolean;
 }
 
 // 4. Don_Dat_San
@@ -174,7 +166,7 @@ export interface ThanhToan {
   ten_san?: string;
   ngay_da?: string;
   so_tien: number;
-  phuong_thuc: 'TIEN_MAT' | 'VNPAY' | 'MOMO';
+  phuong_thuc: 'TIEN_MAT' | 'CHUYEN_KHOAN';
   loai_thanh_toan: 'DAT_COC' | 'TRA_HET';
   ma_giao_dich?: string;
   ngay_thanh_toan: string;
@@ -230,32 +222,21 @@ const getAuthHeaders = () => {
 // =====================================================================
 
 const INITIAL_LOAI_SAN: LoaiSan[] = [
-  { id: 1, ten_loai: 'Sân 5 người', mo_ta: 'Cỏ nhân tạo FIFA Pro tiêu chuẩn 1000 Lux', gia_co_ban: 250000 },
-  { id: 2, ten_loai: 'Sân 7 người', mo_ta: 'Mặt cỏ mềm cao cấp tiêu chuẩn thi đấu', gia_co_ban: 450000 },
-  { id: 3, ten_loai: 'Sân Pickleball', mo_ta: 'Mặt sân cao su chuẩn quốc tế', gia_co_ban: 180000 },
-  { id: 4, ten_loai: 'Sân Cầu lông', mo_ta: 'Sàn gỗ chuyên dụng chống trơn', gia_co_ban: 120000 },
+  { id: 1, ten_loai: 'Sân 5 người', mo_ta: 'Cỏ nhân tạo FIFA Pro tiêu chuẩn 1000 Lux' },
+  { id: 2, ten_loai: 'Sân 7 người', mo_ta: 'Mặt cỏ mềm cao cấp tiêu chuẩn thi đấu' },
+  { id: 3, ten_loai: 'Sân Pickleball', mo_ta: 'Mặt sân cao su chuẩn quốc tế' },
+  { id: 4, ten_loai: 'Sân Cầu lông', mo_ta: 'Sàn gỗ chuyên dụng chống trơn' },
 ];
 
 const INITIAL_SAN_BONG: SanBong[] = [
-  { id: 1, ma_loai_san: 1, ten_san: 'Sân 5A (Cỏ nhân tạo)', ten_loai: 'Sân 5 người', hinh_anh: '/images/san-5a.jpg', trang_thai: 'SAN_SANG' },
-  { id: 2, ma_loai_san: 1, ten_san: 'Sân 5B (Cỏ nhân tạo)', ten_loai: 'Sân 5 người', hinh_anh: '/images/san-5b.jpg', trang_thai: 'SAN_SANG' },
-  { id: 3, ma_loai_san: 1, ten_san: 'Sân 5C (VIP Sân Đêm)', ten_loai: 'Sân 5 người', hinh_anh: '/images/san-5c.jpg', trang_thai: 'SAN_SANG' },
-  { id: 4, ma_loai_san: 2, ten_san: 'Sân 7A (Sân Đại)', ten_loai: 'Sân 7 người', hinh_anh: '/images/san-7a.jpg', trang_thai: 'SAN_SANG' },
-  { id: 5, ma_loai_san: 2, ten_san: 'Sân 7B (Sân Đại)', ten_loai: 'Sân 7 người', hinh_anh: '/images/san-7b.jpg', trang_thai: 'SAN_SANG' },
-  { id: 6, ma_loai_san: 3, ten_san: 'Pickleball 01 (Indoor)', ten_loai: 'Sân Pickleball', hinh_anh: '/images/pb-1.jpg', trang_thai: 'SAN_SANG' },
-  { id: 7, ma_loai_san: 3, ten_san: 'Pickleball 02 (Outdoor)', ten_loai: 'Sân Pickleball', hinh_anh: '/images/pb-2.jpg', trang_thai: 'BAO_TRI' },
-  { id: 8, ma_loai_san: 4, ten_san: 'Cầu lông 01 (Trong nhà)', ten_loai: 'Sân Cầu lông', hinh_anh: '/images/cl-1.jpg', trang_thai: 'SAN_SANG' },
-];
-
-const INITIAL_KHUNG_GIO_GIA: KhungGioGia[] = [
-  { id: 1, ma_loai_san: 1, ten_loai: 'Sân 5 người', gio_bat_dau: '06:00', gio_ket_thuc: '16:30', la_cuoi_tuan: false, don_gia: 250000 },
-  { id: 2, ma_loai_san: 1, ten_loai: 'Sân 5 người', gio_bat_dau: '16:30', gio_ket_thuc: '21:00', la_cuoi_tuan: false, don_gia: 350000 },
-  { id: 3, ma_loai_san: 1, ten_loai: 'Sân 5 người', gio_bat_dau: '06:00', gio_ket_thuc: '23:00', la_cuoi_tuan: true, don_gia: 380000 },
-  { id: 4, ma_loai_san: 2, ten_loai: 'Sân 7 người', gio_bat_dau: '06:00', gio_ket_thuc: '16:30', la_cuoi_tuan: false, don_gia: 450000 },
-  { id: 5, ma_loai_san: 2, ten_loai: 'Sân 7 người', gio_bat_dau: '16:30', gio_ket_thuc: '21:00', la_cuoi_tuan: false, don_gia: 650000 },
-  { id: 6, ma_loai_san: 2, ten_loai: 'Sân 7 người', gio_bat_dau: '06:00', gio_ket_thuc: '23:00', la_cuoi_tuan: true, don_gia: 700000 },
-  { id: 7, ma_loai_san: 3, ten_loai: 'Sân Pickleball', gio_bat_dau: '16:30', gio_ket_thuc: '21:00', la_cuoi_tuan: false, don_gia: 260000 },
-  { id: 8, ma_loai_san: 4, ten_loai: 'Sân Cầu lông', gio_bat_dau: '06:00', gio_ket_thuc: '23:00', la_cuoi_tuan: false, don_gia: 120000 },
+  { id: 1, ma_loai_san: 1, ten_san: 'Sân 5A (Cỏ nhân tạo)', ten_loai: 'Sân 5 người', don_gia_phut: 5000, hinh_anh: '/images/san-5a.jpg', trang_thai: 'SAN_SANG' },
+  { id: 2, ma_loai_san: 1, ten_san: 'Sân 5B (Cỏ nhân tạo)', ten_loai: 'Sân 5 người', don_gia_phut: 5000, hinh_anh: '/images/san-5b.jpg', trang_thai: 'SAN_SANG' },
+  { id: 3, ma_loai_san: 1, ten_san: 'Sân 5C (VIP Sân Đêm)', ten_loai: 'Sân 5 người', don_gia_phut: 5500, hinh_anh: '/images/san-5c.jpg', trang_thai: 'SAN_SANG' },
+  { id: 4, ma_loai_san: 2, ten_san: 'Sân 7A (Sân Đại)', ten_loai: 'Sân 7 người', don_gia_phut: 8000, hinh_anh: '/images/san-7a.jpg', trang_thai: 'SAN_SANG' },
+  { id: 5, ma_loai_san: 2, ten_san: 'Sân 7B (Sân Đại)', ten_loai: 'Sân 7 người', don_gia_phut: 8500, hinh_anh: '/images/san-7b.jpg', trang_thai: 'SAN_SANG' },
+  { id: 6, ma_loai_san: 3, ten_san: 'Pickleball 01 (Indoor)', ten_loai: 'Sân Pickleball', don_gia_phut: 4500, hinh_anh: '/images/pb-1.jpg', trang_thai: 'SAN_SANG' },
+  { id: 7, ma_loai_san: 3, ten_san: 'Pickleball 02 (Outdoor)', ten_loai: 'Sân Pickleball', don_gia_phut: 4000, hinh_anh: '/images/pb-2.jpg', trang_thai: 'BAO_TRI' },
+  { id: 8, ma_loai_san: 4, ten_san: 'Cầu lông 01 (Trong nhà)', ten_loai: 'Sân Cầu lông', don_gia_phut: 3000, hinh_anh: '/images/cl-1.jpg', trang_thai: 'SAN_SANG' },
 ];
 
 const INITIAL_DICH_VU: DichVu[] = [
@@ -358,8 +339,8 @@ const INITIAL_PHIEU_NHAP: PhieuNhapKho[] = [
 ];
 
 const INITIAL_THANH_TOAN: ThanhToan[] = [
-  { id: 1, ma_don_dat: 101, ten_khach_hang: 'Nguyễn Văn Đạt', so_dien_thoai: '0988776655', ten_san: 'Sân 5A', ngay_da: '2026-09-29', so_tien: 200000, phuong_thuc: 'VNPAY', loai_thanh_toan: 'DAT_COC', ma_giao_dich: 'VNPAY_987123', ngay_thanh_toan: '2026-09-29 14:00' },
-  { id: 2, ma_don_dat: 102, ten_khach_hang: 'Lê Hoàng Long', so_dien_thoai: '0912345999', ten_san: 'Sân 7A', ngay_da: '2026-09-29', so_tien: 200000, phuong_thuc: 'MOMO', loai_thanh_toan: 'DAT_COC', ma_giao_dich: 'MOMO_445566', ngay_thanh_toan: '2026-09-29 15:30' },
+  { id: 1, ma_don_dat: 101, ten_khach_hang: 'Nguyễn Văn Đạt', so_dien_thoai: '0988776655', ten_san: 'Sân 5A', ngay_da: '2026-09-29', so_tien: 200000, phuong_thuc: 'CHUYEN_KHOAN', loai_thanh_toan: 'DAT_COC', ma_giao_dich: 'CK_987123', ngay_thanh_toan: '2026-09-29 14:00' },
+  { id: 2, ma_don_dat: 102, ten_khach_hang: 'Lê Hoàng Long', so_dien_thoai: '0912345999', ten_san: 'Sân 7A', ngay_da: '2026-09-29', so_tien: 200000, phuong_thuc: 'CHUYEN_KHOAN', loai_thanh_toan: 'DAT_COC', ma_giao_dich: 'CK_445566', ngay_thanh_toan: '2026-09-29 15:30' },
   { id: 3, ma_don_dat: 103, ten_khach_hang: 'Phạm Minh Đức', so_dien_thoai: '0977112233', ten_san: 'Pickleball 01', ngay_da: '2026-09-29', so_tien: 80000, phuong_thuc: 'TIEN_MAT', loai_thanh_toan: 'DAT_COC', ma_giao_dich: 'CASH_01', ngay_thanh_toan: '2026-09-29 16:00' }
 ];
 
@@ -376,8 +357,22 @@ const TIME_SLOTS = [
   { start: '21:00', end: '22:30', isGold: false }
 ];
 
-// Cấu trúc cây Menu Sidebar 5 Nhóm chuẩn theo ảnh thiết kế của User (Đổi tên Ma Trận Lịch Sân thành Sơ đồ sân)
-const SIDEBAR_GROUPS = [
+interface SidebarItem {
+  id: TabType;
+  label: string;
+  icon: any;
+  badge?: string;
+  tableHint?: string;
+}
+
+interface SidebarGroup {
+  groupTitle: string;
+  groupIcon: any;
+  items: SidebarItem[];
+}
+
+// Cấu trúc cây Menu Sidebar chuẩn
+const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     groupTitle: 'TỔNG QUAN',
     groupIcon: LayoutDashboard,
@@ -389,17 +384,14 @@ const SIDEBAR_GROUPS = [
     groupTitle: 'QUẢN LÝ SÂN BÓNG',
     groupIcon: Trophy,
     items: [
-      { id: 'TIMELINE_GRID', label: 'Sơ đồ sân', icon: Calendar, badge: 'Live' },
       { id: 'SAN_BONG', label: 'Danh Sách Sân Bóng', icon: Layers, tableHint: 'San_Bong' },
-      { id: 'LOAI_SAN_GIA', label: 'Loại Sân & Bảng Giá', icon: Clock, tableHint: 'Loai_San, Khung_Gio_Gia' },
-      { id: 'DON_DAT_SAN', label: 'Đặt Sân', icon: Flame, badge: 'HOT', tableHint: 'Don_Dat_San' }
+      { id: 'LOAI_SAN_GIA', label: 'Loại Sân & Bảng Giá', icon: Clock, tableHint: 'Loai_San, Khung_Gio_Gia' }
     ]
   },
   {
-    groupTitle: 'DỊCH VỤ & BÁN HÀNG (POS)',
+    groupTitle: 'DỊCH VỤ & KHO HÀNG',
     groupIcon: ShoppingCart,
     items: [
-      { id: 'POS_ORDER', label: 'Quầy Bán Hàng (POS)', icon: Sparkles, badge: 'POS', tableHint: 'Chi_Tiet_Dich_Vu' },
       { id: 'DICH_VU', label: 'Danh Mục Dịch Vụ', icon: PackagePlus, tableHint: 'Dich_Vu' },
       { id: 'PHIEU_NHAP_KHO', label: 'Quản Lý Nhập Kho', icon: Download, tableHint: 'Phieu_Nhap_Kho' }
     ]
@@ -426,10 +418,20 @@ export default function AdminDashboard() {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<TabType>('OVERVIEW');
 
+  // Quản lý xác thực & Phân quyền Admin
+  const [currentAdminUser, setCurrentAdminUser] = useState<AuthUser | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
+
+  // State Form Đăng nhập Admin nếu chưa xác thực
+  const [adminEmail, setAdminEmail] = useState<string>('Admin@gmail.com');
+  const [adminPassword, setAdminPassword] = useState<string>('');
+  const [adminLoginError, setAdminLoginError] = useState<string>('');
+  const [isAdminLoggingIn, setIsAdminLoggingIn] = useState<boolean>(false);
+
   // Dữ liệu 11 Bảng CSDL
   const [courtList, setCourtList] = useState<SanBong[]>(INITIAL_SAN_BONG);
   const [categoryList, setCategoryList] = useState<LoaiSan[]>(INITIAL_LOAI_SAN);
-  const [priceList, setPriceList] = useState<KhungGioGia[]>(INITIAL_KHUNG_GIO_GIA);
   const [bookingList, setBookingList] = useState<DonDatSan[]>(INITIAL_DON_DAT);
   const [serviceDetailList, setServiceDetailList] = useState<ChiTietDichVu[]>(INITIAL_CHI_TIET_DICH_VU);
   const [serviceList, setServiceList] = useState<DichVu[]>(INITIAL_DICH_VU);
@@ -451,6 +453,112 @@ export default function AdminDashboard() {
     }
   }, [toastMessage]);
 
+  // Kiểm tra quyền Admin khi tải trang
+  const verifyAdminRole = (): boolean => {
+    try {
+      const savedUserStr = localStorage.getItem('auth_user') || localStorage.getItem('soccer_current_user');
+      if (savedUserStr) {
+        const parsed = JSON.parse(savedUserStr);
+        const role = (parsed.vai_tro || parsed.TenVaiTro || '').toUpperCase();
+        if (role === 'ADMIN') {
+          setCurrentAdminUser(parsed);
+          setIsAuthorized(true);
+          return true;
+        } else {
+          setCurrentAdminUser(parsed);
+          setIsAuthorized(false);
+          return false;
+        }
+      } else {
+        setCurrentAdminUser(null);
+        setIsAuthorized(false);
+        return false;
+      }
+    } catch (e) {
+      console.error('Lỗi xác thực Admin:', e);
+      setIsAuthorized(false);
+      return false;
+    } finally {
+      setIsAuthChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    const isOk = verifyAdminRole();
+    if (isOk) {
+      loadAllDataFromBackend();
+    }
+  }, []);
+
+  // Xử lý Đăng nhập Admin trực tiếp từ trang Dashboard
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminLoginError('');
+    setIsAdminLoggingIn(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: adminEmail.trim(), mat_khau: adminPassword })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAdminLoginError(data.message || '⚠️ Đăng nhập thất bại. Vui lòng kiểm tra email hoặc mật khẩu!');
+        setIsAdminLoggingIn(false);
+        return;
+      }
+
+      const role = (data.data?.vai_tro || '').toUpperCase();
+      if (role !== 'ADMIN') {
+        setAdminLoginError(`❌ Tài khoản "${data.data.email}" có vai trò là "${role}", không phải ADMIN. Truy cập bị từ chối!`);
+        setIsAdminLoggingIn(false);
+        return;
+      }
+
+      if (data.token) {
+        localStorage.setItem('auth_token', data.token);
+      }
+
+      const userObj: AuthUser = {
+        id: data.data.id,
+        ho_ten: data.data.ho_ten,
+        email: data.data.email,
+        so_dien_thoai: data.data.so_dien_thoai,
+        vai_tro: data.data.vai_tro,
+        anh_dai_dien: data.data.anh_dai_dien
+      };
+
+      localStorage.setItem('auth_user', JSON.stringify(userObj));
+      localStorage.setItem('soccer_current_user', JSON.stringify({
+        id: userObj.id,
+        hoTen: userObj.ho_ten,
+        email: userObj.email,
+        soDienThoai: userObj.so_dien_thoai
+      }));
+
+      setCurrentAdminUser(userObj);
+      setIsAuthorized(true);
+      setToastMessage({ type: 'success', message: `🎉 Chào mừng Quản Trị Viên ${userObj.ho_ten}!` });
+      loadAllDataFromBackend();
+    } catch (err) {
+      setAdminLoginError('❌ Không thể kết nối tới máy chủ SQL Server!');
+    } finally {
+      setIsAdminLoggingIn(false);
+    }
+  };
+
+  // Xử lý Đăng xuất Admin
+  const handleAdminLogout = () => {
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('soccer_current_user');
+    setCurrentAdminUser(null);
+    setIsAuthorized(false);
+    setToastMessage({ type: 'info', message: 'Đã đăng xuất tài khoản quản trị thành công!' });
+  };
+
   // Đồng bộ toàn bộ 11 bảng từ Backend CSDL Stored Procedures
   const loadAllDataFromBackend = async () => {
     setIsLoading(true);
@@ -465,12 +573,6 @@ export default function AdminDashboard() {
       if (resLoai.ok) {
         const data = await resLoai.json();
         if (data.success && Array.isArray(data.data) && data.data.length > 0) setCategoryList(data.data);
-      }
-
-      const resPrice = await fetch(`${API_BASE}/dat-san/khung-gio-gia`);
-      if (resPrice.ok) {
-        const data = await resPrice.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setPriceList(data.data);
       }
 
       const resBookings = await fetch(`${API_BASE}/dat-san/tat-ca-don`);
@@ -539,7 +641,6 @@ export default function AdminDashboard() {
 
   const [courtModal, setCourtModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<SanBong> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [loaiSanModal, setLoaiSanModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<LoaiSan> }>({ isOpen: false, mode: 'ADD', data: {} });
-  const [priceModal, setPriceModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<KhungGioGia> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [serviceModal, setServiceModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<DichVu> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [importStockModal, setImportStockModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<PhieuNhapKho> }>({ isOpen: false, mode: 'ADD', data: { ma_dich_vu: 1, so_luong_nhap: 50, gia_nhap: 12000 } });
   const [paymentModal, setPaymentModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<ThanhToan> }>({ isOpen: false, mode: 'ADD', data: { phuong_thuc: 'TIEN_MAT', loai_thanh_toan: 'DAT_COC' } });
@@ -548,7 +649,7 @@ export default function AdminDashboard() {
   const [roleModal, setRoleModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<VaiTro> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [bookingEditModal, setBookingEditModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<DonDatSan> }>({ isOpen: false, mode: 'ADD', data: {} });
 
-  const [checkoutModal, setCheckoutModal] = useState<{ isOpen: boolean; booking: DonDatSan | null; paymentMethod: 'TIEN_MAT' | 'VNPAY' | 'MOMO'; discount: number }>({ isOpen: false, booking: null, paymentMethod: 'TIEN_MAT', discount: 0 });
+  const [checkoutModal, setCheckoutModal] = useState<{ isOpen: boolean; booking: DonDatSan | null; paymentMethod: 'TIEN_MAT' | 'CHUYEN_KHOAN'; discount: number }>({ isOpen: false, booking: null, paymentMethod: 'TIEN_MAT', discount: 0 });
   const [miniPosModal, setMiniPosModal] = useState<{ isOpen: boolean; booking: DonDatSan | null; maDichVuChon: number; soLuong: number }>({ isOpen: false, booking: null, maDichVuChon: 1, soLuong: 1 });
 
   // Form Đặt Sân Tính Giờ Linh Hoạt & Cố Định
@@ -591,24 +692,15 @@ export default function AdminDashboard() {
     if (isNaN(totalMinutes) || totalMinutes <= 0) totalMinutes = 60;
 
     const selectedCourt = courtList.find((c) => c.id === Number(maSan)) || courtList[0];
-    const isWeekend = new Date(ngayDa).getDay() === 0 || new Date(ngayDa).getDay() === 6;
-    const matchingPrice = priceList.find(
-      (p) =>
-        p.ma_loai_san === selectedCourt?.ma_loai_san &&
-        p.la_cuoi_tuan === isWeekend &&
-        gioBat >= p.gio_bat_dau &&
-        gioBat < p.gio_ket_thuc
-    );
-    const hourlyPrice = matchingPrice?.don_gia || (isWeekend ? 380000 : 350000);
-    const perMinute = Math.round(hourlyPrice / 60);
-    const calcPrice = Math.round((totalMinutes * hourlyPrice) / 60 / 1000) * 1000;
+    const donGiaPhut = Number(selectedCourt?.don_gia_phut || 5000);
+    const calcPrice = totalMinutes * donGiaPhut;
 
     return {
       so_phut: totalMinutes,
-      don_gia_gio: hourlyPrice,
-      don_gia_phut: perMinute,
+      don_gia_gio: donGiaPhut * 60,
+      don_gia_phut: donGiaPhut,
       tien_san: calcPrice,
-      cong_thuc: `${totalMinutes} phút × ${hourlyPrice.toLocaleString('vi-VN')} đ / 60 = ${calcPrice.toLocaleString('vi-VN')} đ`
+      cong_thuc: `${totalMinutes} phút × ${donGiaPhut.toLocaleString('vi-VN')} đ/phút = ${calcPrice.toLocaleString('vi-VN')} đ`
     };
   };
 
@@ -689,7 +781,7 @@ export default function AdminDashboard() {
   // 2. Thêm/Sửa Sân Bóng (San_Bong)
   const handleSaveCourt = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ten_san, ma_loai_san, trang_thai, hinh_anh } = courtModal.data;
+    const { id, ten_san, ma_loai_san, don_gia_phut, trang_thai, hinh_anh } = courtModal.data;
     if (!ten_san || !ma_loai_san) {
       setToastMessage({ type: 'error', message: 'Vui lòng nhập tên sân và chọn loại sân!' });
       return;
@@ -700,7 +792,7 @@ export default function AdminDashboard() {
         const res = await fetch(`${API_BASE}/dat-san/san-bong`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ten_san, ma_loai_san: Number(ma_loai_san), hinh_anh: hinh_anh || '', trang_thai: trang_thai || 'SAN_SANG' })
+          body: JSON.stringify({ ten_san, ma_loai_san: Number(ma_loai_san), don_gia_phut: Number(don_gia_phut || 5000), hinh_anh: hinh_anh || '', trang_thai: trang_thai || 'SAN_SANG' })
         });
         const data = await res.json();
         if (data.success) {
@@ -713,7 +805,7 @@ export default function AdminDashboard() {
         const res = await fetch(`${API_BASE}/dat-san/san-bong/${id}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ten_san, ma_loai_san: Number(ma_loai_san), hinh_anh: hinh_anh || '', trang_thai: trang_thai || 'SAN_SANG' })
+          body: JSON.stringify({ ten_san, ma_loai_san: Number(ma_loai_san), don_gia_phut: Number(don_gia_phut || 5000), hinh_anh: hinh_anh || '', trang_thai: trang_thai || 'SAN_SANG' })
         });
         const data = await res.json();
         if (data.success) {
@@ -728,10 +820,10 @@ export default function AdminDashboard() {
     const loai = categoryList.find((l) => l.id === Number(ma_loai_san));
     if (courtModal.mode === 'ADD') {
       const newId = Math.max(...courtList.map((c) => c.id), 0) + 1;
-      setCourtList([...courtList, { id: newId, ma_loai_san: Number(ma_loai_san), ten_san, ten_loai: loai?.ten_loai || '', hinh_anh: '', trang_thai: (trang_thai as any) || 'SAN_SANG' }]);
+      setCourtList([...courtList, { id: newId, ma_loai_san: Number(ma_loai_san), ten_san, ten_loai: loai?.ten_loai || '', don_gia_phut: Number(don_gia_phut || 5000), hinh_anh: '', trang_thai: (trang_thai as any) || 'SAN_SANG' }]);
       setToastMessage({ type: 'success', message: `✅ Đã thêm sân mới [${ten_san}]!` });
     } else {
-      setCourtList(courtList.map((c) => (c.id === id ? { ...c, ten_san, ma_loai_san: Number(ma_loai_san), ten_loai: loai?.ten_loai || c.ten_loai, trang_thai: trang_thai as any } : c)));
+      setCourtList(courtList.map((c) => (c.id === id ? { ...c, ten_san, ma_loai_san: Number(ma_loai_san), ten_loai: loai?.ten_loai || c.ten_loai, don_gia_phut: Number(don_gia_phut || c.don_gia_phut || 5000), trang_thai: trang_thai as any } : c)));
       setToastMessage({ type: 'success', message: `✅ Đã cập nhật sân [${ten_san}]!` });
     }
     setCourtModal({ isOpen: false, mode: 'ADD', data: {} });
@@ -755,17 +847,17 @@ export default function AdminDashboard() {
   // 3. Thêm/Sửa Loại Sân (Loai_San)
   const handleSaveLoaiSan = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ten_loai, mo_ta, gia_co_ban } = loaiSanModal.data;
+    const { id, ten_loai, mo_ta } = loaiSanModal.data;
     if (!ten_loai) {
       setToastMessage({ type: 'error', message: 'Vui lòng nhập tên loại sân!' });
       return;
     }
     if (loaiSanModal.mode === 'ADD') {
       const newId = Math.max(...categoryList.map(l => l.id), 0) + 1;
-      setCategoryList([...categoryList, { id: newId, ten_loai, mo_ta: mo_ta || '', gia_co_ban: Number(gia_co_ban || 200000) }]);
+      setCategoryList([...categoryList, { id: newId, ten_loai, mo_ta: mo_ta || '' }]);
       setToastMessage({ type: 'success', message: `✅ Đã thêm loại sân [${ten_loai}] thành công!` });
     } else {
-      setCategoryList(categoryList.map(l => l.id === id ? { ...l, ten_loai, mo_ta: mo_ta || '', gia_co_ban: Number(gia_co_ban || l.gia_co_ban) } : l));
+      setCategoryList(categoryList.map(l => l.id === id ? { ...l, ten_loai, mo_ta: mo_ta || '' } : l));
       setToastMessage({ type: 'success', message: `✅ Đã cập nhật loại sân [${ten_loai}]!` });
     }
     setLoaiSanModal({ isOpen: false, mode: 'ADD', data: {} });
@@ -777,29 +869,7 @@ export default function AdminDashboard() {
     setToastMessage({ type: 'success', message: '🗑️ Đã xóa loại sân!' });
   };
 
-  // 4. Thêm/Sửa Khung Giờ Giá (Khung_Gio_Gia)
-  const handleSavePrice = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { id, ma_loai_san, gio_bat_dau, gio_ket_thuc, la_cuoi_tuan, don_gia } = priceModal.data;
-    const loai = categoryList.find(l => l.id === Number(ma_loai_san || 1));
-    if (priceModal.mode === 'ADD') {
-      const newId = Math.max(...priceList.map(p => p.id), 0) + 1;
-      setPriceList([...priceList, { id: newId, ma_loai_san: Number(ma_loai_san || 1), ten_loai: loai?.ten_loai, gio_bat_dau: gio_bat_dau || '06:00', gio_ket_thuc: gio_ket_thuc || '22:00', la_cuoi_tuan: !!la_cuoi_tuan, don_gia: Number(don_gia || 300000) }]);
-      setToastMessage({ type: 'success', message: `✅ Đã thêm khung giờ giá mới!` });
-    } else {
-      setPriceList(priceList.map(p => p.id === id ? { ...p, ma_loai_san: Number(ma_loai_san || p.ma_loai_san), ten_loai: loai?.ten_loai || p.ten_loai, gio_bat_dau: gio_bat_dau || p.gio_bat_dau, gio_ket_thuc: gio_ket_thuc || p.gio_ket_thuc, la_cuoi_tuan: !!la_cuoi_tuan, don_gia: Number(don_gia || p.don_gia) } : p));
-      setToastMessage({ type: 'success', message: `✅ Đã cập nhật khung giờ giá!` });
-    }
-    setPriceModal({ isOpen: false, mode: 'ADD', data: {} });
-  };
-
-  const handleDeletePrice = (id: number) => {
-    if (!window.confirm('Xác nhận xóa khung giờ giá này?')) return;
-    setPriceList(priceList.filter(p => p.id !== id));
-    setToastMessage({ type: 'success', message: '🗑️ Đã xóa khung giờ giá!' });
-  };
-
-  // 5. Thêm/Sửa Dịch Vụ (Dich_Vu)
+  // 4. Thêm/Sửa Dịch Vụ (Dich_Vu)
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
     const { id, ten_dich_vu, don_gia, don_vi_tinh, ton_kho } = serviceModal.data;
@@ -1190,6 +1260,162 @@ export default function AdminDashboard() {
     setCheckoutModal({ isOpen: false, booking: null, paymentMethod: 'TIEN_MAT', discount: 0 });
   };
 
+  // 1. Màn hình đang kiểm tra quyền Admin
+  if (isAuthChecking) {
+    return <SoccerLoader message="Đang kiểm tra quyền Quản trị viên..." fullScreen={true} />;
+  }
+
+  // 2. Màn hình Chặn Quyền Truy Cập (Chỉ dành cho ADMIN) & Form Đăng nhập Quản Trị
+  if (!isAuthorized) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center p-4 sm:p-6 transition-colors duration-300 ${isDarkMode ? 'bg-[#060e09] text-white' : 'bg-[#f4f7f5] text-slate-900'}`}>
+        <Head>
+          <title>Yêu Cầu Quyền Quản Trị Viên (Admin) | Soccer 247</title>
+        </Head>
+
+        {/* TOAST THÔNG BÁO NỔI */}
+        {toastMessage && (
+          <div
+            className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border backdrop-blur-xl transition-all duration-300 ${
+              toastMessage.type === 'success'
+                ? isDarkMode
+                  ? 'bg-[#0f2416] border-emerald-500 text-emerald-200'
+                  : 'bg-emerald-50 border-emerald-500 text-[#064e3b] font-black shadow-xl'
+                : toastMessage.type === 'error'
+                ? isDarkMode
+                  ? 'bg-rose-950 border-rose-500 text-rose-200'
+                  : 'bg-rose-50 border-rose-500 text-[#881337] font-black shadow-xl'
+                : isDarkMode
+                ? 'bg-[#0a1b24] border-cyan-500 text-cyan-200'
+                : 'bg-blue-50 border-blue-500 text-[#1e3a8a] font-black shadow-xl'
+            }`}
+          >
+            {toastMessage.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />}
+            {toastMessage.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />}
+            {toastMessage.type === 'info' && <Activity className="w-5 h-5 text-cyan-600 shrink-0" />}
+            <span className="text-xs sm:text-sm font-black">{toastMessage.message}</span>
+          </div>
+        )}
+
+        <div className={`w-full max-w-md rounded-3xl p-6 sm:p-8 border shadow-2xl backdrop-blur-xl relative overflow-hidden ${
+          isDarkMode ? 'bg-[#0c1a12]/90 border-emerald-900/60 shadow-emerald-950/40' : 'bg-white/95 border-emerald-200 shadow-emerald-900/10'
+        }`}>
+          {/* Decorative Glow */}
+          <div className="absolute -top-20 -right-20 w-44 h-44 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute -bottom-20 -left-20 w-44 h-44 bg-emerald-600/15 rounded-full blur-3xl pointer-events-none"></div>
+
+          {/* Header */}
+          <div className="text-center mb-6 relative">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-rose-500 via-amber-500 to-emerald-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/20">
+              <ShieldAlert className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight mb-2">Trang Quản Trị Hệ Thống</h1>
+            <p className="text-xs sm:text-sm opacity-70">
+              Trang Dashboard được bảo mật cao cấp. Chỉ tài khoản có vai trò <span className="font-extrabold text-emerald-500 underline">ADMIN</span> mới được phép truy cập và điều hành.
+            </p>
+          </div>
+
+          {currentAdminUser && (
+            <div className={`mb-5 p-3.5 rounded-2xl border flex items-center gap-3 ${
+              isDarkMode ? 'bg-amber-950/40 border-amber-800/60 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}>
+              <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+              <div className="text-xs">
+                <div>Đang đăng nhập: <strong>{currentAdminUser.ho_ten || currentAdminUser.email}</strong></div>
+                <div>Vai trò hiện tại: <span className="font-bold text-rose-500 uppercase">{currentAdminUser.vai_tro || 'Chưa xác định'}</span> (Không có quyền Admin)</div>
+              </div>
+            </div>
+          )}
+
+          {adminLoginError && (
+            <div className="mb-5 p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-600 dark:text-rose-300 text-xs font-bold flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+              <span>{adminLoginError}</span>
+            </div>
+          )}
+
+          {/* Form Login Admin */}
+          <form onSubmit={handleAdminLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 opacity-80">
+                Email Quản Trị Viên (Admin)
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  type="email"
+                  required
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="Admin@gmail.com"
+                  className={`w-full pl-10 pr-4 py-3 rounded-xl border text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    isDarkMode ? 'bg-[#08130c] border-emerald-900/50 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-gray-400'
+                  }`}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 opacity-80">
+                Mật Khẩu Admin
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <input
+                  type="password"
+                  required
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="Nhập mật khẩu quản trị..."
+                  className={`w-full pl-10 pr-4 py-3 rounded-xl border text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+                    isDarkMode ? 'bg-[#08130c] border-emerald-900/50 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-gray-400'
+                  }`}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isAdminLoggingIn}
+              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all transform active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+            >
+              {isAdminLoggingIn ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Đang xác thực quyền Admin...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Đăng Nhập Quản Trị (Admin)</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Footer Back Link */}
+          <div className="mt-6 pt-5 border-t border-dashed border-gray-500/20 flex items-center justify-between text-xs">
+            <a
+              href="/"
+              className="inline-flex items-center gap-1.5 font-bold text-emerald-500 hover:text-emerald-400 hover:underline transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Quay về Trang chủ Khách Hàng</span>
+            </a>
+            <button
+              type="button"
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="p-1.5 rounded-lg opacity-70 hover:opacity-100 transition-opacity"
+              title="Đổi giao diện Sáng / Tối"
+            >
+              {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${isDarkMode ? 'dark bg-[#060e09] text-white bg-pitch-grid' : 'bg-[#f4f7f5] text-[#0f172a]'}`}>
       <Head>
@@ -1223,6 +1449,9 @@ export default function AdminDashboard() {
           </button>
         </div>
       )}
+
+      {/* HIỆU ỨNG LOADING VÒNG 12 TRÁI BANH XOAY TRÒN KHI ĐỒNG BỘ DỮ LIỆU */}
+      {isLoading && <SoccerLoader message="Đang đồng bộ dữ liệu hệ thống..." fullScreen={true} />}
 
       <div className="flex h-screen overflow-hidden">
         {/* =====================================================================
@@ -1314,19 +1543,23 @@ export default function AdminDashboard() {
 
             {/* Footer Admin User Info */}
             <div className={`p-3 border-t shrink-0 flex items-center justify-between ${isDarkMode ? 'border-emerald-900/40 bg-[#060e09]' : 'border-slate-200 bg-slate-50'}`}>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-xs">
-                  AD
+              <div className="flex items-center gap-2 truncate">
+                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-xs shrink-0">
+                  {currentAdminUser?.ho_ten ? currentAdminUser.ho_ten.charAt(0).toUpperCase() : 'AD'}
                 </div>
-                <div>
-                  <div className={`text-xs font-black ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>Admin Quản Trị</div>
-                  <div className="text-[10px] text-slate-500 font-mono">admin@soccer247.vn</div>
+                <div className="truncate">
+                  <div className={`text-xs font-black truncate ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
+                    {currentAdminUser?.ho_ten || 'Admin Quản Trị'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-mono truncate">
+                    {currentAdminUser?.email || 'admin@soccer247.vn'}
+                  </div>
                 </div>
               </div>
               <button
-                onClick={() => setToastMessage({ type: 'info', message: 'Đăng xuất hệ thống quản trị thành công!' })}
-                className={`p-1.5 rounded-lg transition-all cursor-pointer ${isDarkMode ? 'text-rose-400 hover:bg-rose-500/20' : 'text-rose-600 hover:bg-rose-100'}`}
-                title="Đăng xuất"
+                onClick={handleAdminLogout}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer shrink-0 ${isDarkMode ? 'text-rose-400 hover:bg-rose-500/20' : 'text-rose-600 hover:bg-rose-100'}`}
+                title="Đăng xuất khỏi Dashboard"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -1348,11 +1581,8 @@ export default function AdminDashboard() {
               <ChevronRight className="w-4 h-4 text-slate-500" />
               <h2 className={`text-sm sm:text-base font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
                 {activeTab === 'OVERVIEW' && 'Dashboard (Thống Kê KPI & Biểu Đồ Doanh Thu)'}
-                {activeTab === 'TIMELINE_GRID' && 'Sơ Đồ Sân (Thời Gian Thực)'}
                 {activeTab === 'SAN_BONG' && 'Danh Sách Sân Bóng (Bảng San_Bong)'}
                 {activeTab === 'LOAI_SAN_GIA' && 'Loại Sân & Bảng Giá Khung Giờ (Loai_San, Khung_Gio_Gia)'}
-                {activeTab === 'DON_DAT_SAN' && 'Quản Lý Đặt Sân (Bảng Don_Dat_San)'}
-                {activeTab === 'POS_ORDER' && 'Quầy Bán Hàng POS (Bảng Chi_Tiet_Dich_Vu)'}
                 {activeTab === 'DICH_VU' && 'Danh Mục Dịch Vụ & Kho Nước (Bảng Dich_Vu)'}
                 {activeTab === 'PHIEU_NHAP_KHO' && 'Quản Lý Nhập Kho (Bảng Phieu_Nhap_Kho)'}
                 {activeTab === 'THANH_TOAN' && 'Lịch Sử Thanh Toán (Bảng Thanh_Toan)'}
@@ -1456,19 +1686,16 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Danh sách 11 Bảng CSDL Quick Navigator */}
+                {/* Danh sách Bảng CSDL Quick Navigator */}
                 <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                   <h3 className="text-base font-black flex items-center gap-2 mb-3">
                     <FolderTree className="w-5 h-5 text-emerald-600" />
-                    Bản Đồ 11 Bảng Cơ Sở Dữ Liệu SQL Server
+                    Bản Đồ Các Bảng Cơ Sở Dữ Liệu SQL Server
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                     {[
                       { tab: 'SAN_BONG', name: 'San_Bong', count: courtList.length, label: 'Sân Bóng' },
                       { tab: 'LOAI_SAN_GIA', name: 'Loai_San', count: categoryList.length, label: 'Loại Sân' },
-                      { tab: 'LOAI_SAN_GIA', name: 'Khung_Gio_Gia', count: priceList.length, label: 'Bảng Giá' },
-                      { tab: 'DON_DAT_SAN', name: 'Don_Dat_San', count: bookingList.length, label: 'Đơn Đặt Sân' },
-                      { tab: 'POS_ORDER', name: 'Chi_Tiet_Dich_Vu', count: serviceDetailList.length, label: 'Chi Tiết Dịch Vụ' },
                       { tab: 'DICH_VU', name: 'Dich_Vu', count: serviceList.length, label: 'Danh Mục Dịch Vụ' },
                       { tab: 'PHIEU_NHAP_KHO', name: 'Phieu_Nhap_Kho', count: inventoryList.length, label: 'Phiếu Nhập Kho' },
                       { tab: 'THANH_TOAN', name: 'Thanh_Toan', count: paymentList.length, label: 'Thanh Toán' },
@@ -1498,87 +1725,7 @@ export default function AdminDashboard() {
             )}
 
             {/* =================================================================
-                TAB 2: SƠ ĐỒ SÂN (ĐỔI TÊN THEO YÊU CẦU)
-                ================================================================= */}
-            {activeTab === 'TIMELINE_GRID' && (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-black text-[#0f172a] dark:text-white flex items-center gap-2">
-                      <Calendar className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                      Sơ Đồ Sân Bóng Thời Gian Thực (Ngày: {selectedDate})
-                    </h3>
-                    <p className="text-xs font-bold text-[#334155] dark:text-slate-300 mt-1">
-                      Theo dõi trực tiếp sơ đồ sân, tình trạng đặt sân, duyệt cọc và check-out trả sân
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">🟢 Sân Trống</span>
-                    <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">🟡 Chờ Duyệt Cọc</span>
-                    <span className="px-3 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300">🔴 Đang Đá</span>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[700px]">
-                    <thead>
-                      <tr className={`border-b font-black uppercase text-xs tracking-wider ${isDarkMode ? 'bg-[#060e09] text-emerald-300 border-emerald-900/50' : 'bg-slate-100 text-[#0f172a] border-slate-300'}`}>
-                        <th className="p-4 w-48">TÊN SÂN BÓNG</th>
-                        {TIME_SLOTS.map((slot, idx) => (
-                          <th key={idx} className="p-4 text-center">
-                            <div>{slot.start} - {slot.end}</div>
-                            {slot.isGold && <span className="text-[10px] text-amber-500 font-black">🔥 GIỜ VÀNG</span>}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30 text-xs">
-                      {courtList.map((court) => (
-                        <tr key={court.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-emerald-50/50'}>
-                          <td className="p-4 font-black">
-                            <div className="text-[#0f172a] dark:text-white flex items-center gap-1.5">
-                              <span>⚽</span> {court.ten_san}
-                            </div>
-                            <span className="text-[10px] text-slate-400 font-normal">{court.ten_loai}</span>
-                          </td>
-                          {TIME_SLOTS.map((slot, sIdx) => {
-                            const matched = bookingList.find(b => b.ma_san === court.id && b.ngay_da === selectedDate && b.gio_bat_dau <= slot.start && b.gio_ket_thuc >= slot.end);
-                            return (
-                              <td key={sIdx} className="p-2 text-center">
-                                {!matched ? (
-                                  <button
-                                    onClick={() => {
-                                      const calcs = recalculateBookingPrice(court.id, selectedDate, slot.start, slot.end);
-                                      setBookingForm({ ...bookingForm, ma_san: court.id, ngay_da: selectedDate, gio_bat_dau: slot.start, gio_ket_thuc: slot.end, ...calcs });
-                                      setActiveTab('DON_DAT_SAN');
-                                    }}
-                                    className="w-full py-2.5 px-2 rounded-xl border border-dashed border-emerald-400 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-500 hover:text-white transition-all cursor-pointer text-xs"
-                                  >
-                                    + Đặt Nhanh
-                                  </button>
-                                ) : (
-                                  <div className={`p-2 rounded-xl text-xs font-black shadow ${matched.trang_thai === 'DA_CHOT' ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'}`}>
-                                    <div className="truncate">{matched.ten_khach_hang}</div>
-                                    <div className="text-[10px] opacity-90">{matched.so_phut_da ? `${matched.so_phut_da} phút` : `${matched.gio_bat_dau}-${matched.gio_ket_thuc}`}</div>
-                                    <div className="mt-1 flex gap-1 justify-center">
-                                      <button onClick={() => setMiniPosModal({ isOpen: true, booking: matched, maDichVuChon: 1, soLuong: 1 })} className="px-1.5 py-0.5 rounded bg-white/20 hover:bg-white/30 text-[10px] cursor-pointer">+Nước</button>
-                                      <button onClick={() => setCheckoutModal({ isOpen: true, booking: matched, paymentMethod: 'TIEN_MAT', discount: 0 })} className="px-1.5 py-0.5 rounded bg-rose-700 hover:bg-rose-800 text-[10px] cursor-pointer">Trả Sân</button>
-                                    </div>
-                                  </div>
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* =================================================================
-                TAB 3: BẢNG 1 - SAN_BONG (CÓ ĐẦY ĐỦ THÊM - SỬA - XÓA DẠNG MODAL)
+                TAB 2: BẢNG 1 - SAN_BONG (CÓ ĐẦY ĐỦ THÊM - SỬA - XÓA DẠNG MODAL)
                 ================================================================= */}
             {activeTab === 'SAN_BONG' && (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
@@ -1588,9 +1735,9 @@ export default function AdminDashboard() {
                       <Layers className="w-5 h-5 text-emerald-600" />
                       Danh Sách Sân Bóng (Bảng San_Bong)
                     </h3>
-                    <p className="text-xs font-bold text-slate-500 mt-1">Thao tác Thêm, Sửa, Xóa sân bóng dạng Modal tương tác</p>
+                    <p className="text-xs font-bold text-slate-500 mt-1">Quản lý danh sách sân bóng và đơn giá thuê theo từng phút</p>
                   </div>
-                  <button onClick={() => setCourtModal({ isOpen: true, mode: 'ADD', data: { ma_loai_san: 1, trang_thai: 'SAN_SANG' } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
+                  <button onClick={() => setCourtModal({ isOpen: true, mode: 'ADD', data: { ma_loai_san: 1, don_gia_phut: 5000, trang_thai: 'SAN_SANG' } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
                     <Plus className="w-4 h-4 stroke-[3]" /> Thêm Sân Mới
                   </button>
                 </div>
@@ -1598,9 +1745,9 @@ export default function AdminDashboard() {
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4 w-16">MÃ SÂN</th>
                         <th className="p-4">TÊN SÂN BÓNG</th>
                         <th className="p-4">LOẠI SÂN</th>
+                        <th className="p-4">ĐƠN GIÁ (Đ/PHÚT)</th>
                         <th className="p-4">TRẠNG THÁI</th>
                         <th className="p-4 text-right">THAO TÁC</th>
                       </tr>
@@ -1608,9 +1755,16 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {courtList.map((c) => (
                         <tr key={c.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-emerald-50/50'}>
-                          <td className="p-4 font-mono font-black text-emerald-700 dark:text-emerald-400">#{c.id}</td>
                           <td className="p-4 font-black text-sm text-[#0f172a] dark:text-white">⚽ {c.ten_san}</td>
                           <td className="p-4"><span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 font-bold">{c.ten_loai || 'Sân 5 người'}</span></td>
+                          <td className="p-4">
+                            <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
+                              {Number(c.don_gia_phut || 5000).toLocaleString('vi-VN')} đ/phút
+                            </span>
+                            <div className="text-[10px] text-slate-500 font-medium">
+                              ~ {(Number(c.don_gia_phut || 5000) * 60).toLocaleString('vi-VN')} đ/giờ
+                            </div>
+                          </td>
                           <td className="p-4">
                             {c.trang_thai === 'SAN_SANG' ? (
                               <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black">Sẵn Sàng</span>
@@ -1635,7 +1789,7 @@ export default function AdminDashboard() {
             )}
 
             {/* =================================================================
-                TAB 4: BẢNG 2 & 3 - LOAI_SAN & KHUNG_GIO_GIA (CÓ ĐỦ THÊM SỬA XÓA)
+                TAB 4: BẢNG 2 - LOAI_SAN (DANH MỤC LOẠI SÂN)
                 ================================================================= */}
             {activeTab === 'LOAI_SAN_GIA' && (
               <div className="space-y-6 animate-fade-in">
@@ -1646,6 +1800,7 @@ export default function AdminDashboard() {
                       <h3 className="text-base font-black flex items-center gap-2">
                         <Layers className="w-5 h-5 text-emerald-600" /> Bảng 2: Loai_San (Danh Mục Loại Sân)
                       </h3>
+                      <p className="text-xs font-bold text-slate-500 mt-1">Định nghĩa các loại sân thể thao (Sân 5, Sân 7, Sân 11...)</p>
                     </div>
                     <button onClick={() => setLoaiSanModal({ isOpen: true, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
                       <Plus className="w-4 h-4 stroke-[3]" /> Thêm Loại Sân
@@ -1655,20 +1810,16 @@ export default function AdminDashboard() {
                     <table className="w-full text-left text-xs">
                       <thead>
                         <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                          <th className="p-4 w-16">MÃ LOẠI</th>
                           <th className="p-4">TÊN LOẠI SÂN</th>
                           <th className="p-4">MÔ TẢ CHI TIẾT</th>
-                          <th className="p-4">GIÁ CƠ BẢN</th>
                           <th className="p-4 text-right">THAO TÁC</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                         {categoryList.map((l) => (
                           <tr key={l.id}>
-                            <td className="p-4 font-mono font-black text-emerald-700">#{l.id}</td>
                             <td className="p-4 font-black text-sm">{l.ten_loai}</td>
                             <td className="p-4 text-slate-500">{l.mo_ta}</td>
-                            <td className="p-4 font-black text-emerald-700">{Number(l.gia_co_ban).toLocaleString('vi-VN')} đ</td>
                             <td className="p-4 text-right space-x-2">
                               <button onClick={() => setLoaiSanModal({ isOpen: true, mode: 'EDIT', data: l })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 cursor-pointer font-bold inline-flex items-center gap-1"><Edit2 className="w-3.5 h-3.5" /> Sửa</button>
                               <button onClick={() => handleDeleteLoaiSan(l.id)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
@@ -1679,369 +1830,10 @@ export default function AdminDashboard() {
                     </table>
                   </div>
                 </div>
-
-                {/* BẢNG KHUNG_GIO_GIA */}
-                <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                  <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
-                    <div>
-                      <h3 className="text-base font-black flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-amber-500" /> Bảng 3: Khung_Gio_Gia (Bảng Giá Theo Giờ & Cuối Tuần)
-                      </h3>
-                    </div>
-                    <button onClick={() => setPriceModal({ isOpen: true, mode: 'ADD', data: { ma_loai_san: 1, gio_bat_dau: '17:00', gio_ket_thuc: '21:00', la_cuoi_tuan: false, don_gia: 350000 } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
-                      <Plus className="w-4 h-4 stroke-[3]" /> Thêm Khung Giờ Giá
-                    </button>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                          <th className="p-4 w-16">MÃ GIÁ</th>
-                          <th className="p-4">LOẠI SÂN</th>
-                          <th className="p-4">KHUNG GIỜ</th>
-                          <th className="p-4">ÁP DỤNG</th>
-                          <th className="p-4">ĐƠN GIÁ / GIỜ</th>
-                          <th className="p-4 text-right">THAO TÁC</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                        {priceList.map((p) => (
-                          <tr key={p.id}>
-                            <td className="p-4 font-mono font-black text-emerald-700">#{p.id}</td>
-                            <td className="p-4 font-black">{p.ten_loai || 'Sân 5 người'}</td>
-                            <td className="p-4 font-mono font-bold">{p.gio_bat_dau} - {p.gio_ket_thuc}</td>
-                            <td className="p-4">
-                              {p.la_cuoi_tuan ? (
-                                <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold">Cuối Tuần (T7/CN)</span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 font-bold">Ngày Thường</span>
-                              )}
-                            </td>
-                            <td className="p-4 font-black text-emerald-700">{Number(p.don_gia).toLocaleString('vi-VN')} đ</td>
-                            <td className="p-4 text-right space-x-2">
-                              <button onClick={() => setPriceModal({ isOpen: true, mode: 'EDIT', data: p })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 cursor-pointer font-bold inline-flex items-center gap-1"><Edit2 className="w-3.5 h-3.5" /> Sửa</button>
-                              <button onClick={() => handleDeletePrice(p.id)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
               </div>
             )}
 
-            {/* =================================================================
-                TAB 5: BẢNG 4 - DON_DAT_SAN (ĐẶT SÂN & TÍNH GIỜ THEO PHÚT)
-                ================================================================= */}
-            {activeTab === 'DON_DAT_SAN' && (
-              <div className="space-y-6 animate-fade-in">
-                {/* 1. KHU VỰC TÍNH TOÁN VÀ ĐẶT SÂN THEO PHÚT */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  {/* Form đặt sân */}
-                  <div className={`lg:col-span-7 p-6 rounded-2xl border shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                    <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-500">
-                          <Flame className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-black text-[#0f172a] dark:text-white">Đặt Sân & Tính Giờ Linh Hoạt</h3>
-                          <p className="text-xs text-slate-500 font-bold">Lưu trực tiếp vào bảng Don_Dat_San</p>
-                        </div>
-                      </div>
-                    </div>
 
-                    <form onSubmit={handleSaveBooking} className="space-y-4 text-xs">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <div>
-                          <label className="block font-black uppercase mb-1">Chọn Sân Bóng *</label>
-                          <select
-                            value={bookingForm.ma_san}
-                            onChange={(e) => {
-                              const newSan = Number(e.target.value);
-                              const calcs = recalculateBookingPrice(newSan, bookingForm.ngay_da, bookingForm.gio_bat_dau, bookingForm.gio_ket_thuc);
-                              setBookingForm({ ...bookingForm, ma_san: newSan, ...calcs });
-                            }}
-                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                          >
-                            {courtList.map((c) => (
-                              <option key={c.id} value={c.id} className="bg-slate-900 text-white">{c.ten_san} ({c.ten_loai})</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block font-black uppercase mb-1">Ngày Đá *</label>
-                          <input
-                            type="date"
-                            value={bookingForm.ngay_da}
-                            onChange={(e) => {
-                              const newNgay = e.target.value;
-                              const calcs = recalculateBookingPrice(bookingForm.ma_san, newNgay, bookingForm.gio_bat_dau, bookingForm.gio_ket_thuc);
-                              setBookingForm({ ...bookingForm, ngay_da: newNgay, ...calcs });
-                            }}
-                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <div>
-                          <label className="block font-black uppercase mb-1">Giờ Vào Sân (hh:mm) *</label>
-                          <input
-                            type="time"
-                            value={bookingForm.gio_bat_dau}
-                            onChange={(e) => {
-                              const newBat = e.target.value;
-                              const calcs = recalculateBookingPrice(bookingForm.ma_san, bookingForm.ngay_da, newBat, bookingForm.gio_ket_thuc);
-                              setBookingForm({ ...bookingForm, gio_bat_dau: newBat, ...calcs });
-                            }}
-                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-black uppercase mb-1">Giờ Ra Sân (hh:mm) *</label>
-                          <input
-                            type="time"
-                            value={bookingForm.gio_ket_thuc}
-                            onChange={(e) => {
-                              const newKet = e.target.value;
-                              const calcs = recalculateBookingPrice(bookingForm.ma_san, bookingForm.ngay_da, bookingForm.gio_bat_dau, newKet);
-                              setBookingForm({ ...bookingForm, gio_ket_thuc: newKet, ...calcs });
-                            }}
-                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Quick Chips 85 phút chuẩn mẫu */}
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          { label: '30 phút', mins: 30 },
-                          { label: '60 phút', mins: 60 },
-                          { label: '⭐ 85 phút (Chuẩn mẫu)', mins: 85, start: '17:15', end: '18:40' },
-                          { label: '90 phút', mins: 90 },
-                          { label: '120 phút', mins: 120 }
-                        ].map((chip, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              let newBat = chip.start || bookingForm.gio_bat_dau || '17:15';
-                              let newKet = chip.end;
-                              if (!newKet) {
-                                const [h, m] = newBat.split(':').map(Number);
-                                const totalEndM = h * 60 + m + chip.mins;
-                                newKet = `${String(Math.floor(totalEndM / 60) % 24).padStart(2, '0')}:${String(totalEndM % 60).padStart(2, '0')}`;
-                              }
-                              const calcs = recalculateBookingPrice(bookingForm.ma_san, bookingForm.ngay_da, newBat, newKet);
-                              setBookingForm({ ...bookingForm, gio_bat_dau: newBat, gio_ket_thuc: newKet, ...calcs });
-                            }}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-black border transition-all cursor-pointer ${
-                              bookingForm.so_phut === chip.mins ? 'bg-amber-500 text-white border-amber-600 shadow' : 'bg-slate-100 text-slate-800 hover:bg-emerald-50'
-                            }`}
-                          >
-                            {chip.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <div>
-                          <label className="block font-black uppercase mb-1">Tên Khách Hàng</label>
-                          <input
-                            type="text"
-                            value={bookingForm.ten_khach_hang}
-                            onChange={(e) => setBookingForm({ ...bookingForm, ten_khach_hang: e.target.value })}
-                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-black uppercase mb-1">Số Điện Thoại</label>
-                          <input
-                            type="text"
-                            value={bookingForm.so_dien_thoai}
-                            onChange={(e) => setBookingForm({ ...bookingForm, so_dien_thoai: e.target.value })}
-                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <div>
-                          <label className="block font-black uppercase mb-1">Tiền Cọc Trước (VNĐ)</label>
-                          <input
-                            type="number"
-                            value={bookingForm.tien_coc}
-                            onChange={(e) => setBookingForm({ ...bookingForm, tien_coc: Number(e.target.value) })}
-                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-black uppercase mb-1">Ghi Chú</label>
-                          <input
-                            type="text"
-                            value={bookingForm.ghi_chu}
-                            onChange={(e) => setBookingForm({ ...bookingForm, ghi_chu: e.target.value })}
-                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={(e) => { bookingForm.isRealtimeCheckin = true; handleSaveBooking(e); }}
-                          className="py-3 px-4 rounded-xl font-black text-xs bg-amber-600 hover:bg-amber-700 text-white shadow-lg flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          <Clock className="w-4 h-4" /> Bấm Giờ Ngay (Realtime)
-                        </button>
-                        <button
-                          type="submit"
-                          onClick={() => { bookingForm.isRealtimeCheckin = false; }}
-                          className="py-3 px-4 rounded-xl font-black text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-xl flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          <Check className="w-4 h-4 stroke-[3]" /> Xác Nhận Đặt Sân
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-
-                  {/* Thẻ công thức tự động theo phút */}
-                  <div className="lg:col-span-5 space-y-4">
-                    <div className={`p-6 rounded-2xl border shadow-xl ${isDarkMode ? 'bg-[#0c1c12] border-emerald-500/40 text-white' : 'bg-gradient-to-br from-emerald-50 via-white to-green-50 border-emerald-300 text-[#0f172a]'}`}>
-                      <h4 className="text-sm font-black uppercase tracking-tight text-emerald-800 dark:text-emerald-300 pb-2 border-b border-emerald-300 mb-3 flex items-center gap-2">
-                        <span>🧮</span> Ví dụ thực tế & Công thức tự động
-                      </h4>
-                      <div className="space-y-3 text-xs">
-                        <div>
-                          <span className="font-bold">Đơn giá khung giờ:</span>
-                          <div className="p-2 rounded bg-emerald-100 dark:bg-emerald-950 font-black text-emerald-900 dark:text-emerald-200 mt-1">
-                            {bookingForm.don_gia_gio.toLocaleString('vi-VN')} đ / giờ (≈ {bookingForm.don_gia_phut.toLocaleString('vi-VN')} đ / phút)
-                          </div>
-                        </div>
-                        <div>
-                          <span className="font-bold">Tổng thời gian đá:</span>
-                          <div className="p-2 rounded bg-amber-100 text-amber-900 font-black mt-1">
-                            {bookingForm.gio_bat_dau} đến {bookingForm.gio_ket_thuc} = {bookingForm.so_phut} phút
-                          </div>
-                        </div>
-                        <div className="pt-2 border-t border-emerald-200">
-                          <span className="font-black uppercase text-emerald-800">Công thức tiền sân:</span>
-                          <div className="p-3 rounded bg-white dark:bg-black font-mono font-black text-center text-emerald-700 dark:text-emerald-400 mt-1">
-                            ({bookingForm.so_phut} × {bookingForm.don_gia_gio.toLocaleString('vi-VN')}) / 60
-                          </div>
-                          <div className="p-3 rounded-xl bg-emerald-700 text-white font-black text-base flex justify-between items-center mt-2 shadow">
-                            <span>LÀM TRÒN:</span>
-                            <span>{bookingForm.tien_san.toLocaleString('vi-VN')} đ</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. BẢNG DANH SÁCH ĐƠN ĐẶT SÂN (DON_DAT_SAN) */}
-                <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                  <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
-                    <h3 className="text-base font-black flex items-center gap-2">
-                      <Flame className="w-5 h-5 text-amber-500" /> Bảng 4: Don_Dat_San (Toàn Bộ Đơn Đặt Sân)
-                    </h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead>
-                        <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                          <th className="p-4 w-16">MÃ</th>
-                          <th className="p-4">KHÁCH HÀNG</th>
-                          <th className="p-4">SÂN BÓNG</th>
-                          <th className="p-4">KHUNG GIỜ</th>
-                          <th className="p-4">SỐ PHÚT</th>
-                          <th className="p-4">TIỀN SÂN</th>
-                          <th className="p-4">TỔNG TIỀN</th>
-                          <th className="p-4">TRẠNG THÁI</th>
-                          <th className="p-4 text-right">THAO TÁC</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                        {bookingList.map((b) => (
-                          <tr key={b.id}>
-                            <td className="p-4 font-mono font-black text-emerald-700">#{b.id}</td>
-                            <td className="p-4 font-black">{b.ten_khach_hang}<div className="text-[10px] text-slate-500 font-normal">📞 {b.so_dien_thoai}</div></td>
-                            <td className="p-4 font-bold text-emerald-800 dark:text-emerald-300">⚽ {b.ten_san}</td>
-                            <td className="p-4 font-mono">{b.gio_bat_dau} - {b.gio_ket_thuc}</td>
-                            <td className="p-4"><span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-black">{b.so_phut_da || 85}p</span></td>
-                            <td className="p-4 font-bold text-emerald-700">{Number(b.tien_san).toLocaleString('vi-VN')} đ</td>
-                            <td className="p-4 font-black">{Number(b.tong_tien).toLocaleString('vi-VN')} đ</td>
-                            <td className="p-4">
-                              {b.trang_thai === 'DA_CHOT' && <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-black">Đang Đá</span>}
-                              {b.trang_thai === 'CHO_XAC_NHAN' && <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-black">Chờ Cọc</span>}
-                              {b.trang_thai === 'HOAN_THANH' && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-black">Hoàn Tất</span>}
-                            </td>
-                            <td className="p-4 text-right space-x-1.5">
-                              <button onClick={() => setMiniPosModal({ isOpen: true, booking: b, maDichVuChon: 1, soLuong: 1 })} className="p-1.5 rounded bg-emerald-100 text-emerald-800 cursor-pointer font-bold" title="Bán nước">+Nước</button>
-                              {b.trang_thai !== 'HOAN_THANH' && (
-                                <button onClick={() => setCheckoutModal({ isOpen: true, booking: b, paymentMethod: 'TIEN_MAT', discount: 0 })} className="px-2.5 py-1 rounded bg-rose-600 text-white font-black cursor-pointer text-xs">Trả Sân</button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* =================================================================
-                TAB 6: BẢNG 5 - CHI_TIET_DICH_VU (QUẦY BÁN HÀNG POS)
-                ================================================================= */}
-            {activeTab === 'POS_ORDER' && (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
-                  <div>
-                    <h3 className="text-base font-black flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-emerald-600" /> Bảng 5: Chi_Tiet_Dich_Vu (Quầy Bán Hàng POS)
-                    </h3>
-                    <p className="text-xs text-slate-500 font-bold mt-1">Lịch sử xuất bán nước giải khát & dịch vụ cho các sân</p>
-                  </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4 w-16">MÃ CT</th>
-                        <th className="p-4">MÃ ĐƠN</th>
-                        <th className="p-4">KHÁCH HÀNG</th>
-                        <th className="p-4">SÂN BÓNG</th>
-                        <th className="p-4">TÊN MẶT HÀNG</th>
-                        <th className="p-4">SỐ LƯỢNG</th>
-                        <th className="p-4">ĐƠN GIÁ BÁN</th>
-                        <th className="p-4">THÀNH TIỀN</th>
-                        <th className="p-4 text-right">THAO TÁC</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {serviceDetailList.map((ct) => (
-                        <tr key={ct.id}>
-                          <td className="p-4 font-mono font-black text-emerald-700">#{ct.id}</td>
-                          <td className="p-4 font-mono font-bold">#{ct.ma_don_dat}</td>
-                          <td className="p-4 font-black">{ct.ten_khach_hang || 'Khách vãng lai'}</td>
-                          <td className="p-4 text-emerald-700 font-bold">{ct.ten_san || 'Sân 5A'}</td>
-                          <td className="p-4 font-black">🥤 {ct.ten_dich_vu}</td>
-                          <td className="p-4 font-bold">{ct.so_luong} {ct.don_vi_tinh}</td>
-                          <td className="p-4">{Number(ct.gia_luc_ban).toLocaleString('vi-VN')} đ</td>
-                          <td className="p-4 font-black text-emerald-700">{Number(ct.thanh_tien).toLocaleString('vi-VN')} đ</td>
-                          <td className="p-4 text-right">
-                            <button onClick={() => handleDeleteServiceDetail(ct.id)} className="p-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
 
             {/* =================================================================
                 TAB 7: BẢNG 6 - DICH_VU (CÓ ĐẦY ĐỦ THÊM SỬA XÓA)
@@ -2062,7 +1854,6 @@ export default function AdminDashboard() {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4 w-16">MÃ</th>
                         <th className="p-4">TÊN DỊCH VỤ / SẢN PHẨM</th>
                         <th className="p-4">ĐƠN VỊ TÍNH</th>
                         <th className="p-4">ĐƠN GIÁ BÁN</th>
@@ -2073,7 +1864,6 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {serviceList.map((s) => (
                         <tr key={s.id}>
-                          <td className="p-4 font-mono font-black text-emerald-700">#{s.id}</td>
                           <td className="p-4 font-black text-sm">🥤 {s.ten_dich_vu}</td>
                           <td className="p-4 font-bold">{s.don_vi_tinh}</td>
                           <td className="p-4 font-black text-emerald-700">{Number(s.don_gia).toLocaleString('vi-VN')} đ</td>
@@ -2109,7 +1899,6 @@ export default function AdminDashboard() {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4 w-16">MÃ PHIẾU</th>
                         <th className="p-4">MẶT HÀNG NHẬP</th>
                         <th className="p-4">SỐ LƯỢNG NHẬP</th>
                         <th className="p-4">GIÁ VỐN NHẬP</th>
@@ -2121,7 +1910,6 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {inventoryList.map((p) => (
                         <tr key={p.id}>
-                          <td className="p-4 font-mono font-black text-emerald-700">#{p.id}</td>
                           <td className="p-4 font-black">📦 {p.ten_dich_vu}</td>
                           <td className="p-4 font-black text-emerald-700">{p.so_luong_nhap} {p.don_vi_tinh}</td>
                           <td className="p-4">{Number(p.gia_nhap).toLocaleString('vi-VN')} đ</td>
@@ -2158,7 +1946,6 @@ export default function AdminDashboard() {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4 w-16">MÃ GD</th>
                         <th className="p-4">MÃ ĐƠN</th>
                         <th className="p-4">KHÁCH HÀNG</th>
                         <th className="p-4">SỐ TIỀN</th>
@@ -2172,7 +1959,6 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {paymentList.map((t) => (
                         <tr key={t.id}>
-                          <td className="p-4 font-mono font-black text-emerald-700">#{t.id}</td>
                           <td className="p-4 font-mono font-bold">#{t.ma_don_dat}</td>
                           <td className="p-4 font-black">{t.ten_khach_hang}</td>
                           <td className="p-4 font-black text-emerald-700">{Number(t.so_tien).toLocaleString('vi-VN')} đ</td>
@@ -2211,7 +1997,6 @@ export default function AdminDashboard() {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4 w-16">MÃ HOÀN</th>
                         <th className="p-4">MÃ ĐƠN</th>
                         <th className="p-4">KHÁCH HÀNG</th>
                         <th className="p-4">TIỀN HOÀN</th>
@@ -2224,7 +2009,6 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {refundList.map((h) => (
                         <tr key={h.id}>
-                          <td className="p-4 font-mono font-black text-rose-600">#{h.id}</td>
                           <td className="p-4 font-mono font-bold">#{h.ma_don_dat}</td>
                           <td className="p-4 font-black">{h.ten_khach_hang}</td>
                           <td className="p-4 font-black text-rose-600">{Number(h.so_tien_hoan).toLocaleString('vi-VN')} đ</td>
@@ -2262,7 +2046,6 @@ export default function AdminDashboard() {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4 w-16">MÃ</th>
                         <th className="p-4">HỌ VÀ TÊN</th>
                         <th className="p-4">EMAIL</th>
                         <th className="p-4">SỐ ĐIỆN THOẠI</th>
@@ -2273,7 +2056,6 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {userList.map((u) => (
                         <tr key={u.id}>
-                          <td className="p-4 font-mono font-black text-emerald-700">#{u.id}</td>
                           <td className="p-4 font-black text-sm">👤 {u.ho_ten}</td>
                           <td className="p-4 font-mono text-slate-500">{u.email}</td>
                           <td className="p-4 font-bold">{u.so_dien_thoai}</td>
@@ -2315,7 +2097,6 @@ export default function AdminDashboard() {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4 w-20">MÃ VAI TRÒ</th>
                         <th className="p-4">TÊN VAI TRÒ</th>
                         <th className="p-4">MÔ TẢ QUYỀN HẠN</th>
                         <th className="p-4 text-right">THAO TÁC</th>
@@ -2324,7 +2105,6 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {roleList.map((r) => (
                         <tr key={r.MaVaiTro}>
-                          <td className="p-4 font-mono font-black text-emerald-700">#{r.MaVaiTro}</td>
                           <td className="p-4 font-black text-sm text-purple-700 dark:text-purple-300">🛡️ {r.TenVaiTro}</td>
                           <td className="p-4 text-slate-600 dark:text-slate-300">{r.MoTa}</td>
                           <td className="p-4 text-right space-x-2">
@@ -2379,6 +2159,21 @@ export default function AdminDashboard() {
                 </select>
               </div>
               <div>
+                <label className="block font-black uppercase mb-1">Đơn Giá Theo Phút (VNĐ/phút) *</label>
+                <input
+                  type="number"
+                  step="500"
+                  required
+                  value={courtModal.data.don_gia_phut || 5000}
+                  onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, don_gia_phut: Number(e.target.value) } })}
+                  placeholder="Ví dụ: 5000"
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                />
+                <div className="text-[11px] text-slate-500 mt-1 font-medium">
+                  💡 Gợi ý: {Number(courtModal.data.don_gia_phut || 5000).toLocaleString('vi-VN')} đ/phút = {(Number(courtModal.data.don_gia_phut || 5000) * 60).toLocaleString('vi-VN')} đ/giờ (60 phút)
+                </div>
+              </div>
+              <div>
                 <label className="block font-black uppercase mb-1">Trạng Thái Vận Hành</label>
                 <select
                   value={courtModal.data.trang_thai || 'SAN_SANG'}
@@ -2411,102 +2206,26 @@ export default function AdminDashboard() {
                 <label className="block font-black uppercase mb-1">Tên Loại Sân *</label>
                 <input
                   type="text"
+                  required
                   value={loaiSanModal.data.ten_loai || ''}
                   onChange={(e) => setLoaiSanModal({ ...loaiSanModal, data: { ...loaiSanModal.data, ten_loai: e.target.value } })}
-                  placeholder="Sân 11 người"
+                  placeholder="Ví dụ: Sân 5 người, Sân 7 người, Sân 11..."
                   className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div>
-                <label className="block font-black uppercase mb-1">Giá Cơ Bản (VNĐ) *</label>
-                <input
-                  type="number"
-                  value={loaiSanModal.data.gia_co_ban || 250000}
-                  onChange={(e) => setLoaiSanModal({ ...loaiSanModal, data: { ...loaiSanModal.data, gia_co_ban: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
-              </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Mô Tả</label>
-                <input
-                  type="text"
+                <label className="block font-black uppercase mb-1">Mô Tả Chi Tiết</label>
+                <textarea
+                  rows={3}
                   value={loaiSanModal.data.mo_ta || ''}
                   onChange={(e) => setLoaiSanModal({ ...loaiSanModal, data: { ...loaiSanModal.data, mo_ta: e.target.value } })}
+                  placeholder="Mô tả chất liệu mặt cỏ, tiêu chuẩn thi đấu..."
                   className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setLoaiSanModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
                 <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer">Lưu Loại Sân</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Modal Khung Giờ Giá (Khung_Gio_Gia) */}
-      {priceModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
-            <div className="flex items-center justify-between pb-3 border-b mb-4">
-              <h3 className="font-black text-base">{priceModal.mode === 'ADD' ? '⏰ Thêm Khung Giờ Giá' : '✏️ Cập Nhật Khung Giờ Giá'}</h3>
-              <button onClick={() => setPriceModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleSavePrice} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-black uppercase mb-1">Loại Sân *</label>
-                <select
-                  value={priceModal.data.ma_loai_san || 1}
-                  onChange={(e) => setPriceModal({ ...priceModal, data: { ...priceModal.data, ma_loai_san: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                >
-                  {categoryList.map(l => (
-                    <option key={l.id} value={l.id}>{l.ten_loai}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-black uppercase mb-1">Giờ Bắt Đầu</label>
-                  <input
-                    type="time"
-                    value={priceModal.data.gio_bat_dau || '06:00'}
-                    onChange={(e) => setPriceModal({ ...priceModal, data: { ...priceModal.data, gio_bat_dau: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  />
-                </div>
-                <div>
-                  <label className="block font-black uppercase mb-1">Giờ Kết Thúc</label>
-                  <input
-                    type="time"
-                    value={priceModal.data.gio_ket_thuc || '22:00'}
-                    onChange={(e) => setPriceModal({ ...priceModal, data: { ...priceModal.data, gio_ket_thuc: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Đơn Giá / Giờ (VNĐ) *</label>
-                <input
-                  type="number"
-                  value={priceModal.data.don_gia || 350000}
-                  onChange={(e) => setPriceModal({ ...priceModal, data: { ...priceModal.data, don_gia: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="la_cuoi_tuan"
-                  checked={!!priceModal.data.la_cuoi_tuan}
-                  onChange={(e) => setPriceModal({ ...priceModal, data: { ...priceModal.data, la_cuoi_tuan: e.target.checked } })}
-                  className="w-4 h-4 cursor-pointer"
-                />
-                <label htmlFor="la_cuoi_tuan" className="font-bold cursor-pointer">Áp dụng giá cuối tuần (Thứ 7 / Chủ Nhật)</label>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setPriceModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
-                <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer">Lưu Bảng Giá</button>
               </div>
             </form>
           </div>
@@ -2880,8 +2599,8 @@ export default function AdminDashboard() {
               </div>
               <div>
                 <label className="block font-black uppercase mb-1">Phương Thức Thanh Toán</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['TIEN_MAT', 'VNPAY', 'MOMO'] as const).map((m) => (
+                <div className="grid grid-cols-2 gap-2">
+                  {(['TIEN_MAT', 'CHUYEN_KHOAN'] as const).map((m) => (
                     <button
                       key={m}
                       type="button"
@@ -2890,7 +2609,7 @@ export default function AdminDashboard() {
                         checkoutModal.paymentMethod === m ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 text-slate-800'
                       }`}
                     >
-                      {m === 'TIEN_MAT' ? '💵 Tiền Mặt' : m === 'VNPAY' ? '💳 VNPay' : '📱 MoMo'}
+                      {m === 'TIEN_MAT' ? '💵 Tiền Mặt' : '🏦 Chuyển Khoản'}
                     </button>
                   ))}
                 </div>
