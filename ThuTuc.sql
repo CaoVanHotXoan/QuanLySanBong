@@ -109,7 +109,7 @@ BEGIN
         tong_tien DECIMAL(10, 2) NOT NULL,
         phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'CHUYEN_KHOAN')) NOT NULL DEFAULT 'CHUYEN_KHOAN',
         ghi_chu NVARCHAR(255) NULL,
-        trang_thai VARCHAR(20) CHECK (trang_thai IN ('DA_COC', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY', 'CHO_XAC_NHAN', 'DA_CHOT')) DEFAULT 'DA_COC',
+        trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_THANH_TOAN', 'CHO_XAC_NHAN', 'DA_COC', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY', 'DA_CHOT')) DEFAULT 'DA_COC',
         ngay_tao DATETIME DEFAULT GETDATE(),
         FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
         FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE NO ACTION
@@ -961,7 +961,7 @@ BEGIN
         INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
         WHERE d.ngay_da = @ngay_da
           AND (@ma_san IS NULL OR d.ma_san = @ma_san)
-          AND d.trang_thai <> 'DA_HUY'
+          AND d.trang_thai NOT IN ('DA_HUY', 'CHO_THANH_TOAN')
         ORDER BY d.gio_bat_dau ASC;
     END TRY
     BEGIN CATCH
@@ -970,7 +970,7 @@ BEGIN
 END;
 GO
 
--- Lấy lịch sử đặt sân của khách hàng
+-- Lấy lịch sử đặt sân của khách hàng (Chỉ lấy các đơn đã cọc hoặc đã thanh toán thành công)
 CREATE OR ALTER PROCEDURE sp_LayLichSuDatSan
     @ma_nguoi_dung INT = NULL,
     @so_dien_thoai VARCHAR(20) = NULL,
@@ -1000,7 +1000,8 @@ BEGIN
         LEFT JOIN San_Bong sb ON d.ma_san = sb.id
         LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
         LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
-        WHERE (@ma_nguoi_dung IS NULL OR d.ma_nguoi_dung = @ma_nguoi_dung)
+        WHERE d.trang_thai IN ('DA_COC', 'DA_THANH_TOAN', 'HOAN_THANH', 'DA_CHOT')
+          AND (@ma_nguoi_dung IS NULL OR d.ma_nguoi_dung = @ma_nguoi_dung)
           AND (@so_dien_thoai IS NULL OR nd.so_dien_thoai = @so_dien_thoai)
           AND (@email IS NULL OR nd.email = @email)
         ORDER BY d.id DESC;
@@ -1532,11 +1533,15 @@ BEGIN
 
         IF @loai_thanh_toan = 'DAT_COC'
         BEGIN
-            UPDATE Don_Dat_San SET trang_thai = 'DA_CHOT' WHERE id = @ma_don_dat;
+            UPDATE Don_Dat_San SET trang_thai = 'DA_COC' WHERE id = @ma_don_dat;
         END
         ELSE IF @loai_thanh_toan = 'TRA_HET'
         BEGIN
-            UPDATE Don_Dat_San SET trang_thai = 'HOAN_THANH' WHERE id = @ma_don_dat;
+            UPDATE Don_Dat_San SET trang_thai = 'DA_THANH_TOAN' WHERE id = @ma_don_dat;
+        END
+        ELSE
+        BEGIN
+            UPDATE Don_Dat_San SET trang_thai = 'DA_COC' WHERE id = @ma_don_dat;
         END;
 
         COMMIT TRANSACTION;
@@ -1732,5 +1737,592 @@ BEGIN
 END;
 GO
 
+-- =====================================================================
+-- 4.8. CÁC THỦ TỤC CRUD BỔ SUNG CHO TOÀN BỘ 11 BẢNG (100% STORED PROCEDURES)
+-- =====================================================================
+
+-- 1. BẢNG LOAI_SAN: Thêm, Sửa, Xóa Loại Sân
+CREATE OR ALTER PROCEDURE sp_ThemLoaiSan
+    @ten_loai NVARCHAR(50),
+    @mo_ta NVARCHAR(MAX) = NULL,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        INSERT INTO Loai_San (ten_loai, mo_ta, trang_thai)
+        VALUES (@ten_loai, @mo_ta, @trang_thai);
+
+        SELECT id, ten_loai, mo_ta, trang_thai
+        FROM Loai_San
+        WHERE id = SCOPE_IDENTITY();
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_SuaLoaiSan
+    @id INT,
+    @ten_loai NVARCHAR(50),
+    @mo_ta NVARCHAR(MAX) = NULL,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @id)
+        BEGIN
+            ;THROW 50030, N'Loại sân không tồn tại.', 1;
+        END;
+
+        UPDATE Loai_San
+        SET ten_loai = @ten_loai,
+            mo_ta = ISNULL(@mo_ta, mo_ta),
+            trang_thai = ISNULL(@trang_thai, trang_thai)
+        WHERE id = @id;
+
+        SELECT id, ten_loai, mo_ta, trang_thai
+        FROM Loai_San
+        WHERE id = @id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_XoaLoaiSan
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @id)
+        BEGIN
+            ;THROW 50031, N'Loại sân không tồn tại.', 1;
+        END;
+
+        IF EXISTS (SELECT 1 FROM San_Bong WHERE ma_loai_san = @id)
+        BEGIN
+            ;THROW 50032, N'Không thể xóa loại sân đang có sân bóng sử dụng. Vui lòng chuyển hoặc xóa các sân bóng thuộc loại sân này trước!', 1;
+        END;
+
+        DELETE FROM Loai_San WHERE id = @id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 2. BẢNG VAI_TRO: Xóa Vai Trò
+CREATE OR ALTER PROCEDURE sp_XoaVaiTro
+    @MaVaiTro INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Vai_Tro WHERE MaVaiTro = @MaVaiTro)
+        BEGIN
+            ;THROW 50033, N'Vai trò không tồn tại.', 1;
+        END;
+
+        IF EXISTS (SELECT 1 FROM Nguoi_Dung WHERE MaVaiTro = @MaVaiTro)
+        BEGIN
+            ;THROW 50034, N'Không thể xóa vai trò đang có người dùng sử dụng.', 1;
+        END;
+
+        DELETE FROM Vai_Tro WHERE MaVaiTro = @MaVaiTro;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 3. BẢNG PHIEU_NHAP_KHO: Sửa & Xóa Phiếu Nhập Kho
+CREATE OR ALTER PROCEDURE sp_SuaPhieuNhapKho
+    @id INT,
+    @so_luong_nhap INT,
+    @gia_nhap DECIMAL(10, 2)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Phieu_Nhap_Kho WHERE id = @id)
+        BEGIN
+            ;THROW 50042, N'Phiếu nhập kho không tồn tại.', 1;
+        END;
+
+        DECLARE @ma_dich_vu INT, @so_luong_cu INT;
+        SELECT @ma_dich_vu = ma_dich_vu, @so_luong_cu = so_luong_nhap FROM Phieu_Nhap_Kho WHERE id = @id;
+
+        UPDATE Phieu_Nhap_Kho
+        SET so_luong_nhap = @so_luong_nhap,
+            gia_nhap = @gia_nhap
+        WHERE id = @id;
+
+        UPDATE Dich_Vu
+        SET ton_kho = ton_kho - @so_luong_cu + @so_luong_nhap
+        WHERE id = @ma_dich_vu;
+
+        COMMIT TRANSACTION;
+
+        SELECT 
+            p.id, p.ma_dich_vu, dv.ten_dich_vu, N'Chai' AS don_vi_tinh,
+            p.so_luong_nhap, p.gia_nhap, (p.so_luong_nhap * p.gia_nhap) AS tong_tien_nhap, p.ngay_nhap
+        FROM Phieu_Nhap_Kho p
+        LEFT JOIN Dich_Vu dv ON p.ma_dich_vu = dv.id
+        WHERE p.id = @id;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_XoaPhieuNhapKho
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Phieu_Nhap_Kho WHERE id = @id)
+        BEGIN
+            ;THROW 50043, N'Phiếu nhập kho không tồn tại.', 1;
+        END;
+
+        DECLARE @ma_dich_vu INT, @so_luong INT;
+        SELECT @ma_dich_vu = ma_dich_vu, @so_luong = so_luong_nhap FROM Phieu_Nhap_Kho WHERE id = @id;
+
+        DELETE FROM Phieu_Nhap_Kho WHERE id = @id;
+
+        UPDATE Dich_Vu
+        SET ton_kho = CASE WHEN ton_kho >= @so_luong THEN ton_kho - @so_luong ELSE 0 END
+        WHERE id = @ma_dich_vu;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 4. BẢNG DON_DAT_SAN & THANH_TOAN: Thêm, Sửa, Xóa Đơn Đặt Sân & Thanh Toán
+CREATE OR ALTER PROCEDURE sp_ThemDonDatVaThanhToan
+    @ma_nguoi_dung INT,
+    @ma_san INT,
+    @ngay_da DATE,
+    @gio_bat_dau TIME,
+    @gio_ket_thuc TIME,
+    @tien_san DECIMAL(10, 2) = NULL,
+    @tong_tien DECIMAL(10, 2) = NULL,
+    @phuong_thuc VARCHAR(20) = 'CHUYEN_KHOAN',
+    @trang_thai VARCHAR(20) = 'DA_COC',
+    @ghi_chu NVARCHAR(255) = NULL,
+    @loai_thanh_toan VARCHAR(20) = NULL,
+    @so_tien DECIMAL(10, 2) = NULL,
+    @trang_thai_gd VARCHAR(20) = 'THANH_CONG'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        DECLARE @tien_san_val DECIMAL(10,2) = ISNULL(@tien_san, 0);
+        DECLARE @tong_tien_val DECIMAL(10,2) = ISNULL(@tong_tien, @tien_san_val);
+
+        INSERT INTO Don_Dat_San (
+            ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc,
+            tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao
+        )
+        VALUES (
+            @ma_nguoi_dung, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc,
+            @tien_san_val, @tong_tien_val, @phuong_thuc, @ghi_chu, @trang_thai, GETDATE()
+        );
+
+        DECLARE @newId INT = SCOPE_IDENTITY();
+
+        IF @so_tien IS NOT NULL AND @so_tien > 0
+        BEGIN
+            INSERT INTO Thanh_Toan (
+                ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan
+            )
+            VALUES (
+                @newId, @phuong_thuc, ISNULL(@loai_thanh_toan, 'DAT_COC'), @so_tien, CONCAT('GD_', @newId, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @trang_thai_gd, GETDATE()
+            );
+        END;
+
+        COMMIT TRANSACTION;
+
+        SELECT 
+            d.id, d.ma_san, sb.ten_san, ls.ten_loai, d.ma_nguoi_dung,
+            nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai, d.ngay_da,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+            d.tien_san, d.tong_tien, d.phuong_thuc, d.ghi_chu, d.trang_thai, d.ngay_tao
+        FROM Don_Dat_San d
+        INNER JOIN San_Bong sb ON d.ma_san = sb.id
+        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        WHERE d.id = @newId;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_SuaDonDatVaThanhToan
+    @id INT,
+    @ma_nguoi_dung INT = NULL,
+    @ma_san INT,
+    @ngay_da DATE,
+    @gio_bat_dau TIME,
+    @gio_ket_thuc TIME,
+    @tien_san DECIMAL(10, 2) = NULL,
+    @tong_tien DECIMAL(10, 2) = NULL,
+    @phuong_thuc VARCHAR(20) = 'CHUYEN_KHOAN',
+    @trang_thai VARCHAR(20) = 'DA_COC',
+    @ghi_chu NVARCHAR(255) = NULL,
+    @loai_thanh_toan VARCHAR(20) = NULL,
+    @so_tien DECIMAL(10, 2) = NULL,
+    @trang_thai_gd VARCHAR(20) = 'THANH_CONG'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Don_Dat_San WHERE id = @id)
+        BEGIN
+            ;THROW 50055, N'Đơn đặt sân không tồn tại.', 1;
+        END;
+
+        UPDATE Don_Dat_San
+        SET ma_san = @ma_san,
+            ma_nguoi_dung = ISNULL(@ma_nguoi_dung, ma_nguoi_dung),
+            ngay_da = @ngay_da,
+            gio_bat_dau = @gio_bat_dau,
+            gio_ket_thuc = @gio_ket_thuc,
+            tien_san = ISNULL(@tien_san, tien_san),
+            tong_tien = ISNULL(@tong_tien, tong_tien),
+            phuong_thuc = @phuong_thuc,
+            ghi_chu = @ghi_chu,
+            trang_thai = @trang_thai
+        WHERE id = @id;
+
+        IF @so_tien IS NOT NULL AND @so_tien > 0
+        BEGIN
+            IF EXISTS (SELECT 1 FROM Thanh_Toan WHERE ma_don_dat = @id)
+            BEGIN
+                UPDATE Thanh_Toan
+                SET so_tien = @so_tien,
+                    phuong_thuc = @phuong_thuc,
+                    loai_thanh_toan = ISNULL(@loai_thanh_toan, loai_thanh_toan),
+                    trang_thai_gd = ISNULL(@trang_thai_gd, trang_thai_gd)
+                WHERE ma_don_dat = @id;
+            END
+            ELSE
+            BEGIN
+                INSERT INTO Thanh_Toan (ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan)
+                VALUES (@id, @phuong_thuc, ISNULL(@loai_thanh_toan, 'TRA_HET'), @so_tien, CONCAT('GD_', @id), @trang_thai_gd, GETDATE());
+            END;
+        END;
+
+        COMMIT TRANSACTION;
+
+        SELECT 
+            d.id, d.ma_san, sb.ten_san, ls.ten_loai, d.ma_nguoi_dung,
+            nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai, d.ngay_da,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+            d.tien_san, d.tong_tien, d.phuong_thuc, d.ghi_chu, d.trang_thai, d.ngay_tao
+        FROM Don_Dat_San d
+        INNER JOIN San_Bong sb ON d.ma_san = sb.id
+        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        WHERE d.id = @id;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_XoaDonDatVaThanhToan
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Don_Dat_San WHERE id = @id)
+        BEGIN
+            ;THROW 50056, N'Đơn đặt sân không tồn tại.', 1;
+        END;
+
+        DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat = @id;
+        DELETE FROM Thanh_Toan WHERE ma_don_dat = @id;
+        DELETE FROM Lich_Su_Hoan_Tien WHERE ma_don_dat = @id;
+        DELETE FROM Don_Dat_San WHERE id = @id;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 5. BẢNG LICH_SU_HOAN_TIEN: Thêm, Sửa, Xóa Hoàn Tiền
+CREATE OR ALTER PROCEDURE sp_ThemHoanTien
+    @ma_don_dat INT,
+    @so_tien_hoan DECIMAL(10, 2),
+    @ty_le_hoan INT = 100,
+    @ly_do_huy NVARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        INSERT INTO Lich_Su_Hoan_Tien (ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy, ngay_hoan)
+        VALUES (@ma_don_dat, @so_tien_hoan, @ty_le_hoan, @ly_do_huy, GETDATE());
+
+        DECLARE @newId INT = SCOPE_IDENTITY();
+
+        UPDATE Don_Dat_San SET trang_thai = 'DA_HUY' WHERE id = @ma_don_dat;
+        UPDATE Thanh_Toan SET trang_thai_gd = 'HOAN_TIEN' WHERE ma_don_dat = @ma_don_dat;
+
+        COMMIT TRANSACTION;
+
+        SELECT 
+            ht.id, ht.ma_don_dat, nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai,
+            sb.ten_san, d.ngay_da, ht.so_tien_hoan, ht.ty_le_hoan, ht.ly_do_huy, ht.ngay_hoan
+        FROM Lich_Su_Hoan_Tien ht
+        LEFT JOIN Don_Dat_San d ON ht.ma_don_dat = d.id
+        LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        WHERE ht.id = @newId;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_SuaHoanTien
+    @id INT,
+    @so_tien_hoan DECIMAL(10, 2),
+    @ty_le_hoan INT = 100,
+    @ly_do_huy NVARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Lich_Su_Hoan_Tien WHERE id = @id)
+        BEGIN
+            ;THROW 50057, N'Bản ghi hoàn tiền không tồn tại.', 1;
+        END;
+
+        UPDATE Lich_Su_Hoan_Tien
+        SET so_tien_hoan = @so_tien_hoan,
+            ty_le_hoan = @ty_le_hoan,
+            ly_do_huy = @ly_do_huy
+        WHERE id = @id;
+
+        SELECT 
+            ht.id, ht.ma_don_dat, nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai,
+            sb.ten_san, d.ngay_da, ht.so_tien_hoan, ht.ty_le_hoan, ht.ly_do_huy, ht.ngay_hoan
+        FROM Lich_Su_Hoan_Tien ht
+        LEFT JOIN Don_Dat_San d ON ht.ma_don_dat = d.id
+        LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        WHERE ht.id = @id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_XoaHoanTien
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Lich_Su_Hoan_Tien WHERE id = @id)
+        BEGIN
+            ;THROW 50058, N'Bản ghi hoàn tiền không tồn tại.', 1;
+        END;
+
+        DELETE FROM Lich_Su_Hoan_Tien WHERE id = @id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 6. BẢNG KHUNG_GIO: Đọc, Thêm, Sửa, Xóa & Khôi phục Khung Giờ
+CREATE OR ALTER PROCEDURE sp_LayDanhSachKhungGio
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT id, gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai
+    FROM Khung_Gio
+    WHERE trang_thai = 1
+    ORDER BY thu_tu ASC;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_LayTatCaKhungGioAdmin
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT id, gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai
+    FROM Khung_Gio
+    ORDER BY thu_tu ASC;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_ThemKhungGio
+    @gio_bat_dau VARCHAR(5),
+    @gio_ket_thuc VARCHAR(5),
+    @nhan_hien_thi NVARCHAR(50),
+    @thu_tu INT = 1,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        INSERT INTO Khung_Gio (gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai)
+        VALUES (@gio_bat_dau, @gio_ket_thuc, @nhan_hien_thi, @thu_tu, @trang_thai);
+
+        SELECT id, gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai
+        FROM Khung_Gio
+        WHERE id = SCOPE_IDENTITY();
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_SuaKhungGio
+    @id INT,
+    @gio_bat_dau VARCHAR(5),
+    @gio_ket_thuc VARCHAR(5),
+    @nhan_hien_thi NVARCHAR(50),
+    @thu_tu INT = 1,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Khung_Gio WHERE id = @id)
+        BEGIN
+            ;THROW 50059, N'Khung giờ không tồn tại.', 1;
+        END;
+
+        UPDATE Khung_Gio
+        SET gio_bat_dau = @gio_bat_dau,
+            gio_ket_thuc = @gio_ket_thuc,
+            nhan_hien_thi = @nhan_hien_thi,
+            thu_tu = @thu_tu,
+            trang_thai = @trang_thai
+        WHERE id = @id;
+
+        SELECT id, gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai
+        FROM Khung_Gio
+        WHERE id = @id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_XoaKhungGio
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Khung_Gio WHERE id = @id)
+        BEGIN
+            ;THROW 50060, N'Khung giờ không tồn tại.', 1;
+        END;
+
+        DELETE FROM Khung_Gio WHERE id = @id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_ResetKhungGio
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        DELETE FROM Khung_Gio;
+        DBCC CHECKIDENT ('Khung_Gio', RESEED, 0);
+
+        INSERT INTO Khung_Gio (gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai) VALUES
+        ('06:00', '06:30', N'6h', 1, 1),
+        ('06:30', '07:00', N'6h30', 2, 1),
+        ('07:00', '07:30', N'7h', 3, 1),
+        ('07:30', '08:00', N'7h30', 4, 1),
+        ('08:00', '08:30', N'8h', 5, 1),
+        ('08:30', '09:00', N'8h30', 6, 1),
+        ('09:00', '09:30', N'9h', 7, 1),
+        ('09:30', '10:00', N'9h30', 8, 1),
+        ('10:00', '10:30', N'10h', 9, 1),
+        ('10:30', '11:00', N'10h30', 10, 1),
+        ('11:00', '11:30', N'11h', 11, 1),
+        ('11:30', '12:00', N'11h30', 12, 1),
+        ('12:00', '12:30', N'12h', 13, 1),
+        ('12:30', '13:00', N'12h30', 14, 1),
+        ('13:00', '13:30', N'13h', 15, 1),
+        ('13:30', '14:00', N'13h30', 16, 1),
+        ('14:00', '14:30', N'14h', 17, 1),
+        ('14:30', '15:00', N'14h30', 18, 1),
+        ('15:00', '15:30', N'15h', 19, 1),
+        ('15:30', '16:00', N'15h30', 20, 1),
+        ('16:00', '16:30', N'16h', 21, 1),
+        ('16:30', '17:00', N'16h30', 22, 1),
+        ('17:00', '17:30', N'17h', 23, 1),
+        ('17:30', '18:00', N'17h30', 24, 1),
+        ('18:00', '18:30', N'18h', 25, 1),
+        ('18:30', '19:00', N'18h30', 26, 1),
+        ('19:00', '19:30', N'19h', 27, 1);
+
+        COMMIT TRANSACTION;
+
+        SELECT id, gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai
+        FROM Khung_Gio
+        ORDER BY thu_tu ASC;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
 PRINT N'✅ ĐÃ NẠP TOÀN BỘ STORED PROCEDURES CHO CSDL QuanLySanBong THÀNH CÔNG!';
 GO
+

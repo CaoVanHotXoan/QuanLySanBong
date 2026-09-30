@@ -24,6 +24,9 @@ router.post('/users', authController.dangKy);
 // Cập nhật người dùng
 router.put('/users/:id', authController.suaNguoiDung);
 
+// Xóa người dùng
+router.delete('/users/:id', authController.xoaNguoiDung);
+
 // Lấy danh sách vai trò (Vai_Tro)
 router.get('/vai-tro', authController.layDanhSachVaiTro);
 
@@ -33,4 +36,8 @@ router.post('/vai-tro', authController.themVaiTro);
 // Cập nhật vai trò
 router.put('/vai-tro/:id', authController.suaVaiTro);
 
+// Xóa vai trò
+router.delete('/vai-tro/:id', authController.xoaVaiTro);
+
 module.exports = router;
+

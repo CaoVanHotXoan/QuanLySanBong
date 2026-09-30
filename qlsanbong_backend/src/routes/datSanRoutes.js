@@ -11,14 +11,19 @@ const { verifyToken } = require('../middlewares/authMiddleware');
 
 // Lấy danh sách sân bóng (sp_LayDanhSachSan)
 router.get('/danh-sach-san', datSanController.layDanhSachSan);
+router.get('/san-bong', datSanController.layDanhSachSan);
 
-// Lấy danh sách loại sân
+// Lấy, thêm, sửa, xóa loại sân (Loai_San)
 router.get('/loai-san', datSanController.layDanhSachLoaiSan);
+router.post('/loai-san', datSanController.themLoaiSan);
+router.put('/loai-san/:id', datSanController.suaLoaiSan);
+router.delete('/loai-san/:id', datSanController.xoaLoaiSan);
 
-// Thêm, sửa, xóa sân bóng
+// Thêm, sửa, xóa sân bóng (San_Bong)
 router.post('/san-bong', datSanController.themSanBong);
 router.put('/san-bong/:id', datSanController.suaSanBong);
 router.delete('/san-bong/:id', datSanController.xoaSanBong);
+
 
 // Lấy danh sách khung giờ từ CSDL
 router.get('/khung-gio', datSanController.layDanhSachKhungGio);

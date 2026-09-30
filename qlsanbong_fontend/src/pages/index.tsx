@@ -36,12 +36,36 @@ import {
   QrCode,
   RefreshCw,
   Flame,
-  Check
+  Check,
+  Copy,
+  ExternalLink,
+  Loader2,
+  Building2,
+  Sparkles
 } from 'lucide-react';
 import Login, { AuthUser } from './Login/login';
 import Profile from '../profile/profile';
 import SoccerLoader from '../components/SoccerLoader';
 import DateNavigationBar from '../components/DateNavigationBar';
+
+/**
+ * Interface Dữ liệu trả về từ Cổng thanh toán PayOS (MB Bank VietQR)
+ */
+interface PayOSData {
+  orderCode: number;
+  ma_don_dat?: number | null;
+  amount: number;
+  description: string;
+  accountNumber: string;
+  accountName: string;
+  bin: string;
+  bankName: string;
+  checkoutUrl: string;
+  qrCode: string;
+  paymentLinkId?: string;
+  status: string;
+}
+
 
 // =====================================================================
 // 1. ĐỊNH NGHĨA INTERFACES & KIỂU DỮ LIỆU (MAPPING TỪ CSDL SQL SERVER)
@@ -251,6 +275,18 @@ export default function HomePage() {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
+  // State Cổng thanh toán PayOS VietQR MB Bank
+  const [payOSData, setPayOSData] = useState<PayOSData | null>(null);
+  const [isCreatingPayOS, setIsCreatingPayOS] = useState<boolean>(false);
+  const [isPaymentSuccess, setIsPaymentSuccess] = useState<boolean>(false);
+  const [successCountdown, setSuccessCountdown] = useState<number>(15);
+  const successTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isCheckingPayOS, setIsCheckingPayOS] = useState<boolean>(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [qrModalAlert, setQrModalAlert] = useState<{ type: 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
+
+
   // Hàm hiển thị Toast: Khi là Admin thì không cần hiện thông báo theo yêu cầu
   const triggerToast = (toast: { type: 'success' | 'error' | 'info'; message: string }) => {
     if (currentUser && (currentUser.vai_tro || '').toUpperCase() === 'ADMIN') {
@@ -447,10 +483,35 @@ export default function HomePage() {
       setLockedSlots(updatedSlots || []);
     });
 
+    // Lắng nghe sự kiện thanh toán thành công Real-time từ PayOS Webhook (MB Bank)
+    socket.on('payment_success', (data: any) => {
+      console.log('⚡ [Socket Realtime MB Bank]: Nhận thông báo thanh toán thành công:', data);
+      handlePaymentSuccessAction(data);
+    });
+
+    // Lắng nghe sự kiện cập nhật đơn đặt
+    socket.on('booking_updated', () => {
+      fetchLichSan(filterNgayDa, sanBongList);
+      fetchDichVu();
+    });
+
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [filterNgayDa, sanBongList]);
+
+  // Polling kiểm tra trạng thái thanh toán PayOS định kỳ mỗi 2.5 giây khi đang mở màn hình QR
+  useEffect(() => {
+    if (bookingStep !== 'QR' || !payOSData?.orderCode || isPaymentSuccess) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      checkPayOSStatus(payOSData.orderCode, false);
+    }, 2500);
+
+    return () => clearInterval(intervalId);
+  }, [bookingStep, payOSData?.orderCode, isPaymentSuccess]);
 
   // Cập nhật ma trận lịch sân khi danh sách sân bóng hoặc ngày đá thay đổi
   useEffect(() => {
@@ -463,15 +524,129 @@ export default function HomePage() {
   // C. CÁC HÀM XỬ LÝ SỰ KIỆN TƯƠNG TÁC GIAO DIỆN
   // -------------------------------------------------------------
 
-  // Hàm đóng Modal đặt sân và giải phóng ô đang giữ chỗ Real-time
-  const handleCloseBookingModal = () => {
+  // Hàm sao chép thông tin tài khoản / nội dung
+  const handleCopyText = (text: string, fieldName: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    triggerToast({
+      type: 'info',
+      message: `Đã sao chép ${fieldName} vào bộ nhớ tạm!`,
+    });
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  // Xử lý khi thanh toán MB Bank PayOS thành công
+  const handlePaymentSuccessAction = (info?: any) => {
+    setIsPaymentSuccess(true);
+    setSuccessCountdown(10);
+    triggerToast({
+      type: 'success',
+      message: `🎉 Đã nhận thanh toán từ MB Bank qua PayOS! Đơn đặt sân đã được xác nhận thành công!`,
+    });
+
+    // Tải lại lịch sân và dịch vụ từ SQL Server
+    fetchLichSan(filterNgayDa, sanBongList);
+    fetchDichVu();
+
     if (myLockedSlotId) {
       socketRef.current?.emit('unlock_slot', myLockedSlotId);
       setMyLockedSlotId(null);
     }
+
+    // Đếm ngược 10 giây
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    countdownIntervalRef.current = setInterval(() => {
+      setSuccessCountdown((prev) => {
+        if (prev <= 1) {
+          if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // Tự động đóng modal sau 10 giây (hoặc bấm nút Đóng/X để tắt ngay)
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    successTimerRef.current = setTimeout(() => {
+      handleCloseSuccessModal();
+    }, 10000);
+  };
+
+  // Hàm đóng Modal khi đã thanh toán thành công
+  const handleCloseSuccessModal = () => {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
     setSelectedSlot(null);
     setBookingStep('DURATION');
+    setPayOSData(null);
+    setQrModalAlert(null);
+    setIsPaymentSuccess(false);
   };
+
+  // Kiểm tra trạng thái giao dịch PayOS
+  const checkPayOSStatus = async (orderCode: number, manual: boolean = false) => {
+    if (!orderCode) return;
+    if (manual) {
+      setIsCheckingPayOS(true);
+      setQrModalAlert({
+        type: 'info',
+        title: 'Đang kiểm tra giao dịch với MB Bank...',
+        message: 'Hệ thống đang kết nối trực tiếp với MB Bank và PayOS để đối soát giao dịch.',
+      });
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/thanh-toan/payos/trang-thai/${orderCode}`);
+      const data = await res.json();
+      if (data.success && (data.isPaid || data.status === 'PAID')) {
+        setQrModalAlert(null);
+        handlePaymentSuccessAction(data.data);
+      } else if (manual) {
+        setQrModalAlert({
+          type: 'error',
+          title: 'Chưa Nhận Được Tiền Chuyển Khoản!',
+          message: 'Ngân hàng MB Bank và hệ thống PayOS chưa nhận được tiền từ giao dịch này. Vui lòng mở App Ngân hàng quét mã QR hoặc chuyển khoản chính xác nội dung trước khi bấm kiểm tra lại!',
+        });
+      }
+    } catch (err) {
+      console.error('Lỗi khi kiểm tra PayOS status:', err);
+      if (manual) {
+        setQrModalAlert({
+          type: 'error',
+          title: 'Lỗi Kết Nối Máy Chủ',
+          message: 'Không thể kết nối đến hệ thống thanh toán PayOS. Vui lòng thử lại sau vài giây!',
+        });
+      }
+    } finally {
+      if (manual) setIsCheckingPayOS(false);
+    }
+  };
+
+  // Hàm đóng Modal đặt sân và giải phóng ô đang giữ chỗ Real-time & hủy đơn tạm nếu chưa thanh toán
+  const handleCloseBookingModal = () => {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    if (myLockedSlotId) {
+      socketRef.current?.emit('unlock_slot', myLockedSlotId);
+      setMyLockedSlotId(null);
+    }
+    if (payOSData?.ma_don_dat || payOSData?.orderCode) {
+      fetch(`${API_BASE_URL}/thanh-toan/payos/huy-don-tam`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ma_don_dat: payOSData.ma_don_dat,
+          orderCode: payOSData.orderCode,
+        }),
+      }).catch((e) => console.warn('Lỗi hủy đơn tạm:', e));
+    }
+    setSelectedSlot(null);
+    setBookingStep('DURATION');
+    setPayOSData(null);
+    setQrModalAlert(null);
+    setIsPaymentSuccess(false);
+  };
+
 
   // Lọc danh sách sân theo loại sân, sân cụ thể và từ khóa tìm kiếm
   const filteredSanList = useMemo(() => {
@@ -653,8 +828,8 @@ export default function HomePage() {
     setBookingStep('INFO');
   };
 
-  // Chuyển sang màn hình Quét mã QR thanh toán (Bước 3: QR)
-  const handleProceedToQR = (e: React.FormEvent) => {
+  // Chuyển sang màn hình Quét mã QR thanh toán PayOS VietQR MB Bank (Bước 3: QR)
+  const handleProceedToQR = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSlot) return;
 
@@ -666,8 +841,61 @@ export default function HomePage() {
       return;
     }
 
-    setBookingStep('QR');
+    setIsCreatingPayOS(true);
+    setIsPaymentSuccess(false);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/thanh-toan/payos/tao-link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bookingData: {
+            ma_san: selectedSlot.san.id,
+            ngay_da: filterNgayDa,
+            gio_bat_dau: selectedSlot.slot.start,
+            gio_ket_thuc: selectedSlot.gioKetThuc,
+            tien_san: selectedSlot.giaTien,
+            tong_tien: tongTienDon,
+            ghi_chu: bookingForm.ghi_chu || null,
+            dich_vu_chon: bookingForm.dich_vu_chon || {},
+            ho_ten: bookingForm.ho_ten,
+            so_dien_thoai: bookingForm.so_dien_thoai,
+          },
+          so_tien: soTienThanhToan,
+          loai_thanh_toan: bookingForm.loai_thanh_toan,
+          ho_ten: bookingForm.ho_ten,
+          so_dien_thoai: bookingForm.so_dien_thoai,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.data) {
+        setPayOSData(data.data);
+        setBookingStep('QR');
+        triggerToast({
+          type: 'info',
+          message: 'Đã tạo mã thanh toán VietQR kết nối MB Bank thành công!',
+        });
+      } else {
+        triggerToast({
+          type: 'error',
+          message: data.message || 'Không thể tạo mã VietQR PayOS MB Bank!',
+        });
+      }
+    } catch (err) {
+      console.error('Lỗi khi tạo thanh toán PayOS:', err);
+      triggerToast({
+        type: 'error',
+        message: 'Lỗi kết nối đến máy chủ thanh toán PayOS!',
+      });
+    } finally {
+      setIsCreatingPayOS(false);
+    }
   };
+
 
   // Xử lý gửi đơn đặt sân LƯU TRỰC TIẾP VÀO SQL SERVER (Stored Procedure sp_DatSan)
   const handleConfirmPayment = async () => {
@@ -1144,9 +1372,8 @@ export default function HomePage() {
                 return (
                   <div className="p-6 sm:p-8 space-y-6">
                     {/* Header thông tin sân đã lọc */}
-                    <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg ${
-                      isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
-                    }`}>
+                    <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+                      }`}>
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/25 shrink-0">
                           <Zap className="w-6 h-6" />
@@ -1234,11 +1461,10 @@ export default function HomePage() {
                               ) : (
                                 <button
                                   onClick={() => handleSlotClick(san, slot)}
-                                  className={`w-full h-28 p-3 rounded-2xl border transition-all duration-200 flex flex-col items-center justify-between group shadow-sm hover:scale-[1.03] cursor-pointer ${
-                                    isDarkMode
+                                  className={`w-full h-28 p-3 rounded-2xl border transition-all duration-200 flex flex-col items-center justify-between group shadow-sm hover:scale-[1.03] cursor-pointer ${isDarkMode
                                       ? 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-600/40 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-950/50'
                                       : 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-300 hover:border-emerald-500 hover:shadow-md hover:shadow-emerald-200'
-                                  }`}
+                                    }`}
                                 >
                                   <div className="w-full flex items-center justify-between">
                                     <span className="text-sm font-black text-emerald-400 font-mono group-hover:scale-110 transition-transform">
@@ -2054,105 +2280,330 @@ export default function HomePage() {
                   </button>
                   <button
                     type="submit"
-                    className="w-2/3 py-3.5 rounded-xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    disabled={isCreatingPayOS}
+                    className="w-2/3 py-3.5 rounded-xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    <QrCode className="w-4 h-4" />
-                    <span>TIẾP TỤC ➔ THANH TOÁN ({soTienThanhToan.toLocaleString('vi-VN')} đ)</span>
+                    {isCreatingPayOS ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Đang Khởi Tạo VietQR PayOS...</span>
+                      </>
+                    ) : (
+                      <>
+                        <QrCode className="w-4 h-4" />
+                        <span>TIẾP TỤC ➔ THANH TOÁN ({soTienThanhToan.toLocaleString('vi-VN')} đ)</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
             )}
 
-            {/* Modal Body: BƯỚC 3 - QUÉT MÃ QR VIETQR & LƯU ĐƠN VÀO SQL SERVER */}
+            {/* Modal Body: BƯỚC 3 - QUÉT MÃ QR VIETQR (KẾT NỐI NGÂN HÀNG MB BANK QUA PAYOS) */}
             {bookingStep === 'QR' && (
               <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-                <div className="text-center">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/30 mb-2">
-                    <QrCode className="w-3.5 h-3.5" />
-                    Thanh Toán Tự Động VietQR
-                  </div>
-                  <h3 className={`text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                    Quét mã QR để thanh toán
-                  </h3>
-                  <p className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                    Mở ứng dụng Ngân hàng (Mobile Banking) để quét mã QR chuyển tiền
-                  </p>
-                </div>
+                {isPaymentSuccess ? (
+                  /* MÀN HÌNH CHÚC MỪNG KHI MB BANK XÁC NHẬN GIAO DỊCH THÀNH CÔNG */
+                  <div className="py-6 text-center space-y-5 animate-in zoom-in-95 duration-300 relative">
+                    {/* Nút X ở góc trên bên phải màn hình thành công */}
+                    <button
+                      type="button"
+                      onClick={handleCloseSuccessModal}
+                      className="absolute -top-2 right-0 p-2 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer border border-slate-700 shadow-lg"
+                      title="Đóng cửa sổ ngay"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
 
-                {/* Mã QR VietQR */}
-                <div className="flex flex-col items-center justify-center">
-                  <div className="p-4 bg-white rounded-3xl border-2 border-emerald-500/40 shadow-2xl shadow-emerald-500/10 inline-block">
-                    <img
-                      src={`https://img.vietqr.io/image/mbbank-123456789-compact2.png?amount=${soTienThanhToan}&addInfo=DatSan`}
-                      alt="Mã QR Thanh Toán VietQR"
-                      className="w-56 h-56 sm:w-64 sm:h-64 object-contain rounded-xl"
-                    />
-                  </div>
-                </div>
+                    <div className="w-20 h-20 mx-auto rounded-full bg-emerald-500/20 text-emerald-400 border-2 border-emerald-500/40 flex items-center justify-center shadow-2xl shadow-emerald-500/30 animate-bounce">
+                      <CheckCircle2 className="w-12 h-12" />
+                    </div>
 
-                {/* Thông tin chuyển khoản */}
-                <div className={`p-5 rounded-2xl border space-y-3 text-sm ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                    <span className="text-slate-400">Ngân hàng:</span>
-                    <span className={`text-base font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>MB Bank</span>
-                  </div>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                    <span className="text-slate-400">Chủ tài khoản:</span>
-                    <span className={`text-base font-extrabold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>NGUYEN VAN A</span>
-                  </div>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                    <span className="text-slate-400">Số tài khoản:</span>
-                    <span className="text-base font-extrabold text-emerald-500 tracking-wider">123456789</span>
-                  </div>
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                    <span className="text-slate-400">Số tiền cần thanh toán:</span>
-                    <span className="text-xl font-black text-emerald-500">{soTienThanhToan.toLocaleString('vi-VN')} đ</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Nội dung chuyển khoản:</span>
-                    <span className="text-base font-black px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">DatSan</span>
-                  </div>
-                </div>
+                    <div className="space-y-1">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Giao Dịch MB Bank Thành Công
+                      </div>
+                      <h3 className={`text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        🎉 THANH TOÁN ĐÃ ĐƯỢC XÁC NHẬN!
+                      </h3>
+                      <p className="text-sm text-emerald-400 font-semibold">
+                        Hệ thống đã nhận được {soTienThanhToan.toLocaleString('vi-VN')} đ từ tài khoản MB Bank.
+                      </p>
+                    </div>
 
-                {/* Thông tin tóm tắt đặt sân */}
-                <div className={`p-4 rounded-2xl border text-xs space-y-1.5 ${isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className="flex justify-between"><span className="text-slate-400">Sân & Ngày đá:</span> <span className="font-bold text-slate-200">{selectedSlot.san.ten_san} • {formatDateDMY(filterNgayDa)}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-400">Thời gian:</span> <span className="font-bold text-emerald-400 font-mono">{selectedSlot.slot.start} - {selectedSlot.gioKetThuc} ({selectedSlot.durationMin} phút)</span></div>
-                  <div className="flex justify-between"><span className="text-slate-400">Khách hàng:</span> <span className="font-bold text-slate-200">{bookingForm.ho_ten} - {bookingForm.so_dien_thoai}</span></div>
-                </div>
+                    <div className={`p-4 rounded-2xl border text-xs max-w-md mx-auto space-y-2.5 text-left ${isDarkMode ? 'bg-slate-950/80 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
+                      }`}>
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
+                        <span className="text-slate-400">Mã đơn đặt sân:</span>
+                        <span className="font-mono font-black text-emerald-400 text-sm">#{payOSData?.ma_don_dat || selectedSlot?.san.id}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
+                        <span className="text-slate-400">Mã giao dịch PayOS:</span>
+                        <span className="font-mono font-bold text-slate-200">#{payOSData?.orderCode}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
+                        <span className="text-slate-400">Sân bóng & Khung giờ:</span>
+                        <span className="font-bold text-slate-200">{selectedSlot?.san.ten_san} ({selectedSlot?.slot.start} - {selectedSlot?.gioKetThuc})</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
+                        <span className="text-slate-400">Khách hàng:</span>
+                        <span className="font-bold text-slate-200">{bookingForm.ho_ten} ({bookingForm.so_dien_thoai})</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-400">Số tiền thanh toán:</span>
+                        <span className="font-mono font-black text-emerald-400 text-base">{soTienThanhToan.toLocaleString('vi-VN')} đ</span>
+                      </div>
+                    </div>
 
-                {/* Nút bấm xác nhận */}
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setBookingStep('INFO')}
-                    className={`w-1/3 py-3.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
-                      }`}
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Quay lại</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={handleConfirmPayment}
-                    className="w-2/3 py-3.5 rounded-xl font-black text-sm bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                        <span>Đang Lưu Vào SQL Server...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Tôi đã chuyển khoản thành công</span>
-                      </>
+                    {/* Đếm ngược và các nút hành động */}
+                    <div className="space-y-3 max-w-md mx-auto pt-2">
+                      <div className="text-xs text-slate-400 flex items-center justify-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Tự động đóng sau <strong className="text-emerald-400 font-mono text-sm">{successCountdown}s</strong></span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleCloseSuccessModal();
+                            router.push('/history');
+                          }}
+                          className={`w-1/2 py-3 rounded-xl font-bold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                            }`}
+                        >
+                          <History className="w-4 h-4 text-emerald-400" />
+                          <span>Xem Lịch Sử</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCloseSuccessModal}
+                          className="w-1/2 py-3 rounded-xl font-black text-xs sm:text-sm bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>Đóng Ngay (X)</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* MÀN HÌNH QUÉT MÃ VIETQR & THÔNG TIN CHUYỂN KHOẢN MB BANK */
+                  <div className="space-y-5">
+                    {/* THÔNG BÁO NỔI BẬT TRÊN MODAL KHI CHƯA NHẬN ĐƯỢC TIỀN HOẶC ĐANG KIỂM TRA */}
+                    {qrModalAlert && (
+                      <div
+                        className={`p-4 rounded-2xl border flex items-start gap-3.5 shadow-2xl animate-in slide-in-from-top-3 duration-200 ${qrModalAlert.type === 'error'
+                            ? 'bg-rose-500/20 border-rose-500/60 text-rose-200 shadow-rose-950/40 ring-1 ring-rose-500/40'
+                            : qrModalAlert.type === 'info'
+                              ? 'bg-sky-500/20 border-sky-500/60 text-sky-200 shadow-sky-950/40 ring-1 ring-sky-500/40'
+                              : 'bg-amber-500/20 border-amber-500/60 text-amber-200 shadow-amber-950/40 ring-1 ring-amber-500/40'
+                          }`}
+                      >
+                        <div className="shrink-0 mt-0.5">
+                          {qrModalAlert.type === 'error' ? (
+                            <div className="w-9 h-9 rounded-xl bg-rose-500/30 border border-rose-400/50 flex items-center justify-center text-rose-300 shadow-inner">
+                              <XCircle className="w-5 h-5 animate-pulse" />
+                            </div>
+                          ) : qrModalAlert.type === 'info' ? (
+                            <div className="w-9 h-9 rounded-xl bg-sky-500/30 border border-sky-400/50 flex items-center justify-center text-sky-300 shadow-inner">
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                            </div>
+                          ) : (
+                            <div className="w-9 h-9 rounded-xl bg-amber-500/30 border border-amber-400/50 flex items-center justify-center text-amber-300 shadow-inner">
+                              <AlertCircle className="w-5 h-5" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 space-y-1">
+                          <h4 className="text-sm font-black tracking-wide text-white flex items-center gap-1.5">
+                            {qrModalAlert.title}
+                          </h4>
+                          <p className="text-xs font-medium leading-relaxed opacity-95 text-slate-100">
+                            {qrModalAlert.message}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setQrModalAlert(null)}
+                          className="p-1 rounded-lg hover:bg-white/15 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                          title="Đóng thông báo"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     )}
-                  </button>
-                </div>
+
+                    {/* Header thông báo trạng thái kết nối MB Bank */}
+                    <div className="text-center space-y-1.5">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/30">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                        <span>MB Bank PayOS VietQR • Tự Động Duyệt 3-5 Giây</span>
+                      </div>
+                      <h3 className={`text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        Quét Mã QR MB Bank Để Thanh Toán
+                      </h3>
+                      <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                        Mở App Ngân hàng bất kỳ (MB Bank, Vietcombank, Momo, Techcombank...) để quét mã
+                      </p>
+                    </div>
+
+                    {/* Khối Mã QR VietQR chất lượng cao */}
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="p-3.5 bg-white rounded-3xl border-2 border-emerald-500/40 shadow-2xl shadow-emerald-500/10 inline-block relative group">
+                        <img
+                          src={`https://img.vietqr.io/image/${payOSData?.bin || '970422'}-${payOSData?.accountNumber || 'VQRQAMKSW8778'}-compact2.png?amount=${payOSData?.amount || soTienThanhToan}&addInfo=${encodeURIComponent(payOSData?.description || 'DatSan')}&accountName=${encodeURIComponent(payOSData?.accountName || 'CAO VAN HOT XOAN')}`}
+                          alt="Mã QR VietQR MB Bank"
+                          className="w-56 h-56 sm:w-64 sm:h-64 object-contain rounded-xl"
+                        />
+                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/50 whitespace-nowrap shadow-md">
+                          MB Bank • CAO VAN HOT XOAN
+                        </div>
+                      </div>
+                    </div>
+
+
+                    {/* Bảng thông tin chi tiết chuyển khoản có nút Sao Chép */}
+                    <div className={`p-4 sm:p-5 rounded-2xl border space-y-2.5 text-xs sm:text-sm ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+                      }`}>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
+                        <span className="text-slate-400 flex items-center gap-1.5">
+                          <Building2 className="w-4 h-4 text-emerald-500" /> Ngân hàng:
+                        </span>
+                        <span className={`font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          MB Bank (Ngân hàng TMCP Quân Đội)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
+                        <span className="text-slate-400 flex items-center gap-1.5">
+                          <User className="w-4 h-4 text-emerald-500" /> Chủ tài khoản:
+                        </span>
+                        <span className={`font-black tracking-wide ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {payOSData?.accountName || 'CAO VAN HOT XOAN'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
+                        <span className="text-slate-400">Số tài khoản:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-emerald-500 text-sm sm:text-base tracking-wider">
+                            {payOSData?.accountNumber || 'VQRQAMKSW8778'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(payOSData?.accountNumber || 'VQRQAMKSW8778', 'Số tài khoản')}
+                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                            title="Sao chép số tài khoản"
+                          >
+                            {copiedField === 'Số tài khoản' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
+                        <span className="text-slate-400">Số tiền cần chuyển:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-base sm:text-lg font-black text-emerald-500">
+                            {(payOSData?.amount || soTienThanhToan).toLocaleString('vi-VN')} đ
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(String(payOSData?.amount || soTienThanhToan), 'Số tiền')}
+                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                            title="Sao chép số tiền"
+                          >
+                            {copiedField === 'Số tiền' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Nội dung chuyển khoản:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm sm:text-base font-black px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                            {payOSData?.description || `DS${payOSData?.orderCode || ''}`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText(payOSData?.description || `DS${payOSData?.orderCode || ''}`, 'Nội dung')}
+                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                            title="Sao chép nội dung chuyển khoản"
+                          >
+                            {copiedField === 'Nội dung' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lưu ý quan trọng */}
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-500 dark:text-amber-400 flex items-start gap-2">
+                      <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Lưu ý:</strong> Vui lòng điền <strong>chính xác nội dung chuyển khoản</strong> để MB Bank và PayOS tự động kích hoạt lịch sân của bạn ngay lập tức mà không cần xác nhận thủ công.
+                      </span>
+                    </div>
+
+                    {/* Các nút hành động */}
+                    <div className="pt-2">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (payOSData?.ma_don_dat || payOSData?.orderCode) {
+                              fetch(`${API_BASE_URL}/thanh-toan/payos/huy-don-tam`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  ma_don_dat: payOSData.ma_don_dat,
+                                  orderCode: payOSData.orderCode,
+                                }),
+                              }).catch((e) => console.warn('Lỗi hủy đơn tạm:', e));
+                            }
+                            setPayOSData(null);
+                            setQrModalAlert(null);
+                            setBookingStep('INFO');
+                          }}
+                          className={`w-1/3 py-3.5 rounded-xl font-bold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                            }`}
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                          <span>Quay lại</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isCheckingPayOS}
+                          onClick={() => {
+                            if (payOSData?.orderCode) {
+                              checkPayOSStatus(payOSData.orderCode, true);
+                            } else {
+                              handleConfirmPayment();
+                            }
+                          }}
+                          className="w-2/3 py-3.5 rounded-xl font-black text-xs sm:text-sm bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 hover:from-emerald-400 hover:to-teal-300 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                        >
+                          {isCheckingPayOS ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Đang Kiểm Tra MB Bank...</span>
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="w-4 h-4" />
+                              <span>Tôi Đã Chuyển Tiền • Kiểm Tra Ngay</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                )}
               </div>
             )}
+
 
           </div>
         </div>

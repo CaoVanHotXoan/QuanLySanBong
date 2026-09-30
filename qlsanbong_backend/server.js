@@ -80,6 +80,10 @@ const io = new Server(server, {
     }
 });
 
+// Gán socket.io vào app để các controller (PayOS webhook, đặt sân, thanh toán) có thể emit realtime
+app.set('io', io);
+
+
 /**
  * In-memory Map lưu danh sách các ô slot đang bị giữ chỗ tạm thời
  * Key: slotId (Ví dụ: "2026-09-30_1_16:30" hoặc "1_16:30")

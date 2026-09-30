@@ -223,12 +223,15 @@ export interface VaiTro {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 const getAuthHeaders = () => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
+  const token = typeof window !== 'undefined' 
+    ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '') 
+    : '';
   return {
     'Content-Type': 'application/json',
-    Authorization: token ? `Bearer ${token}` : ''
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
   };
 };
+
 
 // =====================================================================
 // 2. DỮ LIỆU BAN ĐẦU (SEED DATA CHO 11 BẢNG)
@@ -946,6 +949,37 @@ export default function AdminDashboard() {
       setToastMessage({ type: 'error', message: 'Vui lòng nhập tên loại sân!' });
       return;
     }
+
+    try {
+      if (loaiSanModal.mode === 'ADD') {
+        const res = await fetch(`${API_BASE}/dat-san/loai-san`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ ten_loai, mo_ta: mo_ta || '' })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setToastMessage({ type: 'success', message: `✅ Đã thêm loại sân [${ten_loai}] thành công!` });
+          loadAllDataFromBackend();
+          setLoaiSanModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        }
+      } else {
+        const res = await fetch(`${API_BASE}/dat-san/loai-san/${id}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ ten_loai, mo_ta: mo_ta || '' })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setToastMessage({ type: 'success', message: `✅ Đã cập nhật loại sân [${ten_loai}]!` });
+          loadAllDataFromBackend();
+          setLoaiSanModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        }
+      }
+    } catch (err) {}
+
     if (loaiSanModal.mode === 'ADD') {
       const newId = Math.max(...categoryList.map(l => l.id), 0) + 1;
       setCategoryList([...categoryList, { id: newId, ten_loai, mo_ta: mo_ta || '' }]);
@@ -962,7 +996,23 @@ export default function AdminDashboard() {
       'Xóa Loại Sân',
       'Bạn có chắc chắn muốn xóa loại sân này?',
       `🏟️ Loại sân: ${tenLoai || `ID #${id}`}`,
-      () => {
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dat-san/loai-san/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã xóa loại sân!' });
+            loadAllDataFromBackend();
+            return;
+          } else {
+            setToastMessage({ type: 'error', message: data.message || 'Không thể xóa loại sân này!' });
+            return;
+          }
+        } catch (err) {}
+
         setCategoryList((prev) => prev.filter(l => l.id !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa loại sân!' });
       }
@@ -1024,12 +1074,26 @@ export default function AdminDashboard() {
       'Xóa Mặt Hàng Dịch Vụ',
       'Bạn có chắc chắn muốn xóa mặt hàng dịch vụ này?',
       `🥤 Dịch vụ: ${tenDichVu || `ID #${id}`}`,
-      () => {
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dich-vu/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã xóa dịch vụ!' });
+            loadAllDataFromBackend();
+            return;
+          }
+        } catch (err) {}
+
         setServiceList((prev) => prev.filter(s => s.id !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa dịch vụ!' });
       }
     );
   };
+
 
   // 6. Nhập Kho Dịch Vụ (Phieu_Nhap_Kho)
   const handleSaveImportStock = async (e: React.FormEvent) => {
@@ -1078,7 +1142,20 @@ export default function AdminDashboard() {
       'Xóa Phiếu Nhập Kho',
       'Bạn có chắc chắn muốn xóa phiếu nhập kho này?',
       `📦 Phiếu nhập: #${id} ${tenDichVu ? `(${tenDichVu})` : ''}`,
-      () => {
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dich-vu/phieu-nhap/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã xóa phiếu nhập kho!' });
+            loadAllDataFromBackend();
+            return;
+          }
+        } catch (err) {}
+
         setInventoryList((prev) => prev.filter(p => p.id !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa phiếu nhập kho!' });
       }
@@ -1240,7 +1317,23 @@ export default function AdminDashboard() {
       'Xóa Vai Trò Phân Quyền',
       'Bạn có chắc chắn muốn xóa vai trò này khỏi hệ thống?',
       `🛡️ Vai trò: ${roleName || `ID #${id}`}`,
-      () => {
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/auth/vai-tro/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã xóa vai trò!' });
+            loadAllDataFromBackend();
+            return;
+          } else {
+            setToastMessage({ type: 'error', message: data.message || 'Không thể xóa vai trò này!' });
+            return;
+          }
+        } catch (err) {}
+
         setRoleList((prev) => prev.filter(r => r.MaVaiTro !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa vai trò!' });
       }

@@ -256,6 +256,63 @@ const layDanhSachChiTietDichVu = async (req, res) => {
     }
 };
 
+/**
+ * 9. Sửa phiếu nhập kho (Phieu_Nhap_Kho)
+ * Method: PUT /api/dich-vu/phieu-nhap/:id
+ * Procedure: sp_SuaPhieuNhapKho
+ */
+const suaPhieuNhapKho = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { so_luong_nhap, gia_nhap } = req.body;
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .input('so_luong_nhap', sql.Int, parseInt(so_luong_nhap, 10))
+            .input('gia_nhap', sql.Decimal(10, 2), parseFloat(gia_nhap))
+            .execute('sp_SuaPhieuNhapKho');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật phiếu nhập kho thành công!',
+            data: result.recordset[0]
+        });
+    } catch (error) {
+        console.error('Lỗi sp_SuaPhieuNhapKho:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi sửa phiếu nhập kho'
+        });
+    }
+};
+
+/**
+ * 10. Xóa phiếu nhập kho (Phieu_Nhap_Kho)
+ * Method: DELETE /api/dich-vu/phieu-nhap/:id
+ * Procedure: sp_XoaPhieuNhapKho
+ */
+const xoaPhieuNhapKho = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await poolPromise;
+        await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .execute('sp_XoaPhieuNhapKho');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Xóa phiếu nhập kho thành công!'
+        });
+    } catch (error) {
+        console.error('Lỗi sp_XoaPhieuNhapKho:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xóa phiếu nhập kho'
+        });
+    }
+};
+
 module.exports = {
     layDanhSachDichVu,
     themDichVu,
@@ -264,5 +321,8 @@ module.exports = {
     themDichVuVaoDon,
     nhapKhoDichVu,
     layDanhSachPhieuNhapKho,
-    layDanhSachChiTietDichVu
+    layDanhSachChiTietDichVu,
+    suaPhieuNhapKho,
+    xoaPhieuNhapKho
 };
+

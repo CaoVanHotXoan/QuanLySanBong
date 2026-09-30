@@ -516,6 +516,32 @@ const suaVaiTro = async (req, res) => {
     }
 };
 
+/**
+ * 10. Xóa vai trò
+ * Method: DELETE /api/auth/vai-tro/:id
+ * Procedure: sp_XoaVaiTro
+ */
+const xoaVaiTro = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await poolPromise;
+        await pool.request()
+            .input('MaVaiTro', sql.Int, parseInt(id, 10))
+            .execute('sp_XoaVaiTro');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Xóa vai trò thành công!'
+        });
+    } catch (error) {
+        console.error('Lỗi sp_XoaVaiTro:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xóa vai trò'
+        });
+    }
+};
+
 module.exports = {
     dangKy,
     dangNhap,
@@ -525,5 +551,7 @@ module.exports = {
     xoaNguoiDung,
     layDanhSachVaiTro,
     themVaiTro,
-    suaVaiTro
+    suaVaiTro,
+    xoaVaiTro
 };
+
