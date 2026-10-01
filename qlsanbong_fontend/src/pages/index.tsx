@@ -41,7 +41,8 @@ import {
   ExternalLink,
   Loader2,
   Building2,
-  Sparkles
+  Sparkles,
+  LandPlot
 } from 'lucide-react';
 import Login, { AuthUser } from './Login/login';
 import Profile from '../profile/profile';
@@ -1121,6 +1122,32 @@ export default function HomePage() {
                           Vai trò: {currentUser.vai_tro || 'Khách hàng'}
                         </span>
                       </div>
+
+                      {/* Nút đi tới Management System cho Nhân viên & Admin */}
+                      {Boolean(
+                        currentUser.vai_tro &&
+                        ['ADMIN', 'NHAN_VIEN', 'NHANVIEN', 'QUAN_TRI_VIEN'].includes(currentUser.vai_tro.trim().toUpperCase().replace(/\s+/g, '_')) ||
+                        (currentUser.vai_tro || '').toLowerCase().includes('nhân viên') ||
+                        (currentUser.vai_tro || '').toLowerCase().includes('nhan vien') ||
+                        (currentUser.vai_tro || '').toLowerCase().includes('admin')
+                      ) && (
+                        <a
+                          href="/Management System/management system"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setUserDropdownOpen(false);
+                            router.push('/Management System/management system');
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold rounded-xl transition-all text-left cursor-pointer mb-1 ${
+                            isDarkMode 
+                              ? 'text-emerald-300 hover:text-white hover:bg-emerald-900/50 bg-emerald-950/40 border border-emerald-500/30 shadow-sm' 
+                              : 'text-emerald-700 hover:text-emerald-950 hover:bg-emerald-100 bg-emerald-50/90 border border-emerald-300/80 shadow-sm'
+                          }`}
+                        >
+                          <LandPlot className="w-4 h-4 text-emerald-500 shrink-0" />
+                          <span className="truncate font-bold">⚡ Quản Lý Sân (Management System)</span>
+                        </a>
+                      )}
 
                       {/* Nút đi tới Dashboard cho Admin trong Dropdown */}
                       {(currentUser.vai_tro || '').toUpperCase() === 'ADMIN' && (
