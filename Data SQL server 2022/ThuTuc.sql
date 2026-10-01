@@ -108,7 +108,7 @@ BEGIN
         tien_san DECIMAL(10, 2) NOT NULL,
         tong_tien DECIMAL(10, 2) NOT NULL,
         phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'CHUYEN_KHOAN')) NOT NULL DEFAULT 'CHUYEN_KHOAN',
-        ghi_chu NVARCHAR(255) NULL,
+        ghi_chu NVARCHAR(MAX) NULL,
         trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_THANH_TOAN', 'CHO_XAC_NHAN', 'DA_COC', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY', 'DA_CHOT')) DEFAULT 'DA_COC',
         ngay_tao DATETIME DEFAULT GETDATE(),
         FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
@@ -138,7 +138,7 @@ GO
 
 IF OBJECT_ID('Don_Dat_San', 'U') IS NOT NULL AND COL_LENGTH('Don_Dat_San', 'ghi_chu') IS NULL
 BEGIN
-    ALTER TABLE Don_Dat_San ADD ghi_chu NVARCHAR(255) NULL;
+    ALTER TABLE Don_Dat_San ADD ghi_chu NVARCHAR(MAX) NULL;
 END;
 GO
 
@@ -845,6 +845,101 @@ BEGIN
 END;
 GO
 
+-- Cập nhật số lượng / Thêm / Xóa dịch vụ trong đơn đặt sân (Đồng bộ kho & tính lại tổng tiền)
+CREATE OR ALTER PROCEDURE sp_CapNhatDichVuDonDat
+    @ma_don_dat INT,
+    @ma_dich_vu INT,
+    @so_luong_moi INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Don_Dat_San WHERE id = @ma_don_dat AND trang_thai <> 'DA_HUY')
+        BEGIN
+            ;THROW 50030, N'Đơn đặt sân không tồn tại hoặc đã bị hủy.', 1;
+        END;
+
+        DECLARE @don_gia DECIMAL(10, 2);
+        DECLARE @ton_kho_hien_tai INT;
+        SELECT @don_gia = don_gia, @ton_kho_hien_tai = ton_kho
+        FROM Dich_Vu
+        WHERE id = @ma_dich_vu;
+
+        IF @don_gia IS NULL
+        BEGIN
+            ;THROW 50032, N'Dịch vụ không tồn tại.', 1;
+        END;
+
+        DECLARE @so_luong_cu INT = 0;
+        SELECT @so_luong_cu = ISNULL(so_luong, 0)
+        FROM Chi_Tiet_Dich_Vu
+        WHERE ma_don_dat = @ma_don_dat AND ma_dich_vu = @ma_dich_vu;
+
+        DECLARE @chenh_lech INT = @so_luong_moi - @so_luong_cu;
+
+        IF @chenh_lech > 0
+        BEGIN
+            IF @ton_kho_hien_tai < @chenh_lech
+            BEGIN
+                ;THROW 50033, N'Số lượng tồn kho không đủ để thêm dịch vụ này.', 1;
+            END;
+            UPDATE Dich_Vu SET ton_kho = ton_kho - @chenh_lech WHERE id = @ma_dich_vu;
+        END
+        ELSE IF @chenh_lech < 0
+        BEGIN
+            -- Hoàn lại tồn kho khi giảm hoặc xóa
+            UPDATE Dich_Vu SET ton_kho = ton_kho + ABS(@chenh_lech) WHERE id = @ma_dich_vu;
+        END;
+
+        IF @so_luong_moi <= 0
+        BEGIN
+            DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat = @ma_don_dat AND ma_dich_vu = @ma_dich_vu;
+        END
+        ELSE
+        BEGIN
+            IF @so_luong_cu > 0
+            BEGIN
+                UPDATE Chi_Tiet_Dich_Vu
+                SET so_luong = @so_luong_moi,
+                    tongtien_dichvu = @so_luong_moi * @don_gia
+                WHERE ma_don_dat = @ma_don_dat AND ma_dich_vu = @ma_dich_vu;
+            END
+            ELSE
+            BEGIN
+                INSERT INTO Chi_Tiet_Dich_Vu (ma_don_dat, ma_dich_vu, so_luong, tongtien_dichvu)
+                VALUES (@ma_don_dat, @ma_dich_vu, @so_luong_moi, @so_luong_moi * @don_gia);
+            END;
+        END;
+
+        -- Cập nhật lại tổng tiền đơn đặt sân
+        DECLARE @tong_tien_dv DECIMAL(10, 2) = 0;
+        SELECT @tong_tien_dv = ISNULL(SUM(tongtien_dichvu), 0)
+        FROM Chi_Tiet_Dich_Vu
+        WHERE ma_don_dat = @ma_don_dat;
+
+        UPDATE Don_Dat_San
+        SET tong_tien = tien_san + @tong_tien_dv
+        WHERE id = @ma_don_dat;
+
+        COMMIT TRANSACTION;
+
+        SELECT 
+            @ma_don_dat AS ma_don_dat,
+            @ma_dich_vu AS ma_dich_vu,
+            @so_luong_moi AS so_luong,
+            @tong_tien_dv AS tong_tien_dich_vu;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 
+        BEGIN
+            ROLLBACK TRANSACTION;
+        END;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
 -- Nhập kho dịch vụ
 CREATE OR ALTER PROCEDURE sp_NhapKhoDichVu
     @ma_dich_vu INT,
@@ -970,7 +1065,7 @@ BEGIN
 END;
 GO
 
--- Lấy lịch sử đặt sân của khách hàng (Chỉ lấy các đơn đã cọc hoặc đã thanh toán thành công)
+-- Lấy lịch sử đặt sân của khách hàng (Đầy đủ tiền cọc, tiền đã nhận, tiền còn thiếu)
 CREATE OR ALTER PROCEDURE sp_LayLichSuDatSan
     @ma_nguoi_dung INT = NULL,
     @so_dien_thoai VARCHAR(20) = NULL,
@@ -995,13 +1090,46 @@ BEGIN
             d.trang_thai,
             d.ngay_tao,
             nd.ho_ten AS ten_khach_hang,
-            nd.so_dien_thoai AS sdt_khach_hang
+            nd.so_dien_thoai AS sdt_khach_hang,
+            ISNULL((
+                SELECT SUM(tt.so_tien) 
+                FROM Thanh_Toan tt 
+                WHERE tt.ma_don_dat = d.id AND tt.loai_thanh_toan = 'DAT_COC' AND tt.trang_thai_gd = 'THANH_CONG'
+            ), ROUND(d.tong_tien * 0.3, 0)) AS tien_coc,
+            ISNULL((
+                SELECT SUM(tt.so_tien) 
+                FROM Thanh_Toan tt 
+                WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd = 'THANH_CONG'
+            ), CASE 
+                WHEN d.trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH') THEN d.tong_tien 
+                WHEN d.trang_thai = 'DA_COC' THEN ROUND(d.tong_tien * 0.3, 0)
+                ELSE 0 
+            END) AS tien_da_nhan,
+            CASE 
+                WHEN (d.tong_tien - ISNULL((
+                    SELECT SUM(tt.so_tien) 
+                    FROM Thanh_Toan tt 
+                    WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd = 'THANH_CONG'
+                ), CASE 
+                    WHEN d.trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH') THEN d.tong_tien 
+                    WHEN d.trang_thai = 'DA_COC' THEN ROUND(d.tong_tien * 0.3, 0)
+                    ELSE 0 
+                END)) < 0 THEN 0
+                ELSE (d.tong_tien - ISNULL((
+                    SELECT SUM(tt.so_tien) 
+                    FROM Thanh_Toan tt 
+                    WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd = 'THANH_CONG'
+                ), CASE 
+                    WHEN d.trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH') THEN d.tong_tien 
+                    WHEN d.trang_thai = 'DA_COC' THEN ROUND(d.tong_tien * 0.3, 0)
+                    ELSE 0 
+                END))
+            END AS tien_thieu
         FROM Don_Dat_San d
         LEFT JOIN San_Bong sb ON d.ma_san = sb.id
         LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
         LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
-        WHERE d.trang_thai IN ('DA_COC', 'DA_THANH_TOAN', 'HOAN_THANH', 'DA_CHOT')
-          AND (@ma_nguoi_dung IS NULL OR d.ma_nguoi_dung = @ma_nguoi_dung)
+        WHERE (@ma_nguoi_dung IS NULL OR d.ma_nguoi_dung = @ma_nguoi_dung)
           AND (@so_dien_thoai IS NULL OR nd.so_dien_thoai = @so_dien_thoai)
           AND (@email IS NULL OR nd.email = @email)
         ORDER BY d.id DESC;
@@ -1009,6 +1137,25 @@ BEGIN
     BEGIN CATCH
         ;THROW;
     END CATCH;
+END;
+GO
+
+-- Lấy danh sách chi tiết dịch vụ theo đơn đặt sân (hoặc toàn bộ)
+CREATE OR ALTER PROCEDURE sp_LayChiTietDichVuDonDat
+    @ma_don_dat INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        ct.ma_don_dat,
+        ct.ma_dich_vu,
+        dv.ten_dich_vu,
+        ct.so_luong,
+        dv.don_gia,
+        ct.tongtien_dichvu
+    FROM Chi_Tiet_Dich_Vu ct
+    JOIN Dich_Vu dv ON ct.ma_dich_vu = dv.id
+    WHERE (@ma_don_dat IS NULL OR ct.ma_don_dat = @ma_don_dat);
 END;
 GO
 
@@ -1023,7 +1170,7 @@ CREATE OR ALTER PROCEDURE sp_DatSan
     @tong_tien DECIMAL(10, 2) = NULL,
     @phuong_thuc VARCHAR(20) = 'CHUYEN_KHOAN',
     @trang_thai VARCHAR(20) = 'DA_COC',
-    @ghi_chu NVARCHAR(255) = NULL
+    @ghi_chu NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1926,7 +2073,7 @@ CREATE OR ALTER PROCEDURE sp_ThemDonDatVaThanhToan
     @tong_tien DECIMAL(10, 2) = NULL,
     @phuong_thuc VARCHAR(20) = 'CHUYEN_KHOAN',
     @trang_thai VARCHAR(20) = 'DA_COC',
-    @ghi_chu NVARCHAR(255) = NULL,
+    @ghi_chu NVARCHAR(MAX) = NULL,
     @loai_thanh_toan VARCHAR(20) = NULL,
     @so_tien DECIMAL(10, 2) = NULL,
     @trang_thai_gd VARCHAR(20) = 'THANH_CONG'
@@ -1991,7 +2138,7 @@ CREATE OR ALTER PROCEDURE sp_SuaDonDatVaThanhToan
     @tong_tien DECIMAL(10, 2) = NULL,
     @phuong_thuc VARCHAR(20) = 'CHUYEN_KHOAN',
     @trang_thai VARCHAR(20) = 'DA_COC',
-    @ghi_chu NVARCHAR(255) = NULL,
+    @ghi_chu NVARCHAR(MAX) = NULL,
     @loai_thanh_toan VARCHAR(20) = NULL,
     @so_tien DECIMAL(10, 2) = NULL,
     @trang_thai_gd VARCHAR(20) = 'THANH_CONG'

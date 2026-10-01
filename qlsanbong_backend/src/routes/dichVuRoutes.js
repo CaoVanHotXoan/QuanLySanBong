@@ -30,6 +30,9 @@ router.get('/chi-tiet-ban-hang', dichVuController.layDanhSachChiTietDichVu);
 // Bán/Thêm dịch vụ vào đơn đặt sân
 router.post('/them-vao-don', dichVuController.themDichVuVaoDon);
 
+// Cập nhật số lượng / Thêm / Xóa dịch vụ trong đơn đặt sân
+router.post('/cap-nhat-don', dichVuController.capNhatDichVuDon);
+
 // Thêm mới dịch vụ
 router.post('/', dichVuController.themDichVu);
 

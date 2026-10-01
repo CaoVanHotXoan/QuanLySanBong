@@ -19,6 +19,7 @@ const datSanRoutes = require('./src/routes/datSanRoutes');
 const dichVuRoutes = require('./src/routes/dichVuRoutes');
 const thanhToanRoutes = require('./src/routes/thanhToanRoutes');
 const baoCaoRoutes = require('./src/routes/baoCaoRoutes');
+const uploadRoutes = require('./src/routes/uploadRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -39,7 +40,8 @@ app.get('/', (req, res) => {
             dat_san: '/api/dat-san',
             dich_vu: '/api/dich-vu',
             thanh_toan: '/api/thanh-toan',
-            bao_cao: '/api/bao-cao'
+            bao_cao: '/api/bao-cao',
+            upload: '/api/upload'
         }
     });
 });
@@ -50,6 +52,7 @@ app.use('/api/dat-san', datSanRoutes);
 app.use('/api/dich-vu', dichVuRoutes);
 app.use('/api/thanh-toan', thanhToanRoutes);
 app.use('/api/bao-cao', baoCaoRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Middleware xử lý 404 - Không tìm thấy Endpoint
 app.use((req, res, next) => {

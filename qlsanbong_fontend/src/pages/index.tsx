@@ -192,6 +192,25 @@ function formatDateDMY(dateStr: string): string {
   return dateStr;
 }
 
+// Icon quả bóng đá màu đen trắng chuẩn
+function SoccerBallIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="9.5" fill="#FFFFFF" stroke="#0F172A" strokeWidth="1.5" />
+      <polygon points="12,7.5 15.5,10 14.2,14 9.8,14 8.5,10" fill="#0F172A" stroke="#0F172A" strokeWidth="0.5" />
+      <line x1="12" y1="7.5" x2="12" y2="2.5" stroke="#0F172A" strokeWidth="1.3" />
+      <line x1="15.5" y1="10" x2="20.5" y2="8" stroke="#0F172A" strokeWidth="1.3" />
+      <line x1="14.2" y1="14" x2="18" y2="19" stroke="#0F172A" strokeWidth="1.3" />
+      <line x1="9.8" y1="14" x2="6" y2="19" stroke="#0F172A" strokeWidth="1.3" />
+      <line x1="8.5" y1="10" x2="3.5" y2="8" stroke="#0F172A" strokeWidth="1.3" />
+      <path d="M9.5 2.8C10.3 2.6 11.1 2.5 12 2.5C12.9 2.5 13.7 2.6 14.5 2.8L13.8 5.5L10.2 5.5L9.5 2.8Z" fill="#0F172A" />
+      <path d="M21.2 9.5C21.4 10.3 21.5 11.1 21.5 12C21.5 12.8 21.4 13.5 21.2 14.3L18.5 13L18.5 11L21.2 9.5Z" fill="#0F172A" />
+      <path d="M2.8 9.5L5.5 11L5.5 13L2.8 14.3C2.6 13.5 2.5 12.8 2.5 12C2.5 11.1 2.6 10.3 2.8 9.5Z" fill="#0F172A" />
+      <path d="M14.5 21.2C13.7 21.4 12.9 21.5 12 21.5C11.1 21.5 10.3 21.4 9.5 21.2L10.2 18.5L13.8 18.5L14.5 21.2Z" fill="#0F172A" />
+    </svg>
+  );
+}
+
 // =====================================================================
 // 2. COMPONENT TRANG CHỦ CHÍNH (HOMEPAGE COMPONENT)
 // =====================================================================
@@ -288,11 +307,8 @@ export default function HomePage() {
   const [qrModalAlert, setQrModalAlert] = useState<{ type: 'error' | 'warning' | 'info'; title: string; message: string } | null>(null);
 
 
-  // Hàm hiển thị Toast: Khi là Admin thì không cần hiện thông báo theo yêu cầu
+  // Hàm hiển thị Toast thông báo trạng thái
   const triggerToast = (toast: { type: 'success' | 'error' | 'info'; message: string }) => {
-    if (currentUser && (currentUser.vai_tro || '').toUpperCase() === 'ADMIN') {
-      return;
-    }
     setToastMessage(toast);
   };
 
@@ -303,6 +319,16 @@ export default function HomePage() {
       return () => clearTimeout(timer);
     }
   }, [toastMessage]);
+
+  // Tự động đóng thông báo trong Modal VietQR sau 6 giây
+  useEffect(() => {
+    if (qrModalAlert) {
+      const timer = setTimeout(() => {
+        setQrModalAlert(null);
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [qrModalAlert]);
 
   // Khôi phục thông tin người dùng từ localStorage khi tải trang
   useEffect(() => {
@@ -606,7 +632,7 @@ export default function HomePage() {
         setQrModalAlert({
           type: 'error',
           title: 'Chưa Nhận Được Tiền Chuyển Khoản!',
-          message: 'Ngân hàng MB Bank và hệ thống PayOS chưa nhận được tiền từ giao dịch này. Vui lòng mở App Ngân hàng quét mã QR hoặc chuyển khoản chính xác nội dung trước khi bấm kiểm tra lại!',
+          message: 'Soccer 247 chưa nhận được tiền chuyển khoản! Quý khách vui lòng quét mã chuyển tiền hoặc thử lại sau vài giây.',
         });
       }
     } catch (err) {
@@ -665,12 +691,43 @@ export default function HomePage() {
     return list;
   }, [sanBongList, filterLoaiSan, filterSanId, searchCourtName]);
 
-  // Lọc danh sách khung giờ hiển thị trên ma trận
+  // Kiểm tra khung giờ đã trôi qua so với thời gian hiện tại
+  const isSlotInThePast = useCallback((slotStart: string) => {
+    if (!filterNgayDa) return false;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const currentDate = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${currentYear}-${currentMonth}-${currentDate}`;
+
+    // 1. Ngày đã chọn trước ngày hôm nay -> Tất cả các giờ đều đã qua
+    if (filterNgayDa < todayStr) {
+      return true;
+    }
+
+    // 2. Ngày đã chọn sau ngày hôm nay -> Chưa qua giờ nào
+    if (filterNgayDa > todayStr) {
+      return false;
+    }
+
+    // 3. Ngày đã chọn là HÔM NAY -> So sánh giờ bắt đầu với giờ hiện tại
+    const [slotH, slotM] = slotStart.split(':').map(Number);
+    const currentH = now.getHours();
+    const currentM = now.getMinutes();
+
+    if (slotH < currentH) return true;
+    if (slotH === currentH && (slotM !== undefined ? slotM : 0) <= currentM) return true;
+
+    return false;
+  }, [filterNgayDa]);
+
+  // Lọc danh sách khung giờ hiển thị trên ma trận (Ẩn hoàn toàn các khung giờ đã trôi qua)
   const filteredTimeSlots = useMemo(() => {
-    const slots = timeSlotsList.length > 0 ? timeSlotsList : DEFAULT_TIME_SLOTS;
-    if (filterKhungGio === 'ALL') return slots;
-    return slots.filter((s) => s.start === filterKhungGio);
-  }, [filterKhungGio, timeSlotsList]);
+    const rawSlots = timeSlotsList.length > 0 ? timeSlotsList : DEFAULT_TIME_SLOTS;
+    const activeSlots = rawSlots.filter((s) => !isSlotInThePast(s.start));
+    if (filterKhungGio === 'ALL') return activeSlots;
+    return activeSlots.filter((s) => s.start === filterKhungGio);
+  }, [filterKhungGio, timeSlotsList, isSlotInThePast]);
 
   // Kiểm tra xung đột thời lượng đặt (60p, 90p, 120p) với các đơn đặt đã có trong CSDL
   const checkConflictForSan = useCallback((sanId: number, start: string, durationMin: number) => {
@@ -700,7 +757,16 @@ export default function HomePage() {
 
   // Mở Modal đặt sân khi click vào ô Slot Sân Trống (Kèm Khóa Real-time)
   const handleSlotClick = (san: SanBong, slot: { start: string; end: string; label: string }) => {
-    // 0. Kiểm tra nếu người dùng chưa đăng nhập -> Tự động bật Modal Đăng Nhập
+    // 0. Kiểm tra nếu khung giờ đã trôi qua -> Không cho chọn
+    if (isSlotInThePast(slot.start)) {
+      triggerToast({
+        type: 'error',
+        message: `Khung giờ ${slot.label} ngày hôm nay đã trôi qua. Vui lòng chọn khung giờ khác!`,
+      });
+      return;
+    }
+
+    // 0.1 Kiểm tra nếu người dùng chưa đăng nhập -> Tự động bật Modal Đăng Nhập
     if (!currentUser) {
       triggerToast({
         type: 'info',
@@ -1034,8 +1100,8 @@ export default function HomePage() {
 
             {/* Logo Thương Hiệu Bên Trái */}
             <a href="#" className="flex items-center gap-3 group shrink-0">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
-                <Activity className="w-5 h-5 text-slate-950 stroke-[2.5]" />
+              <div className="w-10 h-10 rounded-2xl bg-white border border-slate-200 dark:border-slate-800 flex items-center justify-center shadow-lg shadow-emerald-500/10 group-hover:scale-105 transition-transform overflow-hidden">
+                <SoccerBallIcon className="w-6 h-6" />
               </div>
               <div className="hidden sm:block">
                 <div className="flex items-center gap-1">
@@ -1106,7 +1172,6 @@ export default function HomePage() {
                     </div>
                     <div className="text-left hidden xl:block">
                       <p className={`text-xs font-semibold leading-tight ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{currentUser.ho_ten}</p>
-                      <p className="text-[10px] text-emerald-500 font-mono leading-none">{currentUser.vai_tro || 'Khách hàng'}</p>
                     </div>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
                   </button>
@@ -1115,12 +1180,9 @@ export default function HomePage() {
                   {userDropdownOpen && (
                     <div className={`absolute right-0 mt-3 w-60 rounded-2xl border shadow-2xl p-2 z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
                       }`}>
-                      <div className={`px-3 py-2.5 border-b mb-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                        <p className="text-[11px] text-slate-400">Đã đăng nhập email CSDL:</p>
+                      <div className={`px-3 py-2 border-b mb-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                        <p className="text-[11px] text-slate-400">Tài khoản:</p>
                         <p className="text-xs font-bold text-emerald-500 truncate">{currentUser.email}</p>
-                        <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                          Vai trò: {currentUser.vai_tro || 'Khách hàng'}
-                        </span>
                       </div>
 
                       {/* Nút đi tới Management System cho Nhân viên & Admin */}
@@ -1247,13 +1309,6 @@ export default function HomePage() {
                 📅 Lịch sân theo giờ
               </a>
               <a
-                href="#dich-vu"
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-900/80' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-200'
-                  }`}
-              >
-                🥤 Dịch vụ tại sân
-              </a>
-              <a
                 href="#chinh-sach-lien-he"
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-900/80' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-200'
                   }`}
@@ -1266,11 +1321,7 @@ export default function HomePage() {
             <div className="hidden md:flex items-center gap-4 text-[11px] font-semibold text-slate-400 shrink-0">
               <span className={`flex items-center gap-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                 <Phone className="w-3.5 h-3.5 text-emerald-500" />
-                Hotline Đặt Sân: <strong className="text-emerald-500 font-mono">0909.123.456</strong>
-              </span>
-              <span className={isDarkMode ? 'text-slate-700' : 'text-slate-300'}>|</span>
-              <span className="flex items-center gap-1 text-amber-500 font-bold">
-                🔥 Giờ Vàng: 16h30 - 21h00
+                Hotline Đặt Sân: <strong className="text-emerald-500 font-mono">0816344504</strong>
               </span>
             </div>
 
@@ -1304,13 +1355,13 @@ export default function HomePage() {
         </section>
 
         {/* =====================================================================
-            3. MA TRẬN LỊCH SÂN THEO THỜI GIAN THỰC (CUỘN NGANG)
+            3. LỊCH SÂN THEO THỜI GIAN (CUỘN NGANG)
             ===================================================================== */}
         <section id="ma-tran-lich-san" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
             <div>
               <h2 className={`text-2xl sm:text-4xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                Ma Trận Lịch Sân Theo Thời Gian Thực
+                Lịch Sân Theo Thời Gian
               </h2>
               <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 Bấm vào các ô màu xanh lá để chọn thời lượng (1 tiếng, 1 tiếng 30 phút, 2 tiếng) và thanh toán đặt sân.
@@ -1322,15 +1373,15 @@ export default function HomePage() {
               }`}>
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-300">
                 <span className="w-3 h-3 rounded-md bg-emerald-500 shadow-sm shadow-emerald-500/50" />
-                <span>Sân Trống (Click Đặt)</span>
+                <span>Sân Trống</span>
               </div>
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-gray-500/10 border border-gray-500/40 text-gray-400">
                 <span className="w-3 h-3 rounded-md bg-gray-500 shadow-sm shadow-gray-500/50 animate-pulse" />
-                <span>Đang Giữ Chỗ (Realtime)</span>
+                <span>Đang Giữ Chỗ</span>
               </div>
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/40 text-rose-600 dark:text-rose-300">
                 <span className="w-3 h-3 rounded-md bg-rose-500 shadow-sm shadow-rose-500/50" />
-                <span>Đã Đặt / Kín Sân</span>
+                <span>Đã Đặt</span>
               </div>
             </div>
           </div>
@@ -1339,13 +1390,6 @@ export default function HomePage() {
           <div className={`mb-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 p-4 rounded-2xl border shadow-lg backdrop-blur-md relative z-30 ${isDarkMode ? 'bg-slate-900/80 border-slate-800 shadow-slate-950/40' : 'bg-white border-slate-200 shadow-slate-200/50'
             }`}>
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className={`text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                  Xem Lịch Ngày:
-                </span>
-              </div>
-
               {/* NÚT LỌC SÂN BÓNG (HIỂN THỊ LỊCH SÂN ĐÓ) */}
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${isDarkMode
                 ? 'bg-slate-950/90 border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500'
@@ -1366,7 +1410,7 @@ export default function HomePage() {
                   </option>
                   {sanBongList.map((san) => (
                     <option key={san.id} value={san.id} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
-                      {san.ten_san} ({san.ten_loai || 'Sân'})
+                      {san.ten_san}
                     </option>
                   ))}
                 </select>
@@ -1406,11 +1450,8 @@ export default function HomePage() {
                           <Zap className="w-6 h-6" />
                         </div>
                         <div>
-                          <div className="flex flex-wrap items-center gap-2">
+                          <div>
                             <h3 className={`text-xl sm:text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{san.ten_san}</h3>
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                              {san.ten_loai || 'Sân bóng'}
-                            </span>
                           </div>
                           <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2 sm:gap-3">
                             <span>Ngày xem: <strong className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}>{formatDateDMY(filterNgayDa)}</strong></span>
@@ -1432,92 +1473,140 @@ export default function HomePage() {
                         <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                           <Clock className="w-4 h-4" /> Danh Sách Khung Giờ (Bấm ô xanh để chọn giờ)
                         </h4>
-                        <span className="text-xs text-slate-400">{filteredTimeSlots.length} khung giờ từ 6h00 - 19h00</span>
+                        <span className="text-xs text-slate-400">{filteredTimeSlots.length} khung giờ khả dụng</span>
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-4">
-                        {filteredTimeSlots.map((slot) => {
-                          const slotKey = `${san.id}_${slot.start}`;
-                          const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
-                          const slotData = gridSlots[slotKey];
-                          const isBooked = slotData && slotData.trang_thai === 'DA_CHOT';
-                          const isLockedByOther =
-                            lockedSlots.includes(slotKeyRealtime) && myLockedSlotId !== slotKeyRealtime;
+                      {filteredTimeSlots.length === 0 ? (
+                        <div className={`text-center py-12 px-4 rounded-2xl border border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/30 text-slate-400' : 'border-slate-300 bg-slate-50 text-slate-600'}`}>
+                          <Clock className="w-10 h-10 text-slate-400 dark:text-slate-500 mx-auto mb-3 opacity-60" />
+                          <p className="text-sm font-bold">
+                            Tất cả các khung giờ hôm nay đã kết thúc hoặc đã qua giờ.
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            Quý khách vui lòng chọn ngày tiếp theo để đặt sân!
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-4">
+                          {filteredTimeSlots.map((slot) => {
+                            const slotKey = `${san.id}_${slot.start}`;
+                            const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
+                            const slotData = gridSlots[slotKey];
+                            const isBooked = slotData && slotData.trang_thai === 'DA_CHOT';
+                            const isPast = isSlotInThePast(slot.start);
+                            const isLockedByOther =
+                              lockedSlots.includes(slotKeyRealtime) && myLockedSlotId !== slotKeyRealtime;
 
-                          return (
-                            <div key={slot.start} className="w-full">
-                              {isBooked ? (
-                                <div
-                                  title="Khung giờ này đã được đặt"
-                                  className="w-full h-28 p-3 rounded-2xl border border-rose-600/70 bg-gradient-to-br from-rose-950/90 to-red-950/90 text-rose-300 flex flex-col items-center justify-between shadow-md shadow-rose-950/40 cursor-not-allowed select-none transition-all"
-                                >
-                                  <div className="w-full flex items-center justify-between">
-                                    <span className="text-sm font-black text-rose-300 font-mono">{slot.label}</span>
-                                    <span className="text-[10px] text-rose-400/80 font-mono">{slot.start}</span>
+                            return (
+                              <div key={slot.start} className="w-full">
+                                {isBooked ? (
+                                  <div
+                                    title="Khung giờ này đã được đặt"
+                                    className="w-full h-28 p-3 rounded-2xl border border-rose-600/70 bg-gradient-to-br from-rose-950/90 to-red-950/90 text-rose-300 flex flex-col items-center justify-between shadow-md shadow-rose-950/40 cursor-not-allowed select-none transition-all"
+                                  >
+                                    <div className="w-full flex items-center justify-between">
+                                      <span className="text-sm font-black text-rose-300 font-mono">{slot.label}</span>
+                                      <span className="text-[10px] text-rose-400/80 font-mono">{slot.start}</span>
+                                    </div>
+                                    <div className="flex flex-col items-center justify-center my-auto">
+                                      <span className="inline-flex items-center gap-1.5 text-xs font-black text-rose-300 tracking-wide">
+                                        <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                                        ĐÃ ĐẶT
+                                      </span>
+                                    </div>
+                                    <div className="w-full text-center">
+                                      <span className="text-[10px] text-rose-400/80 font-mono font-bold px-2.5 py-0.5 rounded-full bg-rose-900/40">
+                                        Hết chỗ
+                                      </span>
+                                    </div>
                                   </div>
-                                  <div className="flex flex-col items-center justify-center my-auto">
-                                    <span className="inline-flex items-center gap-1.5 text-xs font-black text-rose-300 tracking-wide">
-                                      <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                                      ĐÃ ĐẶT
-                                    </span>
-                                  </div>
-                                  <div className="w-full text-center">
-                                    <span className="text-[10px] text-rose-400/80 font-mono font-bold px-2.5 py-0.5 rounded-full bg-rose-900/40">
-                                      Hết chỗ
-                                    </span>
-                                  </div>
-                                </div>
-                              ) : isLockedByOther ? (
-                                <div
-                                  title="Đang có người khác thao tác giữ chỗ ô giờ này"
-                                  className="w-full h-28 p-3 rounded-2xl border border-gray-600/50 bg-gray-800/70 text-gray-400 flex flex-col items-center justify-between opacity-70 cursor-not-allowed select-none transition-all"
-                                >
-                                  <div className="w-full flex items-center justify-between">
-                                    <span className="text-sm font-black text-gray-300 font-mono">{slot.label}</span>
-                                    <span className="text-[10px] text-gray-400 font-mono">{slot.start}</span>
-                                  </div>
-                                  <div className="flex flex-col items-center gap-1 my-auto">
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-300">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-ping" />
-                                      GIỮ CHỖ
-                                    </span>
-                                    <span className="text-[10px] text-gray-400">Đang chọn giờ...</span>
-                                  </div>
-                                  <div className="text-[10px] text-gray-500 font-mono">Real-time</div>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => handleSlotClick(san, slot)}
-                                  className={`w-full h-28 p-3 rounded-2xl border transition-all duration-200 flex flex-col items-center justify-between group shadow-sm hover:scale-[1.03] cursor-pointer ${isDarkMode
-                                      ? 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-600/40 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-950/50'
-                                      : 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-300 hover:border-emerald-500 hover:shadow-md hover:shadow-emerald-200'
+                                ) : isPast ? (
+                                  /* Khung giờ đã qua trong ngày -> Khóa màu xám, không chọn được */
+                                  <div
+                                    title={`Khung giờ ${slot.label} đã qua`}
+                                    className={`w-full h-28 p-3 rounded-2xl border flex flex-col items-center justify-between select-none cursor-not-allowed transition-all ${
+                                      isDarkMode
+                                        ? 'border-slate-800 bg-slate-900/40 text-slate-500 opacity-60'
+                                        : 'border-slate-300 bg-slate-100 text-slate-400 opacity-70'
                                     }`}
-                                >
-                                  <div className="w-full flex items-center justify-between">
-                                    <span className="text-sm font-black text-emerald-400 font-mono group-hover:scale-110 transition-transform">
-                                      {slot.label}
-                                    </span>
-                                    <span className="text-[11px] text-slate-400 font-mono">{slot.start}</span>
+                                  >
+                                    <div className="w-full flex items-center justify-between">
+                                      <span className="text-sm font-extrabold text-slate-400 font-mono line-through">{slot.label}</span>
+                                      <span className="text-[10px] text-slate-400 font-mono">{slot.start}</span>
+                                    </div>
+                                    <div className="flex flex-col items-center justify-center my-auto">
+                                      <span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+                                        ĐÃ QUA GIỜ
+                                      </span>
+                                    </div>
+                                    <div className="w-full text-center">
+                                      <span className="text-[10px] text-slate-400 font-mono font-bold px-2.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800">
+                                        Khóa giờ
+                                      </span>
+                                    </div>
                                   </div>
-                                  <div className="flex flex-col items-center gap-0.5 my-auto">
-                                    <span className="text-xs font-black text-emerald-500 group-hover:text-emerald-300">
-                                      TRỐNG
-                                    </span>
-                                    <span className="text-[10px] text-slate-400">Khả dụng</span>
+                                ) : isLockedByOther ? (
+                                  <div
+                                    title="Đang có người khác thao tác giữ chỗ ô giờ này"
+                                    className="w-full h-28 p-3 rounded-2xl border border-gray-600/50 bg-gray-800/70 text-gray-400 flex flex-col items-center justify-between opacity-70 cursor-not-allowed select-none transition-all"
+                                  >
+                                    <div className="w-full flex items-center justify-between">
+                                      <span className="text-sm font-black text-gray-300 font-mono">{slot.label}</span>
+                                      <span className="text-[10px] text-gray-400 font-mono">{slot.start}</span>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-1 my-auto">
+                                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-300">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-ping" />
+                                        GIỮ CHỖ
+                                      </span>
+                                      <span className="text-[10px] text-gray-400">Đang chọn giờ...</span>
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 font-mono">Real-time</div>
                                   </div>
-                                  <span className="w-full py-1 text-[11px] text-center rounded-xl bg-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-slate-950 text-emerald-400 transition-all font-black">
-                                    + Chọn Giờ
-                                  </span>
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                                ) : (
+                                  <button
+                                    onClick={() => handleSlotClick(san, slot)}
+                                    className={`w-full h-28 p-3 rounded-2xl border transition-all duration-200 flex flex-col items-center justify-between group shadow-sm hover:scale-[1.03] cursor-pointer ${isDarkMode
+                                        ? 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-600/40 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-950/50'
+                                        : 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-300 hover:border-emerald-500 hover:shadow-md hover:shadow-emerald-200'
+                                      }`}
+                                  >
+                                    <div className="w-full flex items-center justify-between">
+                                      <span className={`text-sm font-black font-mono group-hover:scale-110 transition-transform ${isDarkMode ? 'text-emerald-400' : 'text-slate-900'}`}>
+                                        {slot.label}
+                                      </span>
+                                      <span className={`text-[11px] font-mono font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>{slot.start}</span>
+                                    </div>
+                                    <div className="flex flex-col items-center gap-0.5 my-auto">
+                                      <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                                        TRỐNG
+                                      </span>
+                                      <span className={`text-[10px] font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Khả dụng</span>
+                                    </div>
+                                    <span className="w-full py-1 text-[11px] text-center rounded-xl bg-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-slate-950 text-emerald-600 dark:text-emerald-400 transition-all font-black">
+                                      + Chọn Giờ
+                                    </span>
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
               })()
+            ) : filteredTimeSlots.length === 0 ? (
+              <div className={`text-center py-16 px-4 rounded-2xl border border-dashed m-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/30 text-slate-400' : 'border-slate-300 bg-slate-50 text-slate-600'}`}>
+                <Clock className="w-12 h-12 text-slate-400 dark:text-slate-500 mx-auto mb-3 opacity-60" />
+                <p className="text-base font-bold">
+                  Tất cả các khung giờ trong ngày đã qua hoặc không còn khung giờ khả dụng.
+                </p>
+                <p className="text-sm text-slate-400 mt-1">
+                  Quý khách vui lòng đổi sang ngày tiếp theo để xem lịch sân và đặt chỗ!
+                </p>
+              </div>
             ) : (
               <table className="w-full text-left border-collapse min-w-[2000px]">
                 <thead>
@@ -1546,11 +1635,6 @@ export default function HomePage() {
                           }`}>
                           {san.ten_san}
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">{san.ten_loai || 'Sân bóng'}</span>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          <span className="text-[11px] text-slate-400">{(Number(san.don_gia_phut) || 5000).toLocaleString('vi-VN')} đ/p</span>
-                        </div>
                       </td>
 
                       {/* Các ô Slot 30 phút trên dòng của sân */}
@@ -1559,6 +1643,7 @@ export default function HomePage() {
                         const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
                         const slotData = gridSlots[slotKey];
                         const isBooked = slotData && slotData.trang_thai === 'DA_CHOT';
+                        const isPast = isSlotInThePast(slot.start);
 
                         // Kiểm tra nếu ô đang bị người khác giữ chỗ Real-time
                         const isLockedByOther =
@@ -1578,8 +1663,25 @@ export default function HomePage() {
                                   ĐÃ ĐẶT
                                 </span>
                               </div>
+                            ) : isPast ? (
+                              /* 2. TRƯỜNG HỢP: ĐÃ QUA GIỜ SO VỚI THỜI GIAN HIỆN TẠI (MÀU XÁM - KHÓA) */
+                              <div
+                                title={`Khung giờ ${slot.label} đã qua`}
+                                className={`w-full h-20 p-2 rounded-2xl border flex flex-col items-center justify-center gap-1 cursor-not-allowed select-none transition-all ${
+                                  isDarkMode
+                                    ? 'border-slate-800 bg-slate-900/40 text-slate-500 opacity-60'
+                                    : 'border-slate-300 bg-slate-100 text-slate-400 opacity-70'
+                                }`}
+                              >
+                                <span className="text-xs font-black text-slate-400 dark:text-slate-500 tracking-wider">
+                                  ĐÃ QUA
+                                </span>
+                                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 font-mono line-through">
+                                  {slot.label}
+                                </span>
+                              </div>
                             ) : isLockedByOther ? (
-                              /* 2. TRƯỜNG HỢP: ĐANG CÓ NGƯỜI KHÁC GIỮ CHỖ REALTIME (MÀU XÁM) */
+                              /* 3. TRƯỜNG HỢP: ĐANG CÓ NGƯỜI KHÁC GIỮ CHỖ REALTIME (MÀU XÁM) */
                               <div
                                 title="Đang có người khác thao tác giữ chỗ ô giờ này"
                                 className="w-full h-20 p-2 rounded-2xl border border-gray-600/50 bg-gray-800/70 text-gray-400 flex flex-col items-center justify-center gap-1 opacity-70 cursor-not-allowed select-none transition-all"
@@ -1593,7 +1695,7 @@ export default function HomePage() {
                                 </span>
                               </div>
                             ) : (
-                              /* 3. TRƯỜNG HỢP: SÂN TRỐNG (MÀU XANH LÁ) -> CLICK ĐỂ CHỌN THỜI LƯỢNG 1H, 1H30, 2H */
+                              /* 4. TRƯỜNG HỢP: SÂN TRỐNG (MÀU XANH LÁ) -> CLICK ĐỂ CHỌN THỜI LƯỢNG 1H, 1H30, 2H */
                               <button
                                 onClick={() => handleSlotClick(san, slot)}
                                 className={`w-full h-20 p-2 rounded-2xl border transition-all duration-200 flex flex-col items-center justify-center gap-1 group shadow-sm hover:scale-[1.03] cursor-pointer ${isDarkMode
@@ -1604,7 +1706,7 @@ export default function HomePage() {
                                 <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
                                   TRỐNG
                                 </span>
-                                <span className="text-[11px] font-bold text-slate-300 font-mono">
+                                <span className={`text-[11px] font-black font-mono ${isDarkMode ? 'text-emerald-300' : 'text-slate-900'}`}>
                                   {slot.label}
                                 </span>
                                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity font-bold">
@@ -1623,65 +1725,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* =====================================================================
-            4. DỊCH VỤ TẠI SÂN (Bảng Dich_Vu từ SQL Server)
-            ===================================================================== */}
-        <section id="dich-vu" className={`py-20 border-y transition-colors duration-300 ${isDarkMode ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-100/60 border-slate-200'
-          }`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div>
-              <div className="text-center max-w-3xl mx-auto mb-16">
-                <div className="text-emerald-600 dark:text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1">
-                  Kho Dịch Vụ & Trang Thiết Bị (Bảng Dich_Vu SQL Server)
-                </div>
-                <h2 className={`text-3xl sm:text-4xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                  Dịch Vụ & Phụ Kiện Tại Sân
-                </h2>
-                <p className={`text-sm mt-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Số lượng tồn kho và đơn giá được đồng bộ theo dữ liệu thực tế.
-                </p>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {dichVuList.map((dv) => (
-                  <div
-                    key={dv.id}
-                    className={`p-5 rounded-3xl border flex items-center justify-between transition-all group ${isDarkMode
-                      ? 'bg-slate-900 border-slate-800 hover:border-emerald-500/40'
-                      : 'bg-white border-slate-200 hover:border-emerald-500/50 shadow-sm'
-                      }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-2xl border flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform ${isDarkMode ? 'bg-emerald-950/70 border-emerald-600/30' : 'bg-emerald-50 border-emerald-200'
-                        }`}>
-                        {dv.ten_dich_vu.toLowerCase().includes('áo') || dv.ten_dich_vu.toLowerCase().includes('giày') ? (
-                          <Shirt className="w-6 h-6" />
-                        ) : dv.ten_dich_vu.toLowerCase().includes('trọng tài') ? (
-                          <Award className="w-6 h-6" />
-                        ) : (
-                          <Coffee className="w-6 h-6" />
-                        )}
-                      </div>
-                      <div>
-                        <h4 className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{dv.ten_dich_vu}</h4>
-                        <div className="text-xs text-slate-400 mt-0.5">
-                          Tồn kho: <span className="text-emerald-500 font-medium">{dv.ton_kho} {dv.don_vi_tinh}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-base font-black text-emerald-500">
-                        {dv.don_gia.toLocaleString('vi-VN')} đ
-                      </div>
-                      <span className="text-[11px] text-slate-400">/{dv.don_vi_tinh}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-        </section>
 
         {/* =====================================================================
             5. FOOTER & THÔNG TIN LIÊN HỆ
@@ -1694,15 +1738,15 @@ export default function HomePage() {
               {/* Cột 1: Thông tin thương hiệu */}
               <div className="lg:col-span-4 space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center">
-                    <Activity className="w-6 h-6 text-slate-950 stroke-[2.5]" />
+                  <div className="w-10 h-10 rounded-xl bg-white border border-slate-700 flex items-center justify-center overflow-hidden">
+                    <SoccerBallIcon className="w-6 h-6" />
                   </div>
                   <span className="text-2xl font-black text-white">
                     SOCCER<span className="text-emerald-400">247</span>
                   </span>
                 </div>
                 <p className="text-slate-400 text-sm leading-relaxed">
-                  Trung tâm thể thao đa năng hiện đại. Toàn bộ quy trình đặt sân, tính giá và thanh toán được quản lý bởi Stored Procedures SQL Server.
+                  Trung tâm thể thao đa năng hiện đại. Toàn bộ quy trình đặt sân, tính giá và thanh toán được quản lý bởi Soccer 247.
                 </p>
 
                 <div className="space-y-3 pt-2">
@@ -1712,7 +1756,7 @@ export default function HomePage() {
                     </div>
                     <div>
                       <div className="text-xs text-slate-400">Hotline đặt sân:</div>
-                      <div className="font-bold text-white text-base">0909.123.456 - 0988.789.789</div>
+                      <div className="font-bold text-white text-base font-mono">0816344504</div>
                     </div>
                   </div>
 
@@ -1722,7 +1766,7 @@ export default function HomePage() {
                     </div>
                     <div>
                       <div className="text-xs text-slate-400">Email:</div>
-                      <div className="font-bold text-white">contact@soccer247.vn</div>
+                      <div className="font-bold text-white">sinhvienxoan@gmail.com</div>
                     </div>
                   </div>
 
@@ -1732,7 +1776,7 @@ export default function HomePage() {
                     </div>
                     <div>
                       <div className="text-xs text-slate-400">Địa chỉ cụm sân:</div>
-                      <div className="font-bold text-white">Khu Thể Thao Đa Năng, TP. Hồ Chí Minh</div>
+                      <div className="font-bold text-white">Biên Hòa - Đồng Nai</div>
                     </div>
                   </div>
                 </div>
@@ -1751,7 +1795,7 @@ export default function HomePage() {
                       <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300">Hoàn 100% Cọc</span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
-                      Hoàn tiền tự động theo Stored Procedure sp_HuyDonVaHoanCoc.
+                      Hoàn tiền tự động nhanh chóng và an toàn.
                     </p>
                   </div>
 
@@ -1780,7 +1824,7 @@ export default function HomePage() {
                 <div className="w-full h-56 rounded-2xl overflow-hidden border border-slate-800 shadow-xl relative bg-slate-900">
                   <iframe
                     title="Bản đồ Soccer247"
-                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3919.4602324316496!2d106.6983424757034!3d10.77601938937248!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752f38f9ed887b%3A0x14aded5703768989!2zU8OibiB24bqtbiDEkeG7mW5nIEhvYSBMxrA!5e0!3m2!1svi!2s!4v1700000000000!5m2!1svi!2s"
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d125397.66986427306!2d106.74558239014159!3d10.950005799999998!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95267b2d5cb%3A0xbcf4a755a9b736b0!2zVHAuIEJpw6puIEjDsmEsIMSQ4buTbmcgTmFp!5e0!3m2!1svi!2s!4v1700000000000!5m2!1svi!2s"
                     width="100%"
                     height="100%"
                     style={{ border: 0 }}
@@ -1795,7 +1839,7 @@ export default function HomePage() {
 
             {/* Bản quyền */}
             <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-              <p>© 2026 Soccer247 - Hệ Thống Quản Lý Sân Bóng Kết Nối SQL Server.</p>
+              <p>© 2026 Soccer 247.</p>
               <div className="flex items-center gap-6">
                 <a href="#" className="hover:text-emerald-400 transition-colors">Điều khoản dịch vụ</a>
                 <a href="#" className="hover:text-emerald-400 transition-colors">Bảo mật thông tin</a>
@@ -2417,52 +2461,6 @@ export default function HomePage() {
                 ) : (
                   /* MÀN HÌNH QUÉT MÃ VIETQR & THÔNG TIN CHUYỂN KHOẢN MB BANK */
                   <div className="space-y-5">
-                    {/* THÔNG BÁO NỔI BẬT TRÊN MODAL KHI CHƯA NHẬN ĐƯỢC TIỀN HOẶC ĐANG KIỂM TRA */}
-                    {qrModalAlert && (
-                      <div
-                        className={`p-4 rounded-2xl border flex items-start gap-3.5 shadow-2xl animate-in slide-in-from-top-3 duration-200 ${qrModalAlert.type === 'error'
-                            ? 'bg-rose-500/20 border-rose-500/60 text-rose-200 shadow-rose-950/40 ring-1 ring-rose-500/40'
-                            : qrModalAlert.type === 'info'
-                              ? 'bg-sky-500/20 border-sky-500/60 text-sky-200 shadow-sky-950/40 ring-1 ring-sky-500/40'
-                              : 'bg-amber-500/20 border-amber-500/60 text-amber-200 shadow-amber-950/40 ring-1 ring-amber-500/40'
-                          }`}
-                      >
-                        <div className="shrink-0 mt-0.5">
-                          {qrModalAlert.type === 'error' ? (
-                            <div className="w-9 h-9 rounded-xl bg-rose-500/30 border border-rose-400/50 flex items-center justify-center text-rose-300 shadow-inner">
-                              <XCircle className="w-5 h-5 animate-pulse" />
-                            </div>
-                          ) : qrModalAlert.type === 'info' ? (
-                            <div className="w-9 h-9 rounded-xl bg-sky-500/30 border border-sky-400/50 flex items-center justify-center text-sky-300 shadow-inner">
-                              <Loader2 className="w-5 h-5 animate-spin" />
-                            </div>
-                          ) : (
-                            <div className="w-9 h-9 rounded-xl bg-amber-500/30 border border-amber-400/50 flex items-center justify-center text-amber-300 shadow-inner">
-                              <AlertCircle className="w-5 h-5" />
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex-1 space-y-1">
-                          <h4 className="text-sm font-black tracking-wide text-white flex items-center gap-1.5">
-                            {qrModalAlert.title}
-                          </h4>
-                          <p className="text-xs font-medium leading-relaxed opacity-95 text-slate-100">
-                            {qrModalAlert.message}
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setQrModalAlert(null)}
-                          className="p-1 rounded-lg hover:bg-white/15 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                          title="Đóng thông báo"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-
                     {/* Header thông báo trạng thái kết nối MB Bank */}
                     <div className="text-center space-y-1.5">
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/30">
@@ -2564,6 +2562,67 @@ export default function HomePage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* THÔNG BÁO NỔI BẬT KHI CHƯA NHẬN ĐƯỢC TIỀN HOẶC ĐANG KIỂM TRA (TỰ MẤT SAU 6 GIÂY) */}
+                    {qrModalAlert && (
+                      <div
+                        className={`relative overflow-hidden p-4 rounded-2xl border flex items-start gap-3.5 shadow-xl animate-in zoom-in-95 duration-200 ${qrModalAlert.type === 'error'
+                            ? 'bg-gradient-to-br from-rose-950/95 via-rose-900/85 to-slate-950/95 border-rose-500/80 text-rose-100 shadow-rose-950/50 ring-1 ring-rose-500/40'
+                            : qrModalAlert.type === 'info'
+                              ? 'bg-gradient-to-br from-sky-950/95 via-sky-900/85 to-slate-950/95 border-sky-500/80 text-sky-100 shadow-sky-950/50 ring-1 ring-sky-500/40'
+                              : 'bg-gradient-to-br from-amber-950/95 via-amber-900/85 to-slate-950/95 border-amber-500/80 text-amber-100 shadow-amber-950/50 ring-1 ring-amber-500/40'
+                          }`}
+                      >
+                        <div className="shrink-0 mt-0.5">
+                          {qrModalAlert.type === 'error' ? (
+                            <div className="w-10 h-10 rounded-xl bg-rose-500/30 border border-rose-400/60 flex items-center justify-center text-rose-300 shadow-inner">
+                              <XCircle className="w-5 h-5 animate-pulse text-rose-400" />
+                            </div>
+                          ) : qrModalAlert.type === 'info' ? (
+                            <div className="w-10 h-10 rounded-xl bg-sky-500/30 border border-sky-400/60 flex items-center justify-center text-sky-300 shadow-inner">
+                              <Loader2 className="w-5 h-5 animate-spin text-sky-400" />
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-amber-500/30 border border-amber-400/60 flex items-center justify-center text-amber-300 shadow-inner">
+                              <AlertCircle className="w-5 h-5 text-amber-400" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 space-y-1 pr-1">
+                          <h4 className="text-sm font-black tracking-wide text-white flex items-center gap-1.5">
+                            {qrModalAlert.title}
+                          </h4>
+                          <p className="text-xs font-medium leading-relaxed opacity-95 text-slate-200">
+                            {qrModalAlert.message}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setQrModalAlert(null)}
+                          className="p-1 rounded-lg hover:bg-white/15 text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
+                          title="Đóng thông báo ngay"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+
+                        {/* Thanh thời gian thu hồi thông báo 6 giây */}
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10 overflow-hidden">
+                          <div
+                            className={`h-full ${qrModalAlert.type === 'error'
+                                ? 'bg-rose-400'
+                                : qrModalAlert.type === 'info'
+                                  ? 'bg-sky-400'
+                                  : 'bg-amber-400'
+                              }`}
+                            style={{
+                              animation: 'shrinkWidth 6s linear forwards',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {/* Lưu ý quan trọng */}
                     <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-500 dark:text-amber-400 flex items-start gap-2">

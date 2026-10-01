@@ -386,33 +386,28 @@ const xoaKhungGioGia = async (req, res) => {
 const layTatCaDonDat = async (req, res) => {
     try {
         const pool = await poolPromise;
-        try {
-            const result = await pool.request().execute('sp_LayTatCaDonDat');
-            return res.status(200).json({
-                success: true,
-                data: result.recordset
-            });
-        } catch (procErr) {
-            const queryRes = await pool.request().query(`
-                SELECT d.id, d.ma_nguoi_dung, nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai,
-                       d.ma_san, sb.ten_san, ls.ten_loai,
-                       d.ngay_da,
-                       CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
-                       CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
-                       d.tien_san, d.tong_tien, d.phuong_thuc, d.ghi_chu, d.trang_thai, d.ngay_tao
-                FROM Don_Dat_San d
-                LEFT JOIN San_Bong sb ON d.ma_san = sb.id
-                LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
-                LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
-                ORDER BY d.id DESC
-            `);
-            return res.status(200).json({
-                success: true,
-                data: queryRes.recordset
-            });
-        }
+        const result = await pool.request().execute('sp_LayTatCaDonDat');
+        const bookings = result.recordset || [];
+
+        // Lấy toàn bộ chi tiết dịch vụ cho các đơn bằng Procedure sp_LayDanhSachChiTietDichVu
+        const detailsRes = await pool.request().execute('sp_LayDanhSachChiTietDichVu');
+        const allDetails = detailsRes.recordset || [];
+
+        const merged = bookings.map(b => {
+            const services = allDetails.filter(d => d.ma_don_dat === b.id);
+            return {
+                ...b,
+                chi_tiet_dich_vu: services,
+                dich_vu_da_dung: services
+            };
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: merged
+        });
     } catch (error) {
-        console.error('Lỗi layTatCaDonDat:', error.message);
+        console.error('Lỗi sp_LayTatCaDonDat:', error.message);
         return res.status(400).json({
             success: false,
             message: error.message || 'Lỗi khi lấy danh sách tất cả đơn đặt sân'
@@ -572,7 +567,7 @@ const datSan = async (req, res) => {
                 .input('tien_san', sql.Decimal(10, 2), tien_san_val)
                 .input('tong_tien', sql.Decimal(10, 2), tong_tien_val)
                 .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
-                .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+                .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
                 .input('trang_thai', sql.VarChar(30), trang_thai_chuan)
                 .query(`
                     INSERT INTO Don_Dat_San (
@@ -598,7 +593,7 @@ const datSan = async (req, res) => {
                 .input('tien_san', sql.Decimal(10, 2), tien_san_val)
                 .input('tong_tien', sql.Decimal(10, 2), tong_tien_val)
                 .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
-                .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+                .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
                 .input('trang_thai', sql.VarChar(30), fallbackTrangThai)
                 .query(`
                     INSERT INTO Don_Dat_San (
@@ -731,17 +726,25 @@ const layLichSuKhachHang = async (req, res) => {
             request.input('email', sql.VarChar(255), null);
         }
 
-        // Nếu khách chưa đăng nhập và không truyền thông tin định danh nào, trả về mảng rỗng
-        if (!ma_nd_param && !sdt_param && !email_param) {
-            return res.status(200).json({
-                success: true,
-                data: []
+        const result = await request.execute('sp_LayLichSuDatSan');
+        const data = result.recordset || [];
+
+        // 100% Stored Procedure: Lấy chi tiết dịch vụ bằng sp_LayChiTietDichVuDonDat
+        if (data.length > 0) {
+            const dvRes = await pool.request().execute('sp_LayChiTietDichVuDonDat');
+            const dvMap = {};
+            (dvRes.recordset || []).forEach(dv => {
+                if (!dvMap[dv.ma_don_dat]) dvMap[dv.ma_don_dat] = [];
+                dvMap[dv.ma_don_dat].push(dv);
+            });
+
+            data.forEach(order => {
+                order.chi_tiet_dich_vu = dvMap[order.id] || [];
+                order.tien_coc = Number(order.tien_coc || 0);
+                order.tien_da_nhan = Number(order.tien_da_nhan || 0);
+                order.tien_thieu = Number(order.tien_thieu || 0);
             });
         }
-
-        const result = await request.execute('sp_LayLichSuDatSan');
-
-        const data = result.recordset || [];
 
         return res.status(200).json({
             success: true,
@@ -857,7 +860,7 @@ const datSanLinhHoat = async (req, res) => {
             .input('ngay_da', sql.Date, ngay_da)
             .input('gio_bat_dau', sql.VarChar(8), gio_bat_dau)
             .input('gio_ket_thuc', sql.VarChar(8), gio_ket_thuc)
-            .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+            .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
             .input('tien_coc', sql.Decimal(10, 2), tien_coc ? parseFloat(tien_coc) : 0)
             .execute('sp_DatSanLinhHoat');
 
@@ -898,7 +901,7 @@ const batDauDaLinhHoat = async (req, res) => {
             .input('ma_san', sql.Int, parseInt(ma_san, 10))
             .input('ten_khach_hang', sql.NVarChar(100), ten_khach_hang || null)
             .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
-            .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+            .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
             .execute('sp_BatDauDaLinhHoat');
 
         return res.status(201).json({
@@ -1145,16 +1148,35 @@ const themDonDatVaThanhToan = async (req, res) => {
             .input('tong_tien', sql.Decimal(10, 2), tong_tien_val)
             .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
             .input('trang_thai', sql.VarChar(30), trang_thai_chuan)
-            .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+            .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
             .input('loai_thanh_toan', sql.VarChar(20), loai_thanh_toan || 'DAT_COC')
             .input('so_tien', sql.Decimal(10, 2), so_tien_val)
             .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
             .execute('sp_ThemDonDatVaThanhToan');
 
+        const orderData = result.recordset[0];
+        const orderId = orderData?.id;
+
+        if (orderId && Array.isArray(req.body.dich_vu_list) && req.body.dich_vu_list.length > 0) {
+            for (const item of req.body.dich_vu_list) {
+                if (item.ma_dich_vu && Number(item.so_luong) > 0) {
+                    try {
+                        await pool.request()
+                            .input('ma_don_dat', sql.Int, parseInt(orderId, 10))
+                            .input('ma_dich_vu', sql.Int, parseInt(item.ma_dich_vu, 10))
+                            .input('so_luong', sql.Int, parseInt(item.so_luong, 10))
+                            .execute('sp_ThemDichVu');
+                    } catch (e) {
+                        console.warn('Lỗi thêm dịch vụ kèm đơn:', e.message);
+                    }
+                }
+            }
+        }
+
         return res.status(201).json({
             success: true,
             message: 'Thêm đơn đặt sân thành công!',
-            data: result.recordset[0]
+            data: orderData
         });
     } catch (error) {
         console.error('Lỗi sp_ThemDonDatVaThanhToan:', error.message);
@@ -1193,11 +1215,27 @@ const suaDonDatVaThanhToan = async (req, res) => {
             .input('tong_tien', sql.Decimal(10, 2), tong_tien_val)
             .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
             .input('trang_thai', sql.VarChar(30), trang_thai_chuan)
-            .input('ghi_chu', sql.NVarChar(255), ghi_chu || null)
+            .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
             .input('loai_thanh_toan', sql.VarChar(20), loai_thanh_toan || 'TRA_HET')
             .input('so_tien', sql.Decimal(10, 2), so_tien_val)
             .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
             .execute('sp_SuaDonDatVaThanhToan');
+
+        if (Array.isArray(req.body.dich_vu_list)) {
+            for (const item of req.body.dich_vu_list) {
+                if (item.ma_dich_vu) {
+                    try {
+                        await pool.request()
+                            .input('ma_don_dat', sql.Int, parseInt(id, 10))
+                            .input('ma_dich_vu', sql.Int, parseInt(item.ma_dich_vu, 10))
+                            .input('so_luong_moi', sql.Int, parseInt(item.so_luong || 0, 10))
+                            .execute('sp_CapNhatDichVuDonDat');
+                    } catch (e) {
+                        console.warn('Lỗi cập nhật dịch vụ kèm đơn:', e.message);
+                    }
+                }
+            }
+        }
 
         return res.status(200).json({
             success: true,

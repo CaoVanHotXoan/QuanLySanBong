@@ -169,7 +169,7 @@ const taoThanhToanPayOS = async (req, res) => {
                 .input('tong_tien', sql.Decimal(10, 2), tong_tien ? parseFloat(tong_tien) : null)
                 .input('phuong_thuc', sql.VarChar(20), 'CHUYEN_KHOAN')
                 .input('trang_thai', sql.VarChar(20), initialStatus)
-                .input('ghi_chu', sql.NVarChar(255), ghi_chu || `PayOS VietQR MB Bank - ${isTraHet ? '100%' : '30%'}`)
+                .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || `PayOS VietQR MB Bank - ${isTraHet ? '100%' : '30%'}`)
                 .execute('sp_DatSan');
 
             if (datSanResult.recordset && datSanResult.recordset[0]) {
@@ -184,14 +184,6 @@ const taoThanhToanPayOS = async (req, res) => {
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const cancelUrl = `${frontendUrl}/?payment=cancel&orderCode=${orderCode}`;
         const returnUrl = `${frontendUrl}/?payment=success&orderCode=${orderCode}`;
-
-        // Cập nhật orderCode vào ghi chú đơn để đối soát
-        if (finalDonDatId) {
-            await pool.request()
-                .input('id', sql.Int, finalDonDatId)
-                .input('orderCodeStr', sql.NVarChar(255), ` [PayOS #${orderCode}]`)
-                .query('UPDATE Don_Dat_San SET ghi_chu = ISNULL(ghi_chu, \'\') + @orderCodeStr WHERE id = @id');
-        }
 
         // Khởi tạo link thanh toán PayOS VietQR
         const payload = {
@@ -287,45 +279,61 @@ const kiemTraTrangThaiPayOS = async (req, res) => {
         if (isPaid) {
             const pool = await poolPromise;
             
-            // Tìm đơn theo mã orderCode
-            const findBooking = await pool.request()
-                .input('searchStr', sql.NVarChar(100), `%PayOS #${orderCode}%`)
-                .query(`
-                    SELECT TOP 1 id, trang_thai, tong_tien, ghi_chu 
-                    FROM Don_Dat_San 
-                    WHERE ghi_chu LIKE @searchStr
-                    ORDER BY id DESC
-                `);
+            // Tìm đơn theo description (DS123 -> ID = 123) hoặc searchStr fallback
+            let donDatId = null;
+            const desc = paymentInfo.description || '';
+            const matchId = desc.match(/DS(\d+)/i);
+            if (matchId && matchId[1]) {
+                donDatId = parseInt(matchId[1], 10);
+            }
 
-            if (findBooking.recordset && findBooking.recordset.length > 0) {
-                const booking = findBooking.recordset[0];
-                const donDatId = booking.id;
-                const isDatCoc = (booking.ghi_chu || '').includes('30%') || (booking.ghi_chu || '').includes('DAT_COC');
+            if (!donDatId) {
+                const findBooking = await pool.request()
+                    .input('searchStr', sql.NVarChar(100), `%PayOS #${orderCode}%`)
+                    .query(`
+                        SELECT TOP 1 id 
+                        FROM Don_Dat_San 
+                        WHERE ghi_chu LIKE @searchStr
+                        ORDER BY id DESC
+                    `);
+                if (findBooking.recordset && findBooking.recordset.length > 0) {
+                    donDatId = findBooking.recordset[0].id;
+                }
+            }
 
-                // Kiểm tra nếu chưa thanh toán thì thực thi Procedure sp_ThanhToanDon
-                const checkTt = await pool.request()
-                    .input('madon', sql.Int, donDatId)
-                    .query('SELECT TOP 1 id FROM Thanh_Toan WHERE ma_don_dat = @madon');
+            if (donDatId) {
+                const bookingRes = await pool.request()
+                    .input('id', sql.Int, donDatId)
+                    .query('SELECT TOP 1 id, trang_thai, tong_tien, ghi_chu FROM Don_Dat_San WHERE id = @id');
 
-                if (!checkTt.recordset || checkTt.recordset.length === 0) {
-                    await pool.request()
-                        .input('ma_don_dat', sql.Int, donDatId)
-                        .input('phuong_thuc', sql.VarChar(20), 'CHUYEN_KHOAN')
-                        .input('loai_thanh_toan', sql.VarChar(20), isDatCoc ? 'DAT_COC' : 'TRA_HET')
-                        .input('so_tien', sql.Decimal(10, 2), paymentInfo.amountPaid || paymentInfo.amount)
-                        .input('ma_giao_dich', sql.VarChar(100), String(orderCode))
-                        .execute('sp_ThanhToanDon');
+                if (bookingRes.recordset && bookingRes.recordset.length > 0) {
+                    const booking = bookingRes.recordset[0];
+                    const isDatCoc = (booking.trang_thai === 'CHO_THANH_TOAN' || !booking.trang_thai) && ((booking.ghi_chu || '').includes('30%') || (booking.ghi_chu || '').includes('DAT_COC'));
 
-                    const io = req.app.get('io');
-                    if (io) {
-                        io.emit('payment_success', {
-                            orderCode: numOrderCode,
-                            ma_don_dat: donDatId,
-                            so_tien: paymentInfo.amountPaid || paymentInfo.amount,
-                            trang_thai: 'PAID',
-                            thoi_gian: new Date()
-                        });
-                        io.emit('booking_updated');
+                    const checkTt = await pool.request()
+                        .input('magd', sql.VarChar(100), String(orderCode))
+                        .query('SELECT TOP 1 id FROM Thanh_Toan WHERE ma_giao_dich = @magd');
+
+                    if (!checkTt.recordset || checkTt.recordset.length === 0) {
+                        await pool.request()
+                            .input('ma_don_dat', sql.Int, donDatId)
+                            .input('phuong_thuc', sql.VarChar(20), 'CHUYEN_KHOAN')
+                            .input('loai_thanh_toan', sql.VarChar(20), isDatCoc ? 'DAT_COC' : 'TRA_HET')
+                            .input('so_tien', sql.Decimal(10, 2), paymentInfo.amountPaid || paymentInfo.amount)
+                            .input('ma_giao_dich', sql.VarChar(100), String(orderCode))
+                            .execute('sp_ThanhToanDon');
+
+                        const io = req.app.get('io');
+                        if (io) {
+                            io.emit('payment_success', {
+                                orderCode: numOrderCode,
+                                ma_don_dat: donDatId,
+                                so_tien: paymentInfo.amountPaid || paymentInfo.amount,
+                                trang_thai: 'PAID',
+                                thoi_gian: new Date()
+                            });
+                            io.emit('booking_updated');
+                        }
                     }
                 }
             }
@@ -380,43 +388,63 @@ const xuLyWebhookPayOS = async (req, res) => {
 
             console.log(`✅ [PayOS Webhook SUCCESS]: Order #${orderCode}, Số tiền: ${amount} VND`);
 
-            const findBooking = await pool.request()
-                .input('searchStr', sql.NVarChar(100), `%PayOS #${orderCode}%`)
-                .query(`
-                    SELECT TOP 1 id, trang_thai, tong_tien, ghi_chu 
-                    FROM Don_Dat_San 
-                    WHERE ghi_chu LIKE @searchStr
-                    ORDER BY id DESC
-                `);
-
             let donDatId = null;
-
-            if (findBooking.recordset && findBooking.recordset.length > 0) {
-                const booking = findBooking.recordset[0];
-                donDatId = booking.id;
-                const isDatCoc = (booking.ghi_chu || '').includes('30%') || (booking.ghi_chu || '').includes('DAT_COC');
-
-                // Thực thi Stored Procedure sp_ThanhToanDon
-                await pool.request()
-                    .input('ma_don_dat', sql.Int, donDatId)
-                    .input('phuong_thuc', sql.VarChar(20), 'CHUYEN_KHOAN')
-                    .input('loai_thanh_toan', sql.VarChar(20), isDatCoc ? 'DAT_COC' : 'TRA_HET')
-                    .input('so_tien', sql.Decimal(10, 2), amount)
-                    .input('ma_giao_dich', sql.VarChar(100), String(orderCode))
-                    .execute('sp_ThanhToanDon');
+            const desc = data.description || '';
+            const matchId = desc.match(/DS(\d+)/i);
+            if (matchId && matchId[1]) {
+                donDatId = parseInt(matchId[1], 10);
             }
 
-            const io = req.app.get('io');
-            if (io) {
-                io.emit('payment_success', {
-                    orderCode: Number(orderCode),
-                    ma_don_dat: donDatId,
-                    so_tien: amount,
-                    trang_thai: 'PAID',
-                    ngan_hang: 'MB Bank',
-                    thoi_gian: new Date()
-                });
-                io.emit('booking_updated');
+            if (!donDatId) {
+                const findBooking = await pool.request()
+                    .input('searchStr', sql.NVarChar(100), `%PayOS #${orderCode}%`)
+                    .query(`
+                        SELECT TOP 1 id 
+                        FROM Don_Dat_San 
+                        WHERE ghi_chu LIKE @searchStr
+                        ORDER BY id DESC
+                    `);
+                if (findBooking.recordset && findBooking.recordset.length > 0) {
+                    donDatId = findBooking.recordset[0].id;
+                }
+            }
+
+            if (donDatId) {
+                const bookingRes = await pool.request()
+                    .input('id', sql.Int, donDatId)
+                    .query('SELECT TOP 1 id, trang_thai, tong_tien, ghi_chu FROM Don_Dat_San WHERE id = @id');
+
+                if (bookingRes.recordset && bookingRes.recordset.length > 0) {
+                    const booking = bookingRes.recordset[0];
+                    const isDatCoc = (booking.trang_thai === 'CHO_THANH_TOAN' || !booking.trang_thai) && ((booking.ghi_chu || '').includes('30%') || (booking.ghi_chu || '').includes('DAT_COC'));
+
+                    const checkTt = await pool.request()
+                        .input('magd', sql.VarChar(100), String(orderCode))
+                        .query('SELECT TOP 1 id FROM Thanh_Toan WHERE ma_giao_dich = @magd');
+
+                    if (!checkTt.recordset || checkTt.recordset.length === 0) {
+                        await pool.request()
+                            .input('ma_don_dat', sql.Int, donDatId)
+                            .input('phuong_thuc', sql.VarChar(20), 'CHUYEN_KHOAN')
+                            .input('loai_thanh_toan', sql.VarChar(20), isDatCoc ? 'DAT_COC' : 'TRA_HET')
+                            .input('so_tien', sql.Decimal(10, 2), amount)
+                            .input('ma_giao_dich', sql.VarChar(100), String(orderCode))
+                            .execute('sp_ThanhToanDon');
+                    }
+                }
+
+                const io = req.app.get('io');
+                if (io) {
+                    io.emit('payment_success', {
+                        orderCode: Number(orderCode),
+                        ma_don_dat: donDatId,
+                        so_tien: amount,
+                        trang_thai: 'PAID',
+                        ngan_hang: 'MB Bank',
+                        thoi_gian: new Date()
+                    });
+                    io.emit('booking_updated');
+                }
             }
         }
 
@@ -602,20 +630,20 @@ const huyDonTamPayOS = async (req, res) => {
         const { ma_don_dat, orderCode } = req.body;
         const pool = await poolPromise;
 
+        const request = pool.request();
         if (ma_don_dat) {
-            await pool.request()
-                .input('id', sql.Int, parseInt(ma_don_dat, 10))
-                .query(`
-                    DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat = @id;
-                    DELETE FROM Don_Dat_San WHERE id = @id AND trang_thai = 'CHO_THANH_TOAN';
-                `);
-        } else if (orderCode) {
-            await pool.request()
-                .input('searchStr', sql.NVarChar(100), `%PayOS #${orderCode}%`)
-                .query(`
-                    DELETE FROM Don_Dat_San WHERE ghi_chu LIKE @searchStr AND trang_thai = 'CHO_THANH_TOAN';
-                `);
+            request.input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10));
+        } else {
+            request.input('ma_don_dat', sql.Int, null);
         }
+
+        if (orderCode) {
+            request.input('searchStr', sql.NVarChar(100), `%PayOS #${orderCode}%`);
+        } else {
+            request.input('searchStr', sql.NVarChar(100), null);
+        }
+
+        await request.execute('sp_HuyDonTam');
 
         return res.status(200).json({
             success: true,

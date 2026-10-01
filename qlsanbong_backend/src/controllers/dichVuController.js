@@ -141,28 +141,44 @@ const xoaDichVu = async (req, res) => {
  */
 const themDichVuVaoDon = async (req, res) => {
     try {
-        const { ma_don_dat, ma_dich_vu, so_luong } = req.body;
+        const { ma_don_dat } = req.body;
 
-        if (!ma_don_dat || !ma_dich_vu || !so_luong) {
+        if (!ma_don_dat) {
             return res.status(400).json({
                 success: false,
-                message: 'Vui lòng cung cấp đầy đủ: ma_don_dat, ma_dich_vu, so_luong!'
+                message: 'Vui lòng cung cấp ma_don_dat!'
+            });
+        }
+
+        let items = [];
+        if (Array.isArray(req.body.dich_vu_list) && req.body.dich_vu_list.length > 0) {
+            items = req.body.dich_vu_list;
+        } else if (req.body.ma_dich_vu && req.body.so_luong) {
+            items = [{ ma_dich_vu: req.body.ma_dich_vu, so_luong: req.body.so_luong }];
+        }
+
+        if (items.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp ma_dich_vu và so_luong!'
             });
         }
 
         const pool = await poolPromise;
-        const result = await pool.request()
-            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
-            .input('ma_dich_vu', sql.Int, parseInt(ma_dich_vu, 10))
-            .input('so_luong', sql.Int, parseInt(so_luong, 10))
-            .execute('sp_ThemDichVu');
-
-        const serviceDetail = result.recordset[0];
+        let lastResult = null;
+        for (const item of items) {
+            const result = await pool.request()
+                .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+                .input('ma_dich_vu', sql.Int, parseInt(item.ma_dich_vu, 10))
+                .input('so_luong', sql.Int, parseInt(item.so_luong, 10))
+                .execute('sp_ThemDichVu');
+            lastResult = result.recordset[0];
+        }
 
         return res.status(200).json({
             success: true,
             message: 'Thêm dịch vụ vào đơn đặt sân thành công!',
-            data: serviceDetail
+            data: lastResult
         });
     } catch (error) {
         console.error('Lỗi sp_ThemDichVu:', error.message);
@@ -313,12 +329,52 @@ const xoaPhieuNhapKho = async (req, res) => {
     }
 };
 
+/**
+ * 5.1 Cập nhật số lượng / Thêm / Xóa dịch vụ trong đơn đặt sân
+ * Method: POST /api/dich-vu/cap-nhat-don
+ * Procedure: sp_CapNhatDichVuDonDat
+ */
+const capNhatDichVuDon = async (req, res) => {
+    try {
+        const { ma_don_dat, ma_dich_vu, so_luong } = req.body;
+
+        if (!ma_don_dat || !ma_dich_vu || so_luong === undefined || so_luong === null) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ: ma_don_dat, ma_dich_vu, so_luong!'
+            });
+        }
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+            .input('ma_dich_vu', sql.Int, parseInt(ma_dich_vu, 10))
+            .input('so_luong_moi', sql.Int, parseInt(so_luong, 10))
+            .execute('sp_CapNhatDichVuDonDat');
+
+        const serviceDetail = result.recordset[0];
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật dịch vụ đơn đặt sân thành công!',
+            data: serviceDetail
+        });
+    } catch (error) {
+        console.error('Lỗi sp_CapNhatDichVuDonDat:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi cập nhật dịch vụ đơn đặt'
+        });
+    }
+};
+
 module.exports = {
     layDanhSachDichVu,
     themDichVu,
     suaDichVu,
     xoaDichVu,
     themDichVuVaoDon,
+    capNhatDichVuDon,
     nhapKhoDichVu,
     layDanhSachPhieuNhapKho,
     layDanhSachChiTietDichVu,

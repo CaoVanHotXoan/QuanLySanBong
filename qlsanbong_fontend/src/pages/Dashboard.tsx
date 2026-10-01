@@ -53,9 +53,32 @@ import {
   FolderTree,
   Lock,
   ShieldAlert,
-  ArrowLeft
+  ArrowLeft,
+  Upload,
+  ImageIcon,
+  Loader2,
+  Minus
 } from 'lucide-react';
 import { AuthUser } from './Login/login';
+
+// Icon quả bóng đá màu đen trắng chuẩn
+function SoccerBallIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="9.5" fill="#FFFFFF" stroke="#0F172A" strokeWidth="1.5" />
+      <polygon points="12,7.5 15.5,10 14.2,14 9.8,14 8.5,10" fill="#0F172A" stroke="#0F172A" strokeWidth="0.5" />
+      <line x1="12" y1="7.5" x2="12" y2="2.5" stroke="#0F172A" strokeWidth="1.3" />
+      <line x1="15.5" y1="10" x2="20.5" y2="8" stroke="#0F172A" strokeWidth="1.3" />
+      <line x1="14.2" y1="14" x2="18" y2="19" stroke="#0F172A" strokeWidth="1.3" />
+      <line x1="9.8" y1="14" x2="6" y2="19" stroke="#0F172A" strokeWidth="1.3" />
+      <line x1="8.5" y1="10" x2="3.5" y2="8" stroke="#0F172A" strokeWidth="1.3" />
+      <path d="M9.5 2.8C10.3 2.6 11.1 2.5 12 2.5C12.9 2.5 13.7 2.6 14.5 2.8L13.8 5.5L10.2 5.5L9.5 2.8Z" fill="#0F172A" />
+      <path d="M21.2 9.5C21.4 10.3 21.5 11.1 21.5 12C21.5 12.8 21.4 13.5 21.2 14.3L18.5 13L18.5 11L21.2 9.5Z" fill="#0F172A" />
+      <path d="M2.8 9.5L5.5 11L5.5 13L2.8 14.3C2.6 13.5 2.5 12.8 2.5 12C2.5 11.1 2.6 10.3 2.8 9.5Z" fill="#0F172A" />
+      <path d="M14.5 21.2C13.7 21.4 12.9 21.5 12 21.5C11.1 21.5 10.3 21.4 9.5 21.2L10.2 18.5L13.8 18.5L14.5 21.2Z" fill="#0F172A" />
+    </svg>
+  );
+}
 
 // =====================================================================
 // 1. ĐỊNH NGHĨA KIỂU DỮ LIỆU & TABS (ÁNH XẠ 11 BẢNG CSDL)
@@ -131,6 +154,18 @@ export interface DonDatSan {
     ten_dich_vu: string;
     so_luong: number;
     gia_luc_ban: number;
+    don_vi_tinh?: string;
+    thanh_tien?: number;
+  }[];
+  chi_tiet_dich_vu?: {
+    id?: number;
+    ma_dich_vu: number;
+    ten_dich_vu: string;
+    so_luong: number;
+    gia_luc_ban?: number;
+    don_gia?: number;
+    don_vi_tinh?: string;
+    thanh_tien?: number;
   }[];
 }
 
@@ -232,146 +267,16 @@ const getAuthHeaders = () => {
   };
 };
 
-
-// =====================================================================
-// 2. DỮ LIỆU BAN ĐẦU (SEED DATA CHO 11 BẢNG)
-// =====================================================================
-
-const INITIAL_LOAI_SAN: LoaiSan[] = [
-  { id: 1, ten_loai: 'Sân 5 người', mo_ta: 'Cỏ nhân tạo FIFA Pro tiêu chuẩn 1000 Lux' },
-  { id: 2, ten_loai: 'Sân 7 người', mo_ta: 'Mặt cỏ mềm cao cấp tiêu chuẩn thi đấu' },
-  { id: 3, ten_loai: 'Sân Pickleball', mo_ta: 'Mặt sân cao su chuẩn quốc tế' },
-  { id: 4, ten_loai: 'Sân Cầu lông', mo_ta: 'Sàn gỗ chuyên dụng chống trơn' },
-];
-
-const INITIAL_SAN_BONG: SanBong[] = [
-  { id: 1, ma_loai_san: 1, ten_san: 'Sân 5A (Cỏ nhân tạo)', ten_loai: 'Sân 5 người', don_gia_phut: 5000, hinh_anh: '/images/san-5a.jpg', trang_thai: 'SAN_SANG' },
-  { id: 2, ma_loai_san: 1, ten_san: 'Sân 5B (Cỏ nhân tạo)', ten_loai: 'Sân 5 người', don_gia_phut: 5000, hinh_anh: '/images/san-5b.jpg', trang_thai: 'SAN_SANG' },
-  { id: 3, ma_loai_san: 1, ten_san: 'Sân 5C (VIP Sân Đêm)', ten_loai: 'Sân 5 người', don_gia_phut: 5500, hinh_anh: '/images/san-5c.jpg', trang_thai: 'SAN_SANG' },
-  { id: 4, ma_loai_san: 2, ten_san: 'Sân 7A (Sân Đại)', ten_loai: 'Sân 7 người', don_gia_phut: 8000, hinh_anh: '/images/san-7a.jpg', trang_thai: 'SAN_SANG' },
-  { id: 5, ma_loai_san: 2, ten_san: 'Sân 7B (Sân Đại)', ten_loai: 'Sân 7 người', don_gia_phut: 8500, hinh_anh: '/images/san-7b.jpg', trang_thai: 'SAN_SANG' },
-  { id: 6, ma_loai_san: 3, ten_san: 'Pickleball 01 (Indoor)', ten_loai: 'Sân Pickleball', don_gia_phut: 4500, hinh_anh: '/images/pb-1.jpg', trang_thai: 'SAN_SANG' },
-  { id: 7, ma_loai_san: 3, ten_san: 'Pickleball 02 (Outdoor)', ten_loai: 'Sân Pickleball', don_gia_phut: 4000, hinh_anh: '/images/pb-2.jpg', trang_thai: 'BAO_TRI' },
-  { id: 8, ma_loai_san: 4, ten_san: 'Cầu lông 01 (Trong nhà)', ten_loai: 'Sân Cầu lông', don_gia_phut: 3000, hinh_anh: '/images/cl-1.jpg', trang_thai: 'SAN_SANG' },
-];
-
-const INITIAL_DICH_VU: DichVu[] = [
-  { id: 1, ten_dich_vu: 'Nước khoáng Aquafina 500ml', don_gia: 10000, don_vi_tinh: 'Chai', ton_kho: 180 },
-  { id: 2, ten_dich_vu: 'Nước tăng lực Revive Chanh Muối', don_gia: 20000, don_vi_tinh: 'Chai', ton_kho: 95 },
-  { id: 3, ten_dich_vu: 'Nước điện giải Pocari Sweat 500ml', don_gia: 25000, don_vi_tinh: 'Chai', ton_kho: 60 },
-  { id: 4, ten_dich_vu: 'Thuê áo Bib phân đội (Bộ 10 áo)', don_gia: 30000, don_vi_tinh: 'Bộ / Trận', ton_kho: 25 },
-  { id: 5, ten_dich_vu: 'Thuê giày bóng đá cỏ nhân tạo', don_gia: 40000, don_vi_tinh: 'Đôi / Trận', ton_kho: 35 },
-  { id: 6, ten_dich_vu: 'Thuê trọng tài bắt trận chuyên nghiệp', don_gia: 200000, don_vi_tinh: 'Người / Trận', ton_kho: 5 },
-];
-
-const INITIAL_VAI_TRO: VaiTro[] = [
-  { MaVaiTro: 1, TenVaiTro: 'ADMIN', MoTa: 'Quản trị viên toàn quyền hệ thống' },
-  { MaVaiTro: 2, TenVaiTro: 'NHAN_VIEN', MoTa: 'Nhân viên quầy vận hành sân & POS' },
-  { MaVaiTro: 3, TenVaiTro: 'KHACH_HANG', MoTa: 'Khách hàng đặt sân trực tuyến' }
-];
-
-const INITIAL_NGUOI_DUNG: NguoiDung[] = [
-  { id: 1, ho_ten: 'Quản Trị Viên Hệ Thống', email: 'admin@soccer247.vn', so_dien_thoai: '0909123456', vai_tro: 'ADMIN', MaVaiTro: 1, TenVaiTro: 'ADMIN', ngay_tao: '2026-01-10' },
-  { id: 2, ho_ten: 'Trần Văn Nhân (Nhân viên Quầy)', email: 'staff@soccer247.vn', so_dien_thoai: '0909789789', vai_tro: 'NHAN_VIEN', MaVaiTro: 2, TenVaiTro: 'NHAN_VIEN', ngay_tao: '2026-02-15' },
-  { id: 3, ho_ten: 'Nguyễn Văn Đạt (Đội Trưởng FC Thunder)', email: 'vandat.soccer@gmail.com', so_dien_thoai: '0988776655', vai_tro: 'KHACH_HANG', MaVaiTro: 3, TenVaiTro: 'KHACH_HANG', ngay_tao: '2026-03-01' },
-  { id: 4, ho_ten: 'Lê Hoàng Long (CLB Sài Gòn Star)', email: 'hoanglong.fc@gmail.com', so_dien_thoai: '0912345999', vai_tro: 'KHACH_HANG', MaVaiTro: 3, TenVaiTro: 'KHACH_HANG', ngay_tao: '2026-03-12' },
-  { id: 5, ho_ten: 'Phạm Minh Đức (Pickleball Pro)', email: 'minhduc.tennis@gmail.com', so_dien_thoai: '0977112233', vai_tro: 'KHACH_HANG', MaVaiTro: 3, TenVaiTro: 'KHACH_HANG', ngay_tao: '2026-03-20' },
-];
-
-const INITIAL_DON_DAT: DonDatSan[] = [
-  {
-    id: 101,
-    ma_nguoi_dung: 3,
-    ten_khach_hang: 'Nguyễn Văn Đạt',
-    so_dien_thoai: '0988776655',
-    ma_san: 1,
-    ten_san: 'Sân 5A (Cỏ nhân tạo)',
-    ngay_da: new Date().toISOString().split('T')[0],
-    gio_bat_dau: '17:15',
-    gio_ket_thuc: '18:40',
-    tien_san: 496000,
-    tong_tien: 556000,
-    tien_coc_da_tra: 200000,
-    kieu_dat: 'LINH_HOAT',
-    so_phut_da: 85,
-    ghi_chu: 'Khách đá linh hoạt 85 phút',
-    trang_thai: 'DA_CHOT',
-    dich_vu_da_dung: [
-      { ma_dich_vu: 2, ten_dich_vu: 'Nước tăng lực Revive Chanh Muối', so_luong: 3, gia_luc_ban: 20000 }
-    ]
-  },
-  {
-    id: 102,
-    ma_nguoi_dung: 4,
-    ten_khach_hang: 'Lê Hoàng Long',
-    so_dien_thoai: '0912345999',
-    ma_san: 4,
-    ten_san: 'Sân 7A (Sân Đại)',
-    ngay_da: new Date().toISOString().split('T')[0],
-    gio_bat_dau: '18:00',
-    gio_ket_thuc: '19:30',
-    tien_san: 650000,
-    tong_tien: 750000,
-    tien_coc_da_tra: 200000,
-    kieu_dat: 'CO_DINH',
-    so_phut_da: 90,
-    ghi_chu: 'Đá giao hữu cuối tuần',
-    trang_thai: 'DA_CHOT',
-    dich_vu_da_dung: [
-      { ma_dich_vu: 1, ten_dich_vu: 'Nước khoáng Aquafina 500ml', so_luong: 4, gia_luc_ban: 10000 },
-      { ma_dich_vu: 4, ten_dich_vu: 'Thuê áo Bib phân đội (Bộ 10 áo)', so_luong: 2, gia_luc_ban: 30000 }
-    ]
-  },
-  {
-    id: 103,
-    ma_nguoi_dung: 5,
-    ten_khach_hang: 'Phạm Minh Đức',
-    so_dien_thoai: '0977112233',
-    ma_san: 6,
-    ten_san: 'Pickleball 01 (Indoor)',
-    ngay_da: new Date().toISOString().split('T')[0],
-    gio_bat_dau: '16:30',
-    gio_ket_thuc: '18:00',
-    tien_san: 260000,
-    tong_tien: 260000,
-    tien_coc_da_tra: 80000,
-    kieu_dat: 'CO_DINH',
-    so_phut_da: 90,
-    trang_thai: 'CHO_XAC_NHAN',
-    dich_vu_da_dung: []
+const formatVNDate = (dateStr?: string) => {
+  if (!dateStr) return '';
+  const raw = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  const parts = raw.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
-];
+  return raw;
+};
 
-const INITIAL_CHI_TIET_DICH_VU: ChiTietDichVu[] = [
-  { id: 1, ma_don_dat: 101, ten_khach_hang: 'Nguyễn Văn Đạt', ten_san: 'Sân 5A', ma_dich_vu: 2, ten_dich_vu: 'Nước tăng lực Revive Chanh Muối', don_vi_tinh: 'Chai', so_luong: 3, gia_luc_ban: 20000, thanh_tien: 60000, ngay_tao: '2026-09-29 17:30' },
-  { id: 2, ma_don_dat: 102, ten_khach_hang: 'Lê Hoàng Long', ten_san: 'Sân 7A', ma_dich_vu: 1, ten_dich_vu: 'Nước khoáng Aquafina 500ml', don_vi_tinh: 'Chai', so_luong: 4, gia_luc_ban: 10000, thanh_tien: 40000, ngay_tao: '2026-09-29 18:10' },
-  { id: 3, ma_don_dat: 102, ten_khach_hang: 'Lê Hoàng Long', ten_san: 'Sân 7A', ma_dich_vu: 4, ten_dich_vu: 'Thuê áo Bib phân đội (Bộ 10 áo)', don_vi_tinh: 'Bộ', so_luong: 2, gia_luc_ban: 30000, thanh_tien: 60000, ngay_tao: '2026-09-29 18:15' }
-];
-
-const INITIAL_PHIEU_NHAP: PhieuNhapKho[] = [
-  { id: 1, ma_dich_vu: 1, ten_dich_vu: 'Nước khoáng Aquafina 500ml', don_vi_tinh: 'Chai', so_luong_nhap: 200, gia_nhap: 5500, tong_tien_nhap: 1100000, ngay_nhap: '2026-09-20' },
-  { id: 2, ma_dich_vu: 2, ten_dich_vu: 'Nước tăng lực Revive Chanh Muối', don_vi_tinh: 'Chai', so_luong_nhap: 100, gia_nhap: 12000, tong_tien_nhap: 1200000, ngay_nhap: '2026-09-22' },
-  { id: 3, ma_dich_vu: 3, ten_dich_vu: 'Nước điện giải Pocari Sweat 500ml', don_vi_tinh: 'Chai', so_luong_nhap: 80, gia_nhap: 16000, tong_tien_nhap: 1280000, ngay_nhap: '2026-09-25' }
-];
-
-const INITIAL_THANH_TOAN: ThanhToan[] = [
-  { id: 1, ma_don_dat: 101, ten_khach_hang: 'Nguyễn Văn Đạt', so_dien_thoai: '0988776655', ten_san: 'Sân 5A', ngay_da: '2026-09-29', so_tien: 200000, phuong_thuc: 'CHUYEN_KHOAN', loai_thanh_toan: 'DAT_COC', ma_giao_dich: 'CK_987123', ngay_thanh_toan: '2026-09-29 14:00' },
-  { id: 2, ma_don_dat: 102, ten_khach_hang: 'Lê Hoàng Long', so_dien_thoai: '0912345999', ten_san: 'Sân 7A', ngay_da: '2026-09-29', so_tien: 200000, phuong_thuc: 'CHUYEN_KHOAN', loai_thanh_toan: 'DAT_COC', ma_giao_dich: 'CK_445566', ngay_thanh_toan: '2026-09-29 15:30' },
-  { id: 3, ma_don_dat: 103, ten_khach_hang: 'Phạm Minh Đức', so_dien_thoai: '0977112233', ten_san: 'Pickleball 01', ngay_da: '2026-09-29', so_tien: 80000, phuong_thuc: 'TIEN_MAT', loai_thanh_toan: 'DAT_COC', ma_giao_dich: 'CASH_01', ngay_thanh_toan: '2026-09-29 16:00' }
-];
-
-const INITIAL_HOAN_TIEN: LichSuHoanTien[] = [
-  { id: 1, ma_don_dat: 99, ten_khach_hang: 'Vũ Quốc Huy', so_dien_thoai: '0933221100', ten_san: 'Sân 5B', ngay_da: '2026-09-28', so_tien_hoan: 100000, ty_le_hoan: 100, ly_do_huy: 'Báo hủy trước 24h do trời mưa to', ngay_hoan: '2026-09-28 10:30' },
-  { id: 2, ma_don_dat: 98, ten_khach_hang: 'Hoàng Mai Lan', so_dien_thoai: '0911889977', ten_san: 'Sân Pickleball 02', ngay_da: '2026-09-27', so_tien_hoan: 40000, ty_le_hoan: 50, ly_do_huy: 'Báo hủy trước 6h đá, trừ 50% phí giữ chỗ', ngay_hoan: '2026-09-27 12:00' }
-];
-
-const TIME_SLOTS = [
-  { start: '15:00', end: '16:30', isGold: false },
-  { start: '16:30', end: '18:00', isGold: true },
-  { start: '18:00', end: '19:30', isGold: true },
-  { start: '19:30', end: '21:00', isGold: true },
-  { start: '21:00', end: '22:30', isGold: false }
-];
 
 interface SidebarItem {
   id: TabType;
@@ -387,36 +292,6 @@ interface SidebarGroup {
   items: SidebarItem[];
 }
 
-const INITIAL_KHUNG_GIO: KhungGio[] = [
-  { id: 1, gio_bat_dau: '06:00', gio_ket_thuc: '06:30', nhan_hien_thi: '6h', thu_tu: 1, trang_thai: true },
-  { id: 2, gio_bat_dau: '06:30', gio_ket_thuc: '07:00', nhan_hien_thi: '6h30', thu_tu: 2, trang_thai: true },
-  { id: 3, gio_bat_dau: '07:00', gio_ket_thuc: '07:30', nhan_hien_thi: '7h', thu_tu: 3, trang_thai: true },
-  { id: 4, gio_bat_dau: '07:30', gio_ket_thuc: '08:00', nhan_hien_thi: '7h30', thu_tu: 4, trang_thai: true },
-  { id: 5, gio_bat_dau: '08:00', gio_ket_thuc: '08:30', nhan_hien_thi: '8h', thu_tu: 5, trang_thai: true },
-  { id: 6, gio_bat_dau: '08:30', gio_ket_thuc: '09:00', nhan_hien_thi: '8h30', thu_tu: 6, trang_thai: true },
-  { id: 7, gio_bat_dau: '09:00', gio_ket_thuc: '09:30', nhan_hien_thi: '9h', thu_tu: 7, trang_thai: true },
-  { id: 8, gio_bat_dau: '09:30', gio_ket_thuc: '10:00', nhan_hien_thi: '9h30', thu_tu: 8, trang_thai: true },
-  { id: 9, gio_bat_dau: '10:00', gio_ket_thuc: '10:30', nhan_hien_thi: '10h', thu_tu: 9, trang_thai: true },
-  { id: 10, gio_bat_dau: '10:30', gio_ket_thuc: '11:00', nhan_hien_thi: '10h30', thu_tu: 10, trang_thai: true },
-  { id: 11, gio_bat_dau: '11:00', gio_ket_thuc: '11:30', nhan_hien_thi: '11h', thu_tu: 11, trang_thai: true },
-  { id: 12, gio_bat_dau: '11:30', gio_ket_thuc: '12:00', nhan_hien_thi: '11h30', thu_tu: 12, trang_thai: true },
-  { id: 13, gio_bat_dau: '12:00', gio_ket_thuc: '12:30', nhan_hien_thi: '12h', thu_tu: 13, trang_thai: true },
-  { id: 14, gio_bat_dau: '12:30', gio_ket_thuc: '13:00', nhan_hien_thi: '12h30', thu_tu: 14, trang_thai: true },
-  { id: 15, gio_bat_dau: '13:00', gio_ket_thuc: '13:30', nhan_hien_thi: '13h', thu_tu: 15, trang_thai: true },
-  { id: 16, gio_bat_dau: '13:30', gio_ket_thuc: '14:00', nhan_hien_thi: '13h30', thu_tu: 16, trang_thai: true },
-  { id: 17, gio_bat_dau: '14:00', gio_ket_thuc: '14:30', nhan_hien_thi: '14h', thu_tu: 17, trang_thai: true },
-  { id: 18, gio_bat_dau: '14:30', gio_ket_thuc: '15:00', nhan_hien_thi: '14h30', thu_tu: 18, trang_thai: true },
-  { id: 19, gio_bat_dau: '15:00', gio_ket_thuc: '15:30', nhan_hien_thi: '15h', thu_tu: 19, trang_thai: true },
-  { id: 20, gio_bat_dau: '15:30', gio_ket_thuc: '16:00', nhan_hien_thi: '15h30', thu_tu: 20, trang_thai: true },
-  { id: 21, gio_bat_dau: '16:00', gio_ket_thuc: '16:30', nhan_hien_thi: '16h', thu_tu: 21, trang_thai: true },
-  { id: 22, gio_bat_dau: '16:30', gio_ket_thuc: '17:00', nhan_hien_thi: '16h30', thu_tu: 22, trang_thai: true },
-  { id: 23, gio_bat_dau: '17:00', gio_ket_thuc: '17:30', nhan_hien_thi: '17h', thu_tu: 23, trang_thai: true },
-  { id: 24, gio_bat_dau: '17:30', gio_ket_thuc: '18:00', nhan_hien_thi: '17h30', thu_tu: 24, trang_thai: true },
-  { id: 25, gio_bat_dau: '18:00', gio_ket_thuc: '18:30', nhan_hien_thi: '18h', thu_tu: 25, trang_thai: true },
-  { id: 26, gio_bat_dau: '18:30', gio_ket_thuc: '19:00', nhan_hien_thi: '18h30', thu_tu: 26, trang_thai: true },
-  { id: 27, gio_bat_dau: '19:00', gio_ket_thuc: '19:30', nhan_hien_thi: '19h', thu_tu: 27, trang_thai: true },
-];
-
 // Cấu trúc cây Menu Sidebar chuẩn
 const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
@@ -431,7 +306,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     groupIcon: Trophy,
     items: [
       { id: 'SAN_BONG', label: 'Danh Sách Sân Bóng', icon: Layers, tableHint: 'San_Bong' },
-      { id: 'LOAI_SAN_GIA', label: 'Loại Sân & Bảng Giá', icon: Clock, tableHint: 'Loai_San, Khung_Gio_Gia' }
+      { id: 'LOAI_SAN_GIA', label: 'Loại Sân', icon: Layers, tableHint: 'Loai_San' }
     ]
   },
   {
@@ -477,23 +352,23 @@ export default function AdminDashboard() {
   const [adminLoginError, setAdminLoginError] = useState<string>('');
   const [isAdminLoggingIn, setIsAdminLoggingIn] = useState<boolean>(false);
 
-  // Dữ liệu 11 Bảng CSDL
-  const [courtList, setCourtList] = useState<SanBong[]>(INITIAL_SAN_BONG);
-  const [categoryList, setCategoryList] = useState<LoaiSan[]>(INITIAL_LOAI_SAN);
-  const [bookingList, setBookingList] = useState<DonDatSan[]>(INITIAL_DON_DAT);
-  const [serviceDetailList, setServiceDetailList] = useState<ChiTietDichVu[]>(INITIAL_CHI_TIET_DICH_VU);
-  const [serviceList, setServiceList] = useState<DichVu[]>(INITIAL_DICH_VU);
-  const [inventoryList, setInventoryList] = useState<PhieuNhapKho[]>(INITIAL_PHIEU_NHAP);
-  const [paymentList, setPaymentList] = useState<ThanhToan[]>(INITIAL_THANH_TOAN);
-  const [refundList, setRefundList] = useState<LichSuHoanTien[]>(INITIAL_HOAN_TIEN);
-  const [khungGioList, setKhungGioList] = useState<KhungGio[]>(INITIAL_KHUNG_GIO);
-  const [userList, setUserList] = useState<NguoiDung[]>(INITIAL_NGUOI_DUNG);
-  const [roleList, setRoleList] = useState<VaiTro[]>(INITIAL_VAI_TRO);
+  // Dữ liệu 11 Bảng CSDL từ SQL Server (100% Real Database Data)
+  const [courtList, setCourtList] = useState<SanBong[]>([]);
+  const [categoryList, setCategoryList] = useState<LoaiSan[]>([]);
+  const [bookingList, setBookingList] = useState<DonDatSan[]>([]);
+  const [serviceDetailList, setServiceDetailList] = useState<ChiTietDichVu[]>([]);
+  const [serviceList, setServiceList] = useState<DichVu[]>([]);
+  const [inventoryList, setInventoryList] = useState<PhieuNhapKho[]>([]);
+  const [paymentList, setPaymentList] = useState<ThanhToan[]>([]);
+  const [refundList, setRefundList] = useState<LichSuHoanTien[]>([]);
+  const [khungGioList, setKhungGioList] = useState<KhungGio[]>([]);
+  const [userList, setUserList] = useState<NguoiDung[]>([]);
+  const [roleList, setRoleList] = useState<VaiTro[]>([]);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [searchFilter, setSearchFilter] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
 
   useEffect(() => {
     if (toastMessage) {
@@ -501,6 +376,72 @@ export default function AdminDashboard() {
       return () => clearTimeout(t);
     }
   }, [toastMessage]);
+
+  // Xử lý tải ảnh từ File máy tính lên Cloudinary
+  const handleUploadImageFile = async (file: File) => {
+    setIsUploadingImage(true);
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
+      const res = await fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        setCourtModal((prev) => ({ ...prev, data: { ...prev.data, hinh_anh: data.url } }));
+        setToastMessage({ type: 'success', message: '☁️ Đã tải ảnh lên Cloudinary thành công!' });
+      } else {
+        setToastMessage({ type: 'error', message: data.message || 'Lỗi tải ảnh lên Cloudinary' });
+      }
+    } catch (err: any) {
+      console.error('Lỗi upload file:', err);
+      setToastMessage({ type: 'error', message: err.message || 'Không thể kết nối máy chủ để upload ảnh' });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Xử lý Dán link ảnh và chuyển sang lưu trữ trên Cloudinary
+  const handleUploadImageUrl = async (url: string) => {
+    if (!url || !url.trim()) {
+      setToastMessage({ type: 'error', message: 'Vui lòng nhập đường link ảnh!' });
+      return;
+    }
+    if (url.includes('cloudinary.com')) {
+      setToastMessage({ type: 'info', message: 'Link ảnh này đã nằm trên Cloudinary!' });
+      return;
+    }
+    setIsUploadingImage(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
+      const res = await fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ url: url.trim() })
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        setCourtModal((prev) => ({ ...prev, data: { ...prev.data, hinh_anh: data.url } }));
+        setToastMessage({ type: 'success', message: '☁️ Đã chuyển đổi và lưu ảnh lên Cloudinary!' });
+      } else {
+        setToastMessage({ type: 'error', message: data.message || 'Lỗi chuyển đổi link ảnh sang Cloudinary' });
+      }
+    } catch (err: any) {
+      console.error('Lỗi upload url:', err);
+      setToastMessage({ type: 'error', message: err.message || 'Không thể kết nối máy chủ để upload ảnh từ link' });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
   // Kiểm tra quyền Admin khi tải trang
   const verifyAdminRole = (): boolean => {
@@ -615,72 +556,72 @@ export default function AdminDashboard() {
       const resCourts = await fetch(`${API_BASE}/dat-san/san-bong`);
       if (resCourts.ok) {
         const data = await resCourts.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setCourtList(data.data);
+        if (data.success && Array.isArray(data.data)) setCourtList(data.data);
       }
 
       const resLoai = await fetch(`${API_BASE}/dat-san/loai-san`);
       if (resLoai.ok) {
         const data = await resLoai.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setCategoryList(data.data);
+        if (data.success && Array.isArray(data.data)) setCategoryList(data.data);
       }
 
       const resBookings = await fetch(`${API_BASE}/dat-san/tat-ca-don`);
       if (resBookings.ok) {
         const data = await resBookings.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
-          setBookingList(data.data.map((b: any) => ({ ...b, dich_vu_da_dung: b.dich_vu_da_dung || [] })));
+        if (data.success && Array.isArray(data.data)) {
+          setBookingList(data.data.map((b: any) => ({ ...b, dich_vu_da_dung: b.dich_vu_da_dung || b.chi_tiet_dich_vu || [] })));
         }
       }
 
       const resDetails = await fetch(`${API_BASE}/dich-vu/chi-tiet-ban-hang`);
       if (resDetails.ok) {
         const data = await resDetails.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setServiceDetailList(data.data);
+        if (data.success && Array.isArray(data.data)) setServiceDetailList(data.data);
       }
 
       const resServices = await fetch(`${API_BASE}/dich-vu`);
       if (resServices.ok) {
         const data = await resServices.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setServiceList(data.data);
+        if (data.success && Array.isArray(data.data)) setServiceList(data.data);
       }
 
       const resNhap = await fetch(`${API_BASE}/dich-vu/phieu-nhap`);
       if (resNhap.ok) {
         const data = await resNhap.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setInventoryList(data.data);
+        if (data.success && Array.isArray(data.data)) setInventoryList(data.data);
       }
 
       const resPayments = await fetch(`${API_BASE}/thanh-toan/danh-sach`);
       if (resPayments.ok) {
         const data = await resPayments.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setPaymentList(data.data);
+        if (data.success && Array.isArray(data.data)) setPaymentList(data.data);
       }
 
       const resRefunds = await fetch(`${API_BASE}/thanh-toan/hoan-tien`);
       if (resRefunds.ok) {
         const data = await resRefunds.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setRefundList(data.data);
+        if (data.success && Array.isArray(data.data)) setRefundList(data.data);
       }
 
       const resKhung = await fetch(`${API_BASE}/dat-san/khung-gio/all`);
       if (resKhung.ok) {
         const data = await resKhung.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setKhungGioList(data.data);
+        if (data.success && Array.isArray(data.data)) setKhungGioList(data.data);
       }
 
       const resUsers = await fetch(`${API_BASE}/auth/users`);
       if (resUsers.ok) {
         const data = await resUsers.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setUserList(data.data);
+        if (data.success && Array.isArray(data.data)) setUserList(data.data);
       }
 
       const resRoles = await fetch(`${API_BASE}/auth/vai-tro`);
       if (resRoles.ok) {
         const data = await resRoles.json();
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) setRoleList(data.data);
+        if (data.success && Array.isArray(data.data)) setRoleList(data.data);
       }
     } catch (err) {
-      console.warn('Using local state backup.', err);
+      console.warn('Lỗi tải dữ liệu từ CSDL:', err);
     } finally {
       setIsLoading(false);
     }
@@ -696,7 +637,20 @@ export default function AdminDashboard() {
 
   const [courtModal, setCourtModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<SanBong> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [loaiSanModal, setLoaiSanModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<LoaiSan> }>({ isOpen: false, mode: 'ADD', data: {} });
-  const [serviceModal, setServiceModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<DichVu> }>({ isOpen: false, mode: 'ADD', data: {} });
+  const [serviceModal, setServiceModal] = useState<{
+    isOpen: boolean;
+    mode: 'ADD' | 'EDIT';
+    data: Partial<DichVu> & {
+      tao_phieu_nhap?: boolean;
+      so_luong_nhap?: number;
+      gia_nhap?: number;
+      ngay_nhap?: string;
+    };
+  }>({
+    isOpen: false,
+    mode: 'ADD',
+    data: { don_vi_tinh: 'Chai', ton_kho: 0, tao_phieu_nhap: true, so_luong_nhap: 50, gia_nhap: 10000, ngay_nhap: new Date().toISOString().split('T')[0] }
+  });
   const [importStockModal, setImportStockModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<PhieuNhapKho> }>({ isOpen: false, mode: 'ADD', data: { ma_dich_vu: 1, so_luong_nhap: 50, gia_nhap: 12000 } });
   const [bookingModal, setBookingModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: any }>({
     isOpen: false,
@@ -802,11 +756,11 @@ export default function AdminDashboard() {
       .reduce((sum, b) => sum + Number(b.tong_tien || 0), 0);
     const totalOrders = bookingList.length;
     const activeCourtsCount = bookingList.filter((b) => b.trang_thai === 'DA_CHOT').length;
-    const totalPossibleSlots = (courtList.length || 1) * TIME_SLOTS.length;
+    const totalPossibleSlots = (courtList.length || 1) * (khungGioList.length || 27);
     const occupancyRate = totalPossibleSlots > 0 ? Math.round((activeCourtsCount / totalPossibleSlots) * 100) : 0;
 
     return { totalRevenue, totalOrders, activeCourtsCount, occupancyRate };
-  }, [bookingList, courtList]);
+  }, [bookingList, courtList, khungGioList]);
 
   // =====================================================================
   // HANDLERS CRUD CHO TẤT CẢ CÁC BẢNG (GỌI STORED PROCEDURES)
@@ -869,6 +823,9 @@ export default function AdminDashboard() {
     setToastMessage({ type: 'success', message: `⚡ Đã tạo đơn đặt sân [${so_phut} phút - ${tien_san.toLocaleString('vi-VN')} đ]!` });
   };
 
+  // State ảnh chờ upload Cloudinary khi nhấn Lưu
+  const [pendingCourtImageFile, setPendingCourtImageFile] = useState<File | null>(null);
+
   // 2. Thêm/Sửa Sân Bóng (San_Bong)
   const handleSaveCourt = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -878,16 +835,97 @@ export default function AdminDashboard() {
       return;
     }
 
+    setIsUploadingImage(true);
+    let finalImageUrl = hinh_anh || '';
+
     try {
+      const oldCourt = courtList.find((c) => c.id === id);
+      const oldImageUrl = oldCourt?.hinh_anh || '';
+
+      // Trường hợp 1: Có File ảnh từ máy tính đang chờ Lưu -> Xóa ảnh cũ & Đẩy lên Cloudinary
+      if (pendingCourtImageFile) {
+        if (oldImageUrl && oldImageUrl.includes('cloudinary.com')) {
+          try {
+            await fetch(`${API_BASE}/upload/delete`, {
+              method: 'POST',
+              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: oldImageUrl })
+            });
+          } catch (e) {
+            console.warn('Lỗi xóa ảnh cũ Cloudinary:', e);
+          }
+        }
+
+        const formData = new FormData();
+        formData.append('image', pendingCourtImageFile);
+        const uploadRes = await fetch(`${API_BASE}/upload`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: formData
+        });
+        const uploadData = await uploadRes.json();
+        if (uploadData.success && uploadData.url) {
+          finalImageUrl = uploadData.url;
+        } else {
+          setToastMessage({ type: 'error', message: uploadData.message || 'Lỗi tải ảnh lên Cloudinary!' });
+          setIsUploadingImage(false);
+          return;
+        }
+      }
+      // Trường hợp 2: Có Link ảnh ngoài dán vào (chưa lên Cloudinary) -> Xóa ảnh cũ & Chuyển sang Cloudinary
+      else if (finalImageUrl && !finalImageUrl.includes('cloudinary.com') && !finalImageUrl.startsWith('blob:')) {
+        if (oldImageUrl && oldImageUrl.includes('cloudinary.com') && oldImageUrl !== finalImageUrl) {
+          try {
+            await fetch(`${API_BASE}/upload/delete`, {
+              method: 'POST',
+              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: oldImageUrl })
+            });
+          } catch (e) {
+            console.warn('Lỗi xóa ảnh cũ Cloudinary:', e);
+          }
+        }
+
+        const uploadRes = await fetch(`${API_BASE}/upload`, {
+          method: 'POST',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: finalImageUrl })
+        });
+        const uploadData = await uploadRes.json();
+        if (uploadData.success && uploadData.url) {
+          finalImageUrl = uploadData.url;
+        }
+      }
+      // Trường hợp 3: Người dùng đã xóa ảnh -> Xóa ảnh cũ trên Cloudinary
+      else if (!finalImageUrl && oldImageUrl && oldImageUrl.includes('cloudinary.com')) {
+        try {
+          await fetch(`${API_BASE}/upload/delete`, {
+            method: 'POST',
+            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: oldImageUrl })
+          });
+        } catch (e) {
+          console.warn('Lỗi xóa ảnh cũ Cloudinary:', e);
+        }
+      }
+
+      setPendingCourtImageFile(null);
+
       if (courtModal.mode === 'ADD') {
         const res = await fetch(`${API_BASE}/dat-san/san-bong`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ten_san, ma_loai_san: Number(ma_loai_san), don_gia_phut: Number(don_gia_phut || 5000), hinh_anh: hinh_anh || '', trang_thai: trang_thai || 'SAN_SANG' })
+          body: JSON.stringify({
+            ten_san,
+            ma_loai_san: Number(ma_loai_san),
+            don_gia_phut: Number(don_gia_phut || 5000),
+            hinh_anh: finalImageUrl,
+            trang_thai: trang_thai || 'SAN_SANG'
+          })
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage({ type: 'success', message: `✅ Đã thêm sân bóng mới [${ten_san}]!` });
+          setToastMessage({ type: 'success', message: `✅ Đã thêm sân [${ten_san}] & lưu ảnh Cloudinary thành công!` });
           loadAllDataFromBackend();
           setCourtModal({ isOpen: false, mode: 'ADD', data: {} });
           return;
@@ -896,25 +934,35 @@ export default function AdminDashboard() {
         const res = await fetch(`${API_BASE}/dat-san/san-bong/${id}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ten_san, ma_loai_san: Number(ma_loai_san), don_gia_phut: Number(don_gia_phut || 5000), hinh_anh: hinh_anh || '', trang_thai: trang_thai || 'SAN_SANG' })
+          body: JSON.stringify({
+            ten_san,
+            ma_loai_san: Number(ma_loai_san),
+            don_gia_phut: Number(don_gia_phut || 5000),
+            hinh_anh: finalImageUrl,
+            trang_thai: trang_thai || 'SAN_SANG'
+          })
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage({ type: 'success', message: `✅ Đã cập nhật sân [${ten_san}]!` });
+          setToastMessage({ type: 'success', message: `✅ Đã cập nhật sân [${ten_san}] & đồng bộ ảnh Cloudinary thành công!` });
           loadAllDataFromBackend();
           setCourtModal({ isOpen: false, mode: 'ADD', data: {} });
           return;
         }
       }
-    } catch (err) {}
+    } catch (err: any) {
+      console.error('Lỗi lưu sân bóng:', err);
+    } finally {
+      setIsUploadingImage(false);
+    }
 
     const loai = categoryList.find((l) => l.id === Number(ma_loai_san));
     if (courtModal.mode === 'ADD') {
       const newId = Math.max(...courtList.map((c) => c.id), 0) + 1;
-      setCourtList([...courtList, { id: newId, ma_loai_san: Number(ma_loai_san), ten_san, ten_loai: loai?.ten_loai || '', don_gia_phut: Number(don_gia_phut || 5000), hinh_anh: '', trang_thai: (trang_thai as any) || 'SAN_SANG' }]);
+      setCourtList([...courtList, { id: newId, ma_loai_san: Number(ma_loai_san), ten_san, ten_loai: loai?.ten_loai || '', don_gia_phut: Number(don_gia_phut || 5000), hinh_anh: finalImageUrl, trang_thai: (trang_thai as any) || 'SAN_SANG' }]);
       setToastMessage({ type: 'success', message: `✅ Đã thêm sân mới [${ten_san}]!` });
     } else {
-      setCourtList(courtList.map((c) => (c.id === id ? { ...c, ten_san, ma_loai_san: Number(ma_loai_san), ten_loai: loai?.ten_loai || c.ten_loai, don_gia_phut: Number(don_gia_phut || c.don_gia_phut || 5000), trang_thai: trang_thai as any } : c)));
+      setCourtList(courtList.map((c) => (c.id === id ? { ...c, ten_san, ma_loai_san: Number(ma_loai_san), ten_loai: loai?.ten_loai || c.ten_loai, don_gia_phut: Number(don_gia_phut || c.don_gia_phut || 5000), hinh_anh: finalImageUrl, trang_thai: trang_thai as any } : c)));
       setToastMessage({ type: 'success', message: `✅ Đã cập nhật sân [${ten_san}]!` });
     }
     setCourtModal({ isOpen: false, mode: 'ADD', data: {} });
@@ -1022,51 +1070,102 @@ export default function AdminDashboard() {
   // 4. Thêm/Sửa Dịch Vụ (Dich_Vu)
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ten_dich_vu, don_gia, don_vi_tinh, ton_kho } = serviceModal.data;
-    if (!ten_dich_vu || !don_gia || !don_vi_tinh) {
-      setToastMessage({ type: 'error', message: 'Vui lòng điền đầy đủ tên dịch vụ, đơn giá và đơn vị tính!' });
+    const { id, ten_dich_vu, don_gia, don_vi_tinh, tao_phieu_nhap, so_luong_nhap, gia_nhap, ngay_nhap } = serviceModal.data;
+    const finalDonViTinh = don_vi_tinh?.trim() || 'Chai';
+    if (!ten_dich_vu || !don_gia) {
+      setToastMessage({ type: 'error', message: 'Vui lòng điền đầy đủ tên dịch vụ và đơn giá bán!' });
       return;
     }
+
+    const shouldCreatePhieuNhap = serviceModal.mode === 'ADD' && (tao_phieu_nhap ?? true) && Number(so_luong_nhap || 0) > 0;
+    const finalTonKho = shouldCreatePhieuNhap ? Number(so_luong_nhap) : Number(serviceModal.data.ton_kho || 0);
 
     try {
       if (serviceModal.mode === 'ADD') {
         const res = await fetch(`${API_BASE}/dich-vu`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ten_dich_vu, don_gia: Number(don_gia), don_vi_tinh, ton_kho: Number(ton_kho || 0) })
+          body: JSON.stringify({
+            ten_dich_vu: ten_dich_vu.trim(),
+            don_gia: Number(don_gia),
+            don_vi_tinh: finalDonViTinh,
+            ton_kho: 0
+          })
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage({ type: 'success', message: `✅ Đã thêm dịch vụ [${ten_dich_vu}] thành công!` });
+          const newId = data.data?.id || data.data?.ma_dich_vu;
+          if (shouldCreatePhieuNhap && newId) {
+            try {
+              await fetch(`${API_BASE}/dich-vu/nhap-kho`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                  ma_dich_vu: Number(newId),
+                  so_luong_nhap: Number(so_luong_nhap),
+                  gia_nhap: Number(gia_nhap || 10000)
+                })
+              });
+            } catch (errNhap) {
+              console.warn('Lỗi tạo phiếu nhập kho ban đầu:', errNhap);
+            }
+          }
+          setToastMessage({
+            type: 'success',
+            message: shouldCreatePhieuNhap
+              ? `✅ Đã thêm dịch vụ [${ten_dich_vu}] và tạo phiếu nhập kho (${so_luong_nhap} ${finalDonViTinh})!`
+              : `✅ Đã thêm dịch vụ [${ten_dich_vu}] thành công!`
+          });
           loadAllDataFromBackend();
-          setServiceModal({ isOpen: false, mode: 'ADD', data: {} });
+          setServiceModal({ isOpen: false, mode: 'ADD', data: { don_vi_tinh: 'Chai', ton_kho: 0 } });
           return;
         }
       } else {
         const res = await fetch(`${API_BASE}/dich-vu/${id}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ten_dich_vu, don_gia: Number(don_gia), don_vi_tinh, ton_kho: Number(ton_kho || 0) })
+          body: JSON.stringify({
+            ten_dich_vu: ten_dich_vu.trim(),
+            don_gia: Number(don_gia),
+            don_vi_tinh: finalDonViTinh,
+            ton_kho: Number(serviceModal.data.ton_kho || 0)
+          })
         });
         const data = await res.json();
         if (data.success) {
           setToastMessage({ type: 'success', message: `✅ Đã cập nhật dịch vụ [${ten_dich_vu}]!` });
           loadAllDataFromBackend();
-          setServiceModal({ isOpen: false, mode: 'ADD', data: {} });
+          setServiceModal({ isOpen: false, mode: 'ADD', data: { don_vi_tinh: 'Chai', ton_kho: 0 } });
           return;
         }
       }
     } catch (err) {}
 
+    // Fallback local update nếu chưa kết nối API
     if (serviceModal.mode === 'ADD') {
       const newId = Math.max(...serviceList.map((s) => s.id), 0) + 1;
-      setServiceList([...serviceList, { id: newId, ten_dich_vu, don_gia: Number(don_gia), don_vi_tinh, ton_kho: Number(ton_kho || 0) }]);
-      setToastMessage({ type: 'success', message: `✅ Đã thêm dịch vụ [${ten_dich_vu}]!` });
+      setServiceList([...serviceList, { id: newId, ten_dich_vu: ten_dich_vu.trim(), don_gia: Number(don_gia), don_vi_tinh: finalDonViTinh, ton_kho: finalTonKho }]);
+      if (shouldCreatePhieuNhap) {
+        const newPhieu: PhieuNhapKho = {
+          id: Math.max(...inventoryList.map((p) => p.id), 0) + 1,
+          ma_dich_vu: newId,
+          ten_dich_vu: ten_dich_vu.trim(),
+          don_vi_tinh: finalDonViTinh,
+          so_luong_nhap: Number(so_luong_nhap),
+          gia_nhap: Number(gia_nhap || 10000),
+          tong_tien_nhap: Number(so_luong_nhap) * Number(gia_nhap || 10000),
+          ngay_nhap: ngay_nhap || new Date().toISOString().split('T')[0]
+        };
+        setInventoryList([newPhieu, ...inventoryList]);
+        setToastMessage({ type: 'success', message: `✅ Đã thêm dịch vụ [${ten_dich_vu}] và tạo phiếu nhập kho (${so_luong_nhap} ${finalDonViTinh})!` });
+      } else {
+        setToastMessage({ type: 'success', message: `✅ Đã thêm dịch vụ [${ten_dich_vu}]!` });
+      }
     } else {
-      setServiceList(serviceList.map((s) => (s.id === id ? { ...s, ten_dich_vu, don_gia: Number(don_gia), don_vi_tinh, ton_kho: Number(ton_kho || 0) } : s)));
+      setServiceList(serviceList.map((s) => (s.id === id ? { ...s, ten_dich_vu: ten_dich_vu.trim(), don_gia: Number(don_gia), don_vi_tinh: finalDonViTinh, ton_kho: Number(serviceModal.data.ton_kho || 0) } : s)));
       setToastMessage({ type: 'success', message: `✅ Đã cập nhật dịch vụ [${ten_dich_vu}]!` });
     }
-    setServiceModal({ isOpen: false, mode: 'ADD', data: {} });
+    setServiceModal({ isOpen: false, mode: 'ADD', data: { don_vi_tinh: 'Chai', ton_kho: 0 } });
   };
 
   const handleDeleteService = (id: number, tenDichVu?: string) => {
@@ -1343,14 +1442,14 @@ export default function AdminDashboard() {
   // 9. Thêm/Sửa Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan)
   const handleSaveDonDatThanhToan = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd } = bookingModal.data;
+    const { id, ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, dich_vu_list } = bookingModal.data;
 
     try {
       if (bookingModal.mode === 'ADD') {
         const res = await fetch(`${API_BASE}/dat-san/don-dat-thanh-toan`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd })
+          body: JSON.stringify({ ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, dich_vu_list })
         });
         const data = await res.json();
         if (data.success) {
@@ -1363,7 +1462,7 @@ export default function AdminDashboard() {
         const res = await fetch(`${API_BASE}/dat-san/don-dat-thanh-toan/${id}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd })
+          body: JSON.stringify({ ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, dich_vu_list })
         });
         const data = await res.json();
         if (data.success) {
@@ -1627,9 +1726,9 @@ export default function AdminDashboard() {
             loadAllDataFromBackend();
             return;
           }
-        } catch (err) {}
-        setKhungGioList(INITIAL_KHUNG_GIO);
-        setToastMessage({ type: 'success', message: '🔄 Đã đặt lại 27 khung giờ mặc định!' });
+        } catch (err) {
+          setToastMessage({ type: 'error', message: 'Không thể kết nối máy chủ để đặt lại khung giờ!' });
+        }
       }
     );
   };
@@ -1954,44 +2053,42 @@ export default function AdminDashboard() {
             1. SIDEBAR PHÂN CẤP THEO 11 BẢNG CSDL (CHUẨN THEO ẢNH USER)
             ===================================================================== */}
         <aside
-          className={`w-64 xl:w-72 shrink-0 border-r flex flex-col justify-between transition-colors duration-300 z-20 ${
-            isDarkMode ? 'bg-[#0a150e] border-emerald-900/40' : 'bg-white border-slate-300 shadow-md'
+          className={`w-[72px] hover:w-64 xl:hover:w-72 shrink-0 border-r flex flex-col justify-between transition-all duration-300 ease-in-out z-30 group/sidebar overflow-hidden shadow-lg ${
+            isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
           }`}
         >
           <div className="flex flex-col h-full overflow-hidden">
             {/* Logo Thương Hiệu: SOCCER 247 ADMIN */}
-            <div className={`p-4 flex items-center justify-between border-b shrink-0 ${isDarkMode ? 'border-emerald-900/40' : 'border-slate-200'}`}>
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-green-400 flex items-center justify-center shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/40">
-                  <span className="text-lg">⚽</span>
-                </div>
-                <div>
-                  <h1 className="text-lg font-black tracking-tight flex items-center gap-1 leading-none">
-                    <span className={isDarkMode ? 'text-white' : 'text-[#0f172a]'}>SOCCER247</span>
-                    <span className="text-emerald-600">ADMIN</span>
-                  </h1>
-                  <p className={`text-[9px] uppercase font-black tracking-widest mt-1 flex items-center gap-1 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    Hệ Thống 11 Bảng CSDL
-                  </p>
-                </div>
+            <div className={`p-3.5 flex items-center gap-3 border-b shrink-0 overflow-hidden ${isDarkMode ? 'border-emerald-900/40' : 'border-slate-200'}`}>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-green-400 flex items-center justify-center shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/40 shrink-0 mx-auto group-hover/sidebar:mx-0 transition-all">
+                <span className="text-xl">⚽</span>
+              </div>
+              <div className="hidden group-hover/sidebar:block whitespace-nowrap overflow-hidden transition-all duration-300">
+                <h1 className="text-base font-black tracking-tight flex items-center gap-1 leading-none">
+                  <span className={isDarkMode ? 'text-white' : 'text-[#0f172a]'}>SOCCER247</span>
+                  <span className="text-emerald-600">ADMIN</span>
+                </h1>
+                <p className={`text-[9px] uppercase font-black tracking-widest mt-1 flex items-center gap-1 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Hệ Thống 11 Bảng CSDL
+                </p>
               </div>
             </div>
 
             {/* Menu Phân Cấp Dạng Cây Theo 5 Nhóm & 11 Bảng */}
-            <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+            <nav className="flex-1 p-2 space-y-3 overflow-y-auto overflow-x-hidden">
               {SIDEBAR_GROUPS.map((group, gIdx) => {
                 const GroupIcon = group.groupIcon;
                 return (
                   <div key={gIdx} className="space-y-1">
                     {/* Tiêu đề nhóm */}
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400 border-b border-slate-100 dark:border-emerald-950 pb-1 mb-1">
-                      <GroupIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <span>{group.groupTitle}</span>
+                    <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400 border-b border-slate-100 dark:border-emerald-950/60 pb-1 mb-1 justify-center group-hover/sidebar:justify-start">
+                      <GroupIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="hidden group-hover/sidebar:inline whitespace-nowrap truncate">{group.groupTitle}</span>
                     </div>
 
                     {/* Danh sách mục con trong nhóm */}
-                    <div className="space-y-1 pl-1">
+                    <div className="space-y-1">
                       {group.items.map((item) => {
                         const ItemIcon = item.icon;
                         const isActive = activeTab === item.id;
@@ -1999,7 +2096,8 @@ export default function AdminDashboard() {
                           <button
                             key={item.id}
                             onClick={() => setActiveTab(item.id as TabType)}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-black transition-all text-left cursor-pointer group ${
+                            title={item.label}
+                            className={`w-full flex items-center justify-center group-hover/sidebar:justify-between px-2.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer group ${
                               isActive
                                 ? isDarkMode
                                   ? 'bg-gradient-to-r from-emerald-500 via-emerald-400 to-green-400 text-slate-950 shadow-md shadow-emerald-500/25 scale-[1.02]'
@@ -2010,14 +2108,14 @@ export default function AdminDashboard() {
                             }`}
                           >
                             <div className="flex items-center gap-2 truncate">
-                              <span className="text-slate-400 group-hover:text-emerald-500 font-mono text-[10px]">├─</span>
-                              <ItemIcon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white md:text-slate-950 stroke-[3]' : isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`} />
-                              <span className="truncate">{item.label}</span>
+                              <span className="hidden group-hover/sidebar:inline text-slate-400 group-hover:text-emerald-500 font-mono text-[10px]">├─</span>
+                              <ItemIcon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white md:text-slate-950 stroke-[3]' : isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`} />
+                              <span className="hidden group-hover/sidebar:inline truncate whitespace-nowrap">{item.label}</span>
                             </div>
 
                             {item.badge && (
                               <span
-                                className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold shrink-0 ${
+                                className={`hidden group-hover/sidebar:inline text-[9px] px-1.5 py-0.5 rounded-md font-bold shrink-0 ${
                                   isActive
                                     ? 'bg-slate-950 text-white dark:bg-slate-900 dark:text-emerald-300'
                                     : item.badge === 'HOT'
@@ -2037,28 +2135,46 @@ export default function AdminDashboard() {
               })}
             </nav>
 
-            {/* Footer Admin User Info */}
-            <div className={`p-3 border-t shrink-0 flex items-center justify-between ${isDarkMode ? 'border-emerald-900/40 bg-[#060e09]' : 'border-slate-200 bg-slate-50'}`}>
-              <div className="flex items-center gap-2 truncate">
-                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-xs shrink-0">
-                  {currentAdminUser?.ho_ten ? currentAdminUser.ho_ten.charAt(0).toUpperCase() : 'AD'}
-                </div>
-                <div className="truncate">
-                  <div className={`text-xs font-black truncate ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
-                    {currentAdminUser?.ho_ten || 'Admin Quản Trị'}
-                  </div>
-                  <div className="text-[10px] text-slate-500 font-mono truncate">
-                    {currentAdminUser?.email || 'admin@soccer247.vn'}
-                  </div>
-                </div>
-              </div>
+            {/* Footer Nút Quay Về Trang Chủ & User Info */}
+            <div className={`p-2.5 border-t shrink-0 space-y-2 overflow-hidden ${isDarkMode ? 'border-emerald-900/40 bg-[#060e09]' : 'border-slate-200 bg-slate-50'}`}>
+              {/* Nút Quay Về Trang Chủ */}
               <button
-                onClick={handleAdminLogout}
-                className={`p-1.5 rounded-lg transition-all cursor-pointer shrink-0 ${isDarkMode ? 'text-rose-400 hover:bg-rose-500/20' : 'text-rose-600 hover:bg-rose-100'}`}
-                title="Đăng xuất khỏi Dashboard"
+                type="button"
+                onClick={() => router.push('/')}
+                title="Quay về Trang Chủ"
+                className={`w-full flex items-center justify-center group-hover/sidebar:justify-start gap-2.5 px-2.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm ${
+                  isDarkMode
+                    ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800/40'
+                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300'
+                }`}
               >
-                <LogOut className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="hidden group-hover/sidebar:inline whitespace-nowrap">Quay Về Trang Chủ</span>
               </button>
+
+              {/* Thông tin Admin User */}
+              <div className="flex items-center justify-between gap-2 overflow-hidden">
+                <div className="flex items-center gap-2 truncate justify-center group-hover/sidebar:justify-start w-full group-hover/sidebar:w-auto">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-sm" title={currentAdminUser?.ho_ten || 'Admin'}>
+                    {currentAdminUser?.ho_ten ? currentAdminUser.ho_ten.charAt(0).toUpperCase() : 'AD'}
+                  </div>
+                  <div className="hidden group-hover/sidebar:block truncate">
+                    <div className={`text-xs font-black truncate ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
+                      {currentAdminUser?.ho_ten || 'Admin Quản Trị'}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono truncate">
+                      {currentAdminUser?.email || 'admin@soccer247.vn'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={handleAdminLogout}
+                  className={`hidden group-hover/sidebar:flex p-1.5 rounded-lg transition-all cursor-pointer shrink-0 ${isDarkMode ? 'text-rose-400 hover:bg-rose-500/20' : 'text-rose-600 hover:bg-rose-100'}`}
+                  title="Đăng xuất khỏi Dashboard"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </aside>
@@ -2076,16 +2192,16 @@ export default function AdminDashboard() {
               </div>
               <ChevronRight className="w-4 h-4 text-slate-500" />
               <h2 className={`text-sm sm:text-base font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
-                {activeTab === 'OVERVIEW' && 'Dashboard (Thống Kê KPI & Biểu Đồ Doanh Thu)'}
-                {activeTab === 'SAN_BONG' && 'Danh Sách Sân Bóng (Bảng San_Bong)'}
-                {activeTab === 'LOAI_SAN_GIA' && 'Loại Sân & Bảng Giá Khung Giờ (Loai_San, Khung_Gio_Gia)'}
-                {activeTab === 'DICH_VU' && 'Danh Mục Dịch Vụ & Kho Nước (Bảng Dich_Vu)'}
-                {activeTab === 'PHIEU_NHAP_KHO' && 'Quản Lý Nhập Kho (Bảng Phieu_Nhap_Kho)'}
-                {activeTab === 'DON_DAT_THANH_TOAN' && 'Đơn Đặt Sân & Chi Tiết Thanh Toán (Don_Dat_San, Thanh_Toan)'}
-                {activeTab === 'HOAN_TIEN' && 'Quản Lý Hủy Sân & Hoàn Tiền (Bảng Lich_Su_Hoan_Tien)'}
-                {activeTab === 'KHUNG_GIO' && 'Quản Lý Danh Sách Khung Giờ (Bảng Khung_Gio)'}
-                {activeTab === 'NGUOI_DUNG' && 'Danh Sách Người Dùng (Bảng Nguoi_Dung)'}
-                {activeTab === 'VAI_TRO' && 'Phân Quyền & Vai Trò (Bảng Vai_Tro)'}
+                {activeTab === 'OVERVIEW' && 'Dashboard'}
+                {activeTab === 'SAN_BONG' && 'Danh Sách Sân Bóng'}
+                {activeTab === 'LOAI_SAN_GIA' && 'Danh Sách Loại Sân'}
+                {activeTab === 'DICH_VU' && 'Danh Mục Dịch Vụ'}
+                {activeTab === 'PHIEU_NHAP_KHO' && 'Quản Lý Nhập Kho'}
+                {activeTab === 'DON_DAT_THANH_TOAN' && 'Đơn Đặt Sân & Chi Tiết Thanh Toán'}
+                {activeTab === 'HOAN_TIEN' && 'Lịch Sử Hoàn Tiền'}
+                {activeTab === 'KHUNG_GIO' && 'Bảng Khung Giờ Hoạt Động'}
+                {activeTab === 'NGUOI_DUNG' && 'Danh Sách Người Dùng'}
+                {activeTab === 'VAI_TRO' && 'Phân Quyền & Vai Trò'}
               </h2>
             </div>
 
@@ -2208,7 +2324,7 @@ export default function AdminDashboard() {
                   <div>
                     <h3 className="text-base sm:text-lg font-black text-[#0f172a] dark:text-white flex items-center gap-2">
                       <Layers className="w-5 h-5 text-emerald-600" />
-                      Danh Sách Sân Bóng (Bảng San_Bong)
+                      Danh Sách Sân Bóng
                     </h3>
                     <p className="text-xs font-bold text-slate-500 mt-1">Quản lý danh sách sân bóng và đơn giá thuê theo từng phút</p>
                   </div>
@@ -2220,6 +2336,7 @@ export default function AdminDashboard() {
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                        <th className="p-4 w-20">HÌNH ẢNH</th>
                         <th className="p-4">TÊN SÂN BÓNG</th>
                         <th className="p-4">LOẠI SÂN</th>
                         <th className="p-4">ĐƠN GIÁ (Đ/PHÚT)</th>
@@ -2230,6 +2347,22 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {courtList.map((c) => (
                         <tr key={c.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-emerald-50/50'}>
+                          <td className="p-4">
+                            <div className="w-16 h-12 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 shadow-sm group">
+                              {c.hinh_anh ? (
+                                <img
+                                  src={c.hinh_anh}
+                                  alt={c.ten_san}
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1529900240041-dd2c1bb50c1e?w=200';
+                                  }}
+                                />
+                              ) : (
+                                <SoccerBallIcon className="w-6 h-6 opacity-30 text-slate-400" />
+                              )}
+                            </div>
+                          </td>
                           <td className="p-4 font-black text-sm text-[#0f172a] dark:text-white">⚽ {c.ten_san}</td>
                           <td className="p-4"><span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 font-bold">{c.ten_loai || 'Sân 5 người'}</span></td>
                           <td className="p-4">
@@ -2273,7 +2406,7 @@ export default function AdminDashboard() {
                   <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                     <div>
                       <h3 className="text-base font-black flex items-center gap-2">
-                        <Layers className="w-5 h-5 text-emerald-600" /> Bảng 2: Loai_San (Danh Mục Loại Sân)
+                        <Layers className="w-5 h-5 text-emerald-600" /> Bảng Loại Sân (Loai_San)
                       </h3>
                       <p className="text-xs font-bold text-slate-500 mt-1">Định nghĩa các loại sân thể thao (Sân 5, Sân 7, Sân 11...)</p>
                     </div>
@@ -2318,10 +2451,24 @@ export default function AdminDashboard() {
                 <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
-                      <PackagePlus className="w-5 h-5 text-emerald-600" /> Bảng 6: Dich_Vu (Danh Mục Mặt Hàng & Tồn Kho)
+                      <PackagePlus className="w-5 h-5 text-emerald-600" /> Danh Mục Dịch Vụ & Sản Phẩm
                     </h3>
                   </div>
-                  <button onClick={() => setServiceModal({ isOpen: true, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
+                  <button
+                    onClick={() => setServiceModal({
+                      isOpen: true,
+                      mode: 'ADD',
+                      data: {
+                        don_vi_tinh: 'Chai',
+                        ton_kho: 0,
+                        tao_phieu_nhap: true,
+                        so_luong_nhap: 50,
+                        gia_nhap: 10000,
+                        ngay_nhap: new Date().toISOString().split('T')[0]
+                      }
+                    })}
+                    className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer"
+                  >
                     <Plus className="w-4 h-4 stroke-[3]" /> Thêm Mặt Hàng
                   </button>
                 </div>
@@ -2363,7 +2510,7 @@ export default function AdminDashboard() {
                 <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
-                      <Download className="w-5 h-5 text-emerald-600" /> Bảng 7: Phieu_Nhap_Kho (Quản Lý Nhập Hàng)
+                      <Download className="w-5 h-5 text-emerald-600" /> Quản Lý Nhập Kho
                     </h3>
                   </div>
                   <button onClick={() => setImportStockModal({ isOpen: true, mode: 'ADD', data: { ma_dich_vu: serviceList[0]?.id || 1, so_luong_nhap: 50, gia_nhap: 12000, ngay_nhap: new Date().toISOString().split('T')[0] } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
@@ -2389,7 +2536,7 @@ export default function AdminDashboard() {
                           <td className="p-4 font-black text-emerald-700">{p.so_luong_nhap} {p.don_vi_tinh}</td>
                           <td className="p-4">{Number(p.gia_nhap).toLocaleString('vi-VN')} đ</td>
                           <td className="p-4 font-black text-emerald-800">{Number(p.tong_tien_nhap || p.so_luong_nhap * p.gia_nhap).toLocaleString('vi-VN')} đ</td>
-                          <td className="p-4 font-mono text-slate-500">{p.ngay_nhap}</td>
+                          <td className="p-4 font-mono font-bold text-slate-600 dark:text-slate-300">{formatVNDate(p.ngay_nhap)}</td>
                           <td className="p-4 text-right space-x-2">
                             <button onClick={() => setImportStockModal({ isOpen: true, mode: 'EDIT', data: p })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 cursor-pointer font-bold inline-flex items-center gap-1"><Edit2 className="w-3.5 h-3.5" /> Sửa</button>
                             <button onClick={() => handleDeleteInventory(p.id)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
@@ -2411,7 +2558,7 @@ export default function AdminDashboard() {
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Receipt className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                      Bảng Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan)
+                      Bảng Đơn Đặt Sân & Thanh Toán
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       Quản lý toàn bộ thông tin lịch đặt sân, khách hàng và giao dịch thanh toán / cọc sân.
@@ -2434,7 +2581,8 @@ export default function AdminDashboard() {
                         loai_thanh_toan: 'TRA_HET',
                         so_tien: 350000,
                         trang_thai_gd: 'THANH_CONG',
-                        ghi_chu: 'Đặt trực tiếp tại quầy'
+                        ghi_chu: 'Đặt trực tiếp tại quầy',
+                        dich_vu_list: []
                       }
                     })}
                     className="px-4 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
@@ -2443,45 +2591,86 @@ export default function AdminDashboard() {
                   </button>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[950px]">
+                  <table className="w-full text-left text-xs min-w-[1050px]">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4">MÃ ĐƠN</th>
-                        <th className="p-4">KHÁCH HÀNG / SĐT</th>
-                        <th className="p-4">SÂN BÓNG</th>
-                        <th className="p-4">NGÀY & GIỜ ĐÁ</th>
-                        <th className="p-4">TỔNG TIỀN</th>
-                        <th className="p-4">PHƯƠNG THỨC</th>
-                        <th className="p-4">TRẠNG THÁI</th>
+                        <th className="p-4 whitespace-nowrap">KHÁCH HÀNG / SĐT</th>
+                        <th className="p-4 whitespace-nowrap">SÂN BÓNG</th>
+                        <th className="p-4 whitespace-nowrap">NGÀY & GIỜ ĐÁ</th>
+                        <th className="p-4 whitespace-nowrap">DỊCH VỤ ĐÃ DÙNG</th>
+                        <th className="p-4 whitespace-nowrap">TỔNG TIỀN</th>
+                        <th className="p-4 whitespace-nowrap">PHƯƠNG THỨC</th>
+                        <th className="p-4 whitespace-nowrap">TRẠNG THÁI</th>
                         <th className="p-4">GHI CHÚ</th>
-                        <th className="p-4 text-right">THAO TÁC</th>
+                        <th className="p-4 text-right whitespace-nowrap">THAO TÁC</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {bookingList.map((b) => {
+                        const servicesUsed = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
+                          ? b.dich_vu_da_dung
+                          : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
+                        const totalDvPrice = servicesUsed.reduce((sum: number, item: any) => sum + (Number(item.so_luong || 0) * Number(item.gia_luc_ban || item.don_gia || 0)), 0);
+
                         return (
                           <tr key={b.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
-                            <td className="p-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">#{b.id}</td>
-                            <td className="p-4">
-                              <div className="font-black text-sm">{b.ten_khach_hang || 'Khách Hàng'}</div>
-                              <div className="text-[11px] text-slate-400 font-mono">{b.so_dien_thoai}</div>
+                            <td className="p-4 whitespace-nowrap">
+                              <div className="font-black text-sm text-[#0f172a] dark:text-white">{b.ten_khach_hang || 'Khách Hàng'}</div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">{b.so_dien_thoai}</div>
                             </td>
-                            <td className="p-4 font-bold">{b.ten_san}</td>
-                            <td className="p-4">
-                              <div className="font-bold">{b.ngay_da ? (b.ngay_da.includes('T') ? b.ngay_da.split('T')[0] : b.ngay_da) : ''}</div>
-                              <div className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-black">{b.gio_bat_dau} - {b.gio_ket_thuc}</div>
+                            <td className="p-4 whitespace-nowrap font-bold text-[#0f172a] dark:text-white">
+                              {b.ten_san}
                             </td>
-                            <td className="p-4 font-black text-sm text-emerald-600 dark:text-emerald-400">
-                              {Number(b.tong_tien || b.tien_san || 0).toLocaleString('vi-VN')} đ
+                            <td className="p-4 whitespace-nowrap">
+                              <div className="font-bold text-[#0f172a] dark:text-slate-100 flex items-center gap-1.5 text-xs">
+                                <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span>{formatVNDate(b.ngay_da)}</span>
+                              </div>
+                              <div className="font-mono text-xs text-emerald-700 dark:text-emerald-400 font-black flex items-center gap-1.5 mt-1 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md w-fit border border-emerald-300 dark:border-emerald-500/20">
+                                <Clock className="w-3 h-3 shrink-0" />
+                                <span>{b.gio_bat_dau} - {b.gio_ket_thuc}</span>
+                              </div>
                             </td>
-                            <td className="p-4">
+                            <td className="p-4 min-w-[200px]">
+                              {servicesUsed.length > 0 ? (
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap gap-1">
+                                    {servicesUsed.map((dv: any, sIdx: number) => (
+                                      <span
+                                        key={sIdx}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50"
+                                      >
+                                        <span>🥤 {dv.ten_dich_vu}</span>
+                                        <span className="font-black text-emerald-600 dark:text-emerald-400">x{dv.so_luong}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                    Tiền DV: <span className="text-emerald-600 dark:text-emerald-400 font-black">{totalDvPrice.toLocaleString('vi-VN')} đ</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 italic text-[11px]">— Chưa dùng —</span>
+                              )}
+                            </td>
+                            <td className="p-4 whitespace-nowrap">
+                              <div className="font-black text-sm text-emerald-600 dark:text-emerald-400">
+                                {Number(b.tong_tien || b.tien_san || 0).toLocaleString('vi-VN')} đ
+                              </div>
+                              {totalDvPrice > 0 && (
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                                  <span>Sân: {Number(b.tien_san || 0).toLocaleString('vi-VN')} đ</span>
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-4 whitespace-nowrap">
                               <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase ${
                                 b.phuong_thuc === 'CHUYEN_KHOAN' ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
                               }`}>
                                 {b.phuong_thuc === 'CHUYEN_KHOAN' ? 'Chuyển Khoản' : 'Tiền Mặt'}
                               </span>
                             </td>
-                            <td className="p-4">
+                            <td className="p-4 whitespace-nowrap">
                               <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
                                 (b.trang_thai === 'DA_THANH_TOAN' || b.trang_thai === 'Da Thanh Toan') ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' :
                                 (b.trang_thai === 'DA_COC' || b.trang_thai === 'DA_CHOT') ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30' :
@@ -2500,24 +2689,36 @@ export default function AdminDashboard() {
                             </td>
                             <td className="p-4 text-right space-x-2 whitespace-nowrap">
                               <button
-                                onClick={() => setBookingModal({
-                                  isOpen: true,
-                                  mode: 'EDIT',
-                                  data: {
-                                    id: b.id,
-                                    ma_san: b.ma_san,
-                                    ma_nguoi_dung: b.ma_nguoi_dung,
-                                    ngay_da: b.ngay_da,
-                                    gio_bat_dau: b.gio_bat_dau,
-                                    gio_ket_thuc: b.gio_ket_thuc,
-                                    tien_san: b.tien_san,
-                                    tong_tien: b.tong_tien,
-                                    trang_thai: b.trang_thai || 'DA_COC',
-                                    ghi_chu: b.ghi_chu,
-                                    phuong_thuc: b.phuong_thuc || 'CHUYEN_KHOAN',
-                                    loai_thanh_toan: b.trang_thai === 'DA_THANH_TOAN' ? 'TRA_HET' : 'DAT_COC'
-                                  }
-                                })}
+                                onClick={() => {
+                                  const currentServices = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
+                                    ? b.dich_vu_da_dung
+                                    : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
+                                  setBookingModal({
+                                    isOpen: true,
+                                    mode: 'EDIT',
+                                    data: {
+                                      id: b.id,
+                                      ma_san: b.ma_san,
+                                      ma_nguoi_dung: b.ma_nguoi_dung,
+                                      ngay_da: b.ngay_da,
+                                      gio_bat_dau: b.gio_bat_dau,
+                                      gio_ket_thuc: b.gio_ket_thuc,
+                                      tien_san: b.tien_san,
+                                      tong_tien: b.tong_tien,
+                                      trang_thai: b.trang_thai || 'DA_COC',
+                                      ghi_chu: b.ghi_chu,
+                                      phuong_thuc: b.phuong_thuc || 'CHUYEN_KHOAN',
+                                      loai_thanh_toan: b.trang_thai === 'DA_THANH_TOAN' ? 'TRA_HET' : 'DAT_COC',
+                                      dich_vu_list: currentServices.map((s: any) => ({
+                                        ma_dich_vu: s.ma_dich_vu,
+                                        ten_dich_vu: s.ten_dich_vu,
+                                        so_luong: s.so_luong,
+                                        don_gia: s.gia_luc_ban || s.don_gia || 0,
+                                        don_vi_tinh: s.don_vi_tinh || 'Chai'
+                                      }))
+                                    }
+                                  });
+                                }}
                                 className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
                               >
                                 <Edit2 className="w-3.5 h-3.5" /> Sửa
@@ -2546,7 +2747,7 @@ export default function AdminDashboard() {
                 <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
-                      <RefreshCw className="w-5 h-5 text-rose-500" /> Bảng Lịch Sử Hoàn Tiền (Lich_Su_Hoan_Tien)
+                      <RefreshCw className="w-5 h-5 text-rose-500" /> Bảng Lịch Sử Hoàn Tiền
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       Ghi nhận và quản lý các giao dịch hoàn cọc do khách hủy lịch hoặc thay đổi sân.
@@ -2567,8 +2768,6 @@ export default function AdminDashboard() {
                   <table className="w-full text-left text-xs min-w-[750px]">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4">MÃ HOÀN</th>
-                        <th className="p-4">MÃ ĐƠN ĐẶT</th>
                         <th className="p-4">KHÁCH HÀNG</th>
                         <th className="p-4">TIỀN HOÀN</th>
                         <th className="p-4">TỶ LỆ</th>
@@ -2580,8 +2779,6 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {refundList.map((h) => (
                         <tr key={h.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
-                          <td className="p-4 font-mono font-bold text-slate-400">#{h.id}</td>
-                          <td className="p-4 font-mono font-bold text-rose-500">#{h.ma_don_dat}</td>
                           <td className="p-4 font-black">{h.ten_khach_hang || 'Khách Đặt'}</td>
                           <td className="p-4 font-black text-rose-600 dark:text-rose-400 text-sm">
                             {Number(h.so_tien_hoan).toLocaleString('vi-VN')} đ
@@ -2590,7 +2787,7 @@ export default function AdminDashboard() {
                             <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-500">{h.ty_le_hoan}%</span>
                           </td>
                           <td className="p-4 text-slate-600 dark:text-slate-300">{h.ly_do_huy}</td>
-                          <td className="p-4 font-mono text-slate-400">{h.ngay_hoan}</td>
+                          <td className="p-4 font-mono text-slate-600 dark:text-slate-300 font-bold">{formatVNDate(h.ngay_hoan)}</td>
                           <td className="p-4 text-right space-x-2 whitespace-nowrap">
                             <button
                               onClick={() => setRefundModal({ isOpen: true, mode: 'EDIT', data: h })}
@@ -2622,7 +2819,7 @@ export default function AdminDashboard() {
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Clock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                      Bảng Khung Giờ Hoạt Động (Khung_Gio)
+                      Bảng Khung Giờ Hoạt Động
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       Quản lý danh sách các mốc thời gian đá bóng (6h00 - 19h30). Dữ liệu được đồng bộ trực tiếp với CSDL SQL Server.
@@ -2659,7 +2856,6 @@ export default function AdminDashboard() {
                   <table className="w-full text-left text-xs min-w-[700px]">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4">STT / THỨ TỰ</th>
                         <th className="p-4">NHÃN HIỂN THỊ</th>
                         <th className="p-4">GIỜ BẮT ĐẦU</th>
                         <th className="p-4">GIỜ KẾT THÚC</th>
@@ -2670,16 +2866,13 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {khungGioList.map((k, index) => (
                         <tr key={k.id || index} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
-                          <td className="p-4 font-mono font-bold text-slate-400">
-                            #{k.thu_tu || index + 1}
-                          </td>
                           <td className="p-4">
                             <span className="font-black text-sm text-emerald-600 dark:text-emerald-400 font-mono px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                               {k.nhan_hien_thi}
                             </span>
                           </td>
-                          <td className="p-4 font-mono font-bold text-slate-200 text-sm">{k.gio_bat_dau}</td>
-                          <td className="p-4 font-mono font-bold text-slate-200 text-sm">{k.gio_ket_thuc}</td>
+                          <td className="p-4 font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">{k.gio_bat_dau}</td>
+                          <td className="p-4 font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">{k.gio_ket_thuc}</td>
                           <td className="p-4">
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
                               k.trang_thai !== false ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-gray-500/20 text-gray-400'
@@ -2720,7 +2913,7 @@ export default function AdminDashboard() {
                 <div className={`p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
-                      <User className="w-5 h-5 text-emerald-600" /> Bảng 10: Nguoi_Dung (Tài Khoản & Người Dùng)
+                      <User className="w-5 h-5 text-emerald-600" /> Danh Sách Tài Khoản Người Dùng
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">Quản lý danh sách người dùng, mật khẩu, phân quyền và ảnh đại diện</p>
                   </div>
@@ -2850,7 +3043,7 @@ export default function AdminDashboard() {
                 <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
-                      <ShieldCheck className="w-5 h-5 text-emerald-600" /> Bảng 11: Vai_Tro (Phân Quyền Hệ Thống)
+                      <ShieldCheck className="w-5 h-5 text-emerald-600" /> Phân Quyền & Vai Trò
                     </h3>
                   </div>
                   <button onClick={() => setRoleModal({ isOpen: true, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
@@ -2891,66 +3084,181 @@ export default function AdminDashboard() {
           CÁC MODAL THÊM / SỬA CHO 11 BẢNG
           ===================================================================== */}
 
-      {/* 1. Modal Sân Bóng (San_Bong) */}
+      {/* 1. Modal Sân Bóng (San_Bong) - Giao diện hình chữ nhật ngang nhỏ gọn */}
       {courtModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
-            <div className="flex items-center justify-between pb-3 border-b mb-4">
-              <h3 className="font-black text-base">{courtModal.mode === 'ADD' ? '⚽ Thêm Sân Bóng Mới' : '✏️ Cập Nhật Sân Bóng'}</h3>
-              <button onClick={() => setCourtModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-2xl sm:max-w-3xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800/60 dark:border-emerald-900/40 mb-4">
+              <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
+                <span>{courtModal.mode === 'ADD' ? '⚽ Thêm Sân Bóng Mới' : '✏️ Cập Nhật Sân Bóng'}</span>
+              </h3>
+              <button 
+                onClick={() => setCourtModal({ isOpen: false, mode: 'ADD', data: {} })}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
+
             <form onSubmit={handleSaveCourt} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-black uppercase mb-1">Tên Sân Bóng *</label>
-                <input
-                  type="text"
-                  value={courtModal.data.ten_san || ''}
-                  onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, ten_san: e.target.value } })}
-                  placeholder="Ví dụ: Sân 5D Sân VIP"
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
-              </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Loại Sân *</label>
-                <select
-                  value={courtModal.data.ma_loai_san || 1}
-                  onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, ma_loai_san: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                >
-                  {categoryList.map((l) => (
-                    <option key={l.id} value={l.id}>{l.ten_loai}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Đơn Giá Theo Phút (VNĐ/phút) *</label>
-                <input
-                  type="number"
-                  step="500"
-                  required
-                  value={courtModal.data.don_gia_phut || 5000}
-                  onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, don_gia_phut: Number(e.target.value) } })}
-                  placeholder="Ví dụ: 5000"
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
-                <div className="text-[11px] text-slate-500 mt-1 font-medium">
-                  💡 Gợi ý: {Number(courtModal.data.don_gia_phut || 5000).toLocaleString('vi-VN')} đ/phút = {(Number(courtModal.data.don_gia_phut || 5000) * 60).toLocaleString('vi-VN')} đ/giờ (60 phút)
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* Cột trái: Thông tin cơ bản của sân */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block font-black uppercase mb-1 text-slate-400">Tên Sân Bóng *</label>
+                    <input
+                      type="text"
+                      required
+                      value={courtModal.data.ten_san || ''}
+                      onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, ten_san: e.target.value } })}
+                      placeholder="Ví dụ: Sân 5D Sân VIP"
+                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-black uppercase mb-1 text-slate-400">Loại Sân *</label>
+                    <select
+                      value={courtModal.data.ma_loai_san || 1}
+                      onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, ma_loai_san: Number(e.target.value) } })}
+                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    >
+                      {categoryList.map((l) => (
+                        <option key={l.id} value={l.id}>{l.ten_loai}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-black uppercase mb-1 text-slate-400">Đơn Giá Theo Phút (VNĐ/phút) *</label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      value={courtModal.data.don_gia_phut !== undefined ? courtModal.data.don_gia_phut : 5000}
+                      onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, don_gia_phut: Number(e.target.value) } })}
+                      placeholder="Ví dụ: 5000"
+                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    />
+                    <div className="text-[10px] text-slate-500 mt-1 font-medium">
+                      💡 {Number(courtModal.data.don_gia_phut || 5000).toLocaleString('vi-VN')} đ/phút = {(Number(courtModal.data.don_gia_phut || 5000) * 60).toLocaleString('vi-VN')} đ/giờ
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-black uppercase mb-1 text-slate-400">Trạng Thái Vận Hành</label>
+                    <select
+                      value={courtModal.data.trang_thai || 'SAN_SANG'}
+                      onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, trang_thai: e.target.value as any } })}
+                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    >
+                      <option value="SAN_SANG">Sẵn Sàng Vận Hành</option>
+                      <option value="BAO_TRI">Bảo Trì / Sửa Chữa</option>
+                    </select>
+                  </div>
                 </div>
+
+                {/* Cột phải: Hình ảnh sân bóng Cloudinary */}
+                <div className="space-y-2.5 flex flex-col justify-between">
+                  <div>
+                    <label className="block font-black uppercase mb-1 text-slate-400">Hình Ảnh Sân Bóng (Cloudinary)</label>
+                    
+                    {/* Xem trước ảnh */}
+                    {courtModal.data.hinh_anh ? (
+                      <div className="relative w-full h-32 sm:h-36 rounded-xl overflow-hidden border border-emerald-500/40 bg-slate-900 group shadow-sm mb-2">
+                        <img
+                          src={courtModal.data.hinh_anh}
+                          alt="Ảnh sân bóng"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1529900240041-dd2c1bb50c1e?w=300';
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPendingCourtImageFile(null);
+                            setCourtModal({ ...courtModal, data: { ...courtModal.data, hinh_anh: '' } });
+                          }}
+                          className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white shadow-md cursor-pointer transition-colors"
+                          title="Xóa ảnh này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="absolute bottom-1 left-1.5 text-[9px] text-emerald-300 bg-black/85 px-2 py-0.5 rounded font-mono truncate max-w-[85%] border border-emerald-500/30">
+                          {pendingCourtImageFile
+                            ? '📁 File máy tính (Lưu để Up)'
+                            : (courtModal.data.hinh_anh.includes('cloudinary.com')
+                              ? '☁️ Cloudinary'
+                              : '🔗 Link chờ Lưu & Up')}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-full h-32 sm:h-36 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 flex flex-col items-center justify-center text-slate-500 gap-1.5 mb-2">
+                        <Upload className="w-6 h-6 text-slate-600" />
+                        <span className="text-[11px]">Chưa có hình ảnh sân bóng</span>
+                      </div>
+                    )}
+
+                    {/* Dán link & Nút chọn file */}
+                    <div className="space-y-1.5">
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={pendingCourtImageFile ? `[File máy tính]: ${pendingCourtImageFile.name}` : (courtModal.data.hinh_anh || '')}
+                          onChange={(e) => {
+                            setPendingCourtImageFile(null);
+                            setCourtModal({ ...courtModal, data: { ...courtModal.data, hinh_anh: e.target.value } });
+                          }}
+                          placeholder="Dán link ảnh hoặc bấm chọn file..."
+                          className={`flex-1 px-2.5 py-1.5 text-xs rounded-xl border font-medium ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        />
+
+                        <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-xs cursor-pointer transition-all shrink-0">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{pendingCourtImageFile ? 'Đổi file' : 'Chọn file'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                setPendingCourtImageFile(file);
+                                const previewUrl = URL.createObjectURL(file);
+                                setCourtModal((prev) => ({ ...prev, data: { ...prev.data, hinh_anh: previewUrl } }));
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        💡 Dán link hoặc chọn file rồi bấm <strong className="text-emerald-400">"Lưu Sân Bóng"</strong> để tự động tải lên Cloudinary.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
               </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Trạng Thái Vận Hành</label>
-                <select
-                  value={courtModal.data.trang_thai || 'SAN_SANG'}
-                  onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, trang_thai: e.target.value as any } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+
+              {/* Footer Modal: Nút Hủy & Lưu Sân Bóng */}
+              <div className="flex justify-end items-center gap-2.5 pt-3 border-t border-slate-800/60 dark:border-emerald-900/40">
+                <button 
+                  type="button" 
+                  onClick={() => setCourtModal({ isOpen: false, mode: 'ADD', data: {} })} 
+                  className="px-4 py-2 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer text-xs transition-colors"
                 >
-                  <option value="SAN_SANG">Sẵn Sàng Vận Hành</option>
-                  <option value="BAO_TRI">Bảo Trì / Sửa Chữa</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setCourtModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
-                <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer">Lưu Sân Bóng</button>
+                  Hủy
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isUploadingImage} 
+                  className="px-5 py-2 rounded-xl font-black bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer disabled:opacity-50 text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5"
+                >
+                  {isUploadingImage ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
+                  <span>{isUploadingImage ? 'Đang tải ảnh...' : 'Lưu Sân Bóng'}</span>
+                </button>
               </div>
             </form>
           </div>
@@ -2999,16 +3307,18 @@ export default function AdminDashboard() {
       {/* 4. Modal Dịch Vụ (Dich_Vu) */}
       {serviceModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base">{serviceModal.mode === 'ADD' ? '🥤 Thêm Dịch Vụ Mới' : '✏️ Cập Nhật Dịch Vụ'}</h3>
-              <button onClick={() => setServiceModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
+              <button onClick={() => setServiceModal({ isOpen: false, mode: 'ADD', data: { don_vi_tinh: 'Chai', ton_kho: 0 } })}><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleSaveService} className="space-y-4 text-xs">
               <div>
                 <label className="block font-black uppercase mb-1">Tên Dịch Vụ / Nước Uống *</label>
                 <input
                   type="text"
+                  required
+                  placeholder="Ví dụ: Nước khoáng Lavie 500ml"
                   value={serviceModal.data.ten_dich_vu || ''}
                   onChange={(e) => setServiceModal({ ...serviceModal, data: { ...serviceModal.data, ten_dich_vu: e.target.value } })}
                   className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
@@ -3019,7 +3329,10 @@ export default function AdminDashboard() {
                   <label className="block font-black uppercase mb-1">Đơn Giá Bán (VNĐ) *</label>
                   <input
                     type="number"
-                    value={serviceModal.data.don_gia || ''}
+                    required
+                    min="0"
+                    placeholder="Ví dụ: 15000"
+                    value={serviceModal.data.don_gia !== undefined ? serviceModal.data.don_gia : ''}
                     onChange={(e) => setServiceModal({ ...serviceModal, data: { ...serviceModal.data, don_gia: Number(e.target.value) } })}
                     className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
@@ -3028,14 +3341,89 @@ export default function AdminDashboard() {
                   <label className="block font-black uppercase mb-1">Đơn Vị Tính *</label>
                   <input
                     type="text"
-                    value={serviceModal.data.don_vi_tinh || 'Chai'}
+                    required
+                    placeholder="Chai, Lon, Gói, Bộ..."
+                    value={serviceModal.data.don_vi_tinh !== undefined ? serviceModal.data.don_vi_tinh : 'Chai'}
                     onChange={(e) => setServiceModal({ ...serviceModal, data: { ...serviceModal.data, don_vi_tinh: e.target.value } })}
                     className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
               </div>
+
+              {/* TÙY CHỌN TẠO PHIẾU NHẬP KHO BAN ĐẦU KHI THÊM DỊCH VỤ MỚI */}
+              {serviceModal.mode === 'ADD' && (
+                <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40' : 'bg-emerald-50/60 border-emerald-200'} space-y-3`}>
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 font-black text-xs cursor-pointer select-none text-emerald-700 dark:text-emerald-400">
+                      <input
+                        type="checkbox"
+                        checked={serviceModal.data.tao_phieu_nhap ?? true}
+                        onChange={(e) => setServiceModal({
+                          ...serviceModal,
+                          data: { ...serviceModal.data, tao_phieu_nhap: e.target.checked }
+                        })}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <span className="flex items-center gap-1.5 font-black">
+                        📦 Nhập kho ban đầu (Tạo phiếu nhập)
+                      </span>
+                    </label>
+                    {(serviceModal.data.tao_phieu_nhap ?? true) && (
+                      <span className="text-[11px] font-black text-emerald-800 dark:text-emerald-300">
+                        Tổng vốn: {Number((serviceModal.data.so_luong_nhap ?? 50) * (serviceModal.data.gia_nhap ?? 10000)).toLocaleString('vi-VN')} đ
+                      </span>
+                    )}
+                  </div>
+
+                  {(serviceModal.data.tao_phieu_nhap ?? true) && (
+                    <div className="space-y-2.5 pt-1">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-black uppercase mb-1 text-[10px] text-slate-500 dark:text-slate-400">Số Lượng Nhập Ban Đầu *</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={serviceModal.data.so_luong_nhap ?? 50}
+                            onChange={(e) => setServiceModal({
+                              ...serviceModal,
+                              data: { ...serviceModal.data, so_luong_nhap: Number(e.target.value) }
+                            })}
+                            className={`w-full p-2 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-black uppercase mb-1 text-[10px] text-slate-500 dark:text-slate-400">Đơn Giá Vốn Nhập (VNĐ) *</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={serviceModal.data.gia_nhap ?? 10000}
+                            onChange={(e) => setServiceModal({
+                              ...serviceModal,
+                              data: { ...serviceModal.data, gia_nhap: Number(e.target.value) }
+                            })}
+                            className={`w-full p-2 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block font-black uppercase mb-1 text-[10px] text-slate-500 dark:text-slate-400">Ngày Nhập Kho *</label>
+                        <input
+                          type="date"
+                          value={serviceModal.data.ngay_nhap || new Date().toISOString().split('T')[0]}
+                          onChange={(e) => setServiceModal({
+                            ...serviceModal,
+                            data: { ...serviceModal.data, ngay_nhap: e.target.value }
+                          })}
+                          className={`w-full p-2 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setServiceModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
+                <button type="button" onClick={() => setServiceModal({ isOpen: false, mode: 'ADD', data: { don_vi_tinh: 'Chai', ton_kho: 0 } })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
                 <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer">Lưu Dịch Vụ</button>
               </div>
             </form>
@@ -3174,11 +3562,12 @@ export default function AdminDashboard() {
                   <input
                     type="number"
                     min="0"
-                    step="10000"
-                    value={bookingModal.data.tien_san || 350000}
+                    step="any"
+                    value={bookingModal.data.tien_san !== undefined ? bookingModal.data.tien_san : ''}
                     onChange={(e) => {
                       const ts = Number(e.target.value);
-                      setBookingModal({ ...bookingModal, data: { ...bookingModal.data, tien_san: ts, tong_tien: ts } });
+                      const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
+                      setBookingModal({ ...bookingModal, data: { ...bookingModal.data, tien_san: ts, tong_tien: ts + totalDv } });
                     }}
                     className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
@@ -3196,6 +3585,146 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
+              {/* DỊCH VỤ ĐI KÈM (CHI TIẾT DỊCH VỤ) */}
+              <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-[#060e09]/80 border-emerald-800/40' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-200 dark:border-emerald-900/30">
+                  <label className="font-black uppercase flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                    <ShoppingCart className="w-3.5 h-3.5" /> Dịch Vụ / Nước Uống (Chi Tiết Dịch Vụ)
+                  </label>
+                  <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400">
+                    + {((bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0)).toLocaleString('vi-VN')} đ
+                  </span>
+                </div>
+
+                {/* Danh sách dịch vụ đã chọn trong đơn */}
+                {Array.isArray(bookingModal.data.dich_vu_list) && bookingModal.data.dich_vu_list.length > 0 ? (
+                  <div className="space-y-1.5 mb-3 max-h-36 overflow-y-auto pr-1">
+                    {bookingModal.data.dich_vu_list.map((it: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-[#0a150e] border border-slate-200 dark:border-emerald-800/30 text-xs">
+                        <div className="flex-1 min-w-0 mr-2">
+                          <div className="font-bold truncate text-[#0f172a] dark:text-slate-100">🥤 {it.ten_dich_vu}</div>
+                          <div className="text-[10px] text-slate-500">{Number(it.don_gia).toLocaleString('vi-VN')} đ / {it.don_vi_tinh || 'Chai'}</div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center border border-slate-300 dark:border-emerald-800/50 rounded-lg overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const list = [...(bookingModal.data.dich_vu_list || [])];
+                                if (list[idx].so_luong > 1) {
+                                  list[idx].so_luong -= 1;
+                                } else {
+                                  list.splice(idx, 1);
+                                }
+                                const totalDv = list.reduce((s: number, d: any) => s + (Number(d.so_luong) * Number(d.don_gia)), 0);
+                                setBookingModal({
+                                  ...bookingModal,
+                                  data: {
+                                    ...bookingModal.data,
+                                    dich_vu_list: list,
+                                    tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv
+                                  }
+                                });
+                              }}
+                              className="px-2 py-0.5 hover:bg-slate-200 dark:hover:bg-emerald-950 font-bold"
+                            >
+                              -
+                            </button>
+                            <span className="px-2 font-mono font-black">{it.so_luong}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const list = [...(bookingModal.data.dich_vu_list || [])];
+                                list[idx].so_luong += 1;
+                                const totalDv = list.reduce((s: number, d: any) => s + (Number(d.so_luong) * Number(d.don_gia)), 0);
+                                setBookingModal({
+                                  ...bookingModal,
+                                  data: {
+                                    ...bookingModal.data,
+                                    dich_vu_list: list,
+                                    tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv
+                                  }
+                                });
+                              }}
+                              className="px-2 py-0.5 hover:bg-slate-200 dark:hover:bg-emerald-950 font-bold"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <div className="font-black text-emerald-600 dark:text-emerald-400 w-16 text-right font-mono text-[11px]">
+                            {(Number(it.so_luong) * Number(it.don_gia)).toLocaleString('vi-VN')} đ
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const list = bookingModal.data.dich_vu_list.filter((_: any, i: number) => i !== idx);
+                              const totalDv = list.reduce((s: number, d: any) => s + (Number(d.so_luong) * Number(d.don_gia)), 0);
+                              setBookingModal({
+                                ...bookingModal,
+                                data: {
+                                  ...bookingModal.data,
+                                  dich_vu_list: list,
+                                  tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv
+                                }
+                              });
+                            }}
+                            className="text-rose-500 hover:text-rose-700 p-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400 italic mb-2">Chưa thêm dịch vụ nào vào đơn đặt sân này.</p>
+                )}
+
+                {/* Dropdown chọn thêm dịch vụ */}
+                <div className="flex gap-2">
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      const sId = Number(e.target.value);
+                      if (!sId) return;
+                      const s = serviceList.find(item => item.id === sId);
+                      if (!s) return;
+                      const currentList = [...(bookingModal.data.dich_vu_list || [])];
+                      const existIdx = currentList.findIndex((item: any) => Number(item.ma_dich_vu) === sId);
+                      if (existIdx >= 0) {
+                        currentList[existIdx].so_luong += 1;
+                      } else {
+                        currentList.push({
+                          ma_dich_vu: s.id,
+                          ten_dich_vu: s.ten_dich_vu,
+                          so_luong: 1,
+                          don_gia: s.don_gia,
+                          don_vi_tinh: s.don_vi_tinh
+                        });
+                      }
+                      const totalDv = currentList.reduce((sum: number, d: any) => sum + (Number(d.so_luong) * Number(d.don_gia)), 0);
+                      setBookingModal({
+                        ...bookingModal,
+                        data: {
+                          ...bookingModal.data,
+                          dich_vu_list: currentList,
+                          tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv
+                        }
+                      });
+                      e.target.value = "";
+                    }}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  >
+                    <option value="">+ Chọn mặt hàng dịch vụ thêm vào đơn...</option>
+                    {serviceList.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.ten_dich_vu} — {Number(s.don_gia).toLocaleString('vi-VN')} đ (Còn: {s.ton_kho} {s.don_vi_tinh})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="block font-black uppercase mb-1">Trạng Thái Đơn</label>
                 <select
@@ -3205,7 +3734,6 @@ export default function AdminDashboard() {
                 >
                   <option value="DA_COC">Đã Cọc (30%)</option>
                   <option value="DA_THANH_TOAN">Đã Thanh Toán (100%)</option>
-                  <option value="HOAN_THANH">Hoàn Thành (Đã đá xong)</option>
                   <option value="DA_HUY">Đã Hủy</option>
                 </select>
               </div>
@@ -3221,9 +3749,17 @@ export default function AdminDashboard() {
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <button type="button" onClick={() => setBookingModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
-                <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer hover:bg-emerald-500">Lưu Đơn Đặt Sân</button>
+              <div className="flex items-center justify-between pt-3 border-t">
+                <div className="text-xs">
+                  <span className="text-slate-500 font-bold">Tổng Thanh Toán: </span>
+                  <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm font-mono">
+                    {Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0).toLocaleString('vi-VN')} đ
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setBookingModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
+                  <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer hover:bg-emerald-500">Lưu Đơn Đặt Sân</button>
+                </div>
               </div>
             </form>
           </div>

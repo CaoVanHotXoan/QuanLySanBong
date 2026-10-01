@@ -94,7 +94,7 @@ CREATE TABLE Don_Dat_San (
     tong_tien DECIMAL(10, 2) NOT NULL,
     phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'CHUYEN_KHOAN')) NOT NULL,
     ghi_chu NVARCHAR(255) NULL,
-    trang_thai VARCHAR(20) CHECK (trang_thai IN ('DA_COC', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY')) DEFAULT 'DA_COC',
+    trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_THANH_TOAN', 'CHO_XAC_NHAN', 'DA_COC', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY', 'DA_CHOT')) DEFAULT 'DA_COC',
     ngay_tao DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
     FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE NO ACTION

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   User,
   Bell,
@@ -18,7 +18,10 @@ import {
   Lock,
   Eye,
   EyeOff,
+  Sparkles,
 } from "lucide-react";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
 // =====================================================================
 // ĐỊNH NGHĨA KIỂU DỮ LIỆU (INTERFACES)
@@ -44,7 +47,25 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
   // 1. STATE QUẢN LÝ TAB ĐIỀU HƯỚNG HIỆN TẠI
   const [activeTab, setActiveTab] = useState<TabType>("account");
 
-  // 2. STATE THÔNG TIN NGƯỜI DÙNG HIỂN THỊ
+  // 2. STATE THÔNG BÁO NỔI (TOAST)
+  const [toast, setToast] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
+    setToast({ type, message });
+  };
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => {
+      setToast(null);
+    }, 3500);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  // 3. STATE THÔNG TIN NGƯỜI DÙNG HIỂN THỊ
   const [userData, setUserData] = useState<UserProfileData>({
     hoTen: initialData?.hoTen || "Khách Hàng",
     email: initialData?.email || "khachhang@gmail.com",
@@ -55,12 +76,16 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
       "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250&auto=format&fit=crop",
   });
 
-  // 3. STATE QUẢN LÝ MODAL "CẬP NHẬT THÔNG TIN"
+  // 4. STATE QUẢN LÝ MODAL "CẬP NHẬT THÔNG TIN"
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editForm, setEditForm] = useState<UserProfileData>({ ...userData });
   const [modalSuccessMsg, setModalSuccessMsg] = useState<string>("");
 
-  // 4. STATE QUẢN LÝ FORM "ĐỔI MẬT KHẨU"
+  // 5. UPLOAD AVATAR
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState<boolean>(false);
+
+  // 6. STATE QUẢN LÝ FORM "ĐỔI MẬT KHẨU"
   const [currentPassword, setCurrentPassword] = useState<string>("");
   const [newPassword, setNewPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
@@ -93,6 +118,86 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
     }
   }, []);
 
+  // Xử lý upload ảnh đại diện khi bấm icon máy ảnh
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("Vui lòng chọn tệp hình ảnh hợp lệ (PNG, JPG, JPEG, WEBP)!", "error");
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      let newAvatarUrl = "";
+
+      // 1. Đẩy file lên API /api/upload
+      const formData = new FormData();
+      formData.append("image", file);
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/upload`, {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+        if (data.success && data.url) {
+          newAvatarUrl = data.url;
+        }
+      } catch (uploadErr) {
+        console.warn("Upload API lỗi, fallback sang Data URL:", uploadErr);
+      }
+
+      // Fallback sang Data URL nếu API chưa phản hồi
+      if (!newAvatarUrl) {
+        const reader = new FileReader();
+        newAvatarUrl = await new Promise<string>((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // 2. Cập nhật state
+      setUserData((prev) => ({ ...prev, avatarUrl: newAvatarUrl }));
+      setEditForm((prev) => ({ ...prev, avatarUrl: newAvatarUrl }));
+
+      // 3. Lưu vào localStorage
+      const savedAuth = localStorage.getItem("auth_user") || localStorage.getItem("soccer_current_user");
+      let userId: number | null = null;
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        userId = parsed.id || null;
+        parsed.anh_dai_dien = newAvatarUrl;
+        parsed.avatarUrl = newAvatarUrl;
+        localStorage.setItem("auth_user", JSON.stringify(parsed));
+      }
+      localStorage.setItem("soccer_current_user", JSON.stringify({ ...userData, avatarUrl: newAvatarUrl }));
+
+      // 4. Đồng bộ CSDL SQL Server nếu đã đăng nhập
+      if (userId) {
+        await fetch(`${API_BASE_URL}/auth/users/${userId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ho_ten: userData.hoTen,
+            email: userData.email,
+            so_dien_thoai: userData.soDienThoai,
+            anh_dai_dien: newAvatarUrl,
+          }),
+        });
+      }
+
+      showToast("🎉 Đã cập nhật ảnh đại diện thành công!", "success");
+    } catch (err) {
+      console.error("Lỗi khi tải ảnh đại diện:", err);
+      showToast("Không thể cập nhật ảnh đại diện. Vui lòng thử lại!", "error");
+    } finally {
+      setIsUploadingAvatar(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
   // Mở Modal cập nhật thông tin
   const handleOpenModal = () => {
     setEditForm({ ...userData });
@@ -107,30 +212,61 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
   };
 
   // Lưu thông tin từ Modal
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!editForm.hoTen.trim()) {
-      alert("Họ và tên không được để trống!");
+      showToast("Họ và tên không được để trống!", "error");
+      return;
+    }
+
+    if (!editForm.email.trim()) {
+      showToast("Email (Gmail) không được để trống!", "error");
       return;
     }
 
     setUserData(editForm);
 
     try {
+      let userId: number | null = null;
+      const savedAuth = localStorage.getItem("auth_user") || localStorage.getItem("soccer_current_user");
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        userId = parsed.id || null;
+        parsed.ho_ten = editForm.hoTen;
+        parsed.hoTen = editForm.hoTen;
+        parsed.email = editForm.email;
+        parsed.so_dien_thoai = editForm.soDienThoai;
+        parsed.soDienThoai = editForm.soDienThoai;
+        parsed.diaChi = editForm.diaChi;
+        if (editForm.avatarUrl) {
+          parsed.anh_dai_dien = editForm.avatarUrl;
+          parsed.avatarUrl = editForm.avatarUrl;
+        }
+        localStorage.setItem("auth_user", JSON.stringify(parsed));
+      }
       localStorage.setItem("soccer_current_user", JSON.stringify(editForm));
-      const authUserStr = localStorage.getItem("auth_user");
-      if (authUserStr) {
-        const authObj = JSON.parse(authUserStr);
-        authObj.ho_ten = editForm.hoTen;
-        authObj.so_dien_thoai = editForm.soDienThoai;
-        localStorage.setItem("auth_user", JSON.stringify(authObj));
+
+      // Đồng bộ trực tiếp vào CSDL SQL Server qua API
+      if (userId) {
+        await fetch(`${API_BASE_URL}/auth/users/${userId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ho_ten: editForm.hoTen,
+            email: editForm.email,
+            so_dien_thoai: editForm.soDienThoai,
+            diaChi: editForm.diaChi,
+            anh_dai_dien: editForm.avatarUrl,
+          }),
+        });
       }
     } catch {
       // Ignored
     }
 
     setModalSuccessMsg("Cập nhật thông tin thành công!");
+    showToast("🎉 Cập nhật thông tin tài khoản thành công!", "success");
     setTimeout(() => {
       handleCloseModal();
     }, 800);
@@ -197,6 +333,44 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
 
   return (
     <div className={`w-full ${onClose ? "" : "min-h-screen bg-slate-950 flex items-center justify-center p-4"} text-slate-100 font-sans`}>
+      {/* THÔNG BÁO NỔI DẠNG TOAST */}
+      {toast && (
+        <div className="fixed top-5 right-5 z-[99999] max-w-sm pointer-events-auto transition-all animate-bounce duration-300">
+          <div
+            className={`px-4 py-3 rounded-2xl backdrop-blur-xl border flex items-center gap-3 text-xs font-semibold shadow-2xl ${
+              toast.type === "success"
+                ? "bg-slate-900/95 text-emerald-300 border-emerald-500/50 shadow-emerald-950/50"
+                : toast.type === "error"
+                ? "bg-slate-900/95 text-rose-300 border-rose-500/50 shadow-rose-950/50"
+                : "bg-slate-900/95 text-slate-200 border-slate-700/80 shadow-slate-950/50"
+            }`}
+          >
+            <div
+              className={`p-1.5 rounded-xl shrink-0 ${
+                toast.type === "success"
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : toast.type === "error"
+                  ? "bg-rose-500/20 text-rose-400"
+                  : "bg-slate-800 text-slate-300"
+              }`}
+            >
+              {toast.type === "success" && <CheckCircle2 className="w-4 h-4" />}
+              {toast.type === "error" && <AlertCircle className="w-4 h-4" />}
+              {toast.type === "info" && <Sparkles className="w-4 h-4" />}
+            </div>
+            <p className="flex-1 leading-snug">{toast.message}</p>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800/60 transition-colors cursor-pointer shrink-0"
+              title="Đóng thông báo"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* KHUNG MODAL GỌN GÀNG (MAX-WIDTH 2XL / 3XL) */}
       <div className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col md:flex-row mx-auto">
         
@@ -298,12 +472,25 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                     alt={userData.hoTen}
                     className="w-14 h-14 rounded-full object-cover ring-2 ring-emerald-500/40 border border-emerald-400 shadow-md"
                   />
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                  />
                   <button
                     type="button"
-                    title="Đổi ảnh đại diện"
-                    className="absolute -bottom-1 -right-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 p-1 rounded-full shadow transition-transform hover:scale-110 cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingAvatar}
+                    title="Bấm để tải ảnh đại diện từ máy tính"
+                    className="absolute -bottom-1 -right-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 p-1.5 rounded-full shadow-lg transition-transform hover:scale-110 cursor-pointer disabled:opacity-50"
                   >
-                    <Camera className="w-3 h-3" />
+                    {isUploadingAvatar ? (
+                      <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Camera className="w-3.5 h-3.5" />
+                    )}
                   </button>
                 </div>
 
@@ -526,7 +713,21 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                   type="text"
                   value={editForm.hoTen}
                   onChange={(e) => setEditForm({ ...editForm, hoTen: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:border-emerald-500 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                  Email (Gmail) <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  placeholder="admin@gmail.com"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:border-emerald-500 focus:outline-none"
                   required
                 />
               </div>
@@ -537,7 +738,7 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                   type="text"
                   value={editForm.soDienThoai}
                   onChange={(e) => setEditForm({ ...editForm, soDienThoai: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:border-emerald-500 focus:outline-none"
                 />
               </div>
 
@@ -547,7 +748,7 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                   type="text"
                   value={editForm.diaChi}
                   onChange={(e) => setEditForm({ ...editForm, diaChi: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:border-emerald-500 focus:outline-none"
                 />
               </div>
 
