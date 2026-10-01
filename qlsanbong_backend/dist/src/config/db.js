@@ -21,7 +21,7 @@ const dbConfig = {
     database: process.env.DB_DATABASE || 'QuanLySanTheThao',
     port: parseInt(process.env.DB_PORT || '1433', 10),
     options: {
-        encrypt: false, // Bắt buộc false cho kết nối nội bộ / cục bộ
+        encrypt: process.env.DB_ENCRYPT === 'true', // true nếu dùng Cloud Azure SQL, false nếu dùng local/ngrok
         trustServerCertificate: true, // Chấp nhận chứng chỉ tự ký
         enableArithAbort: true
     },
@@ -31,7 +31,7 @@ const dbConfig = {
         idleTimeoutMillis: 30000
     }
 };
-// Khởi tạo Connection Pool
+// Khởi tạo Connection Pool (Tự động kết nối và không làm sập máy chủ Render nếu tạm thời mất mạng)
 const poolPromise = new mssql_1.default.ConnectionPool(dbConfig)
     .connect()
     .then(pool => {
@@ -40,7 +40,8 @@ const poolPromise = new mssql_1.default.ConnectionPool(dbConfig)
 })
     .catch(err => {
     console.error('❌ [SQL Server] Lỗi kết nối cơ sở dữ liệu:', err.message);
-    process.exit(1);
+    console.warn('⚠️ [Cảnh báo]: Vui lòng kiểm tra lại biến môi trường DB_SERVER, DB_USER, DB_PASSWORD, DB_PORT!');
+    return new mssql_1.default.ConnectionPool(dbConfig); // Trả về pool rỗng để Render không bị dừng tiến trình
 });
 exports.poolPromise = poolPromise;
 exports.default = poolPromise;

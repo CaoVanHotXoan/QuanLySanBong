@@ -226,11 +226,12 @@ export default function HomePage() {
   const socketRef = useRef<Socket | null>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Danh sách các ID slot đang bị khóa trên hệ thống Real-time
+  // Danh sách các ID slot đang bị khóa trên hệ thống Real-time (toàn bộ các khách hàng đang chọn)
   const [lockedSlots, setLockedSlots] = useState<string[]>([]);
 
-  // SlotId do CHÍNH user hiện tại đang giữ chỗ thao tác
-  const [myLockedSlotId, setMyLockedSlotId] = useState<string | null>(null);
+  // Danh sách các SlotId do CHÍNH khách hàng hiện tại đang giữ chỗ khi chọn mốc thời gian trong Modal
+  const [myLockedSlotIds, setMyLockedSlotIds] = useState<string[]>([]);
+  const myLockedSlotId = myLockedSlotIds[0] || null;
 
   // Chuyển đổi Giao diện Sáng / Tối
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
@@ -629,10 +630,9 @@ export default function HomePage() {
     fetchLichSan(filterNgayDa, sanBongList);
     fetchDichVu();
 
-    if (myLockedSlotId) {
-      socketRef.current?.emit('unlock_slot', myLockedSlotId);
-      setMyLockedSlotId(null);
-    }
+    // Giải phóng toàn bộ các ô giữ chỗ của khách hàng này khi thanh toán thành công
+    socketRef.current?.emit('unlock_all');
+    setMyLockedSlotIds([]);
 
     // Đếm ngược 10 giây
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
@@ -706,10 +706,11 @@ export default function HomePage() {
   const handleCloseBookingModal = () => {
     if (successTimerRef.current) clearTimeout(successTimerRef.current);
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-    if (myLockedSlotId) {
-      socketRef.current?.emit('unlock_slot', myLockedSlotId);
-      setMyLockedSlotId(null);
-    }
+    
+    // Bắn sự kiện socket giải phóng tất cả ô mà khách hàng này đang giữ
+    socketRef.current?.emit('unlock_all');
+    setMyLockedSlotIds([]);
+
     if (payOSData?.ma_don_dat || payOSData?.orderCode) {
       fetch(`${API_BASE_URL}/thanh-toan/payos/huy-don-tam`, {
         method: 'POST',
@@ -830,14 +831,36 @@ export default function HomePage() {
       return;
     }
 
-    const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
     const slotData = gridSlots[`${san.id}_${slot.start}`];
 
-    // 1. Kiểm tra nếu ô đang bị người khác giữ Real-time
-    if (lockedSlots.includes(slotKeyRealtime) && myLockedSlotId !== slotKeyRealtime) {
+    // -------------------------------------------------------------
+    // TÍNH TOÁN DANH SÁCH CÁC Ô SLOT THUỘC THỜI LƯỢNG ĐẶT SÂN
+    // -------------------------------------------------------------
+    // Mặc định chọn 1 tiếng 30 phút (90 phút) nếu không trùng, hoặc chọn 60 phút
+    const canDo90 = !checkConflictForSan(san.id, slot.start, 90);
+    const canDo60 = !checkConflictForSan(san.id, slot.start, 60);
+    const initialDuration = canDo90 ? 90 : canDo60 ? 60 : 120;
+    const initialEndTime = addMinutesToTime(slot.start, initialDuration);
+    const donGiaPhut = Number(san.don_gia_phut) || 5000;
+    const giaTien = initialDuration * donGiaPhut;
+
+    // Tính toàn bộ các ô 30 phút mà khách 1 sẽ chiếm giữ
+    const totalSlots = Math.ceil(initialDuration / 30);
+    const initialSlotKeys: string[] = [];
+    let curTime = slot.start;
+    for (let i = 0; i < totalSlots; i++) {
+      initialSlotKeys.push(`${filterNgayDa}_${san.id}_${curTime}`);
+      curTime = addMinutesToTime(curTime, 30);
+    }
+
+    // 1. Kiểm tra nếu bất kỳ ô nào trong khoảng này đang bị khách khác giữ
+    const isAnySlotLockedByOther = initialSlotKeys.some(
+      (k) => lockedSlots.includes(k) && !myLockedSlotIds.includes(k)
+    );
+    if (isAnySlotLockedByOther) {
       triggerToast({
         type: 'info',
-        message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang có người khác giữ chỗ thao tác!`,
+        message: `Khung giờ ${slot.label} (${slot.start} - ${initialEndTime}) của ${san.ten_san} đang có khách hàng khác chọn giữ chỗ!`,
       });
       return;
     }
@@ -851,20 +874,9 @@ export default function HomePage() {
       return;
     }
 
-    // 3. Nếu ô hoàn toàn trống
-    if (myLockedSlotId && myLockedSlotId !== slotKeyRealtime) {
-      socketRef.current?.emit('unlock_slot', myLockedSlotId);
-    }
-    socketRef.current?.emit('lock_slot', slotKeyRealtime);
-    setMyLockedSlotId(slotKeyRealtime);
-
-    // Mặc định chọn 1 tiếng 30 phút (90 phút) nếu không trùng, hoặc chọn 60 phút
-    const canDo90 = !checkConflictForSan(san.id, slot.start, 90);
-    const canDo60 = !checkConflictForSan(san.id, slot.start, 60);
-    const initialDuration = canDo90 ? 90 : canDo60 ? 60 : 120;
-    const initialEndTime = addMinutesToTime(slot.start, initialDuration);
-    const donGiaPhut = Number(san.don_gia_phut) || 5000;
-    const giaTien = initialDuration * donGiaPhut;
+    // 3. Khóa toàn bộ các ô thuộc khoảng thời gian đã chọn trên Socket.IO Real-time
+    socketRef.current?.emit('lock_slots', initialSlotKeys);
+    setMyLockedSlotIds(initialSlotKeys);
 
     setSelectedSlot({
       san,
@@ -882,12 +894,29 @@ export default function HomePage() {
     }));
   };
 
-  // Chọn thời lượng đặt sân (1 Tiếng, 1 Tiếng 30 Phút, 2 Tiếng)
+  /**
+   * Chọn thời lượng đặt sân (1 Tiếng, 1 Tiếng 30 Phút, 2 Tiếng)
+   * Tự động tính toán lại tất cả các ô slot cần khóa và phát tín hiệu Socket.IO
+   * để Khách hàng 2 nhìn thấy các ô chuyển sang MÀU CAM Real-time
+   */
   const handleSelectDuration = (durationMin: number) => {
     if (!selectedSlot) return;
     const newEndTime = addMinutesToTime(selectedSlot.slot.start, durationMin);
     const donGiaPhut = Number(selectedSlot.san.don_gia_phut) || 5000;
     const newGiaTien = durationMin * donGiaPhut;
+
+    // Tính danh sách các ô slot 30 phút tương ứng với thời lượng mới
+    const totalSlots = Math.ceil(durationMin / 30);
+    const newSlotKeys: string[] = [];
+    let curTime = selectedSlot.slot.start;
+    for (let i = 0; i < totalSlots; i++) {
+      newSlotKeys.push(`${filterNgayDa}_${selectedSlot.san.id}_${curTime}`);
+      curTime = addMinutesToTime(curTime, 30);
+    }
+
+    // Gửi sự kiện lock_slots lên Socket.IO để khóa đồng loạt các ô này
+    socketRef.current?.emit('lock_slots', newSlotKeys);
+    setMyLockedSlotIds(newSlotKeys);
 
     setSelectedSlot({
       ...selectedSlot,
@@ -1065,10 +1094,9 @@ export default function HomePage() {
         fetchDichVu()
       ]);
 
-      if (myLockedSlotId) {
-        socketRef.current?.emit('unlock_slot', myLockedSlotId);
-        setMyLockedSlotId(null);
-      }
+      // Giải phóng toàn bộ các ô giữ chỗ Real-time trên Socket
+      socketRef.current?.emit('unlock_all');
+      setMyLockedSlotIds([]);
 
       setIsSubmitting(false);
       setSelectedSlot(null);
@@ -1424,9 +1452,9 @@ export default function HomePage() {
                 <span className="w-3 h-3 rounded-md bg-emerald-500 shadow-sm shadow-emerald-500/50" />
                 <span>Sân Trống</span>
               </div>
-              <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-gray-500/10 border border-gray-500/40 text-gray-400">
-                <span className="w-3 h-3 rounded-md bg-gray-500 shadow-sm shadow-gray-500/50 animate-pulse" />
-                <span>Đang Giữ Chỗ</span>
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/50 text-amber-500 dark:text-amber-400">
+                <span className="w-3 h-3 rounded-md bg-amber-500 shadow-sm shadow-amber-500/50 animate-pulse" />
+                <span>Đang Giữ Chỗ (Màu Cam)</span>
               </div>
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/40 text-rose-600 dark:text-rose-300">
                 <span className="w-3 h-3 rounded-md bg-rose-500 shadow-sm shadow-rose-500/50" />
@@ -1544,7 +1572,7 @@ export default function HomePage() {
                             const isBooked = slotData && slotData.trang_thai === 'DA_CHOT';
                             const isPast = isSlotInThePast(slot.start);
                             const isLockedByOther =
-                              lockedSlots.includes(slotKeyRealtime) && myLockedSlotId !== slotKeyRealtime;
+                              lockedSlots.includes(slotKeyRealtime) && !myLockedSlotIds.includes(slotKeyRealtime);
 
                             return (
                               <div key={slot.start} className="w-full">
@@ -1595,22 +1623,33 @@ export default function HomePage() {
                                     </div>
                                   </div>
                                 ) : isLockedByOther ? (
+                                  /* 3. KHÁCH HÀNG KHÁC ĐANG GIỮ CHỖ THỜI GIAN THỰC -> KHÓA MÀU CAM NỔI BẬT */
                                   <div
-                                    title="Đang có người khác thao tác giữ chỗ ô giờ này"
-                                    className="w-full h-28 p-3 rounded-2xl border border-gray-600/50 bg-gray-800/70 text-gray-400 flex flex-col items-center justify-between opacity-70 cursor-not-allowed select-none transition-all"
+                                    title="Khung giờ này đang được khách hàng khác giữ chỗ thao tác đặt sân"
+                                    onClick={() => {
+                                      triggerToast({
+                                        type: 'info',
+                                        message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang được khách hàng khác chọn giữ chỗ. Vui lòng chọn khung giờ khác!`,
+                                      });
+                                    }}
+                                    className="w-full h-28 p-3 rounded-2xl border border-amber-500/80 bg-gradient-to-br from-amber-950/90 via-orange-950/85 to-amber-900/90 text-amber-300 flex flex-col items-center justify-between shadow-lg shadow-amber-950/50 cursor-not-allowed select-none transition-all hover:scale-[1.02]"
                                   >
                                     <div className="w-full flex items-center justify-between">
-                                      <span className="text-sm font-black text-gray-300 font-mono">{slot.label}</span>
-                                      <span className="text-[10px] text-gray-400 font-mono">{slot.start}</span>
+                                      <span className="text-sm font-black text-amber-300 font-mono">{slot.label}</span>
+                                      <span className="text-[10px] text-amber-400 font-mono font-bold">{slot.start}</span>
                                     </div>
                                     <div className="flex flex-col items-center gap-1 my-auto">
-                                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-300">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-ping" />
-                                        GIỮ CHỖ
+                                      <span className="inline-flex items-center gap-1.5 text-xs font-black text-amber-300 tracking-wide">
+                                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                                        ĐANG GIỮ CHỖ
                                       </span>
-                                      <span className="text-[10px] text-gray-400">Đang chọn giờ...</span>
+                                      <span className="text-[10px] text-amber-300/90 font-medium">Khách đang chọn...</span>
                                     </div>
-                                    <div className="text-[10px] text-gray-500 font-mono">Real-time</div>
+                                    <div className="w-full text-center">
+                                      <span className="text-[10px] text-amber-300 font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30">
+                                        Tạm Khóa (Màu Cam)
+                                      </span>
+                                    </div>
                                   </div>
                                 ) : (
                                   <button
@@ -1696,7 +1735,7 @@ export default function HomePage() {
 
                         // Kiểm tra nếu ô đang bị người khác giữ chỗ Real-time
                         const isLockedByOther =
-                          lockedSlots.includes(slotKeyRealtime) && myLockedSlotId !== slotKeyRealtime;
+                          lockedSlots.includes(slotKeyRealtime) && !myLockedSlotIds.includes(slotKeyRealtime);
 
                         return (
                           <td key={slot.start} className={`p-2 border-l text-center ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'
@@ -1730,17 +1769,23 @@ export default function HomePage() {
                                 </span>
                               </div>
                             ) : isLockedByOther ? (
-                              /* 3. TRƯỜNG HỢP: ĐANG CÓ NGƯỜI KHÁC GIỮ CHỖ REALTIME (MÀU XÁM) */
+                              /* 3. TRƯỜNG HỢP: ĐANG CÓ NGƯỜI KHÁC GIỮ CHỖ REALTIME (MÀU CAM NỔI BẬT) */
                               <div
-                                title="Đang có người khác thao tác giữ chỗ ô giờ này"
-                                className="w-full h-20 p-2 rounded-2xl border border-gray-600/50 bg-gray-800/70 text-gray-400 flex flex-col items-center justify-center gap-1 opacity-70 cursor-not-allowed select-none transition-all"
+                                title="Khung giờ này đang được khách hàng khác giữ chỗ thao tác đặt sân"
+                                onClick={() => {
+                                  triggerToast({
+                                    type: 'info',
+                                    message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang được khách hàng khác chọn giữ chỗ. Vui lòng chọn khung giờ khác!`,
+                                  });
+                                }}
+                                className="w-full h-20 p-2 rounded-2xl border border-amber-500/80 bg-gradient-to-br from-amber-950/90 via-orange-950/85 to-amber-900/90 text-amber-300 flex flex-col items-center justify-center gap-1 shadow-md shadow-amber-950/50 cursor-not-allowed select-none transition-all hover:scale-[1.02]"
                               >
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-300">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-ping" />
-                                  GIỮ CHỖ
+                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-300 tracking-wide">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                                  ĐANG GIỮ CHỖ
                                 </span>
-                                <span className="text-[9px] text-gray-400 truncate max-w-[100px]">
-                                  Đang chọn giờ...
+                                <span className="text-[9px] text-amber-300/90 font-bold truncate max-w-[100px]">
+                                  {slot.label} (Khóa)
                                 </span>
                               </div>
                             ) : (
