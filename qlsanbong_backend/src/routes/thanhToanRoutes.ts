@@ -4,10 +4,10 @@
  * =====================================================================
  */
 
-const express = require('express');
-const router = express.Router();
-const thanhToanController = require('../controllers/thanhToanController');
-const { verifyToken } = require('../middlewares/authMiddleware');
+import express, { Router } from 'express';
+import * as thanhToanController from '../controllers/thanhToanController';
+
+const router: Router = express.Router();
 
 // =====================================================================
 // PAYOS VIETQR MB BANK ENDPOINTS
@@ -42,4 +42,4 @@ router.delete('/hoan-tien/:id', thanhToanController.xoaHoanTien);
 // Thanh toán đơn đặt sân truyền thống
 router.post('/', thanhToanController.thanhToanDon);
 
-module.exports = router;
+export default router;

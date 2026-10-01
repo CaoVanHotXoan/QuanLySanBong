@@ -18,14 +18,16 @@
  * =====================================================================
  */
 
-const { sql, poolPromise } = require('../config/db');
+import { Response } from 'express';
+import { sql, poolPromise } from '../config/db';
+import { AuthRequest } from '../types';
 
 /**
  * 1. Lấy danh sách tất cả các sân bóng
  * Method: GET /api/dat-san/danh-sach-san
  * Procedure: sp_LayDanhSachSan
  */
-const layDanhSachSan = async (req, res) => {
+export const layDanhSachSan = async (req: AuthRequest, res: Response) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
@@ -35,7 +37,7 @@ const layDanhSachSan = async (req, res) => {
             success: true,
             data: result.recordset
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachSan:', error.message);
         return res.status(400).json({
             success: false,
@@ -49,7 +51,7 @@ const layDanhSachSan = async (req, res) => {
  * Method: GET /api/dat-san/loai-san
  * Procedure: sp_LayDanhSachLoaiSan
  */
-const layDanhSachLoaiSan = async (req, res) => {
+export const layDanhSachLoaiSan = async (req: AuthRequest, res: Response) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
@@ -59,7 +61,7 @@ const layDanhSachLoaiSan = async (req, res) => {
             success: true,
             data: result.recordset
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachLoaiSan:', error.message);
         return res.status(400).json({
             success: false,
@@ -73,7 +75,7 @@ const layDanhSachLoaiSan = async (req, res) => {
  * Method: POST /api/dat-san/loai-san
  * Procedure: sp_ThemLoaiSan
  */
-const themLoaiSan = async (req, res) => {
+export const themLoaiSan = async (req: AuthRequest, res: Response) => {
     try {
         const { ten_loai, mo_ta, trang_thai } = req.body;
         if (!ten_loai) {
@@ -95,7 +97,7 @@ const themLoaiSan = async (req, res) => {
             message: 'Thêm loại sân mới thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_ThemLoaiSan:', error.message);
         return res.status(400).json({
             success: false,
@@ -109,9 +111,9 @@ const themLoaiSan = async (req, res) => {
  * Method: PUT /api/dat-san/loai-san/:id
  * Procedure: sp_SuaLoaiSan
  */
-const suaLoaiSan = async (req, res) => {
+export const suaLoaiSan = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const { ten_loai, mo_ta, trang_thai } = req.body;
 
         const pool = await poolPromise;
@@ -127,7 +129,7 @@ const suaLoaiSan = async (req, res) => {
             message: 'Cập nhật loại sân thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_SuaLoaiSan:', error.message);
         return res.status(400).json({
             success: false,
@@ -141,9 +143,9 @@ const suaLoaiSan = async (req, res) => {
  * Method: DELETE /api/dat-san/loai-san/:id
  * Procedure: sp_XoaLoaiSan
  */
-const xoaLoaiSan = async (req, res) => {
+export const xoaLoaiSan = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const pool = await poolPromise;
         await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
@@ -153,7 +155,7 @@ const xoaLoaiSan = async (req, res) => {
             success: true,
             message: 'Xóa loại sân thành công!'
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_XoaLoaiSan:', error.message);
         return res.status(400).json({
             success: false,
@@ -162,13 +164,12 @@ const xoaLoaiSan = async (req, res) => {
     }
 };
 
-
 /**
  * 3. Thêm sân bóng mới (Admin Dashboard)
  * Method: POST /api/dat-san/san-bong
  * Procedure: sp_ThemSanBong
  */
-const themSanBong = async (req, res) => {
+export const themSanBong = async (req: AuthRequest, res: Response) => {
     try {
         const { ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai } = req.body;
 
@@ -193,7 +194,7 @@ const themSanBong = async (req, res) => {
             message: 'Thêm sân bóng mới thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_ThemSanBong:', error.message);
         return res.status(400).json({
             success: false,
@@ -207,9 +208,9 @@ const themSanBong = async (req, res) => {
  * Method: PUT /api/dat-san/san-bong/:id
  * Procedure: sp_SuaSanBong
  */
-const suaSanBong = async (req, res) => {
+export const suaSanBong = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const { ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai } = req.body;
 
         const pool = await poolPromise;
@@ -227,7 +228,7 @@ const suaSanBong = async (req, res) => {
             message: 'Cập nhật sân bóng thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_SuaSanBong:', error.message);
         return res.status(400).json({
             success: false,
@@ -241,9 +242,9 @@ const suaSanBong = async (req, res) => {
  * Method: DELETE /api/dat-san/san-bong/:id
  * Procedure: sp_XoaSanBong
  */
-const xoaSanBong = async (req, res) => {
+export const xoaSanBong = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const pool = await poolPromise;
         await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
@@ -253,7 +254,7 @@ const xoaSanBong = async (req, res) => {
             success: true,
             message: 'Xóa sân bóng thành công!'
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_XoaSanBong:', error.message);
         return res.status(400).json({
             success: false,
@@ -267,7 +268,7 @@ const xoaSanBong = async (req, res) => {
  * Method: GET /api/dat-san/khung-gio-gia
  * Procedure: sp_LayKhungGioGia
  */
-const layKhungGioGia = async (req, res) => {
+export const layKhungGioGia = async (req: AuthRequest, res: Response) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
@@ -277,7 +278,7 @@ const layKhungGioGia = async (req, res) => {
             success: true,
             data: result.recordset
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_LayKhungGioGia:', error.message);
         return res.status(400).json({
             success: false,
@@ -291,7 +292,7 @@ const layKhungGioGia = async (req, res) => {
  * Method: POST /api/dat-san/khung-gio-gia
  * Procedure: sp_ThemKhungGioGia
  */
-const themKhungGioGia = async (req, res) => {
+export const themKhungGioGia = async (req: AuthRequest, res: Response) => {
     try {
         const { ma_loai_san, gio_bat_dau, gio_ket_thuc, la_cuoi_tuan, don_gia } = req.body;
 
@@ -309,7 +310,7 @@ const themKhungGioGia = async (req, res) => {
             message: 'Thêm khung giờ giá mới thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_ThemKhungGioGia:', error.message);
         return res.status(400).json({
             success: false,
@@ -323,9 +324,9 @@ const themKhungGioGia = async (req, res) => {
  * Method: PUT /api/dat-san/khung-gio-gia/:id
  * Procedure: sp_SuaKhungGioGia
  */
-const suaKhungGioGia = async (req, res) => {
+export const suaKhungGioGia = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const { ma_loai_san, gio_bat_dau, gio_ket_thuc, la_cuoi_tuan, don_gia } = req.body;
 
         const pool = await poolPromise;
@@ -343,7 +344,7 @@ const suaKhungGioGia = async (req, res) => {
             message: 'Cập nhật khung giờ giá thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_SuaKhungGioGia:', error.message);
         return res.status(400).json({
             success: false,
@@ -357,9 +358,9 @@ const suaKhungGioGia = async (req, res) => {
  * Method: DELETE /api/dat-san/khung-gio-gia/:id
  * Procedure: sp_XoaKhungGioGia
  */
-const xoaKhungGioGia = async (req, res) => {
+export const xoaKhungGioGia = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const pool = await poolPromise;
         await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
@@ -369,7 +370,7 @@ const xoaKhungGioGia = async (req, res) => {
             success: true,
             message: 'Xóa khung giờ giá thành công!'
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_XoaKhungGioGia:', error.message);
         return res.status(400).json({
             success: false,
@@ -383,7 +384,7 @@ const xoaKhungGioGia = async (req, res) => {
  * Method: GET /api/dat-san/tat-ca-don
  * Procedure: sp_LayTatCaDonDat
  */
-const layTatCaDonDat = async (req, res) => {
+export const layTatCaDonDat = async (req: AuthRequest, res: Response) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_LayTatCaDonDat');
@@ -393,8 +394,8 @@ const layTatCaDonDat = async (req, res) => {
         const detailsRes = await pool.request().execute('sp_LayDanhSachChiTietDichVu');
         const allDetails = detailsRes.recordset || [];
 
-        const merged = bookings.map(b => {
-            const services = allDetails.filter(d => d.ma_don_dat === b.id);
+        const merged = bookings.map((b: any) => {
+            const services = allDetails.filter((d: any) => d.ma_don_dat === b.id);
             return {
                 ...b,
                 chi_tiet_dich_vu: services,
@@ -406,7 +407,7 @@ const layTatCaDonDat = async (req, res) => {
             success: true,
             data: merged
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_LayTatCaDonDat:', error.message);
         return res.status(400).json({
             success: false,
@@ -420,7 +421,7 @@ const layTatCaDonDat = async (req, res) => {
  * Method: GET /api/dat-san/lich-san?ngay_da=YYYY-MM-DD&ma_san=1
  * Procedure: sp_LayLichSan
  */
-const layLichSan = async (req, res) => {
+export const layLichSan = async (req: AuthRequest, res: Response) => {
     try {
         const { ngay_da, ma_san } = req.query;
 
@@ -433,10 +434,10 @@ const layLichSan = async (req, res) => {
 
         const pool = await poolPromise;
         const request = pool.request()
-            .input('ngay_da', sql.Date, ngay_da);
+            .input('ngay_da', sql.Date, ngay_da as string);
 
         if (ma_san) {
-            request.input('ma_san', sql.Int, parseInt(ma_san, 10));
+            request.input('ma_san', sql.Int, parseInt(ma_san as string, 10));
         } else {
             request.input('ma_san', sql.Int, null);
         }
@@ -447,7 +448,7 @@ const layLichSan = async (req, res) => {
             success: true,
             data: result.recordset
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_LayLichSan:', error.message);
         return res.status(400).json({
             success: false,
@@ -460,7 +461,7 @@ const layLichSan = async (req, res) => {
  * 12. Đặt sân bóng (Lưu trạng thái DA_COC hoặc DA_THANH_TOAN vào bảng Don_Dat_San)
  * Method: POST /api/dat-san
  */
-const datSan = async (req, res) => {
+export const datSan = async (req: AuthRequest, res: Response) => {
     try {
         const { ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, phuong_thuc, loai_thanh_toan, trang_thai, ghi_chu, ho_ten, so_dien_thoai } = req.body;
 
@@ -474,7 +475,7 @@ const datSan = async (req, res) => {
         const pool = await poolPromise;
 
         // 1. Xác định hoặc tạo mới người dùng theo đúng Tên và Số điện thoại khách đặt sân
-        let ma_nd = null;
+        let ma_nd: number | null = null;
         const ten_khach = (ho_ten && ho_ten.trim()) ? ho_ten.trim() : '';
         const sdt_khach = (so_dien_thoai && so_dien_thoai.trim()) ? so_dien_thoai.trim() : '';
 
@@ -556,7 +557,7 @@ const datSan = async (req, res) => {
         const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '07:30:00');
 
         // 3. Thực hiện lưu trực tiếp vào bảng Don_Dat_San
-        let booking = null;
+        let booking: any = null;
         try {
             const insertRes = await pool.request()
                 .input('ma_nguoi_dung', sql.Int, ma_nd)
@@ -581,7 +582,7 @@ const datSan = async (req, res) => {
                     )
                 `);
             booking = insertRes.recordset && insertRes.recordset[0];
-        } catch (insertErr) {
+        } catch (insertErr: any) {
             console.warn('Thử fallback lưu Don_Dat_San:', insertErr.message);
             const fallbackTrangThai = isTraHet ? 'Da Thanh Toan' : 'DA_COC';
             const fallbackRes = await pool.request()
@@ -614,12 +615,12 @@ const datSan = async (req, res) => {
         const selectedServices = req.body.dich_vu_chon || req.body.dich_vu || {};
 
         if (donDatId && selectedServices) {
-            let serviceItems = [];
+            let serviceItems: any[] = [];
             if (Array.isArray(selectedServices)) {
                 serviceItems = selectedServices;
             } else if (typeof selectedServices === 'object') {
                 Object.entries(selectedServices).forEach(([dvId, qty]) => {
-                    const numQty = parseInt(qty, 10);
+                    const numQty = parseInt(qty as string, 10);
                     if (numQty > 0) {
                         serviceItems.push({ ma_dich_vu: parseInt(dvId, 10), so_luong: numQty });
                     }
@@ -671,7 +672,7 @@ const datSan = async (req, res) => {
                                 WHERE id = @madv
                             `);
                     }
-                } catch (serviceErr) {
+                } catch (serviceErr: any) {
                     console.error('Lỗi khi chèn Chi_Tiet_Dich_Vu và trừ kho:', serviceErr.message);
                 }
             }
@@ -682,7 +683,7 @@ const datSan = async (req, res) => {
             message: `Đặt sân thành công! Trạng thái đơn: ${isTraHet ? 'Đã thanh toán' : 'Đã cọc'}`,
             data: booking
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi datSan:', error.message);
         return res.status(400).json({
             success: false,
@@ -695,32 +696,32 @@ const datSan = async (req, res) => {
  * 12b. Lấy lịch sử đặt sân của khách hàng (Đúng dữ liệu CSDL SQL Server - sp_LayLichSuDatSan)
  * Method: GET /api/dat-san/lich-su-khach-hang
  */
-const layLichSuKhachHang = async (req, res) => {
+export const layLichSuKhachHang = async (req: AuthRequest, res: Response) => {
     try {
         const { ma_nguoi_dung, so_dien_thoai, email } = req.query;
         const pool = await poolPromise;
 
         const request = pool.request();
-        let ma_nd_param = null;
-        let sdt_param = null;
-        let email_param = null;
+        let ma_nd_param: number | null = null;
+        let sdt_param: string | null = null;
+        let email_param: string | null = null;
 
-        if (ma_nguoi_dung && parseInt(ma_nguoi_dung, 10)) {
-            ma_nd_param = parseInt(ma_nguoi_dung, 10);
+        if (ma_nguoi_dung && parseInt(ma_nguoi_dung as string, 10)) {
+            ma_nd_param = parseInt(ma_nguoi_dung as string, 10);
             request.input('ma_nguoi_dung', sql.Int, ma_nd_param);
         } else {
             request.input('ma_nguoi_dung', sql.Int, null);
         }
 
-        if (so_dien_thoai && so_dien_thoai.trim()) {
-            sdt_param = so_dien_thoai.trim();
+        if (so_dien_thoai && (so_dien_thoai as string).trim()) {
+            sdt_param = (so_dien_thoai as string).trim();
             request.input('so_dien_thoai', sql.VarChar(20), sdt_param);
         } else {
             request.input('so_dien_thoai', sql.VarChar(20), null);
         }
 
-        if (email && email.trim()) {
-            email_param = email.trim();
+        if (email && (email as string).trim()) {
+            email_param = (email as string).trim();
             request.input('email', sql.VarChar(255), email_param);
         } else {
             request.input('email', sql.VarChar(255), null);
@@ -732,13 +733,13 @@ const layLichSuKhachHang = async (req, res) => {
         // 100% Stored Procedure: Lấy chi tiết dịch vụ bằng sp_LayChiTietDichVuDonDat
         if (data.length > 0) {
             const dvRes = await pool.request().execute('sp_LayChiTietDichVuDonDat');
-            const dvMap = {};
-            (dvRes.recordset || []).forEach(dv => {
+            const dvMap: Record<number, any[]> = {};
+            (dvRes.recordset || []).forEach((dv: any) => {
                 if (!dvMap[dv.ma_don_dat]) dvMap[dv.ma_don_dat] = [];
                 dvMap[dv.ma_don_dat].push(dv);
             });
 
-            data.forEach(order => {
+            data.forEach((order: any) => {
                 order.chi_tiet_dich_vu = dvMap[order.id] || [];
                 order.tien_coc = Number(order.tien_coc || 0);
                 order.tien_da_nhan = Number(order.tien_da_nhan || 0);
@@ -750,7 +751,7 @@ const layLichSuKhachHang = async (req, res) => {
             success: true,
             data
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi layLichSuKhachHang:', error.message);
         return res.status(400).json({
             success: false,
@@ -764,7 +765,7 @@ const layLichSuKhachHang = async (req, res) => {
  * Method: POST /api/dat-san/huy-don
  * Procedure: sp_HuyDonVaHoanCoc
  */
-const huyDonVaHoanCoc = async (req, res) => {
+export const huyDonVaHoanCoc = async (req: AuthRequest, res: Response) => {
     try {
         const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung || 1);
         const { ma_don_dat, ly_do_huy } = req.body;
@@ -790,7 +791,7 @@ const huyDonVaHoanCoc = async (req, res) => {
             message: 'Hủy đơn đặt sân và xử lý hoàn tiền thành công!',
             data: cancelResult
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_HuyDonVaHoanCoc:', error.message);
         return res.status(400).json({
             success: false,
@@ -804,7 +805,7 @@ const huyDonVaHoanCoc = async (req, res) => {
  * Method: POST /api/dat-san/tinh-gia-linh-hoat
  * Procedure: sp_TinhGiaSanLinhHoat
  */
-const tinhGiaLinhHoat = async (req, res) => {
+export const tinhGiaLinhHoat = async (req: AuthRequest, res: Response) => {
     try {
         const { ma_san, ngay_da, gio_bat_dau, gio_ket_thuc } = req.body;
 
@@ -827,7 +828,7 @@ const tinhGiaLinhHoat = async (req, res) => {
             success: true,
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_TinhGiaSanLinhHoat:', error.message);
         return res.status(400).json({
             success: false,
@@ -841,7 +842,7 @@ const tinhGiaLinhHoat = async (req, res) => {
  * Method: POST /api/dat-san/dat-linh-hoat
  * Procedure: sp_DatSanLinhHoat
  */
-const datSanLinhHoat = async (req, res) => {
+export const datSanLinhHoat = async (req: AuthRequest, res: Response) => {
     try {
         const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung || 1);
         const { ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, ghi_chu, tien_coc } = req.body;
@@ -869,7 +870,7 @@ const datSanLinhHoat = async (req, res) => {
             message: 'Đặt sân tính giờ linh hoạt thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_DatSanLinhHoat:', error.message);
         return res.status(400).json({
             success: false,
@@ -883,7 +884,7 @@ const datSanLinhHoat = async (req, res) => {
  * Method: POST /api/dat-san/checkin-linh-hoat
  * Procedure: sp_BatDauDaLinhHoat
  */
-const batDauDaLinhHoat = async (req, res) => {
+export const batDauDaLinhHoat = async (req: AuthRequest, res: Response) => {
     try {
         const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung || 3);
         const { ma_san, ten_khach_hang, so_dien_thoai, ghi_chu } = req.body;
@@ -909,7 +910,7 @@ const batDauDaLinhHoat = async (req, res) => {
             message: 'Đã check-in và bắt đầu tính giờ đá linh hoạt cho sân!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_BatDauDaLinhHoat:', error.message);
         return res.status(400).json({
             success: false,
@@ -923,7 +924,7 @@ const batDauDaLinhHoat = async (req, res) => {
  * Method: POST /api/dat-san/checkout-linh-hoat
  * Procedure: sp_KetThucDaLinhHoat
  */
-const ketThucDaLinhHoat = async (req, res) => {
+export const ketThucDaLinhHoat = async (req: AuthRequest, res: Response) => {
     try {
         const { ma_don_dat, gio_ket_thuc } = req.body;
 
@@ -945,7 +946,7 @@ const ketThucDaLinhHoat = async (req, res) => {
             message: 'Đã chốt giờ và tính tiền sân linh hoạt thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_KetThucDaLinhHoat:', error.message);
         return res.status(400).json({
             success: false,
@@ -955,11 +956,11 @@ const ketThucDaLinhHoat = async (req, res) => {
 };
 
 /**
- * 15. Lấy danh sách khung giờ từ CSDL (Bảng Khung_Gio)
+ * 18. Lấy danh sách khung giờ từ CSDL (Bảng Khung_Gio)
  * Method: GET /api/dat-san/khung-gio
  * Procedure: sp_LayDanhSachKhungGio
  */
-const layDanhSachKhungGio = async (req, res) => {
+export const layDanhSachKhungGio = async (req: AuthRequest, res: Response) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachKhungGio');
@@ -968,7 +969,7 @@ const layDanhSachKhungGio = async (req, res) => {
             success: true,
             data: result.recordset
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachKhungGio:', error.message);
         return res.status(400).json({
             success: false,
@@ -982,7 +983,7 @@ const layDanhSachKhungGio = async (req, res) => {
  * Method: GET /api/dat-san/khung-gio/all
  * Procedure: sp_LayTatCaKhungGioAdmin
  */
-const layTatCaKhungGioAdmin = async (req, res) => {
+export const layTatCaKhungGioAdmin = async (req: AuthRequest, res: Response) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_LayTatCaKhungGioAdmin');
@@ -991,7 +992,7 @@ const layTatCaKhungGioAdmin = async (req, res) => {
             success: true,
             data: result.recordset
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_LayTatCaKhungGioAdmin:', error.message);
         return res.status(400).json({
             success: false,
@@ -1005,7 +1006,7 @@ const layTatCaKhungGioAdmin = async (req, res) => {
  * Method: POST /api/dat-san/khung-gio
  * Procedure: sp_ThemKhungGio
  */
-const themKhungGio = async (req, res) => {
+export const themKhungGio = async (req: AuthRequest, res: Response) => {
     try {
         const { gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai } = req.body;
         if (!gio_bat_dau || !gio_ket_thuc || !nhan_hien_thi) {
@@ -1029,7 +1030,7 @@ const themKhungGio = async (req, res) => {
             message: 'Thêm khung giờ mới thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_ThemKhungGio:', error.message);
         return res.status(400).json({
             success: false,
@@ -1043,9 +1044,9 @@ const themKhungGio = async (req, res) => {
  * Method: PUT /api/dat-san/khung-gio/:id
  * Procedure: sp_SuaKhungGio
  */
-const suaKhungGio = async (req, res) => {
+export const suaKhungGio = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const { gio_bat_dau, gio_ket_thuc, nhan_hien_thi, thu_tu, trang_thai } = req.body;
 
         const pool = await poolPromise;
@@ -1063,7 +1064,7 @@ const suaKhungGio = async (req, res) => {
             message: 'Cập nhật khung giờ thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_SuaKhungGio:', error.message);
         return res.status(400).json({
             success: false,
@@ -1077,9 +1078,9 @@ const suaKhungGio = async (req, res) => {
  * Method: DELETE /api/dat-san/khung-gio/:id
  * Procedure: sp_XoaKhungGio
  */
-const xoaKhungGio = async (req, res) => {
+export const xoaKhungGio = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const pool = await poolPromise;
         await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
@@ -1089,7 +1090,7 @@ const xoaKhungGio = async (req, res) => {
             success: true,
             message: 'Xóa khung giờ thành công!'
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_XoaKhungGio:', error.message);
         return res.status(400).json({
             success: false,
@@ -1103,7 +1104,7 @@ const xoaKhungGio = async (req, res) => {
  * Method: POST /api/dat-san/khung-gio/reset
  * Procedure: sp_ResetKhungGio
  */
-const resetKhungGio = async (req, res) => {
+export const resetKhungGio = async (req: AuthRequest, res: Response) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_ResetKhungGio');
@@ -1113,7 +1114,7 @@ const resetKhungGio = async (req, res) => {
             message: 'Đã nạp lại 27 khung giờ mặc định thành công!',
             data: result.recordset
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_ResetKhungGio:', error.message);
         return res.status(400).json({
             success: false,
@@ -1127,7 +1128,7 @@ const resetKhungGio = async (req, res) => {
  * Method: POST /api/dat-san/don-dat-thanh-toan
  * Procedure: sp_ThemDonDatVaThanhToan
  */
-const themDonDatVaThanhToan = async (req, res) => {
+export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
     try {
         const { ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd } = req.body;
 
@@ -1166,7 +1167,7 @@ const themDonDatVaThanhToan = async (req, res) => {
                             .input('ma_dich_vu', sql.Int, parseInt(item.ma_dich_vu, 10))
                             .input('so_luong', sql.Int, parseInt(item.so_luong, 10))
                             .execute('sp_ThemDichVu');
-                    } catch (e) {
+                    } catch (e: any) {
                         console.warn('Lỗi thêm dịch vụ kèm đơn:', e.message);
                     }
                 }
@@ -1178,7 +1179,7 @@ const themDonDatVaThanhToan = async (req, res) => {
             message: 'Thêm đơn đặt sân thành công!',
             data: orderData
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_ThemDonDatVaThanhToan:', error.message);
         return res.status(400).json({
             success: false,
@@ -1192,9 +1193,9 @@ const themDonDatVaThanhToan = async (req, res) => {
  * Method: PUT /api/dat-san/don-dat-thanh-toan/:id
  * Procedure: sp_SuaDonDatVaThanhToan
  */
-const suaDonDatVaThanhToan = async (req, res) => {
+export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const { ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd } = req.body;
 
         const pool = await poolPromise;
@@ -1230,7 +1231,7 @@ const suaDonDatVaThanhToan = async (req, res) => {
                             .input('ma_dich_vu', sql.Int, parseInt(item.ma_dich_vu, 10))
                             .input('so_luong_moi', sql.Int, parseInt(item.so_luong || 0, 10))
                             .execute('sp_CapNhatDichVuDonDat');
-                    } catch (e) {
+                    } catch (e: any) {
                         console.warn('Lỗi cập nhật dịch vụ kèm đơn:', e.message);
                     }
                 }
@@ -1242,7 +1243,7 @@ const suaDonDatVaThanhToan = async (req, res) => {
             message: 'Cập nhật đơn đặt sân thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_SuaDonDatVaThanhToan:', error.message);
         return res.status(400).json({
             success: false,
@@ -1256,9 +1257,9 @@ const suaDonDatVaThanhToan = async (req, res) => {
  * Method: DELETE /api/dat-san/don-dat-thanh-toan/:id
  * Procedure: sp_XoaDonDatVaThanhToan
  */
-const xoaDonDatVaThanhToan = async (req, res) => {
+export const xoaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const pool = await poolPromise;
         await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
@@ -1268,7 +1269,7 @@ const xoaDonDatVaThanhToan = async (req, res) => {
             success: true,
             message: 'Xóa đơn đặt sân thành công!'
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_XoaDonDatVaThanhToan:', error.message);
         return res.status(400).json({
             success: false,
@@ -1276,38 +1277,3 @@ const xoaDonDatVaThanhToan = async (req, res) => {
         });
     }
 };
-
-module.exports = {
-    layDanhSachSan,
-    layDanhSachLoaiSan,
-    themLoaiSan,
-    suaLoaiSan,
-    xoaLoaiSan,
-    themSanBong,
-    suaSanBong,
-    xoaSanBong,
-    layKhungGioGia,
-    themKhungGioGia,
-    suaKhungGioGia,
-    xoaKhungGioGia,
-    layTatCaDonDat,
-    layLichSan,
-    datSan,
-    layLichSuKhachHang,
-    huyDonVaHoanCoc,
-    tinhGiaLinhHoat,
-    datSanLinhHoat,
-    batDauDaLinhHoat,
-    ketThucDaLinhHoat,
-    layDanhSachKhungGio,
-    layTatCaKhungGioAdmin,
-    themKhungGio,
-    suaKhungGio,
-    xoaKhungGio,
-    resetKhungGio,
-    themDonDatVaThanhToan,
-    suaDonDatVaThanhToan,
-    xoaDonDatVaThanhToan
-};
-
-

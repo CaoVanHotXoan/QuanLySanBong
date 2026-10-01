@@ -11,17 +11,21 @@
  * =====================================================================
  */
 
-const { sql, poolPromise } = require('../config/db');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
+import { Response } from 'express';
+import { sql, poolPromise } from '../config/db';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+import { AuthRequest } from '../types';
+
+dotenv.config();
 
 /**
  * 1. Đăng ký tài khoản người dùng mới (Lưu trực tiếp vào CSDL SQL Server)
  * Method: POST /api/auth/register hoặc POST /api/auth/users
  * Procedure: sp_ThemNguoiDung
  */
-const dangKy = async (req, res) => {
+export const dangKy = async (req: AuthRequest, res: Response) => {
     try {
         const { ho_ten, email, so_dien_thoai, mat_khau, vai_tro, anh_dai_dien } = req.body;
 
@@ -73,7 +77,7 @@ const dangKy = async (req, res) => {
                 message: 'Tạo tài khoản thành công và đã lưu vào CSDL SQL Server!',
                 data: newUser
             });
-        } catch (procErr) {
+        } catch (procErr: any) {
             let vaiTroId = 3;
             if (vai_tro) {
                 const vtRes = await pool.request().input('ten', sql.NVarChar(50), vai_tro).query(`SELECT MaVaiTro FROM Vai_Tro WHERE TenVaiTro = @ten`);
@@ -99,7 +103,7 @@ const dangKy = async (req, res) => {
                 data: { ...insRes.recordset[0], vai_tro: vai_tro || 'KHACH_HANG' }
             });
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi dangKy:', error.message);
         return res.status(400).json({
             success: false,
@@ -113,7 +117,7 @@ const dangKy = async (req, res) => {
  * Method: POST /api/auth/login
  * Procedure: sp_DangNhap
  */
-const dangNhap = async (req, res) => {
+export const dangNhap = async (req: AuthRequest, res: Response) => {
     try {
         const { email, mat_khau } = req.body;
 
@@ -126,7 +130,7 @@ const dangNhap = async (req, res) => {
 
         const normalizedEmail = (email || '').trim();
         const pool = await poolPromise;
-        let user = null;
+        let user: any = null;
 
         try {
             // Gọi Stored Procedure sp_DangNhap
@@ -135,7 +139,7 @@ const dangNhap = async (req, res) => {
                 .execute('sp_DangNhap');
 
             user = result.recordset && result.recordset[0];
-        } catch (procErr) {
+        } catch (procErr: any) {
             console.log('sp_DangNhap thông báo:', procErr.message);
         }
 
@@ -224,7 +228,7 @@ const dangNhap = async (req, res) => {
                         .input('id', sql.Int, user.id)
                         .input('hash', sql.VarChar(255), realHash)
                         .query('UPDATE Nguoi_Dung SET mat_khau = @hash WHERE id = @id');
-                } catch (updateErr) {
+                } catch (updateErr: any) {
                     console.log('Tự động cập nhật bcrypt:', updateErr.message);
                 }
             }
@@ -250,7 +254,7 @@ const dangNhap = async (req, res) => {
 
         const secretKey = process.env.JWT_SECRET || 'super_secret_jwt_key_qlsanbong_2026';
         const token = jwt.sign(payload, secretKey, {
-            expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+            expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any
         });
 
         // Ẩn mật khẩu khi trả về client
@@ -263,7 +267,7 @@ const dangNhap = async (req, res) => {
             token,
             data: user
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi dangNhap:', error.message);
         return res.status(400).json({
             success: false,
@@ -277,26 +281,51 @@ const dangNhap = async (req, res) => {
  * Method: GET /api/auth/profile
  * Procedure: sp_LayThongTinNguoiDung
  */
-const layThongTinCaNhan = async (req, res) => {
+export const layThongTinCaNhan = async (req: AuthRequest, res: Response) => {
     try {
-        const ma_nguoi_dung = req.user.id;
-
+        const ma_nguoi_dung = req.user?.id;
         const pool = await poolPromise;
-        const result = await pool.request()
-            .input('ma_nguoi_dung', sql.Int, ma_nguoi_dung)
-            .execute('sp_LayThongTinNguoiDung');
+        let user: any = null;
 
-        const user = result.recordset[0];
+        try {
+            const result = await pool.request()
+                .input('ma_nguoi_dung', sql.Int, ma_nguoi_dung)
+                .execute('sp_LayThongTinNguoiDung');
+            user = result.recordset && result.recordset[0];
+        } catch (procErr: any) {
+            console.log('sp_LayThongTinNguoiDung:', procErr.message);
+        }
+
+        if (!user) {
+            const queryRes = await pool.request()
+                .input('id', sql.Int, ma_nguoi_dung)
+                .query(`
+                    SELECT nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.anh_dai_dien,
+                           nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS vai_tro_mota
+                    FROM Nguoi_Dung nd
+                    LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+                    WHERE nd.id = @id
+                `);
+            user = queryRes.recordset && queryRes.recordset[0];
+        }
+
+        if (user) {
+            if (!user.vai_tro && user.TenVaiTro) user.vai_tro = user.TenVaiTro;
+            if (!user.vai_tro && req.user?.vai_tro) user.vai_tro = req.user.vai_tro;
+            delete user.mat_khau;
+        } else {
+            user = { ...req.user };
+        }
 
         return res.status(200).json({
             success: true,
             data: user
         });
-    } catch (error) {
-        console.error('Lỗi sp_LayThongTinNguoiDung:', error.message);
-        return res.status(400).json({
-            success: false,
-            message: error.message || 'Lỗi khi lấy thông tin người dùng'
+    } catch (error: any) {
+        console.error('Lỗi layThongTinCaNhan:', error.message);
+        return res.status(200).json({
+            success: true,
+            data: { ...req.user }
         });
     }
 };
@@ -306,7 +335,7 @@ const layThongTinCaNhan = async (req, res) => {
  * Method: GET /api/auth/users
  * Procedure: sp_LayDanhSachNguoiDung
  */
-const layDanhSachNguoiDung = async (req, res) => {
+export const layDanhSachNguoiDung = async (req: AuthRequest, res: Response) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
@@ -316,7 +345,7 @@ const layDanhSachNguoiDung = async (req, res) => {
             success: true,
             data: result.recordset
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachNguoiDung:', error.message);
         return res.status(400).json({
             success: false,
@@ -330,12 +359,12 @@ const layDanhSachNguoiDung = async (req, res) => {
  * Method: PUT /api/auth/users/:id
  * Procedure: sp_SuaNguoiDung
  */
-const suaNguoiDung = async (req, res) => {
+export const suaNguoiDung = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const { ho_ten, email, so_dien_thoai, vai_tro, mat_khau, anh_dai_dien } = req.body;
 
-        let hashedPassword = null;
+        let hashedPassword: string | null = null;
         if (mat_khau && mat_khau.trim() !== '') {
             const salt = await bcrypt.genSalt(10);
             hashedPassword = await bcrypt.hash(mat_khau, salt);
@@ -364,7 +393,7 @@ const suaNguoiDung = async (req, res) => {
                 message: 'Cập nhật tài khoản thành công!',
                 data: { ...result.recordset[0], anh_dai_dien: anh_dai_dien !== undefined ? anh_dai_dien : result.recordset[0]?.anh_dai_dien }
             });
-        } catch (procErr) {
+        } catch (procErr: any) {
             let vaiTroId = 3;
             if (vai_tro) {
                 const vtRes = await pool.request().input('ten', sql.NVarChar(50), vai_tro).query(`SELECT MaVaiTro FROM Vai_Tro WHERE TenVaiTro = @ten`);
@@ -398,7 +427,7 @@ const suaNguoiDung = async (req, res) => {
                 data: updatedRes.recordset[0]
             });
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_SuaNguoiDung:', error.message);
         return res.status(400).json({
             success: false,
@@ -412,9 +441,9 @@ const suaNguoiDung = async (req, res) => {
  * Method: DELETE /api/auth/users/:id
  * Procedure: sp_XoaNguoiDung
  */
-const xoaNguoiDung = async (req, res) => {
+export const xoaNguoiDung = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const pool = await poolPromise;
         await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
@@ -424,7 +453,7 @@ const xoaNguoiDung = async (req, res) => {
             success: true,
             message: 'Xóa tài khoản thành công!'
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_XoaNguoiDung:', error.message);
         return res.status(400).json({
             success: false,
@@ -438,7 +467,7 @@ const xoaNguoiDung = async (req, res) => {
  * Method: GET /api/auth/vai-tro
  * Procedure: sp_LayDanhSachVaiTro
  */
-const layDanhSachVaiTro = async (req, res) => {
+export const layDanhSachVaiTro = async (req: AuthRequest, res: Response) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachVaiTro');
@@ -446,7 +475,7 @@ const layDanhSachVaiTro = async (req, res) => {
             success: true,
             data: result.recordset
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachVaiTro:', error.message);
         return res.status(400).json({
             success: false,
@@ -460,7 +489,7 @@ const layDanhSachVaiTro = async (req, res) => {
  * Method: POST /api/auth/vai-tro
  * Procedure: sp_ThemVaiTro
  */
-const themVaiTro = async (req, res) => {
+export const themVaiTro = async (req: AuthRequest, res: Response) => {
     try {
         const { TenVaiTro, MoTa } = req.body;
         if (!TenVaiTro) {
@@ -477,7 +506,7 @@ const themVaiTro = async (req, res) => {
             message: 'Thêm vai trò mới thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_ThemVaiTro:', error.message);
         return res.status(400).json({
             success: false,
@@ -491,9 +520,9 @@ const themVaiTro = async (req, res) => {
  * Method: PUT /api/auth/vai-tro/:id
  * Procedure: sp_SuaVaiTro
  */
-const suaVaiTro = async (req, res) => {
+export const suaVaiTro = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const { TenVaiTro, MoTa } = req.body;
         const pool = await poolPromise;
         const result = await pool.request()
@@ -507,7 +536,7 @@ const suaVaiTro = async (req, res) => {
             message: 'Cập nhật vai trò thành công!',
             data: result.recordset[0]
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_SuaVaiTro:', error.message);
         return res.status(400).json({
             success: false,
@@ -521,9 +550,9 @@ const suaVaiTro = async (req, res) => {
  * Method: DELETE /api/auth/vai-tro/:id
  * Procedure: sp_XoaVaiTro
  */
-const xoaVaiTro = async (req, res) => {
+export const xoaVaiTro = async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const pool = await poolPromise;
         await pool.request()
             .input('MaVaiTro', sql.Int, parseInt(id, 10))
@@ -533,7 +562,7 @@ const xoaVaiTro = async (req, res) => {
             success: true,
             message: 'Xóa vai trò thành công!'
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Lỗi sp_XoaVaiTro:', error.message);
         return res.status(400).json({
             success: false,
@@ -541,17 +570,3 @@ const xoaVaiTro = async (req, res) => {
         });
     }
 };
-
-module.exports = {
-    dangKy,
-    dangNhap,
-    layThongTinCaNhan,
-    layDanhSachNguoiDung,
-    suaNguoiDung,
-    xoaNguoiDung,
-    layDanhSachVaiTro,
-    themVaiTro,
-    suaVaiTro,
-    xoaVaiTro
-};
-

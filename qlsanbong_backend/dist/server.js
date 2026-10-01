@@ -1,34 +1,34 @@
+"use strict";
 /**
  * =====================================================================
  * MÁY CHỦ CHÍNH (EXPRESS + SOCKET.IO REALTIME) - QUẢN LÝ SÂN BÓNG BACKEND
  * =====================================================================
  */
-
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const cors = require('cors');
-require('dotenv').config();
-
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const http_1 = __importDefault(require("http"));
+const socket_io_1 = require("socket.io");
+const cors_1 = __importDefault(require("cors"));
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
 // Khởi chạy kết nối CSDL
-require('./src/config/db');
-
+require("./src/config/db");
 // Import các routes
-const authRoutes = require('./src/routes/authRoutes');
-const datSanRoutes = require('./src/routes/datSanRoutes');
-const dichVuRoutes = require('./src/routes/dichVuRoutes');
-const thanhToanRoutes = require('./src/routes/thanhToanRoutes');
-const baoCaoRoutes = require('./src/routes/baoCaoRoutes');
-const uploadRoutes = require('./src/routes/uploadRoutes');
-
-const app = express();
+const authRoutes_1 = __importDefault(require("./src/routes/authRoutes"));
+const datSanRoutes_1 = __importDefault(require("./src/routes/datSanRoutes"));
+const dichVuRoutes_1 = __importDefault(require("./src/routes/dichVuRoutes"));
+const thanhToanRoutes_1 = __importDefault(require("./src/routes/thanhToanRoutes"));
+const baoCaoRoutes_1 = __importDefault(require("./src/routes/baoCaoRoutes"));
+const uploadRoutes_1 = __importDefault(require("./src/routes/uploadRoutes"));
+const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
-
 // Cấu hình Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
+app.use((0, cors_1.default)());
+app.use(express_1.default.json());
+app.use(express_1.default.urlencoded({ extended: true }));
 // Trang chào mừng & Kiểm tra trạng thái máy chủ
 app.get('/', (req, res) => {
     res.status(200).json({
@@ -45,15 +45,13 @@ app.get('/', (req, res) => {
         }
     });
 });
-
 // Đăng ký các Routes chính
-app.use('/api/auth', authRoutes);
-app.use('/api/dat-san', datSanRoutes);
-app.use('/api/dich-vu', dichVuRoutes);
-app.use('/api/thanh-toan', thanhToanRoutes);
-app.use('/api/bao-cao', baoCaoRoutes);
-app.use('/api/upload', uploadRoutes);
-
+app.use('/api/auth', authRoutes_1.default);
+app.use('/api/dat-san', datSanRoutes_1.default);
+app.use('/api/dich-vu', dichVuRoutes_1.default);
+app.use('/api/thanh-toan', thanhToanRoutes_1.default);
+app.use('/api/bao-cao', baoCaoRoutes_1.default);
+app.use('/api/upload', uploadRoutes_1.default);
 // Middleware xử lý 404 - Không tìm thấy Endpoint
 app.use((req, res, next) => {
     res.status(404).json({
@@ -61,7 +59,6 @@ app.use((req, res, next) => {
         message: `Endpoint ${req.originalUrl} không tồn tại trên hệ thống!`
     });
 });
-
 // Middleware xử lý lỗi toàn cục (Global Error Handler)
 app.use((err, req, res, next) => {
     console.error('🔥 [Lỗi Hệ Thống]:', err.stack || err.message);
@@ -70,40 +67,32 @@ app.use((err, req, res, next) => {
         message: err.message || 'Đã có lỗi xảy ra từ máy chủ nội bộ!'
     });
 });
-
 // =====================================================================
 // KHỞI TẠO HTTP SERVER & SOCKET.IO CHO TÍNH NĂNG GIỮ CHỖ REAL-TIME
 // =====================================================================
-const server = http.createServer(app);
-
-const io = new Server(server, {
+const server = http_1.default.createServer(app);
+const io = new socket_io_1.Server(server, {
     cors: {
         origin: '*',
         methods: ['GET', 'POST']
     }
 });
-
 // Gán socket.io vào app để các controller (PayOS webhook, đặt sân, thanh toán) có thể emit realtime
 app.set('io', io);
-
-
 /**
  * In-memory Map lưu danh sách các ô slot đang bị giữ chỗ tạm thời
  * Key: slotId (Ví dụ: "2026-09-30_1_16:30" hoặc "1_16:30")
  * Value: socket.id của người đang thao tác giữ chỗ
  */
 const lockedSlots = new Map();
-
 io.on('connection', (socket) => {
     console.log(`⚡ [Socket Connected]: ${socket.id}`);
-
     // Gửi danh sách các slot đang bị khóa cho Client vừa kết nối
     socket.emit('slots_updated', Array.from(lockedSlots.keys()));
-
     // 1. SỰ KIỆN KHÓA SÂN (lock_slot)
     socket.on('lock_slot', (slotId) => {
-        if (!slotId) return;
-
+        if (!slotId)
+            return;
         // Nếu ô này chưa bị ai khác khóa
         if (!lockedSlots.has(slotId)) {
             lockedSlots.set(slotId, socket.id);
@@ -112,11 +101,10 @@ io.on('connection', (socket) => {
             io.emit('slots_updated', Array.from(lockedSlots.keys()));
         }
     });
-
     // 2. SỰ KIỆN NHẢ SÂN (unlock_slot)
     socket.on('unlock_slot', (slotId) => {
-        if (!slotId) return;
-
+        if (!slotId)
+            return;
         // Chỉ cho phép chính socket đang giữ ô đó nhả ra
         if (lockedSlots.get(slotId) === socket.id) {
             lockedSlots.delete(slotId);
@@ -124,13 +112,11 @@ io.on('connection', (socket) => {
             io.emit('slots_updated', Array.from(lockedSlots.keys()));
         }
     });
-
     // 3. SỰ KIỆN NGẮT KẾT NỐI (disconnect)
     // Tự động giải phóng toàn bộ ô mà user này đang giữ khi tắt tab/rớt mạng
     socket.on('disconnect', () => {
         console.log(`❌ [Socket Disconnected]: ${socket.id}`);
         let hasChanges = false;
-
         for (const [slotId, holderSocketId] of lockedSlots.entries()) {
             if (holderSocketId === socket.id) {
                 lockedSlots.delete(slotId);
@@ -138,13 +124,11 @@ io.on('connection', (socket) => {
                 console.log(`🧹 [Auto-Release]: Đã tự động nhả slot ${slotId} do ${socket.id} ngắt kết nối.`);
             }
         }
-
         if (hasChanges) {
             io.emit('slots_updated', Array.from(lockedSlots.keys()));
         }
     });
 });
-
 // Khởi chạy máy chủ HTTP + Socket.io
 server.listen(PORT, () => {
     console.log(`====================================================`);

@@ -224,6 +224,7 @@ export default function HomePage() {
 
   // Ref kết nối Socket.io Real-time
   const socketRef = useRef<Socket | null>(null);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
 
   // Danh sách các ID slot đang bị khóa trên hệ thống Real-time
   const [lockedSlots, setLockedSlots] = useState<string[]>([]);
@@ -257,6 +258,28 @@ export default function HomePage() {
 
   // State tìm kiếm nhanh tên sân tại Navbar
   const [searchCourtName, setSearchCourtName] = useState<string>('');
+
+  // Kiểm tra quyền Admin cho người dùng hiện tại
+  const isUserAdmin = Boolean(
+    currentUser && (
+      (currentUser.vai_tro || '').trim().toUpperCase() === 'ADMIN' ||
+      (currentUser.vai_tro || '').trim().toUpperCase() === 'QUAN_TRI_VIEN' ||
+      (currentUser.vai_tro || '').toLowerCase().includes('admin') ||
+      (currentUser.vai_tro || '').toLowerCase().includes('quản trị') ||
+      (currentUser.email || '').toLowerCase().includes('admin')
+    )
+  );
+
+  // Kiểm tra quyền Nhân viên & Admin cho Management System
+  const isUserStaffOrAdmin = Boolean(
+    currentUser && (
+      isUserAdmin ||
+      (currentUser.vai_tro || '').trim().toUpperCase() === 'NHAN_VIEN' ||
+      (currentUser.vai_tro || '').trim().toUpperCase() === 'NHANVIEN' ||
+      (currentUser.vai_tro || '').toLowerCase().includes('nhân viên') ||
+      (currentUser.vai_tro || '').toLowerCase().includes('nhan vien')
+    )
+  );
 
   // State Bộ lọc Đặt sân nhanh (Loại sân, Sân cụ thể & Ngày đá)
   const [filterLoaiSan, setFilterLoaiSan] = useState<string>('ALL');
@@ -342,6 +365,36 @@ export default function HomePage() {
       console.error('Lỗi khi đọc auth_user:', e);
     }
   }, []);
+
+  // Mở modal đăng nhập nếu được chuyển hướng từ trang yêu cầu quyền Admin hoặc trang khác
+  useEffect(() => {
+    if (!router.isReady) return;
+    if (router.query.login === 'true' || router.query.requireAdmin === 'true') {
+      setIsLoginModalOpen(true);
+      if (router.query.requireAdmin === 'true') {
+        triggerToast({
+          type: 'error',
+          message: '🛡️ Vui lòng đăng nhập với tài khoản Quản trị viên (ADMIN) để truy cập Dashboard!'
+        });
+      }
+    }
+  }, [router.isReady, router.query]);
+
+  // Lắng nghe sự kiện click ra ngoài để tự động thu gọn Dropdown menu tài khoản
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+        setUserDropdownOpen(false);
+      }
+    };
+
+    if (userDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [userDropdownOpen]);
 
   // Cập nhật form khách hàng khi currentUser thay đổi
   useEffect(() => {
@@ -1159,9 +1212,10 @@ export default function HomePage() {
 
               {/* Khu vực Người Dùng / Đăng nhập (Xác thực trực tiếp từ SQL Server) */}
               {currentUser ? (
-                <div className="relative">
+                <div className="relative" ref={userDropdownRef}>
                   <button
-                    onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                    type="button"
+                    onClick={() => setUserDropdownOpen((prev) => !prev)}
                     className={`flex items-center gap-2 p-1 sm:pr-3 rounded-full border transition-all cursor-pointer ${isDarkMode
                       ? 'bg-slate-900 border-emerald-800/50 hover:border-emerald-500/60'
                       : 'bg-slate-100 border-slate-300 hover:border-emerald-500'
@@ -1186,13 +1240,7 @@ export default function HomePage() {
                       </div>
 
                       {/* Nút đi tới Management System cho Nhân viên & Admin */}
-                      {Boolean(
-                        currentUser.vai_tro &&
-                        ['ADMIN', 'NHAN_VIEN', 'NHANVIEN', 'QUAN_TRI_VIEN'].includes(currentUser.vai_tro.trim().toUpperCase().replace(/\s+/g, '_')) ||
-                        (currentUser.vai_tro || '').toLowerCase().includes('nhân viên') ||
-                        (currentUser.vai_tro || '').toLowerCase().includes('nhan vien') ||
-                        (currentUser.vai_tro || '').toLowerCase().includes('admin')
-                      ) && (
+                      {isUserStaffOrAdmin && (
                         <a
                           href="/Management System/management system"
                           onClick={(e) => {
@@ -1200,26 +1248,34 @@ export default function HomePage() {
                             setUserDropdownOpen(false);
                             router.push('/Management System/management system');
                           }}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold rounded-xl transition-all text-left cursor-pointer mb-1 ${
+                          className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-black rounded-xl transition-all text-left cursor-pointer mb-1 shadow-sm ${
                             isDarkMode 
-                              ? 'text-emerald-300 hover:text-white hover:bg-emerald-900/50 bg-emerald-950/40 border border-emerald-500/30 shadow-sm' 
-                              : 'text-emerald-700 hover:text-emerald-950 hover:bg-emerald-100 bg-emerald-50/90 border border-emerald-300/80 shadow-sm'
+                              ? 'text-emerald-300 hover:text-white hover:bg-emerald-900/60 bg-emerald-950/50 border border-emerald-500/40' 
+                              : 'text-emerald-700 hover:text-emerald-950 hover:bg-emerald-100 bg-emerald-50 border border-emerald-300'
                           }`}
                         >
                           <LandPlot className="w-4 h-4 text-emerald-500 shrink-0" />
-                          <span className="truncate font-bold">⚡ Quản Lý Sân (Management System)</span>
+                          <span className="truncate font-black">⚡ Quản Lý Sân (Management System)</span>
                         </a>
                       )}
 
                       {/* Nút đi tới Dashboard cho Admin trong Dropdown */}
-                      {(currentUser.vai_tro || '').toUpperCase() === 'ADMIN' && (
+                      {isUserAdmin && (
                         <a
                           href="/Dashboard"
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold rounded-xl transition-colors text-left cursor-pointer mb-1 ${isDarkMode ? 'text-purple-300 hover:text-white hover:bg-purple-900/40 bg-purple-950/30' : 'text-purple-700 hover:text-purple-900 hover:bg-purple-50 bg-purple-50/50'
-                            }`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setUserDropdownOpen(false);
+                            router.push('/Dashboard');
+                          }}
+                          className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-black rounded-xl transition-all text-left cursor-pointer mb-1 shadow-sm ${
+                            isDarkMode 
+                              ? 'text-purple-300 hover:text-white hover:bg-purple-900/60 bg-purple-950/50 border border-purple-500/40' 
+                              : 'text-purple-700 hover:text-purple-950 hover:bg-purple-100 bg-purple-50 border border-purple-300'
+                          }`}
                         >
-                          <ShieldCheck className="w-4 h-4 text-purple-500" />
-                          <span>🛡️ Trang Quản Trị Dashboard</span>
+                          <ShieldCheck className="w-4 h-4 text-purple-500 shrink-0" />
+                          <span>🛡️ Trang Quản Trị (Dashboard)</span>
                         </a>
                       )}
 
@@ -1307,13 +1363,6 @@ export default function HomePage() {
                   }`}
               >
                 📅 Lịch sân theo giờ
-              </a>
-              <a
-                href="#chinh-sach-lien-he"
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-900/80' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-200'
-                  }`}
-              >
-                🛡️ Chính sách & Bản đồ
               </a>
             </nav>
 
@@ -1735,8 +1784,8 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 pb-16 border-b border-slate-800/80">
 
-              {/* Cột 1: Thông tin thương hiệu */}
-              <div className="lg:col-span-4 space-y-4">
+              {/* Cột 1: Thông tin thương hiệu & Liên hệ */}
+              <div className="lg:col-span-6 space-y-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-white border border-slate-700 flex items-center justify-center overflow-hidden">
                     <SoccerBallIcon className="w-6 h-6" />
@@ -1745,7 +1794,7 @@ export default function HomePage() {
                     SOCCER<span className="text-emerald-400">247</span>
                   </span>
                 </div>
-                <p className="text-slate-400 text-sm leading-relaxed">
+                <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
                   Trung tâm thể thao đa năng hiện đại. Toàn bộ quy trình đặt sân, tính giá và thanh toán được quản lý bởi Soccer 247.
                 </p>
 
@@ -1782,41 +1831,8 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* Cột 2: Chính sách hủy đơn */}
-              <div className="lg:col-span-4 space-y-4">
-                <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                  Chính Sách Hủy Đơn & Hoàn Tiền
-                </h3>
-                <div className="space-y-3">
-                  <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-                    <div className="flex items-center justify-between text-xs font-bold text-emerald-400">
-                      <span>Hủy trước &gt; 12 Giờ</span>
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300">Hoàn 100% Cọc</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Hoàn tiền tự động nhanh chóng và an toàn.
-                    </p>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-                    <div className="flex items-center justify-between text-xs font-bold text-amber-400">
-                      <span>Hủy trước 6 - 12 Giờ</span>
-                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300">Hoàn 50% Cọc</span>
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-                    <div className="flex items-center justify-between text-xs font-bold text-rose-400">
-                      <span>Hủy dưới 6 Giờ</span>
-                      <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300">Không Hoàn Cọc (0%)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cột 3: Bản đồ Google Maps */}
-              <div className="lg:col-span-4 space-y-4">
+              {/* Cột 2: Bản đồ Google Maps */}
+              <div className="lg:col-span-6 space-y-4">
                 <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-emerald-400" />
                   Bản Đồ Vị Trí Cụm Sân
@@ -2722,7 +2738,16 @@ export default function HomePage() {
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           setIsLoginModalOpen(false);
-          if ((user.vai_tro || '').toUpperCase() !== 'ADMIN') {
+          const role = (user.vai_tro || '').toUpperCase();
+          if (role === 'ADMIN') {
+            triggerToast({
+              type: 'success',
+              message: `🎉 Đăng nhập Admin thành công! Chào mừng Quản trị viên ${user.ho_ten || user.email}.`,
+            });
+            if (router.query.requireAdmin === 'true') {
+              router.push('/Dashboard');
+            }
+          } else {
             triggerToast({
               type: 'success',
               message: `🎉 Đăng nhập thành công! Chào mừng ${user.ho_ten || user.email}.`,

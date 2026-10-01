@@ -306,7 +306,8 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     groupIcon: Trophy,
     items: [
       { id: 'SAN_BONG', label: 'Danh Sách Sân Bóng', icon: Layers, tableHint: 'San_Bong' },
-      { id: 'LOAI_SAN_GIA', label: 'Loại Sân', icon: Layers, tableHint: 'Loai_San' }
+      { id: 'LOAI_SAN_GIA', label: 'Loại Sân', icon: Layers, tableHint: 'Loai_San' },
+      { id: 'KHUNG_GIO', label: 'Bảng Khung Giờ', icon: Clock, tableHint: 'Khung_Gio' }
     ]
   },
   {
@@ -322,8 +323,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     groupIcon: CreditCard,
     items: [
       { id: 'DON_DAT_THANH_TOAN', label: 'Đơn Đặt Sân & Thanh Toán', icon: Receipt, tableHint: 'Don_Dat_San, Thanh_Toan' },
-      { id: 'HOAN_TIEN', label: 'Lịch Sử Hoàn Tiền', icon: RefreshCw, tableHint: 'Lich_Su_Hoan_Tien' },
-      { id: 'KHUNG_GIO', label: 'Bảng Khung Giờ', icon: Clock, tableHint: 'Khung_Gio' }
+      { id: 'HOAN_TIEN', label: 'Lịch Sử Hoàn Tiền', icon: RefreshCw, tableHint: 'Lich_Su_Hoan_Tien' }
     ]
   },
   {
@@ -345,12 +345,6 @@ export default function AdminDashboard() {
   const [currentAdminUser, setCurrentAdminUser] = useState<AuthUser | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
-
-  // State Form Đăng nhập Admin nếu chưa xác thực
-  const [adminEmail, setAdminEmail] = useState<string>('Admin@gmail.com');
-  const [adminPassword, setAdminPassword] = useState<string>('');
-  const [adminLoginError, setAdminLoginError] = useState<string>('');
-  const [isAdminLoggingIn, setIsAdminLoggingIn] = useState<boolean>(false);
 
   // Dữ liệu 11 Bảng CSDL từ SQL Server (100% Real Database Data)
   const [courtList, setCourtList] = useState<SanBong[]>([]);
@@ -443,29 +437,95 @@ export default function AdminDashboard() {
     }
   };
 
-  // Kiểm tra quyền Admin khi tải trang
-  const verifyAdminRole = (): boolean => {
+  // Hàm kiểm tra linh hoạt vai trò Admin
+  const checkIsAdmin = (user: any): boolean => {
+    if (!user) return false;
+    const role = (user.vai_tro || user.TenVaiTro || user.role || '').trim().toUpperCase();
+    const email = (user.email || '').trim().toLowerCase();
+    return (
+      role === 'ADMIN' ||
+      role === 'QUAN_TRI_VIEN' ||
+      role === 'QUANTRIVIEN' ||
+      role.includes('ADMIN') ||
+      role.includes('QUẢN TRỊ') ||
+      role.includes('QUAN TRI') ||
+      email === 'admin@gmail.com' ||
+      email.startsWith('admin')
+    );
+  };
+
+  // Kiểm tra quyền Admin khi tải trang (Bảo mật 2 lớp: Local + Xác thực Backend)
+  const verifyAdminRole = async (): Promise<boolean> => {
+    setIsAuthChecking(true);
     try {
-      const savedUserStr = localStorage.getItem('auth_user') || localStorage.getItem('soccer_current_user');
-      if (savedUserStr) {
-        const parsed = JSON.parse(savedUserStr);
-        const role = (parsed.vai_tro || parsed.TenVaiTro || '').toUpperCase();
-        if (role === 'ADMIN') {
-          setCurrentAdminUser(parsed);
-          setIsAuthorized(true);
-          return true;
-        } else {
-          setCurrentAdminUser(parsed);
-          setIsAuthorized(false);
-          return false;
-        }
-      } else {
+      const token = typeof window !== 'undefined' 
+        ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '') 
+        : '';
+      const savedUserStr = typeof window !== 'undefined'
+        ? (localStorage.getItem('auth_user') || localStorage.getItem('soccer_current_user') || '')
+        : '';
+
+      if (!token && !savedUserStr) {
         setCurrentAdminUser(null);
         setIsAuthorized(false);
         return false;
       }
+
+      let parsedUser: any = null;
+      if (savedUserStr) {
+        try {
+          parsedUser = JSON.parse(savedUserStr);
+        } catch (err) {
+          console.error('Lỗi parse saved user:', err);
+        }
+      }
+
+      // Xác minh lại với server nếu có token
+      if (token) {
+        try {
+          const res = await fetch(`${API_BASE}/auth/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (res.ok && data.success && data.data) {
+            const serverUser = data.data;
+            if (checkIsAdmin(serverUser)) {
+              const userObj: AuthUser = {
+                id: serverUser.id || parsedUser?.id,
+                ho_ten: serverUser.ho_ten || parsedUser?.ho_ten || 'Quản Trị Viên',
+                email: serverUser.email || parsedUser?.email || 'Admin@gmail.com',
+                so_dien_thoai: serverUser.so_dien_thoai || parsedUser?.so_dien_thoai || '',
+                vai_tro: serverUser.vai_tro || 'ADMIN',
+                anh_dai_dien: serverUser.anh_dai_dien || parsedUser?.anh_dai_dien
+              };
+              localStorage.setItem('auth_user', JSON.stringify(userObj));
+              setCurrentAdminUser(userObj);
+              setIsAuthorized(true);
+              return true;
+            } else {
+              setCurrentAdminUser(serverUser);
+              setIsAuthorized(false);
+              return false;
+            }
+          }
+        } catch (serverErr) {
+          console.warn('Lỗi kết nối server xác thực, kiểm tra qua local storage:', serverErr);
+        }
+      }
+
+      // Fallback kiểm tra từ local storage
+      if (parsedUser && checkIsAdmin(parsedUser)) {
+        setCurrentAdminUser(parsedUser);
+        setIsAuthorized(true);
+        return true;
+      }
+
+      setCurrentAdminUser(parsedUser);
+      setIsAuthorized(false);
+      return false;
     } catch (e) {
       console.error('Lỗi xác thực Admin:', e);
+      setCurrentAdminUser(null);
       setIsAuthorized(false);
       return false;
     } finally {
@@ -474,70 +534,15 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    const isOk = verifyAdminRole();
-    if (isOk) {
-      loadAllDataFromBackend();
-    }
+    verifyAdminRole().then((isOk) => {
+      if (isOk) {
+        loadAllDataFromBackend();
+      } else {
+        // Chưa đăng nhập hoặc không phải ADMIN -> Chuyển hướng ngay về Trang chủ và bật modal đăng nhập
+        router.replace('/?login=true&requireAdmin=true');
+      }
+    });
   }, []);
-
-  // Xử lý Đăng nhập Admin trực tiếp từ trang Dashboard
-  const handleAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminLoginError('');
-    setIsAdminLoggingIn(true);
-
-    try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: adminEmail.trim(), mat_khau: adminPassword })
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setAdminLoginError(data.message || '⚠️ Đăng nhập thất bại. Vui lòng kiểm tra email hoặc mật khẩu!');
-        setIsAdminLoggingIn(false);
-        return;
-      }
-
-      const role = (data.data?.vai_tro || '').toUpperCase();
-      if (role !== 'ADMIN') {
-        setAdminLoginError(`❌ Tài khoản "${data.data.email}" có vai trò là "${role}", không phải ADMIN. Truy cập bị từ chối!`);
-        setIsAdminLoggingIn(false);
-        return;
-      }
-
-      if (data.token) {
-        localStorage.setItem('auth_token', data.token);
-      }
-
-      const userObj: AuthUser = {
-        id: data.data.id,
-        ho_ten: data.data.ho_ten,
-        email: data.data.email,
-        so_dien_thoai: data.data.so_dien_thoai,
-        vai_tro: data.data.vai_tro,
-        anh_dai_dien: data.data.anh_dai_dien
-      };
-
-      localStorage.setItem('auth_user', JSON.stringify(userObj));
-      localStorage.setItem('soccer_current_user', JSON.stringify({
-        id: userObj.id,
-        hoTen: userObj.ho_ten,
-        email: userObj.email,
-        soDienThoai: userObj.so_dien_thoai
-      }));
-
-      setCurrentAdminUser(userObj);
-      setIsAuthorized(true);
-      setToastMessage({ type: 'success', message: `🎉 Chào mừng Quản Trị Viên ${userObj.ho_ten}!` });
-      loadAllDataFromBackend();
-    } catch (err) {
-      setAdminLoginError('❌ Không thể kết nối tới máy chủ SQL Server!');
-    } finally {
-      setIsAdminLoggingIn(false);
-    }
-  };
 
   // Xử lý Đăng xuất Admin -> Chuyển hướng ngay về Trang chủ Khách hàng
   const handleAdminLogout = () => {
@@ -1856,159 +1861,9 @@ export default function AdminDashboard() {
   };
 
   // 1. Màn hình đang kiểm tra quyền Admin
-  if (isAuthChecking) {
+  // 1. Màn hình đang kiểm tra quyền Admin hoặc chuyển hướng về Trang chủ
+  if (isAuthChecking || !isAuthorized) {
     return <SoccerLoader message="Đang kiểm tra quyền Quản trị viên..." fullScreen={true} />;
-  }
-
-  // 2. Màn hình Chặn Quyền Truy Cập (Chỉ dành cho ADMIN) & Form Đăng nhập Quản Trị
-  if (!isAuthorized) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center p-4 sm:p-6 transition-colors duration-300 ${isDarkMode ? 'bg-[#060e09] text-white' : 'bg-[#f4f7f5] text-slate-900'}`}>
-        <Head>
-          <title>Yêu Cầu Quyền Quản Trị Viên (Admin) | Soccer 247</title>
-        </Head>
-
-        {/* TOAST THÔNG BÁO NỔI */}
-        {toastMessage && (
-          <div
-            className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border backdrop-blur-xl transition-all duration-300 ${
-              toastMessage.type === 'success'
-                ? isDarkMode
-                  ? 'bg-[#0f2416] border-emerald-500 text-emerald-200'
-                  : 'bg-emerald-50 border-emerald-500 text-[#064e3b] font-black shadow-xl'
-                : toastMessage.type === 'error'
-                ? isDarkMode
-                  ? 'bg-rose-950 border-rose-500 text-rose-200'
-                  : 'bg-rose-50 border-rose-500 text-[#881337] font-black shadow-xl'
-                : isDarkMode
-                ? 'bg-[#0a1b24] border-cyan-500 text-cyan-200'
-                : 'bg-blue-50 border-blue-500 text-[#1e3a8a] font-black shadow-xl'
-            }`}
-          >
-            {toastMessage.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />}
-            {toastMessage.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />}
-            {toastMessage.type === 'info' && <Activity className="w-5 h-5 text-cyan-600 shrink-0" />}
-            <span className="text-xs sm:text-sm font-black">{toastMessage.message}</span>
-          </div>
-        )}
-
-        <div className={`w-full max-w-md rounded-3xl p-6 sm:p-8 border shadow-2xl backdrop-blur-xl relative overflow-hidden ${
-          isDarkMode ? 'bg-[#0c1a12]/90 border-emerald-900/60 shadow-emerald-950/40' : 'bg-white/95 border-emerald-200 shadow-emerald-900/10'
-        }`}>
-          {/* Decorative Glow */}
-          <div className="absolute -top-20 -right-20 w-44 h-44 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none"></div>
-          <div className="absolute -bottom-20 -left-20 w-44 h-44 bg-emerald-600/15 rounded-full blur-3xl pointer-events-none"></div>
-
-          {/* Header */}
-          <div className="text-center mb-6 relative">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-rose-500 via-amber-500 to-emerald-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/20">
-              <ShieldAlert className="w-8 h-8 text-white" />
-            </div>
-            <h1 className="text-2xl font-black tracking-tight mb-2">Trang Quản Trị Hệ Thống</h1>
-            <p className="text-xs sm:text-sm opacity-70">
-              Trang Dashboard được bảo mật cao cấp. Chỉ tài khoản có vai trò <span className="font-extrabold text-emerald-500 underline">ADMIN</span> mới được phép truy cập và điều hành.
-            </p>
-          </div>
-
-          {currentAdminUser && (
-            <div className={`mb-5 p-3.5 rounded-2xl border flex items-center gap-3 ${
-              isDarkMode ? 'bg-amber-950/40 border-amber-800/60 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-900'
-            }`}>
-              <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
-              <div className="text-xs">
-                <div>Đang đăng nhập: <strong>{currentAdminUser.ho_ten || currentAdminUser.email}</strong></div>
-                <div>Vai trò hiện tại: <span className="font-bold text-rose-500 uppercase">{currentAdminUser.vai_tro || 'Chưa xác định'}</span> (Không có quyền Admin)</div>
-              </div>
-            </div>
-          )}
-
-          {adminLoginError && (
-            <div className="mb-5 p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-600 dark:text-rose-300 text-xs font-bold flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-              <span>{adminLoginError}</span>
-            </div>
-          )}
-
-          {/* Form Login Admin */}
-          <form onSubmit={handleAdminLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 opacity-80">
-                Email Quản Trị Viên (Admin)
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <input
-                  type="email"
-                  required
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="Admin@gmail.com"
-                  className={`w-full pl-10 pr-4 py-3 rounded-xl border text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                    isDarkMode ? 'bg-[#08130c] border-emerald-900/50 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-gray-400'
-                  }`}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 opacity-80">
-                Mật Khẩu Admin
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <input
-                  type="password"
-                  required
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Nhập mật khẩu quản trị..."
-                  className={`w-full pl-10 pr-4 py-3 rounded-xl border text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                    isDarkMode ? 'bg-[#08130c] border-emerald-900/50 text-white placeholder-gray-500' : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-gray-400'
-                  }`}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isAdminLoggingIn}
-              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all transform active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
-            >
-              {isAdminLoggingIn ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Đang xác thực quyền Admin...</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Đăng Nhập Quản Trị (Admin)</span>
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Footer Back Link */}
-          <div className="mt-6 pt-5 border-t border-dashed border-gray-500/20 flex items-center justify-between text-xs">
-            <a
-              href="/"
-              className="inline-flex items-center gap-1.5 font-bold text-emerald-500 hover:text-emerald-400 hover:underline transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Quay về Trang chủ Khách Hàng</span>
-            </a>
-            <button
-              type="button"
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-1.5 rounded-lg opacity-70 hover:opacity-100 transition-opacity"
-              title="Đổi giao diện Sáng / Tối"
-            >
-              {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (

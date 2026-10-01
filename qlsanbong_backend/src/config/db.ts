@@ -5,15 +5,17 @@
  * =====================================================================
  */
 
-const sql = require('mssql');
-require('dotenv').config();
+import sql, { config as SqlConfig, ConnectionPool } from 'mssql';
+import dotenv from 'dotenv';
 
-const dbConfig = {
+dotenv.config();
+
+const dbConfig: SqlConfig = {
     user: process.env.DB_USER || 'sa',
     password: process.env.DB_PASSWORD || '123',
     server: process.env.DB_SERVER || 'localhost',
     database: process.env.DB_DATABASE || 'QuanLySanTheThao',
-    port: parseInt(process.env.DB_PORT, 10) || 1433,
+    port: parseInt(process.env.DB_PORT || '1433', 10),
     options: {
         encrypt: false, // Bắt buộc false cho kết nối nội bộ / cục bộ
         trustServerCertificate: true, // Chấp nhận chứng chỉ tự ký
@@ -27,7 +29,7 @@ const dbConfig = {
 };
 
 // Khởi tạo Connection Pool
-const poolPromise = new sql.ConnectionPool(dbConfig)
+const poolPromise: Promise<ConnectionPool> = new sql.ConnectionPool(dbConfig)
     .connect()
     .then(pool => {
         console.log('✅ [SQL Server] Kết nối cơ sở dữ liệu thành công!');
@@ -38,7 +40,5 @@ const poolPromise = new sql.ConnectionPool(dbConfig)
         process.exit(1);
     });
 
-module.exports = {
-    sql,
-    poolPromise
-};
+export { sql, poolPromise };
+export default poolPromise;

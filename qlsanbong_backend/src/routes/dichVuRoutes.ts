@@ -4,10 +4,10 @@
  * =====================================================================
  */
 
-const express = require('express');
-const router = express.Router();
-const dichVuController = require('../controllers/dichVuController');
-const { verifyToken, authorizeRoles } = require('../middlewares/authMiddleware');
+import express, { Router } from 'express';
+import * as dichVuController from '../controllers/dichVuController';
+
+const router: Router = express.Router();
 
 // Lấy danh sách dịch vụ (Dich_Vu)
 router.get('/', dichVuController.layDanhSachDichVu);
@@ -42,5 +42,4 @@ router.put('/:id', dichVuController.suaDichVu);
 // Xóa dịch vụ
 router.delete('/:id', dichVuController.xoaDichVu);
 
-module.exports = router;
-
+export default router;

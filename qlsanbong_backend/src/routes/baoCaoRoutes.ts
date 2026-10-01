@@ -4,12 +4,13 @@
  * =====================================================================
  */
 
-const express = require('express');
-const router = express.Router();
-const baoCaoController = require('../controllers/baoCaoController');
-const { verifyToken, authorizeRoles } = require('../middlewares/authMiddleware');
+import express, { Router } from 'express';
+import * as baoCaoController from '../controllers/baoCaoController';
+import { verifyToken, authorizeRoles } from '../middlewares/authMiddleware';
+
+const router: Router = express.Router();
 
 // Thống kê doanh thu theo khoảng thời gian (Yêu cầu quyền ADMIN hoặc NHAN_VIEN)
 router.get('/doanh-thu', verifyToken, authorizeRoles('ADMIN', 'NHAN_VIEN'), baoCaoController.baoCaoDoanhThu);
 
-module.exports = router;
+export default router;

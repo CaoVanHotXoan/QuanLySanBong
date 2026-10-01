@@ -2,10 +2,12 @@
   "name": "qlsanbong_backend",
   "version": "1.0.0",
   "description": "RESTful API Quản lý sân bóng đá - Node.js Express & SQL Server Stored Procedures",
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "tsx watch server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "start:ts": "tsx server.ts"
   },
   "keywords": [
     "nodejs",
@@ -30,6 +32,14 @@
     "socket.io": "^4.8.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^26.6.3",
+    "nodemon": "^3.1.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
   }
 }
