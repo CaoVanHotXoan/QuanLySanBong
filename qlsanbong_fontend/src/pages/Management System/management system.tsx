@@ -108,7 +108,9 @@ DEFAULT_TIME_SLOTS.push({
 
 // Cấu hình URL Backend & Socket.IO
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL ||
+  (process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, '') : 'http://localhost:5000');
 
 function isTimeOverlapping(startA: string, endA: string, startB: string, endB: string): boolean {
   return startA < endB && endA > startB;

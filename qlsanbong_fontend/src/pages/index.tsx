@@ -129,8 +129,10 @@ interface DichVu {
 
 // Cấu hình URL Backend API Express kết nối trực tiếp CSDL SQL Server
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-// Cấu hình URL Socket.io Real-time
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+// Cấu hình URL Socket.io Real-time (Tự động suy ra từ API_BASE_URL nếu không cấu hình riêng)
+const SOCKET_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL ||
+  (process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/?$/, '') : 'http://localhost:5000');
 
 // Interface Khung giờ đá mapping từ bảng Khung_Gio trong CSDL SQL Server
 export interface KhungGioItem {
