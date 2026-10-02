@@ -182,6 +182,18 @@ export const taoThanhToanPayOS = async (req: AuthRequest, res: Response) => {
         const orderCode = Number(String(Date.now()).slice(-6) + Math.floor(Math.random() * 90 + 10));
         const description = `DS${finalDonDatId || orderCode}`.slice(0, 25);
 
+        // Lưu orderCode vào ghi chú đơn để dễ dàng tra cứu khi Webhook gọi về
+        if (finalDonDatId) {
+            try {
+                await pool.request()
+                    .input('id', sql.Int, finalDonDatId)
+                    .input('orderCodeStr', sql.NVarChar(100), ` | PayOS #${orderCode}`)
+                    .query(`UPDATE Don_Dat_San SET ghi_chu = ISNULL(ghi_chu, '') + @orderCodeStr WHERE id = @id`);
+            } catch (errDb: any) {
+                console.warn('⚠️ Không thể update ghi chú orderCode:', errDb.message);
+            }
+        }
+
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const cancelUrl = `${frontendUrl}/?payment=cancel&orderCode=${orderCode}`;
         const returnUrl = `${frontendUrl}/?payment=success&orderCode=${orderCode}`;
@@ -305,7 +317,12 @@ export const kiemTraTrangThaiPayOS = async (req: AuthRequest, res: Response) => 
             if (donDatId) {
                 const bookingRes = await pool.request()
                     .input('id', sql.Int, donDatId)
-                    .query('SELECT TOP 1 id, trang_thai, tong_tien, ghi_chu FROM Don_Dat_San WHERE id = @id');
+                    .query(`
+                        SELECT TOP 1 d.id, d.trang_thai, d.tong_tien, d.ghi_chu, nd.ho_ten AS ten_khach_hang 
+                        FROM Don_Dat_San d
+                        LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+                        WHERE d.id = @id
+                    `);
 
                 if (bookingRes.recordset && bookingRes.recordset.length > 0) {
                     const booking = bookingRes.recordset[0];
@@ -330,6 +347,7 @@ export const kiemTraTrangThaiPayOS = async (req: AuthRequest, res: Response) => 
                                 orderCode: numOrderCode,
                                 ma_don_dat: donDatId,
                                 so_tien: paymentInfo.amountPaid || paymentInfo.amount,
+                                ten_khach_hang: booking?.ten_khach_hang || 'Khách MB Bank',
                                 trang_thai: 'PAID',
                                 thoi_gian: new Date()
                             });
@@ -413,7 +431,12 @@ export const xuLyWebhookPayOS = async (req: AuthRequest, res: Response) => {
             if (donDatId) {
                 const bookingRes = await pool.request()
                     .input('id', sql.Int, donDatId)
-                    .query('SELECT TOP 1 id, trang_thai, tong_tien, ghi_chu FROM Don_Dat_San WHERE id = @id');
+                    .query(`
+                        SELECT TOP 1 d.id, d.trang_thai, d.tong_tien, d.ghi_chu, nd.ho_ten AS ten_khach_hang 
+                        FROM Don_Dat_San d
+                        LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+                        WHERE d.id = @id
+                    `);
 
                 if (bookingRes.recordset && bookingRes.recordset.length > 0) {
                     const booking = bookingRes.recordset[0];
@@ -432,19 +455,20 @@ export const xuLyWebhookPayOS = async (req: AuthRequest, res: Response) => {
                             .input('ma_giao_dich', sql.VarChar(100), String(orderCode))
                             .execute('sp_ThanhToanDon');
                     }
-                }
 
-                const io = req.app.get('io');
-                if (io) {
-                    io.emit('payment_success', {
-                        orderCode: Number(orderCode),
-                        ma_don_dat: donDatId,
-                        so_tien: amount,
-                        trang_thai: 'PAID',
-                        ngan_hang: 'MB Bank',
-                        thoi_gian: new Date()
-                    });
-                    io.emit('booking_updated');
+                    const io = req.app.get('io');
+                    if (io) {
+                        io.emit('payment_success', {
+                            orderCode: Number(orderCode),
+                            ma_don_dat: donDatId,
+                            so_tien: amount,
+                            ten_khach_hang: booking?.ten_khach_hang || 'Khách MB Bank',
+                            trang_thai: 'PAID',
+                            ngan_hang: 'MB Bank',
+                            thoi_gian: new Date()
+                        });
+                        io.emit('booking_updated');
+                    }
                 }
             }
         }
