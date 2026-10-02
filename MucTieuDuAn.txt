@@ -4,3 +4,7 @@
 4Cơ sở dữ liệu
 5Nhóm người dung
 6Các chức năng của hệ thống
+
+Làm thêm đặt trực tiếp
+- đặt bất cứ giờ nào
+- thêm 2 sân dự phòng

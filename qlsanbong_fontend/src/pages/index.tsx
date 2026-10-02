@@ -194,6 +194,16 @@ function formatDateDMY(dateStr: string): string {
   return dateStr;
 }
 
+// Helper kiểm tra sân hoặc loại sân có phải là "Dự bị" hay không
+function isDuBiPitch(item?: { ten_loai?: string; ten_san?: string; mo_ta?: string } | null): boolean {
+  if (!item) return false;
+  const str = `${item.ten_loai || ''} ${item.ten_san || ''} ${item.mo_ta || ''}`
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return str.includes('du bi') || str.includes('du phong');
+}
+
 // Icon quả bóng đá màu đen trắng chuẩn
 function SoccerBallIcon({ className = "w-6 h-6" }: { className?: string }) {
   return (
@@ -420,7 +430,9 @@ export default function HomePage() {
       const res = await fetch(`${API_BASE_URL}/dat-san/loai-san`);
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
-        setLoaiSanList(data.data);
+        // Lọc bỏ hoàn toàn loại sân Dự bị
+        const validLoaiSan = data.data.filter((l: LoaiSan) => !isDuBiPitch(l));
+        setLoaiSanList(validLoaiSan);
       }
     } catch (err) {
       console.error('Lỗi fetch loại sân từ SQL Server:', err);
@@ -433,7 +445,9 @@ export default function HomePage() {
       const res = await fetch(`${API_BASE_URL}/dat-san/danh-sach-san`);
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
-        setSanBongList(data.data);
+        // Lọc bỏ hoàn toàn các sân thuộc loại Dự bị hoặc có tên/mô tả Dự bị
+        const validSanBong = data.data.filter((s: SanBong) => !isDuBiPitch(s));
+        setSanBongList(validSanBong);
       }
     } catch (err) {
       console.error('Lỗi fetch danh sách sân từ SQL Server:', err);
@@ -731,9 +745,9 @@ export default function HomePage() {
   };
 
 
-  // Lọc danh sách sân theo loại sân, sân cụ thể và từ khóa tìm kiếm
+  // Lọc danh sách sân theo loại sân, sân cụ thể và từ khóa tìm kiếm (Loại bỏ hoàn toàn sân Dự bị)
   const filteredSanList = useMemo(() => {
-    let list = sanBongList;
+    let list = sanBongList.filter((s) => !isDuBiPitch(s));
     if (filterLoaiSan !== 'ALL') {
       list = list.filter((s) => s.ma_loai_san === Number(filterLoaiSan));
     }
@@ -1485,9 +1499,9 @@ export default function HomePage() {
                     }`}
                 >
                   <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
-                    Tất Cả Các Sân ({sanBongList.length} sân)
+                    Tất Cả Các Sân ({sanBongList.filter((s) => !isDuBiPitch(s)).length} sân)
                   </option>
-                  {sanBongList.map((san) => (
+                  {sanBongList.filter((s) => !isDuBiPitch(s)).map((san) => (
                     <option key={san.id} value={san.id} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
                       {san.ten_san}
                     </option>

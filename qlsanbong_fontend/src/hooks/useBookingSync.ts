@@ -21,71 +21,17 @@ export interface DonDatSanSync {
   tien_san: number;
   dich_vu: ServiceItemOrder[];
   tong_tien: number;
-  trang_thai: 'Chờ thanh toán' | 'Đã thanh toán' | 'Đã hủy';
+  trang_thai: 'Chờ thanh toán' | 'Đã thanh toán' | 'Đã hủy' | string;
+  trang_thai_vao_san?: string;
+  da_vao_san?: boolean;
+  gio_vao_san?: string;
   ngay_tao: string;
 }
 
 export const STORAGE_KEY = 'SYSTEM_ORDERS';
 export const CUSTOM_STORAGE_EVENT = 'custom_storage_update';
 
-export const INITIAL_ORDERS: DonDatSanSync[] = [
-  {
-    id: 101,
-    ma_don_dat: 'HD-2026-001',
-    ten_khach_hang: 'Nguyễn Văn Nam',
-    so_dien_thoai: '0901234567',
-    ten_san: 'Sân 1 (5 người)',
-    ma_san: 1,
-    gio_bat_dau: '17:00',
-    gio_ket_thuc: '18:30',
-    ngay_da: '2026-10-02',
-    tien_san: 270000,
-    dich_vu: [
-      { id: 1, ten_dich_vu: 'Nước Khoáng Aquafina 500ml', so_luong: 4, don_gia: 10000, thanh_tien: 40000 },
-      { id: 2, ten_dich_vu: 'Nước Tăng Lực Revive Chanh Muối', so_luong: 2, don_gia: 15000, thanh_tien: 30000 },
-    ],
-    tong_tien: 340000,
-    trang_thai: 'Chờ thanh toán',
-    ngay_tao: '2026-10-02T16:45:00',
-  },
-  {
-    id: 102,
-    ma_don_dat: 'HD-2026-002',
-    ten_khach_hang: 'Trần Đình Trọng',
-    so_dien_thoai: '0987654321',
-    ten_san: 'Sân 4 (7 người)',
-    ma_san: 4,
-    gio_bat_dau: '18:30',
-    gio_ket_thuc: '20:00',
-    ngay_da: '2026-10-02',
-    tien_san: 450000,
-    dich_vu: [
-      { id: 6, ten_dich_vu: 'Thuê Bộ Áo Bib Phân Đội (10 áo)', so_luong: 1, don_gia: 30000, thanh_tien: 30000 },
-      { id: 3, ten_dich_vu: 'Nước Tăng Lực Red Bull', so_luong: 6, don_gia: 20000, thanh_tien: 120000 },
-    ],
-    tong_tien: 600000,
-    trang_thai: 'Chờ thanh toán',
-    ngay_tao: '2026-10-02T18:00:00',
-  },
-  {
-    id: 201,
-    ma_don_dat: 'HD-2026-999',
-    ten_khach_hang: 'Vũ Đức Đam',
-    so_dien_thoai: '0977889900',
-    ten_san: 'Sân 1 (5 người)',
-    ma_san: 1,
-    gio_bat_dau: '07:00',
-    gio_ket_thuc: '08:30',
-    ngay_da: '2026-10-02',
-    tien_san: 270000,
-    dich_vu: [
-      { id: 1, ten_dich_vu: 'Nước Khoáng Aquafina 500ml', so_luong: 6, don_gia: 10000, thanh_tien: 60000 },
-    ],
-    tong_tien: 330000,
-    trang_thai: 'Đã thanh toán',
-    ngay_tao: '2026-10-02T06:50:00',
-  },
-];
+export const INITIAL_ORDERS: DonDatSanSync[] = [];
 
 /**
  * Custom Hook useBookingSync
@@ -100,12 +46,26 @@ export function useBookingSync() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
-        // Khởi tạo mặc định nếu chưa có
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_ORDERS));
-        return INITIAL_ORDERS;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+        return [];
       }
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+
+      // Lọc bỏ toàn bộ dữ liệu mẫu giả lập trước đây
+      const cleaned = parsed.filter((o: any) => {
+        if (!o) return false;
+        const ma = String(o.ma_don_dat || '');
+        const name = String(o.ten_khach_hang || '');
+        if (ma === 'HD-2026-001' || ma === 'HD-2026-002' || ma === 'HD-2026-999') return false;
+        if (name === 'Nguyễn Văn Nam' || name === 'Trần Đình Trọng' || name === 'Vũ Đức Đam') return false;
+        return true;
+      });
+
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch (err) {
       console.error('Lỗi khi đọc SYSTEM_ORDERS từ localStorage:', err);
       return [];

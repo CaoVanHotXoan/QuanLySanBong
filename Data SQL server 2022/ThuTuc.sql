@@ -2064,7 +2064,7 @@ GO
 
 -- 4. BẢNG DON_DAT_SAN & THANH_TOAN: Thêm, Sửa, Xóa Đơn Đặt Sân & Thanh Toán
 CREATE OR ALTER PROCEDURE sp_ThemDonDatVaThanhToan
-    @ma_nguoi_dung INT,
+    @ma_nguoi_dung INT = NULL,
     @ma_san INT,
     @ngay_da DATE,
     @gio_bat_dau TIME,
@@ -2076,12 +2076,53 @@ CREATE OR ALTER PROCEDURE sp_ThemDonDatVaThanhToan
     @ghi_chu NVARCHAR(MAX) = NULL,
     @loai_thanh_toan VARCHAR(20) = NULL,
     @so_tien DECIMAL(10, 2) = NULL,
-    @trang_thai_gd VARCHAR(20) = 'THANH_CONG'
+    @trang_thai_gd VARCHAR(20) = 'THANH_CONG',
+    @ten_khach_hang NVARCHAR(100) = NULL,
+    @so_dien_thoai VARCHAR(20) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRANSACTION;
     BEGIN TRY
+        DECLARE @final_user_id INT = @ma_nguoi_dung;
+        DECLARE @clean_ten NVARCHAR(100) = NULLIF(LTRIM(RTRIM(@ten_khach_hang)), '');
+        DECLARE @clean_phone VARCHAR(20) = NULLIF(LTRIM(RTRIM(@so_dien_thoai)), '');
+
+        -- 1. Nếu có cung cấp Tên hoặc SĐT -> Tìm hoặc tạo mới khách hàng trong bảng Nguoi_Dung
+        IF @clean_phone IS NOT NULL OR @clean_ten IS NOT NULL
+        BEGIN
+            DECLARE @found_id INT = NULL;
+
+            -- Tìm theo SĐT trước
+            IF @clean_phone IS NOT NULL
+            BEGIN
+                SELECT TOP 1 @found_id = id FROM Nguoi_Dung WHERE so_dien_thoai = @clean_phone;
+            END;
+
+            -- Tìm theo Tên nếu chưa thấy
+            IF @found_id IS NULL AND @clean_ten IS NOT NULL
+            BEGIN
+                SELECT TOP 1 @found_id = id FROM Nguoi_Dung WHERE ho_ten = @clean_ten;
+            END;
+
+            -- Nếu chưa có trong Nguoi_Dung -> Thêm mới tài khoản khách hàng
+            IF @found_id IS NULL
+            BEGIN
+                DECLARE @email_auto VARCHAR(255) = CONCAT('khach_', DATEDIFF(SECOND, '2026-01-01', GETDATE()), '_', ABS(CHECKSUM(NEWID()) % 1000), '@khachhang.pos');
+                INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, MaVaiTro)
+                VALUES (ISNULL(@clean_ten, CONCAT(N'Khách ', @clean_phone)), @email_auto, @clean_phone, 3);
+                SET @found_id = SCOPE_IDENTITY();
+            END;
+
+            SET @final_user_id = @found_id;
+        END;
+
+        -- 2. Nếu không điền tên/sđt -> Dùng tài khoản đang đăng nhập hoặc mặc định 1
+        IF @final_user_id IS NULL
+        BEGIN
+            SET @final_user_id = 1;
+        END;
+
         DECLARE @tien_san_val DECIMAL(10,2) = ISNULL(@tien_san, 0);
         DECLARE @tong_tien_val DECIMAL(10,2) = ISNULL(@tong_tien, @tien_san_val);
 
@@ -2090,7 +2131,7 @@ BEGIN
             tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao
         )
         VALUES (
-            @ma_nguoi_dung, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc,
+            @final_user_id, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc,
             @tien_san_val, @tong_tien_val, @phuong_thuc, @ghi_chu, @trang_thai, GETDATE()
         );
 
@@ -2141,7 +2182,9 @@ CREATE OR ALTER PROCEDURE sp_SuaDonDatVaThanhToan
     @ghi_chu NVARCHAR(MAX) = NULL,
     @loai_thanh_toan VARCHAR(20) = NULL,
     @so_tien DECIMAL(10, 2) = NULL,
-    @trang_thai_gd VARCHAR(20) = 'THANH_CONG'
+    @trang_thai_gd VARCHAR(20) = 'THANH_CONG',
+    @ten_khach_hang NVARCHAR(100) = NULL,
+    @so_dien_thoai VARCHAR(20) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -2152,9 +2195,39 @@ BEGIN
             ;THROW 50055, N'Đơn đặt sân không tồn tại.', 1;
         END;
 
+        DECLARE @final_user_id INT = @ma_nguoi_dung;
+        DECLARE @clean_ten NVARCHAR(100) = NULLIF(LTRIM(RTRIM(@ten_khach_hang)), '');
+        DECLARE @clean_phone VARCHAR(20) = NULLIF(LTRIM(RTRIM(@so_dien_thoai)), '');
+
+        -- 1. Nếu có cung cấp Tên hoặc SĐT -> Tìm hoặc tạo mới khách hàng trong bảng Nguoi_Dung
+        IF @clean_phone IS NOT NULL OR @clean_ten IS NOT NULL
+        BEGIN
+            DECLARE @found_id INT = NULL;
+
+            IF @clean_phone IS NOT NULL
+            BEGIN
+                SELECT TOP 1 @found_id = id FROM Nguoi_Dung WHERE so_dien_thoai = @clean_phone;
+            END;
+
+            IF @found_id IS NULL AND @clean_ten IS NOT NULL
+            BEGIN
+                SELECT TOP 1 @found_id = id FROM Nguoi_Dung WHERE ho_ten = @clean_ten;
+            END;
+
+            IF @found_id IS NULL
+            BEGIN
+                DECLARE @email_auto VARCHAR(255) = CONCAT('khach_', DATEDIFF(SECOND, '2026-01-01', GETDATE()), '_', ABS(CHECKSUM(NEWID()) % 1000), '@khachhang.pos');
+                INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, MaVaiTro)
+                VALUES (ISNULL(@clean_ten, CONCAT(N'Khách ', @clean_phone)), @email_auto, @clean_phone, 3);
+                SET @found_id = SCOPE_IDENTITY();
+            END;
+
+            SET @final_user_id = @found_id;
+        END;
+
         UPDATE Don_Dat_San
         SET ma_san = @ma_san,
-            ma_nguoi_dung = ISNULL(@ma_nguoi_dung, ma_nguoi_dung),
+            ma_nguoi_dung = ISNULL(@final_user_id, ma_nguoi_dung),
             ngay_da = @ngay_da,
             gio_bat_dau = @gio_bat_dau,
             gio_ket_thuc = @gio_ket_thuc,

@@ -678,6 +678,12 @@ export const datSan = async (req: AuthRequest, res: Response) => {
             }
         }
 
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
+
         return res.status(201).json({
             success: true,
             message: `Đặt sân thành công! Trạng thái đơn: ${isTraHet ? 'Đã thanh toán' : 'Đã cọc'}`,
@@ -786,6 +792,12 @@ export const huyDonVaHoanCoc = async (req: AuthRequest, res: Response) => {
 
         const cancelResult = result.recordset[0];
 
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
+
         return res.status(200).json({
             success: true,
             message: 'Hủy đơn đặt sân và xử lý hoàn tiền thành công!',
@@ -865,6 +877,12 @@ export const datSanLinhHoat = async (req: AuthRequest, res: Response) => {
             .input('tien_coc', sql.Decimal(10, 2), tien_coc ? parseFloat(tien_coc) : 0)
             .execute('sp_DatSanLinhHoat');
 
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
+
         return res.status(201).json({
             success: true,
             message: 'Đặt sân tính giờ linh hoạt thành công!',
@@ -905,6 +923,12 @@ export const batDauDaLinhHoat = async (req: AuthRequest, res: Response) => {
             .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
             .execute('sp_BatDauDaLinhHoat');
 
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
+
         return res.status(201).json({
             success: true,
             message: 'Đã check-in và bắt đầu tính giờ đá linh hoạt cho sân!',
@@ -940,6 +964,12 @@ export const ketThucDaLinhHoat = async (req: AuthRequest, res: Response) => {
             .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
             .input('gio_ket_thuc', sql.VarChar(8), gio_ket_thuc || null)
             .execute('sp_KetThucDaLinhHoat');
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
 
         return res.status(200).json({
             success: true,
@@ -1123,6 +1153,58 @@ export const resetKhungGio = async (req: AuthRequest, res: Response) => {
     }
 };
 
+async function resolveCustomerUserId(pool: any, ten_khach_hang?: string, so_dien_thoai?: string, fallbackId: number = 1): Promise<number> {
+    const ten = (ten_khach_hang || '').trim();
+    const phone = (so_dien_thoai || '').trim();
+
+    // Nếu KHÔNG điền tên khách hàng VÀ KHÔNG điền số điện thoại -> Dùng tài khoản đang đăng nhập (fallbackId)
+    if (!ten && !phone) {
+        return fallbackId;
+    }
+
+    try {
+        // 1. Tìm theo SĐT nếu có
+        if (phone) {
+            const res = await pool.request()
+                .input('phone', sql.VarChar(20), phone)
+                .query('SELECT TOP 1 id FROM Nguoi_Dung WHERE so_dien_thoai = @phone');
+            if (res.recordset[0]?.id) {
+                return res.recordset[0].id;
+            }
+        }
+
+        // 2. Tìm theo Tên khách hàng
+        if (ten) {
+            const res = await pool.request()
+                .input('ten', sql.NVarChar(100), ten)
+                .query('SELECT TOP 1 id FROM Nguoi_Dung WHERE ho_ten = @ten');
+            if (res.recordset[0]?.id) {
+                return res.recordset[0].id;
+            }
+        }
+
+        // 3. Nếu chưa có trong CSDL -> Tự động thêm khách hàng mới vào bảng Nguoi_Dung
+        const email = `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@khachhang.pos`;
+        const insertRes = await pool.request()
+            .input('ho_ten', sql.NVarChar(100), ten || `Khách ${phone}`)
+            .input('email', sql.VarChar(255), email)
+            .input('so_dien_thoai', sql.VarChar(15), phone || null)
+            .input('MaVaiTro', sql.Int, 3)
+            .query(`
+                INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, MaVaiTro)
+                OUTPUT INSERTED.id
+                VALUES (@ho_ten, @email, @so_dien_thoai, @MaVaiTro)
+            `);
+        if (insertRes.recordset[0]?.id) {
+            return insertRes.recordset[0].id;
+        }
+    } catch (err: any) {
+        console.warn('Lỗi tự động định danh khách hàng:', err.message);
+    }
+
+    return fallbackId;
+}
+
 /**
  * Thêm Đơn Đặt Sân (Admin Dashboard)
  * Method: POST /api/dat-san/don-dat-thanh-toan
@@ -1130,7 +1212,7 @@ export const resetKhungGio = async (req: AuthRequest, res: Response) => {
  */
 export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
     try {
-        const { ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd } = req.body;
+        const { ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai } = req.body;
 
         const pool = await poolPromise;
         const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan' || loai_thanh_toan === 'TRA_HET') ? 'DA_THANH_TOAN' : (trang_thai || 'DA_COC');
@@ -1138,13 +1220,21 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
         const tien_san_val = parseFloat(tien_san) || parseFloat(tong_tien) || 0;
         const tong_tien_val = parseFloat(tong_tien) || tien_san_val;
         const so_tien_val = so_tien ? parseFloat(so_tien) : tien_san_val;
+        const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
+        const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
+        const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '18:30:00');
+
+        // Phân giải mã người dùng: Nếu có điền tên/SĐT khách -> Lưu theo khách đó. Nếu không điền -> Lưu theo tài khoản đang đăng nhập
+        const tenKhach = ten_khach_hang || (ghi_chu?.includes('Khách:') ? ghi_chu.replace('Khách:', '').split('-')[0].trim() : '');
+        const sdtKhach = so_dien_thoai || (ghi_chu?.includes('-') ? ghi_chu.split('-')[1].trim() : '');
+        const finalUserId = await resolveCustomerUserId(pool, tenKhach, sdtKhach, parseInt(ma_nguoi_dung, 10) || req.user?.id || 1);
 
         const result = await pool.request()
-            .input('ma_nguoi_dung', sql.Int, parseInt(ma_nguoi_dung, 10) || 1)
+            .input('ma_nguoi_dung', sql.Int, parseInt(ma_nguoi_dung, 10) || req.user?.id || 1)
             .input('ma_san', sql.Int, parseInt(ma_san, 10))
-            .input('ngay_da', sql.Date, ngay_da)
-            .input('gio_bat_dau', sql.VarChar(8), gio_bat_dau)
-            .input('gio_ket_thuc', sql.VarChar(8), gio_ket_thuc)
+            .input('ngay_da', sql.Date, ngay_da_clean)
+            .input('gio_bat_dau', sql.VarChar(8), gio_bd_clean)
+            .input('gio_ket_thuc', sql.VarChar(8), gio_kt_clean)
             .input('tien_san', sql.Decimal(10, 2), tien_san_val)
             .input('tong_tien', sql.Decimal(10, 2), tong_tien_val)
             .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
@@ -1153,6 +1243,8 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
             .input('loai_thanh_toan', sql.VarChar(20), loai_thanh_toan || 'DAT_COC')
             .input('so_tien', sql.Decimal(10, 2), so_tien_val)
             .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
+            .input('ten_khach_hang', sql.NVarChar(100), tenKhach || null)
+            .input('so_dien_thoai', sql.VarChar(20), sdtKhach || null)
             .execute('sp_ThemDonDatVaThanhToan');
 
         const orderData = result.recordset[0];
@@ -1172,6 +1264,12 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
                     }
                 }
             }
+        }
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
         }
 
         return res.status(201).json({
@@ -1196,7 +1294,7 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
 export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
     try {
         const id = String(req.params.id);
-        const { ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd } = req.body;
+        const { ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai } = req.body;
 
         const pool = await poolPromise;
         const phuong_thuc_chuan = phuong_thuc ? ((phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT') : 'TIEN_MAT';
@@ -1204,14 +1302,20 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
         const tien_san_val = tien_san !== undefined ? parseFloat(tien_san) : null;
         const tong_tien_val = tong_tien !== undefined ? parseFloat(tong_tien) : null;
         const so_tien_val = so_tien !== undefined ? parseFloat(so_tien) : null;
+        const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
+        const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
+        const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '18:30:00');
+
+        const tenKhach = ten_khach_hang || (ghi_chu?.includes('Khách:') ? ghi_chu.replace('Khách:', '').split('-')[0].trim() : '');
+        const sdtKhach = so_dien_thoai || (ghi_chu?.includes('-') ? ghi_chu.split('-')[1].trim() : '');
 
         const result = await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
-            .input('ma_nguoi_dung', sql.Int, ma_nguoi_dung ? parseInt(ma_nguoi_dung, 10) : null)
+            .input('ma_nguoi_dung', sql.Int, ma_nguoi_dung ? parseInt(ma_nguoi_dung, 10) : (req.user?.id || 1))
             .input('ma_san', sql.Int, parseInt(ma_san, 10))
-            .input('ngay_da', sql.Date, ngay_da)
-            .input('gio_bat_dau', sql.VarChar(8), gio_bat_dau)
-            .input('gio_ket_thuc', sql.VarChar(8), gio_ket_thuc)
+            .input('ngay_da', sql.Date, ngay_da_clean)
+            .input('gio_bat_dau', sql.VarChar(8), gio_bd_clean)
+            .input('gio_ket_thuc', sql.VarChar(8), gio_kt_clean)
             .input('tien_san', sql.Decimal(10, 2), tien_san_val)
             .input('tong_tien', sql.Decimal(10, 2), tong_tien_val)
             .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
@@ -1220,6 +1324,8 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
             .input('loai_thanh_toan', sql.VarChar(20), loai_thanh_toan || 'TRA_HET')
             .input('so_tien', sql.Decimal(10, 2), so_tien_val)
             .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
+            .input('ten_khach_hang', sql.NVarChar(100), tenKhach || null)
+            .input('so_dien_thoai', sql.VarChar(20), sdtKhach || null)
             .execute('sp_SuaDonDatVaThanhToan');
 
         if (Array.isArray(req.body.dich_vu_list)) {
@@ -1236,6 +1342,12 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
                     }
                 }
             }
+        }
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
         }
 
         return res.status(200).json({
@@ -1264,6 +1376,12 @@ export const xoaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
         await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
             .execute('sp_XoaDonDatVaThanhToan');
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
 
         return res.status(200).json({
             success: true,

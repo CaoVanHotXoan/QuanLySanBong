@@ -1444,82 +1444,102 @@ export default function AdminDashboard() {
     );
   };
 
+  // Helper tính tiền sân tự động = đơn giá phút * (giờ kết thúc - giờ bắt đầu)
+  const calculateBookingPitchPrice = (maSan: number, start: string, end: string): number => {
+    if (!start || !end) return 0;
+    const court = courtList.find((c) => c.id === Number(maSan));
+    const donGiaPhut = Number(court?.don_gia_phut || 0);
+    if (!donGiaPhut) return 0;
+
+    const [sh, sm] = (start || '').substring(0, 5).split(':').map(Number);
+    const [eh, em] = (end || '').substring(0, 5).split(':').map(Number);
+
+    if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return 0;
+
+    const startMinutes = sh * 60 + sm;
+    const endMinutes = eh * 60 + em;
+    const diffMinutes = endMinutes - startMinutes;
+
+    if (diffMinutes <= 0) return 0;
+    return Math.round(diffMinutes * donGiaPhut);
+  };
+
   // 9. Thêm/Sửa Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan)
   const handleSaveDonDatThanhToan = async (e: React.FormEvent) => {
     e.preventDefault();
     const { id, ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, dich_vu_list } = bookingModal.data;
+
+    const cleanNgayDa = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
+    const cleanGioBatDau = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
+    const cleanGioKetThuc = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '18:30:00');
 
     try {
       if (bookingModal.mode === 'ADD') {
         const res = await fetch(`${API_BASE}/dat-san/don-dat-thanh-toan`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, dich_vu_list })
+          body: JSON.stringify({
+            ma_san: Number(ma_san),
+            ma_nguoi_dung: Number(ma_nguoi_dung || 1),
+            ngay_da: cleanNgayDa,
+            gio_bat_dau: cleanGioBatDau,
+            gio_ket_thuc: cleanGioKetThuc,
+            tien_san: Number(tien_san || 0),
+            tong_tien: Number(tong_tien || tien_san || 0),
+            ghi_chu: ghi_chu || null,
+            trang_thai: trang_thai || 'DA_CHOT',
+            phuong_thuc: phuong_thuc || 'TIEN_MAT',
+            loai_thanh_toan: loai_thanh_toan || 'TRA_HET',
+            so_tien: Number(so_tien || tong_tien || tien_san || 0),
+            trang_thai_gd: trang_thai_gd || 'THANH_CONG',
+            dich_vu_list: dich_vu_list || []
+          })
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage({ type: 'success', message: '✅ Đã tạo đơn đặt sân & thanh toán thành công!' });
+          setToastMessage({ type: 'success', message: '✅ Đã tạo đơn đặt sân & lưu CSDL SQL Server thành công!' });
           loadAllDataFromBackend();
           setBookingModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        } else {
+          setToastMessage({ type: 'error', message: data.message || 'Lỗi khi thêm đơn đặt sân vào CSDL!' });
           return;
         }
       } else {
         const res = await fetch(`${API_BASE}/dat-san/don-dat-thanh-toan/${id}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, dich_vu_list })
+          body: JSON.stringify({
+            ma_san: Number(ma_san),
+            ma_nguoi_dung: ma_nguoi_dung ? Number(ma_nguoi_dung) : undefined,
+            ngay_da: cleanNgayDa,
+            gio_bat_dau: cleanGioBatDau,
+            gio_ket_thuc: cleanGioKetThuc,
+            tien_san: Number(tien_san || 0),
+            tong_tien: Number(tong_tien || tien_san || 0),
+            ghi_chu: ghi_chu || null,
+            trang_thai: trang_thai || 'DA_CHOT',
+            phuong_thuc: phuong_thuc || 'TIEN_MAT',
+            loai_thanh_toan: loai_thanh_toan || 'TRA_HET',
+            so_tien: Number(so_tien || tong_tien || tien_san || 0),
+            trang_thai_gd: trang_thai_gd || 'THANH_CONG',
+            dich_vu_list: dich_vu_list || []
+          })
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage({ type: 'success', message: '✅ Đã cập nhật đơn đặt sân & thanh toán!' });
+          setToastMessage({ type: 'success', message: '✅ Đã cập nhật đơn đặt sân trong CSDL SQL Server!' });
           loadAllDataFromBackend();
           setBookingModal({ isOpen: false, mode: 'ADD', data: {} });
           return;
+        } else {
+          setToastMessage({ type: 'error', message: data.message || 'Lỗi khi cập nhật đơn đặt sân trong CSDL!' });
+          return;
         }
       }
-    } catch (err) {}
-
-    // Fallback local update
-    const selectedSan = courtList.find(s => s.id === Number(ma_san));
-    const selectedUser = userList.find(u => u.id === Number(ma_nguoi_dung));
-    if (bookingModal.mode === 'ADD') {
-      const newId = Math.max(...bookingList.map(b => b.id), 0) + 1;
-      const newBooking: DonDatSan = {
-        id: newId,
-        ma_nguoi_dung: Number(ma_nguoi_dung || 1),
-        ten_khach_hang: selectedUser?.ho_ten || 'Khách Hàng',
-        so_dien_thoai: selectedUser?.so_dien_thoai || '0909000111',
-        ma_san: Number(ma_san || 1),
-        ten_san: selectedSan?.ten_san || 'Sân Bóng',
-        ngay_da: ngay_da || new Date().toISOString().split('T')[0],
-        gio_bat_dau: gio_bat_dau || '17:00',
-        gio_ket_thuc: gio_ket_thuc || '18:30',
-        tien_san: Number(tien_san || 350000),
-        tong_tien: Number(tong_tien || 350000),
-        phuong_thuc: phuong_thuc || 'CHUYEN_KHOAN',
-        trang_thai: trang_thai || 'DA_COC',
-        ghi_chu: ghi_chu || '',
-        dich_vu_da_dung: []
-      };
-      setBookingList([newBooking, ...bookingList]);
-      setToastMessage({ type: 'success', message: '✅ Đã thêm đơn đặt sân thành công!' });
-    } else {
-      setBookingList(bookingList.map(b => b.id === id ? {
-        ...b,
-        ma_san: Number(ma_san || b.ma_san),
-        ten_san: selectedSan?.ten_san || b.ten_san,
-        ngay_da: ngay_da || b.ngay_da,
-        gio_bat_dau: gio_bat_dau || b.gio_bat_dau,
-        gio_ket_thuc: gio_ket_thuc || b.gio_ket_thuc,
-        tien_san: Number(tien_san ?? b.tien_san),
-        tong_tien: Number(tong_tien ?? b.tong_tien),
-        phuong_thuc: phuong_thuc || b.phuong_thuc || 'CHUYEN_KHOAN',
-        trang_thai: trang_thai || b.trang_thai,
-        ghi_chu: ghi_chu ?? b.ghi_chu
-      } : b));
-      setToastMessage({ type: 'success', message: '✅ Đã cập nhật đơn đặt sân!' });
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối máy chủ' });
     }
-    setBookingModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
   const handleDeleteDonDatThanhToan = (id: number, info?: string) => {
@@ -2420,26 +2440,32 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setBookingModal({
-                      isOpen: true,
-                      mode: 'ADD',
-                      data: {
-                        ma_san: courtList[0]?.id || 1,
-                        ma_nguoi_dung: userList[0]?.id || 1,
-                        ngay_da: selectedDate,
-                        gio_bat_dau: '17:00',
-                        gio_ket_thuc: '18:30',
-                        tien_san: 350000,
-                        tong_tien: 350000,
-                        trang_thai: 'DA_CHOT',
-                        phuong_thuc: 'TIEN_MAT',
-                        loai_thanh_toan: 'TRA_HET',
-                        so_tien: 350000,
-                        trang_thai_gd: 'THANH_CONG',
-                        ghi_chu: 'Đặt trực tiếp tại quầy',
-                        dich_vu_list: []
-                      }
-                    })}
+                    onClick={() => {
+                      const initSan = courtList[0]?.id || 1;
+                      const initStart = '17:00';
+                      const initEnd = '18:30';
+                      const initPrice = calculateBookingPitchPrice(initSan, initStart, initEnd) || 350000;
+                      setBookingModal({
+                        isOpen: true,
+                        mode: 'ADD',
+                        data: {
+                          ma_san: initSan,
+                          ma_nguoi_dung: userList[0]?.id || 1,
+                          ngay_da: selectedDate,
+                          gio_bat_dau: initStart,
+                          gio_ket_thuc: initEnd,
+                          tien_san: initPrice,
+                          tong_tien: initPrice,
+                          trang_thai: 'DA_CHOT',
+                          phuong_thuc: 'TIEN_MAT',
+                          loai_thanh_toan: 'TRA_HET',
+                          so_tien: initPrice,
+                          trang_thai_gd: 'THANH_CONG',
+                          ghi_chu: 'Đặt trực tiếp tại quầy',
+                          dich_vu_list: []
+                        }
+                      });
+                    }}
                     className="px-4 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
                     <Plus className="w-4 h-4 stroke-[3]" /> Thêm Đơn & Thanh Toán
@@ -3353,12 +3379,28 @@ export default function AdminDashboard() {
                     onChange={(e) => {
                       const ms = Number(e.target.value);
                       const s = courtList.find(c => c.id === ms);
-                      setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ma_san: ms, ten_san: s?.ten_san } });
+                      const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
+                      const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
+                      const autoPrice = calculateBookingPitchPrice(ms, curStart, curEnd);
+                      const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
+                      const finalPrice = autoPrice > 0 ? autoPrice : (bookingModal.data.tien_san || 0);
+                      setBookingModal({
+                        ...bookingModal,
+                        data: {
+                          ...bookingModal.data,
+                          ma_san: ms,
+                          ten_san: s?.ten_san,
+                          tien_san: finalPrice,
+                          tong_tien: finalPrice + totalDv,
+                        }
+                      });
                     }}
                     className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     {courtList.map((c) => (
-                      <option key={c.id} value={c.id}>{c.ten_san}</option>
+                      <option key={c.id} value={c.id}>
+                        {c.ten_san} ({Number(c.don_gia_phut || 0).toLocaleString('vi-VN')} đ/phút)
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -3388,32 +3430,113 @@ export default function AdminDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block font-black uppercase mb-1">Giờ Bắt Đầu *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="17:00"
-                    value={bookingModal.data.gio_bat_dau || '17:00'}
-                    onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, gio_bat_dau: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  />
+                  <label className="block font-black uppercase mb-1 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Giờ Bắt Đầu *</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      id="modal_gio_bat_dau"
+                      type="time"
+                      step="any"
+                      required
+                      value={(bookingModal.data.gio_bat_dau || '17:00').substring(0, 5)}
+                      onChange={(e) => {
+                        const newStart = e.target.value;
+                        const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
+                        const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
+                        const autoPrice = calculateBookingPitchPrice(curSanId, newStart, curEnd);
+                        const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
+                        const finalPrice = autoPrice > 0 ? autoPrice : (bookingModal.data.tien_san || 0);
+                        setBookingModal({
+                          ...bookingModal,
+                          data: {
+                            ...bookingModal.data,
+                            gio_bat_dau: newStart,
+                            tien_san: finalPrice,
+                            tong_tien: finalPrice + totalDv,
+                          },
+                        });
+                      }}
+                      className={`w-full p-2.5 pl-8 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('modal_gio_bat_dau') as HTMLInputElement | null;
+                        if (el && typeof el.showPicker === 'function') {
+                          el.showPicker();
+                        } else if (el) {
+                          el.focus();
+                        }
+                      }}
+                      className="absolute left-2.5 text-emerald-400 hover:text-emerald-300 cursor-pointer p-0.5"
+                      title="Nhấn để mở đồng hồ chọn giờ hoặc nhập tự do"
+                    >
+                      <Clock className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div>
-                  <label className="block font-black uppercase mb-1">Giờ Kết Thúc *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="18:30"
-                    value={bookingModal.data.gio_ket_thuc || '18:30'}
-                    onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, gio_ket_thuc: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  />
+                  <label className="block font-black uppercase mb-1 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Giờ Kết Thúc *</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <input
+                      id="modal_gio_ket_thuc"
+                      type="time"
+                      step="any"
+                      required
+                      value={(bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5)}
+                      onChange={(e) => {
+                        const newEnd = e.target.value;
+                        const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
+                        const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
+                        const autoPrice = calculateBookingPitchPrice(curSanId, curStart, newEnd);
+                        const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
+                        const finalPrice = autoPrice > 0 ? autoPrice : (bookingModal.data.tien_san || 0);
+                        setBookingModal({
+                          ...bookingModal,
+                          data: {
+                            ...bookingModal.data,
+                            gio_ket_thuc: newEnd,
+                            tien_san: finalPrice,
+                            tong_tien: finalPrice + totalDv,
+                          },
+                        });
+                      }}
+                      className={`w-full p-2.5 pl-8 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('modal_gio_ket_thuc') as HTMLInputElement | null;
+                        if (el && typeof el.showPicker === 'function') {
+                          el.showPicker();
+                        } else if (el) {
+                          el.focus();
+                        }
+                      }}
+                      className="absolute left-2.5 text-emerald-400 hover:text-emerald-300 cursor-pointer p-0.5"
+                      title="Nhấn để mở đồng hồ chọn giờ hoặc nhập tự do"
+                    >
+                      <Clock className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-black uppercase mb-1">Tiền Sân (VNĐ) *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-black uppercase">Tiền Sân (VNĐ) *</label>
+                    {bookingModal.data.ma_san && (
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold">
+                        ⚡ Tự động tính
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="number"
                     min="0"
@@ -3424,7 +3547,7 @@ export default function AdminDashboard() {
                       const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
                       setBookingModal({ ...bookingModal, data: { ...bookingModal.data, tien_san: ts, tong_tien: ts + totalDv } });
                     }}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-emerald-400 ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-emerald-300' : 'bg-white border-slate-300 text-emerald-600'}`}
                   />
                 </div>
                 <div>

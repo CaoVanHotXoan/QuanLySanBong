@@ -41,10 +41,10 @@ GO
 -- 4.1. Bảng Nguoi_Dung (Người dùng & Khách hàng liên kết bảng Vai_Tro)
 CREATE TABLE Nguoi_Dung (
     id INT IDENTITY(1,1) PRIMARY KEY,
-    ho_ten NVARCHAR(100) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    so_dien_thoai VARCHAR(10),
-    mat_khau VARCHAR(255),
+    ho_ten NVARCHAR(100) NULL,
+    email VARCHAR(255) UNIQUE NULL,
+    so_dien_thoai VARCHAR(10) NULL,
+    mat_khau VARCHAR(255) NULL,
     anh_dai_dien VARCHAR(255) NULL,
     MaVaiTro INT NOT NULL DEFAULT 3,
     FOREIGN KEY (MaVaiTro) REFERENCES Vai_Tro(MaVaiTro) ON DELETE NO ACTION
@@ -85,13 +85,13 @@ GO
 -- 4.5. Bảng Don_Dat_San (Đơn đặt lịch thi đấu: Cố định hoặc Linh hoạt theo phút)
 CREATE TABLE Don_Dat_San (
     id INT IDENTITY(1,1) PRIMARY KEY,
-    ma_nguoi_dung INT Not NULL,
+    ma_nguoi_dung INT NULL,
     ma_san INT NOT NULL,
     ngay_da DATE NOT NULL,
     gio_bat_dau TIME NOT NULL,
-    gio_ket_thuc TIME NOT NULL,
-    tien_san DECIMAL(10, 2) NOT NULL,
-    tong_tien DECIMAL(10, 2) NOT NULL,
+    gio_ket_thuc TIME NULL,
+    tien_san DECIMAL(10, 2) NULL,
+    tong_tien DECIMAL(10, 2) NULL,
     phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'CHUYEN_KHOAN')) NOT NULL,
     ghi_chu NVARCHAR(255) NULL,
     trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_THANH_TOAN', 'CHO_XAC_NHAN', 'DA_COC', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY', 'DA_CHOT')) DEFAULT 'DA_COC',
