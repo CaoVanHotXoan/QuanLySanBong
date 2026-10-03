@@ -82,11 +82,11 @@ CREATE TABLE Khung_Gio (
 );
 GO
 
--- 4.5. Bảng Don_Dat_San (Đơn đặt lịch thi đấu: Cố định hoặc Linh hoạt theo phút)
+-- 4.5. Bảng Don_Dat_San (Đơn đặt lịch thi đấu: Cố định hoặc Linh hoạt theo phút; Hỗ trợ NULL ma_san cho đơn bán lẻ dịch vụ/nước)
 CREATE TABLE Don_Dat_San (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ma_nguoi_dung INT NULL,
-    ma_san INT NOT NULL,
+    ma_san INT NULL, -- NULL nếu là đơn bán lẻ nước / dịch vụ tại quầy không đặt sân
     ngay_da DATE NOT NULL,
     gio_bat_dau TIME NOT NULL,
     gio_ket_thuc TIME NULL,

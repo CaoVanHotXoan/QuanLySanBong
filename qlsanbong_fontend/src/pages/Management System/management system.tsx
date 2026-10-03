@@ -55,7 +55,9 @@ import {
   QrCode,
   Copy,
   Banknote,
-  Smartphone
+  Smartphone,
+  ArrowRightLeft,
+  AlertTriangle,
 } from 'lucide-react';
 import Login, { AuthUser } from '../Login/login';
 import { useBookingSync } from '../../hooks/useBookingSync';
@@ -148,6 +150,7 @@ export interface DonDatSanPOS {
   tien_san: number;
   dich_vu: ServiceItemOrder[];
   tong_tien: number;
+  so_tien_da_tra?: number;
   trang_thai: 'Chờ thanh toán' | 'Đã thanh toán' | 'Đã hủy' | string;
   trang_thai_vao_san?: string;
   da_vao_san?: boolean;
@@ -427,6 +430,16 @@ export default function ManagementSystem() {
   const [selectedInvoiceDetail, setSelectedInvoiceDetail] = useState<DonDatSanPOS | null>(null);
   // State lưu đơn hàng lịch sử đang xem chi tiết (Modal Read-only)
   const [selectedHistoryOrder, setSelectedHistoryOrder] = useState<any | null>(null);
+
+  // State Gia hạn thời gian sân đang đá & Chuyển sân đá tiếp (Đá thêm giờ)
+  const [isExtendingModalOpen, setIsExtendingModalOpen] = useState<boolean>(false);
+  const [extendingBooking, setExtendingBooking] = useState<any | null>(null);
+  const [extendMinutes, setExtendMinutes] = useState<number>(30);
+  const [extendCheckResult, setExtendCheckResult] = useState<any | null>(null);
+  const [isCheckingExtend, setIsCheckingExtend] = useState<boolean>(false);
+  const [selectedAlternativePitch, setSelectedAlternativePitch] = useState<any | null>(null);
+  const [extendPayNow, setExtendPayNow] = useState<boolean>(false);
+  const [extendPaymentMethod, setExtendPaymentMethod] = useState<'TIEN_MAT' | 'CHUYEN_KHOAN'>('TIEN_MAT');
 
   // State thông báo Toast nổi trên màn hình
   const [toastMessage, setToastMessage] = useState<{
@@ -871,11 +884,11 @@ export default function ManagementSystem() {
     const todayISO = formatDateToISO(now);
     const viewingDateISO = formattedDateISO;
 
-    // Gộp tất cả đơn đặt hôm nay/ngày xem
-    const allBookingsToday = [...rawBookings, ...historyBookings].filter((b) => {
+    // Gộp tất cả đơn đặt hôm nay/ngày xem (bao gồm cả syncOrders vừa tạo)
+    const allBookingsToday = [...rawBookings, ...historyBookings, ...syncOrders].filter((b) => {
       if (b.trang_thai === 'DA_HUY' || b.trang_thai === 'Đã hủy') return false;
       const bDate = (b.ngay_da || '').substring(0, 10);
-      return bDate === viewingDateISO || bDate === todayISO;
+      return bDate === viewingDateISO || bDate === todayISO || !b.ngay_da;
     });
 
     const activeList: Array<{
@@ -894,10 +907,10 @@ export default function ManagementSystem() {
     }> = [];
 
     sanBongList.forEach((san) => {
-      // Tìm booking đang hoạt động trong khung giờ hiện tại
+      // Tìm booking đang hoạt động trong khung giờ hiện tại HOẶC được kích hoạt DANG_DA
       const matched = allBookingsToday.find((b) => {
         if (b.ma_san !== san.id && b.ten_san !== san.ten_san) return false;
-        if (b.trang_thai === 'DANG_DA' || b.da_vao_san === 1 || b.da_vao_san === true) return true;
+        if (b.trang_thai === 'DANG_DA' || b.da_vao_san === 1 || b.da_vao_san === true || b.trang_thai_vao_san === 'DANG_DA') return true;
         const bStart = (b.gio_bat_dau || '').substring(0, 5);
         const bEnd = (b.gio_ket_thuc || '').substring(0, 5);
         if (!bStart || !bEnd) return false;
@@ -937,7 +950,7 @@ export default function ManagementSystem() {
     });
 
     return activeList;
-  }, [sanBongList, rawBookings, historyBookings, formattedDateISO]);
+  }, [sanBongList, rawBookings, historyBookings, syncOrders, formattedDateISO]);
 
   // Tất cả các ca đá có lịch trong ngày hôm nay (chưa vào sân thi đấu)
   const allTodayBookings = useMemo(() => {
@@ -1610,27 +1623,37 @@ export default function ManagementSystem() {
     if (!loadedBookingState) return false;
     const soTienDaTra = Number(loadedBookingState.so_tien_da_tra || 0);
     const tongTien = Number(loadedBookingState.tong_tien || grandTotal || 0);
+    // Nếu có tiền đã trả và số tiền đã trả >= tổng tiền
     if (soTienDaTra > 0 && soTienDaTra >= tongTien) return true;
     const rawSt = (loadedBookingState.trang_thai || '').toUpperCase().replace(/\s+/g, '_');
-    if (rawSt.includes('DA_COC') || rawSt.includes('CHO') || rawSt.includes('CHUA') || rawSt.includes('TAM')) return false;
+    // Các trạng thái chưa thanh toán đủ: DANG_DA, DA_COC, CHO, CHUA, TAM
+    if (rawSt.includes('DANG_DA') || rawSt.includes('DA_COC') || rawSt.includes('CHO') || rawSt.includes('CHUA') || rawSt.includes('TAM')) {
+      return false;
+    }
     return Boolean(
-      loadedBookingState.isPaid ||
-      rawSt.includes('DA_THANH_TOAN') ||
-      rawSt.includes('THANH_TOAN') ||
-      rawSt === 'HOAN_THANH'
+      (loadedBookingState.isPaid && soTienDaTra >= tongTien) ||
+      ((rawSt.includes('DA_THANH_TOAN') || rawSt.includes('THANH_TOAN') || rawSt === 'HOAN_THANH') && soTienDaTra >= tongTien)
     );
   }, [loadedBookingState, grandTotal]);
 
   // Số tiền thực tế cần thanh toán:
-  // - Nếu ĐÃ TRẢ TIỀN SÂN: Chỉ tính tiền dịch vụ phát sinh
-  // - Nếu CHƯA TRẢ TIỀN SÂN: Tính số tiền còn nợ (Tổng - Đã cọc) + Tiền dịch vụ
+  // - Nếu đơn bán lẻ (không sân): totalServicePrice
+  // - Nếu đã thanh toán đủ tiền sân (isOrderFullyPaid): Chỉ tính tiền dịch vụ phát sinh thêm
+  // - Nếu đơn chưa thanh toán hoặc mới cọc (chưa thanh toán đủ): Số tiền còn lại = grandTotal - soTienDaTra
   const amountDueToPay = useMemo(() => {
-    const soTienDaTra = Number(loadedBookingState?.so_tien_da_tra || 0);
-    if (isOrderFullyPaid) {
+    // 1. Trường hợp đơn bán lẻ dịch vụ / nước uống (không đặt sân)
+    if (selectedPitches.length === 0 && !loadedBookingState) {
       return totalServicePrice;
     }
+
+    const soTienDaTra = Number(loadedBookingState?.so_tien_da_tra || 0);
+    if (isOrderFullyPaid) {
+      const initialSvc = loadedBookingState?.initialServices || [];
+      const initialSvcTotal = initialSvc.reduce((sum: number, s: any) => sum + (Number(s.don_gia || 0) * Number(s.so_luong || 0)), 0);
+      return Math.max(0, totalServicePrice - initialSvcTotal);
+    }
     return Math.max(0, grandTotal - soTienDaTra);
-  }, [isOrderFullyPaid, totalServicePrice, grandTotal, loadedBookingState]);
+  }, [isOrderFullyPaid, totalServicePrice, grandTotal, loadedBookingState, selectedPitches.length]);
 
   // Kiểm tra khách hàng có mua thêm dịch vụ mới hay không
   const hasAddedExtraServices = useMemo(() => {
@@ -1745,6 +1768,36 @@ export default function ManagementSystem() {
       so_luong: s.so_luong,
     }));
 
+    // TRƯỜNG HỢP 1: BÁN LẺ DỊCH VỤ / NƯỚC UỐNG (KHÔNG ĐẶT SÂN) - LƯU CHỜ THANH TOÁN
+    if (selectedPitches.length === 0 && selectedServices.length > 0 && !editingInvoiceId) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/dat-san/ban-le-dich-vu`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ten_khach_hang: customerName.trim() || 'Khách lẻ quầy',
+            so_dien_thoai: customerPhone.trim() || null,
+            phuong_thuc: paymentMethod,
+            ghi_chu: 'Bán lẻ dịch vụ / nước uống (Chờ thanh toán sau)',
+            da_thanh_toan: false,
+            dich_vu_list: dichVuListPayload,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`💾 Đã lưu đơn bán lẻ #${data.data?.id || ''} thành công! Khách sẽ thanh toán sau.`, 'success', 'Lưu Đơn Bán Lẻ');
+        } else {
+          showToast(data.message || 'Lỗi lưu đơn bán lẻ', 'error');
+        }
+      } catch (e: any) {
+        console.error('Lỗi lưu đơn bán lẻ:', e);
+      }
+      fetchLichSan(formattedDateISO, sanBongList);
+      fetchHistory();
+      handleClearOrder();
+      return;
+    }
+
     try {
       if (editingInvoiceId && !String(editingInvoiceId).startsWith('temp_')) {
         // CẬP NHẬT HÓA ĐƠN ĐANG SỬA TRÊN CSDL SQL SERVER (sp_SuaDonDatVaThanhToan)
@@ -1757,17 +1810,17 @@ export default function ManagementSystem() {
             ma_nguoi_dung: currentUser?.id || 1,
             ten_khach_hang: customerName.trim(),
             so_dien_thoai: customerPhone.trim(),
-            ma_san: firstP?.pitch.id || sanBongList[0]?.id || 1,
+            ma_san: firstP?.pitch.id || null,
             ngay_da: formattedDateISO,
             gio_bat_dau: (firstP?.startTime || '17:00').length === 5 ? `${firstP?.startTime}:00` : firstP?.startTime,
             gio_ket_thuc: (firstP?.endTime || '18:30').length === 5 ? `${firstP?.endTime}:00` : firstP?.endTime,
             tien_san: totalPitchPrice,
             tong_tien: grandTotal,
-            ghi_chu: customerName ? `Khách: ${customerName} - ${customerPhone}` : 'Khách vãng lai POS',
+            ghi_chu: customerName ? `Khách: ${customerName} - ${customerPhone}` : 'Khách sân đang đá',
             trang_thai: targetStatus,
             phuong_thuc: paymentMethod,
             loai_thanh_toan: null,
-            so_tien: isOrderFullyPaid ? grandTotal : 0,
+            so_tien: 0,
             trang_thai_gd: 'THANH_CONG',
             dich_vu_list: dichVuListPayload,
           }),
@@ -1777,7 +1830,7 @@ export default function ManagementSystem() {
           console.warn('Lỗi khi cập nhật CSDL SQL Server:', data.message);
         }
 
-        // Đảm bảo cập nhật vao-san trên SQL Server nếu đưa vào sân đá trước trả sau
+        // Đảm bảo duy trì trạng thái vao-san trên SQL Server nếu đang thi đấu
         try {
           await fetch(`${API_BASE_URL}/dat-san/vao-san/${editingInvoiceId}`, {
             method: 'POST',
@@ -1804,7 +1857,6 @@ export default function ManagementSystem() {
           const isFirst = i === 0;
           const pitchDichVu = isFirst ? dichVuListPayload : [];
           const pitchGrandTotal = p.price + (isFirst ? totalServicePrice : 0);
-          const pitchAmountToCharge = (isOrderFullyPaid && isFirst) ? totalServicePrice : pitchGrandTotal;
 
           await fetch(`${API_BASE_URL}/dat-san/don-dat-thanh-toan`, {
             method: 'POST',
@@ -1819,10 +1871,10 @@ export default function ManagementSystem() {
               gio_ket_thuc: p.endTime.length === 5 ? `${p.endTime}:00` : p.endTime,
               tien_san: p.price,
               tong_tien: pitchGrandTotal,
-              ghi_chu: customerName ? `Khách: ${customerName} - ${customerPhone}` : 'Khách vãng lai POS',
-              trang_thai: 'CHO_XAC_NHAN',
+              ghi_chu: customerName ? `Khách: ${customerName} - ${customerPhone}` : 'Khách đá trả sau POS',
+              trang_thai: 'DANG_DA',
               phuong_thuc: paymentMethod,
-              loai_thanh_toan: 'DAT_COC',
+              loai_thanh_toan: null,
               so_tien: 0,
               trang_thai_gd: 'THANH_CONG',
               dich_vu_list: pitchDichVu,
@@ -1872,11 +1924,14 @@ export default function ManagementSystem() {
         tien_san: totalPitchPrice,
         dich_vu: serviceItems,
         tong_tien: grandTotal,
-        trang_thai: 'Chờ thanh toán',
+        so_tien_da_tra: 0,
+        trang_thai: 'DANG_DA',
+        trang_thai_vao_san: 'DANG_DA',
+        da_vao_san: true,
         ngay_tao: new Date().toISOString(),
       };
       addSyncOrder(newInvoice);
-      showToast(`💾 Đã lưu ${selectedPitches.length > 0 ? selectedPitches.length : 1} đơn đặt sân vào hệ thống thành công!`, 'success', 'Lưu Đơn Thành Công');
+      showToast(`💾 Đã lưu đơn đá trả sau vào danh sách Sân đang đá!`, 'success', 'Lưu Đơn Thành Công');
     }
 
     fetchLichSan(formattedDateISO, sanBongList);
@@ -1885,7 +1940,14 @@ export default function ManagementSystem() {
     setActiveTab('pitch');
   };
 
-  const handlePayOrder = async (invoiceToPay?: DonDatSanPOS) => {
+  const handlePayOrder = async (invoiceToPay?: DonDatSanPOS, skipQRCheck: boolean = false) => {
+    const getPaymentSuccessMsg = (extraText = '') => {
+      if (paymentMethod === 'CHUYEN_KHOAN') {
+        return `✅ Khách đã chuyển khoản thành công!${extraText ? ` (${extraText})` : ''}`;
+      }
+      return `💵 Đã thanh toán tiền mặt thành công!${extraText ? ` (${extraText})` : ''}`;
+    };
+
     if (invoiceToPay) {
       try {
         if (invoiceToPay.id && !String(invoiceToPay.id).startsWith('temp_')) {
@@ -1908,7 +1970,8 @@ export default function ManagementSystem() {
       setSelectedInvoiceDetail(null);
       fetchLichSan(formattedDateISO, sanBongList);
       fetchHistory();
-      showToast('💳 Thanh toán đơn thành công và đã lưu hệ thống!', 'success', 'Thanh Toán Thành Công');
+      playNotificationChime();
+      showToast(getPaymentSuccessMsg(`Đơn #${invoiceToPay.id}`), 'success', paymentMethod === 'CHUYEN_KHOAN' ? 'Chuyển Khoản Thành Công' : 'Thanh Toán Thành Công');
       return;
     }
 
@@ -1930,6 +1993,90 @@ export default function ManagementSystem() {
       so_luong: s.so_luong,
     }));
 
+    // TRƯỜNG HỢP 1: BÁN LẺ DỊCH VỤ / NƯỚC UỐNG TẠI QUẦY (KHÔNG ĐẶT SÂN) - THANH TOÁN NGAY
+    if (selectedPitches.length === 0 && selectedServices.length > 0 && !editingInvoiceId) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/dat-san/ban-le-dich-vu`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ten_khach_hang: customerName.trim() || 'Khách lẻ quầy',
+            so_dien_thoai: customerPhone.trim() || null,
+            phuong_thuc: paymentMethod,
+            ghi_chu: 'Bán lẻ dịch vụ / nước uống tại quầy (Đã thanh toán)',
+            da_thanh_toan: true,
+            dich_vu_list: dichVuListPayload,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          playNotificationChime();
+          showToast(getPaymentSuccessMsg(`Đơn bán lẻ #${data.data?.id || ''}`), 'success', paymentMethod === 'CHUYEN_KHOAN' ? 'Chuyển Khoản Thành Công' : 'Thanh Toán Bán Lẻ');
+        } else {
+          showToast(data.message || 'Lỗi thanh toán bán lẻ', 'error');
+        }
+      } catch (err: any) {
+        console.error('Lỗi thanh toán bán lẻ:', err);
+      }
+      fetchLichSan(formattedDateISO, sanBongList);
+      fetchHistory();
+      handleClearOrder();
+      return;
+    }
+
+    // TRƯỜNG HỢP 2: CẬP NHẬT & THANH TOÁN CHO ĐƠN HIỆN CÓ / SÂN ĐANG ĐÁ (editingInvoiceId)
+    if (editingInvoiceId && !String(editingInvoiceId).startsWith('temp_')) {
+      try {
+        const firstP = selectedPitches[0];
+        const res = await fetch(`${API_BASE_URL}/dat-san/don-dat-thanh-toan/${editingInvoiceId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ma_nguoi_dung: currentUser?.id || 1,
+            ten_khach_hang: customerName.trim(),
+            so_dien_thoai: customerPhone.trim(),
+            ma_san: firstP?.pitch.id || null,
+            ngay_da: formattedDateISO,
+            gio_bat_dau: (firstP?.startTime || '17:00').length === 5 ? `${firstP?.startTime}:00` : firstP?.startTime,
+            gio_ket_thuc: (firstP?.endTime || '18:30').length === 5 ? `${firstP?.endTime}:00` : firstP?.endTime,
+            tien_san: totalPitchPrice,
+            tong_tien: grandTotal,
+            ghi_chu: customerName ? `Khách: ${customerName} - ${customerPhone}` : 'Khách sân đang đá',
+            trang_thai: 'DA_THANH_TOAN',
+            phuong_thuc: paymentMethod,
+            loai_thanh_toan: 'TRA_HET',
+            so_tien: amountDueToPay,
+            trang_thai_gd: 'THANH_CONG',
+            dich_vu_list: dichVuListPayload,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          playNotificationChime();
+          showToast(getPaymentSuccessMsg(`Đơn #${editingInvoiceId}`), 'success', paymentMethod === 'CHUYEN_KHOAN' ? 'Chuyển Khoản Thành Công' : 'Thanh Toán Thành Công');
+        } else {
+          showToast(data.message || 'Lỗi thanh toán đơn', 'error');
+        }
+      } catch (err: any) {
+        console.error('Lỗi khi thanh toán đơn đang sửa:', err);
+      }
+
+      updateSyncOrderStatus(editingInvoiceId, 'Đã thanh toán', {
+        ten_khach_hang: customerName.trim() || 'Khách vãng lai',
+        so_dien_thoai: customerPhone.trim() || 'Chưa có SĐT',
+        dich_vu: serviceItems,
+        tong_tien: grandTotal,
+        trang_thai: 'Đã thanh toán',
+      });
+
+      fetchLichSan(formattedDateISO, sanBongList);
+      fetchHistory();
+      handleClearOrder();
+      setActiveTab('pitch');
+      return;
+    }
+
+    // TRƯỜNG HỢP 3: TẠO ĐƠN ĐẶT SÂN MỚI VÀ THANH TOÁN (Từ Tab Home)
     try {
       const pitchesToPay = selectedPitches.length > 0
         ? selectedPitches
@@ -1979,53 +2126,25 @@ export default function ManagementSystem() {
     const payStart = firstPayPitch ? firstPayPitch.startTime : '17:00';
     const payEnd = firstPayPitch ? firstPayPitch.endTime : '18:30';
 
-    if (editingInvoiceId) {
-      updateSyncOrderStatus(editingInvoiceId, 'Đã thanh toán', {
-        ten_khach_hang: customerName.trim() || 'Khách vãng lai',
-        so_dien_thoai: customerPhone.trim() || 'Chưa có SĐT',
-        ten_san: selectedPitches.length > 0 ? selectedPitches.map((s) => s.pitch.ten_san).join(', ') : 'Quầy nước / Dịch vụ',
-        gio_bat_dau: payStart,
-        gio_ket_thuc: payEnd,
-        ngay_da: formattedDateISO,
-        tien_san: totalPitchPrice,
-        dich_vu: serviceItems,
-        tong_tien: grandTotal,
-      });
-
-      if (loadedBookingState) {
-        setLoadedBookingState({
-          ...loadedBookingState,
-          isPaid: true,
-          trang_thai: 'Đã thanh toán',
-          initialServices: JSON.parse(JSON.stringify(selectedServices)),
-        });
-        fetchLichSan(formattedDateISO, sanBongList);
-        fetchHistory();
-        showToast('💳 Đã thanh toán dịch vụ bổ sung thành công! Bây giờ bạn có thể cho khách Vào Sân.', 'success', 'Thanh Toán Thành Công');
-        return;
-      }
-
-      showToast('💳 Thanh toán thành công và đã lưu hệ thống!', 'success', 'Thanh Toán Thành Công');
-    } else {
-      const newId = Date.now();
-      const paidOrder: DonDatSanPOS = {
-        id: newId,
-        ma_don_dat: `HD-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`,
-        ten_khach_hang: customerName.trim() || 'Khách vãng lai',
-        so_dien_thoai: customerPhone.trim() || 'Chưa có SĐT',
-        ten_san: selectedPitches.length > 0 ? selectedPitches.map((s) => s.pitch.ten_san).join(', ') : 'Quầy nước / Dịch vụ',
-        gio_bat_dau: payStart,
-        gio_ket_thuc: payEnd,
-        ngay_da: formattedDateISO,
-        tien_san: totalPitchPrice,
-        dich_vu: serviceItems,
-        tong_tien: grandTotal,
-        trang_thai: 'Đã thanh toán',
-        ngay_tao: new Date().toISOString(),
-      };
-      addSyncOrder(paidOrder);
-      showToast('💳 Thanh toán thành công và đã lưu hệ thống!', 'success', 'Thanh Toán Thành Công');
-    }
+    const newId = Date.now();
+    const paidOrder: DonDatSanPOS = {
+      id: newId,
+      ma_don_dat: `HD-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`,
+      ten_khach_hang: customerName.trim() || 'Khách vãng lai',
+      so_dien_thoai: customerPhone.trim() || 'Chưa có SĐT',
+      ten_san: selectedPitches.length > 0 ? selectedPitches.map((s) => s.pitch.ten_san).join(', ') : 'Quầy nước / Dịch vụ',
+      gio_bat_dau: payStart,
+      gio_ket_thuc: payEnd,
+      ngay_da: formattedDateISO,
+      tien_san: totalPitchPrice,
+      dich_vu: serviceItems,
+      tong_tien: grandTotal,
+      trang_thai: 'Đã thanh toán',
+      ngay_tao: new Date().toISOString(),
+    };
+    addSyncOrder(paidOrder);
+    playNotificationChime();
+    showToast(getPaymentSuccessMsg(), 'success', paymentMethod === 'CHUYEN_KHOAN' ? 'Chuyển Khoản Thành Công' : 'Thanh Toán Thành Công');
 
     fetchLichSan(formattedDateISO, sanBongList);
     fetchHistory();
@@ -2067,13 +2186,14 @@ export default function ManagementSystem() {
 
     // 2. Nạp lại danh sách dịch vụ từ hóa đơn vào giỏ hàng
     const loadedSvc: SelectedServiceItem[] = [];
-    if (invoice.dich_vu && Array.isArray(invoice.dich_vu) && invoice.dich_vu.length > 0) {
-      invoice.dich_vu.forEach((dv: any) => {
+    const rawServices = invoice.chi_tiet_dich_vu || invoice.dich_vu_da_dung || invoice.dich_vu || [];
+    if (Array.isArray(rawServices) && rawServices.length > 0) {
+      rawServices.forEach((dv: any) => {
         loadedSvc.push({
           id: dv.id || dv.ma_dich_vu,
           ten_dich_vu: dv.ten_dich_vu || dv.name,
           so_luong: dv.so_luong || dv.quantity || 1,
-          don_gia: dv.don_gia || dv.price || 0,
+          don_gia: Number(dv.don_gia || dv.price || 0),
           don_vi: dv.don_vi_tinh || dv.don_vi || 'Phần',
         });
       });
@@ -2083,16 +2203,21 @@ export default function ManagementSystem() {
     // 3. Nạp thông tin khách hàng & lưu ID hóa đơn đang sửa
     setCustomerName(invoice.ten_khach_hang || '');
     setCustomerPhone(invoice.so_dien_thoai || '');
-    setEditingInvoiceId(invoice.id || invoice.ma_don_dat);
+    const bookingId = invoice.ma_don_dat || invoice.id;
+    setEditingInvoiceId(bookingId);
 
+    const soTienDaTra = Number(invoice.so_tien_da_tra || 0);
+    const tongTien = Number(invoice.tong_tien || pitchPrice);
     const rawStatus = (invoice.trang_thai || invoice.trang_thai_thanh_toan || '').toUpperCase().replace(/\s+/g, '_');
-    const isPaid = rawStatus.includes('DA_THANH_TOAN') || rawStatus.includes('THANH_TOAN') || rawStatus === 'DA_CHOT' || rawStatus === 'HOAN_THANH';
+    const isPaid = (soTienDaTra > 0 && soTienDaTra >= tongTien);
 
     setLoadedBookingState({
-      id: invoice.id || invoice.ma_don_dat,
-      ma_don_dat: invoice.ma_don_dat || invoice.id,
-      trang_thai: invoice.trang_thai || (isPaid ? 'Đã thanh toán' : 'Chờ thanh toán'),
+      id: bookingId,
+      ma_don_dat: bookingId,
+      trang_thai: isPaid ? 'Đã thanh toán' : (soTienDaTra > 0 ? 'Đã cọc' : (rawStatus === 'DANG_DA' ? 'Đang đá' : 'Chờ thanh toán')),
       isPaid,
+      so_tien_da_tra: soTienDaTra,
+      tong_tien: tongTien,
       initialServices: JSON.parse(JSON.stringify(loadedSvc)),
       ten_san: invoice.ten_san,
       gio_da: `${startT} - ${endT}`,
@@ -2102,6 +2227,190 @@ export default function ManagementSystem() {
     // 4. Đóng chi tiết modal (nếu có) & chuyển sang Tab Dịch vụ với Cột Order tự động mở
     setSelectedInvoiceDetail(null);
     setActiveTab('services');
+    showToast(`🛒 Đã mở giỏ hàng gọi dịch vụ cho ${invoice.ten_san || 'sân'}!`, 'info', 'Thêm Dịch Vụ');
+  };
+
+  const handleSelectBookingForPayment = (invoice: any) => {
+    if (!invoice) return;
+
+    // 1. Nạp lại sân từ hóa đơn vào selectedPitches (cột Order đa sân)
+    const startT = (invoice.gio_bat_dau || '').substring(0, 5) || '17:00';
+    const endT = (invoice.gio_ket_thuc || '').substring(0, 5) || '18:30';
+    const [sh, sm] = startT.split(':').map(Number);
+    const [eh, em] = endT.split(':').map(Number);
+    const durMin = Math.max(1, (eh * 60 + (em || 0)) - (sh * 60 + (sm || 0)));
+
+    const matchedSan = sanBongList.find((s) => s.id === invoice.ma_san || s.ten_san === invoice.ten_san);
+    const unitPrice = matchedSan ? Number(matchedSan.don_gia_phut) : 5000;
+    const pitchPrice = Number(invoice.tien_san || (durMin * unitPrice));
+
+    const targetPitch: SanBong = matchedSan || {
+      id: Number(invoice.ma_san || invoice.id || 1),
+      ma_loai_san: 1,
+      ten_san: invoice.ten_san || 'Sân bóng',
+      ten_loai: invoice.ten_loai || 'Sân bóng',
+      don_gia_phut: unitPrice,
+      trang_thai: 'SAN_SANG',
+    };
+
+    setSelectedPitches([
+      {
+        pitch: targetPitch,
+        startTime: startT,
+        endTime: endT,
+        durationMin: durMin,
+        price: pitchPrice,
+      },
+    ]);
+
+    // 2. Nạp lại danh sách dịch vụ từ hóa đơn vào giỏ hàng
+    const loadedSvc: SelectedServiceItem[] = [];
+    const rawServices = invoice.chi_tiet_dich_vu || invoice.dich_vu_da_dung || invoice.dich_vu || [];
+    if (Array.isArray(rawServices) && rawServices.length > 0) {
+      rawServices.forEach((dv: any) => {
+        loadedSvc.push({
+          id: dv.id || dv.ma_dich_vu,
+          ten_dich_vu: dv.ten_dich_vu || dv.name,
+          so_luong: dv.so_luong || dv.quantity || 1,
+          don_gia: Number(dv.don_gia || dv.price || 0),
+          don_vi: dv.don_vi_tinh || dv.don_vi || 'Phần',
+        });
+      });
+    }
+    setSelectedServices(loadedSvc);
+
+    // 3. Nạp thông tin khách hàng & lưu ID hóa đơn đang sửa
+    setCustomerName(invoice.ten_khach_hang || '');
+    setCustomerPhone(invoice.so_dien_thoai || '');
+    const bookingId = invoice.ma_don_dat || invoice.id;
+    setEditingInvoiceId(bookingId);
+
+    const soTienDaTra = Number(invoice.so_tien_da_tra || 0);
+    const tongTien = Number(invoice.tong_tien || pitchPrice);
+    const rawStatus = (invoice.trang_thai || invoice.trang_thai_thanh_toan || '').toUpperCase().replace(/\s+/g, '_');
+    const isPaid = (soTienDaTra > 0 && soTienDaTra >= tongTien);
+
+    setLoadedBookingState({
+      id: bookingId,
+      ma_don_dat: bookingId,
+      trang_thai: isPaid ? 'Đã thanh toán' : (soTienDaTra > 0 ? 'Đã cọc' : (rawStatus === 'DANG_DA' ? 'Đang đá' : 'Chờ thanh toán')),
+      isPaid,
+      so_tien_da_tra: soTienDaTra,
+      tong_tien: tongTien,
+      initialServices: JSON.parse(JSON.stringify(loadedSvc)),
+      ten_san: invoice.ten_san,
+      gio_da: `${startT} - ${endT}`,
+      ngay_da: invoice.ngay_da,
+    });
+
+    // 4. Chuyển sang Tab Home (Lịch đặt & POS) để thấy rõ Cột Thông tin Order
+    setSelectedInvoiceDetail(null);
+    setActiveTab('home');
+    showToast(`💳 Đã chuyển đơn #${bookingId} sang Order để thanh toán!`, 'info', 'Thanh Toán Đơn');
+  };
+
+  // --- CÁC HÀM XỬ LÝ GIA HẠN THỜI GIAN SÂN ĐANG ĐÁ & CHUYỂN SÂN ĐÁ TIẾP ---
+  const checkPitchExtension = async (bookingId: number | string, minutes: number) => {
+    setIsCheckingExtend(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/dat-san/kiem-tra-gia-han`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ma_don_dat: Number(bookingId),
+          so_phut_them: minutes,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setExtendCheckResult(data.data);
+      } else {
+        setExtendCheckResult(null);
+        showToast(data.message || 'Lỗi khi kiểm tra gia hạn sân!', 'error');
+      }
+    } catch (err: any) {
+      console.error('Lỗi checkPitchExtension:', err);
+      showToast('Lỗi kết nối máy chủ khi kiểm tra lịch sân!', 'error');
+    } finally {
+      setIsCheckingExtend(false);
+    }
+  };
+
+  const handleOpenExtendModal = (booking: any) => {
+    if (!booking) return;
+    setExtendingBooking(booking);
+    setExtendMinutes(30);
+    setExtendCheckResult(null);
+    setSelectedAlternativePitch(null);
+    setExtendPayNow(false);
+    setExtendPaymentMethod('TIEN_MAT');
+    setIsExtendingModalOpen(true);
+    checkPitchExtension(booking.ma_don_dat || booking.id, 30);
+  };
+
+  const handleChangeExtendMinutes = (minutes: number) => {
+    setExtendMinutes(minutes);
+    if (extendingBooking) {
+      checkPitchExtension(extendingBooking.ma_don_dat || extendingBooking.id, minutes);
+    }
+  };
+
+  const handleConfirmExtendSamePitch = async () => {
+    if (!extendingBooking || !extendCheckResult) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/dat-san/xac-nhan-gia-han`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ma_don_dat: Number(extendingBooking.ma_don_dat || extendingBooking.id),
+          so_phut_them: extendMinutes,
+          da_thanh_toan_luon: extendPayNow,
+          phuong_thuc: extendPaymentMethod,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || `⚽ Đã gia hạn thêm ${extendMinutes} phút cho sân thành công!`, 'success', 'Gia Hạn Thành Công');
+        setIsExtendingModalOpen(false);
+        fetchLichSan(formattedDateISO, sanBongList);
+        fetchHistory();
+      } else {
+        showToast(data.message || 'Không thể gia hạn sân này!', 'error');
+      }
+    } catch (err: any) {
+      console.error('Lỗi handleConfirmExtendSamePitch:', err);
+      showToast('Lỗi khi xác nhận gia hạn!', 'error');
+    }
+  };
+
+  const handleConfirmSwitchPitch = async () => {
+    if (!extendingBooking || !selectedAlternativePitch || !extendCheckResult) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/dat-san/chuyen-san-da-tiep`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ma_don_cu: Number(extendingBooking.ma_don_dat || extendingBooking.id),
+          ma_san_moi: Number(selectedAlternativePitch.id || selectedAlternativePitch.ma_san),
+          gio_bat_dau: extendCheckResult.gio_ket_thuc_cu,
+          gio_ket_thuc: extendCheckResult.gio_ket_thuc_moi,
+          phuong_thuc: extendPaymentMethod,
+          so_tien: extendPayNow ? selectedAlternativePitch.tien_san_du_kien : 0,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || '⚽ Đã chuyển khách sang sân khác đá tiếp thành công!', 'success', 'Chuyển Sân Mới');
+        setIsExtendingModalOpen(false);
+        fetchLichSan(formattedDateISO, sanBongList);
+        fetchHistory();
+      } else {
+        showToast(data.message || 'Không thể chuyển sân!', 'error');
+      }
+    } catch (err: any) {
+      console.error('Lỗi handleConfirmSwitchPitch:', err);
+      showToast('Lỗi khi chuyển sân đá tiếp!', 'error');
+    }
   };
 
   // Nạp thông tin đơn đặt sân trong ngày vào cột Order (Mục Sân Đang Đá)
@@ -2742,20 +3051,31 @@ export default function ManagementSystem() {
                                         <button
                                           type="button"
                                           onClick={() => handleAddMoreService(item.booking)}
-                                          className="py-1.5 px-3 rounded-lg bg-blue-600/25 hover:bg-blue-600 text-cyan-300 hover:text-white font-black text-xs border border-blue-500/40 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                          className="py-1.5 px-2.5 rounded-lg bg-blue-600/25 hover:bg-blue-600 text-cyan-300 hover:text-white font-black text-xs border border-blue-500/40 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
                                           title="Tự động điền đơn vào Cột Order và mở gọi thêm dịch vụ"
                                         >
                                           <Plus className="w-3.5 h-3.5 text-cyan-300" />
                                           <span>Dịch Vụ</span>
                                         </button>
 
+                                        {/* Nút + Thêm Giờ: Gia hạn thời gian hoặc đổi sân đá tiếp */}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenExtendModal(item.booking)}
+                                          className="py-1.5 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-black text-xs border border-amber-500/40 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                          title="Gia hạn thời gian đá hoặc chuyển sân khác đá tiếp"
+                                        >
+                                          <Clock className="w-3.5 h-3.5" />
+                                          <span>Thêm Giờ</span>
+                                        </button>
+
                                         {/* Nút Thanh Toán: Chỉ hiển thị khi đơn CHƯA thanh toán đủ hoặc Lưu tạm */}
                                         {!isPaid && (
                                           <button
                                             type="button"
-                                            onClick={() => handlePayOrder(item.booking)}
+                                            onClick={() => handleSelectBookingForPayment(item.booking)}
                                             className="py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-md flex items-center gap-1 cursor-pointer"
-                                            title="Thanh toán ngay cho đơn này"
+                                            title="Chuyển đơn này sang Order để xem thông tin và thanh toán"
                                           >
                                             <CreditCard className="w-3.5 h-3.5" />
                                             <span>Thanh Toán</span>
@@ -2783,8 +3103,8 @@ export default function ManagementSystem() {
                               key={item.san.id || idx}
                               className={`p-5 rounded-2xl border transition-all duration-200 shadow-xl relative overflow-hidden ${
                                 isDarkMode 
-                                  ? 'bg-slate-900/90 border-rose-500/40 hover:border-rose-500/70 shadow-rose-950/20' 
-                                  : 'bg-white border-rose-300 hover:border-rose-400 shadow-sm'
+                                ? 'bg-slate-900/90 border-rose-500/40 hover:border-rose-500/70 shadow-rose-950/20' 
+                                : 'bg-white border-rose-300 hover:border-rose-400 shadow-sm'
                               }`}
                             >
                               <div className="flex items-start justify-between gap-2 mb-3">
@@ -2843,22 +3163,33 @@ export default function ManagementSystem() {
                                 )}
                               </div>
 
-                              <div className="mt-3.5 flex items-center gap-2">
+                              <div className="mt-3.5 flex items-center gap-1.5">
                                 <button
                                   type="button"
                                   onClick={() => handleAddMoreService(item.booking)}
-                                  className="flex-1 py-2 px-2.5 rounded-xl bg-blue-600/25 hover:bg-blue-600 text-cyan-300 hover:text-white font-bold text-xs border border-blue-500/40 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                  className="flex-1 py-2 px-1.5 rounded-xl bg-blue-600/25 hover:bg-blue-600 text-cyan-300 hover:text-white font-bold text-xs border border-blue-500/40 transition-all flex items-center justify-center gap-1 cursor-pointer"
                                   title="Tự động điền đơn vào Cột Order và mở gọi thêm dịch vụ"
                                 >
                                   <Plus className="w-3.5 h-3.5 text-cyan-300" />
                                   <span>Dịch Vụ</span>
                                 </button>
 
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenExtendModal(item.booking)}
+                                  className="flex-1 py-2 px-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-bold text-xs border border-amber-500/40 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                  title="Gia hạn thời gian đá hoặc chuyển sân khác đá tiếp"
+                                >
+                                  <Clock className="w-3.5 h-3.5" />
+                                  <span>+ Giờ</span>
+                                </button>
+
                                 {!isPaid && (
                                   <button
                                     type="button"
-                                    onClick={() => handlePayOrder(item.booking)}
-                                    className="flex-1 py-2 px-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
+                                    onClick={() => handleSelectBookingForPayment(item.booking)}
+                                    className="flex-1 py-2 px-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
+                                    title="Chuyển đơn này sang Order để xem thông tin và thanh toán"
                                   >
                                     <CreditCard className="w-3.5 h-3.5" />
                                     <span>Thanh Toán</span>
@@ -3062,15 +3393,60 @@ export default function ManagementSystem() {
             {activeTab === 'services' && (
               <div className="space-y-5 animate-in fade-in duration-300">
                 <div className={`p-5 rounded-2xl border shadow-lg ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-black shrink-0">
-                      <Shirt className="w-6 h-6" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-black shrink-0">
+                        <Shirt className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-base sm:text-lg font-black leading-tight text-white">Dịch Vụ Đi Kèm & Bán Nước Lẻ</h2>
+                        <p className="text-xs text-slate-400 mt-0.5">Quản lý nước uống, phụ kiện, thuê trang phục thi đấu từ cơ sở dữ liệu.</p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-base sm:text-lg font-black leading-tight text-white">Dịch Vụ Đi Kèm</h2>
-                      <p className="text-xs text-slate-400 mt-0.5">Quản lý nước uống, phụ kiện, thuê trang phục thi đấu từ cơ sở dữ liệu.</p>
-                    </div>
+
+                    {/* Nút thoát / chuyển tab nhanh */}
+                    {editingInvoiceId ? (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('playing')}
+                        className="py-1.5 px-3 rounded-xl bg-blue-500/15 hover:bg-blue-500 text-blue-400 hover:text-white border border-blue-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      >
+                        <LandPlot className="w-3.5 h-3.5" />
+                        <span>Quay lại Sân Đang Đá</span>
+                      </button>
+                    ) : (
+                      <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl">
+                        🥤 Bán Lẻ Nước Tại Quầy
+                      </span>
+                    )}
                   </div>
+
+                  {/* Banner hướng dẫn chi tiết theo ngữ cảnh */}
+                  {editingInvoiceId ? (
+                    <div className="mt-4 p-3.5 rounded-xl bg-blue-950/40 border border-blue-500/30 flex items-start gap-3">
+                      <Sparkles className="w-5 h-5 text-cyan-400 shrink-0 mt-0.5" />
+                      <div className="text-xs space-y-1">
+                        <div className="font-black text-cyan-300">
+                          Đang gọi thêm dịch vụ cho: <span className="text-white">{selectedPitches[0]?.pitch?.ten_san || 'Sân đang đá'}</span> (Khách: <span className="text-emerald-400">{customerName || 'Khách đá sân'}</span> - Đơn #{editingInvoiceId})
+                        </div>
+                        <p className="text-slate-300 leading-relaxed">
+                          Chọn các món bên dưới để thêm vào cột Order. Nhấn <strong>"LƯU DỊCH VỤ"</strong> khi khách chưa cần thanh toán ngay (sẽ thanh toán khi kết thúc trận), hoặc nhấn <strong>"THANH TOÁN DỊCH VỤ"</strong> để thu tiền ngay (chọn Tiền mặt hoặc Chuyển khoản QR).
+                        </p>
+                      </div>
+                    </div>
+                  ) : selectedPitches.length === 0 ? (
+                    <div className="mt-4 p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 flex items-start gap-3">
+                      <ShoppingBag className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                      <div className="text-xs space-y-1">
+                        <div className="font-black text-emerald-300">
+                          Chế độ Bán lẻ Dịch vụ / Nước uống tại quầy (Không cần đặt sân bóng)
+                        </div>
+                        <p className="text-slate-300 leading-relaxed">
+                          Khách vãng lai mua nước uống hoặc phụ kiện lẻ: Chọn các món bên dưới, điều chỉnh số lượng ở cột bên phải rồi nhấn <strong>"LƯU ĐƠN LẺ"</strong> hoặc <strong>"THANH TOÁN BÁN LẺ"</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 {dichVuList.length === 0 ? (
@@ -3900,15 +4276,27 @@ export default function ManagementSystem() {
                   </div>
 
                   {selectedPitches.length === 0 ? (
-                    <div className="p-3 rounded-2xl bg-slate-900/60 border border-slate-700/60 text-center space-y-1">
-                      <div className="flex items-center justify-center gap-1.5 text-amber-400 font-bold text-xs">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>Chưa chọn sân & giờ đá</span>
+                    selectedServices.length > 0 ? (
+                      <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-center space-y-1">
+                        <div className="flex items-center justify-center gap-1.5 text-emerald-400 font-black text-xs">
+                          <ShoppingBag className="w-3.5 h-3.5" />
+                          <span>🥤 ĐƠN BÁN LẺ DỊCH VỤ TẠI QUẦY</span>
+                        </div>
+                        <p className="text-[10px] text-slate-300 leading-relaxed">
+                          Đơn bán tại quầy không đặt sân. Bấm <strong>LƯU ĐƠN LẺ</strong> để giữ đơn hoặc <strong>THANH TOÁN LẺ</strong> để thu tiền.
+                        </p>
                       </div>
-                      <p className="text-[10.5px] text-slate-400 leading-relaxed">
-                        Nhấn vào ô giờ trống trên bảng lịch để chọn 1 hoặc nhiều sân cùng lúc.
-                      </p>
-                    </div>
+                    ) : (
+                      <div className="p-3 rounded-2xl bg-slate-900/60 border border-slate-700/60 text-center space-y-1">
+                        <div className="flex items-center justify-center gap-1.5 text-amber-400 font-bold text-xs">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Chưa chọn sân & giờ đá</span>
+                        </div>
+                        <p className="text-[10.5px] text-slate-400 leading-relaxed">
+                          Nhấn vào ô giờ trống trên bảng lịch để chọn sân, hoặc sang tab <strong>Dịch vụ</strong> để bán lẻ nước tại quầy.
+                        </p>
+                      </div>
+                    )
                   ) : (
                     <div className="space-y-2">
                       {selectedPitches.map((item) => (
@@ -4130,13 +4518,34 @@ export default function ManagementSystem() {
                       <span className="font-mono text-white font-bold">{totalPitchPrice.toLocaleString('vi-VN')}đ</span>
                     </div>
                   </div>
+
                   <div className="flex justify-between items-center text-slate-400">
                     <span>Tiền dịch vụ:</span>
                     <span className="font-mono text-white font-bold">{totalServicePrice.toLocaleString('vi-VN')}đ</span>
                   </div>
+
+                  <div className="flex justify-between items-center text-slate-300 font-bold pt-1 border-t border-slate-700/60">
+                    <span>Tổng tiền hóa đơn:</span>
+                    <span className="font-mono text-white font-black">{grandTotal.toLocaleString('vi-VN')}đ</span>
+                  </div>
+
+                  {/* Hiển thị số tiền đã trả rồi (CHỈ HIỂN THỊ KHI THỰC SỰ CÓ TIỀN ĐÃ TRẢ > 0) */}
+                  {Number(loadedBookingState?.so_tien_da_tra || 0) > 0 && (
+                    <div className="flex justify-between items-center text-emerald-400 font-bold">
+                      <span className="flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Tiền đã trả rồi:
+                      </span>
+                      <span className="font-mono font-black">
+                        -{Number(loadedBookingState?.so_tien_da_tra).toLocaleString('vi-VN')}đ
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between items-center text-sm font-black pt-1.5 border-t border-slate-700">
                     <span className="text-white uppercase tracking-wider text-xs flex items-center gap-1">
-                      {isOrderFullyPaid ? 'CẦN THANH TOÁN (DỊCH VỤ):' : (Number(loadedBookingState?.so_tien_da_tra || 0) > 0 ? 'CẦN THANH TOÁN (CÒN LẠI):' : 'TỔNG TIỀN THANH TOÁN:')}
+                      {isOrderFullyPaid 
+                        ? 'CẦN THANH TOÁN (DỊCH VỤ):' 
+                        : (Number(loadedBookingState?.so_tien_da_tra || 0) > 0 ? 'CẦN THANH TOÁN (CÒN LẠI):' : 'TỔNG TIỀN PHẢI TRẢ:')}
                     </span>
                     <span className="text-amber-400 font-mono text-lg font-black tracking-tight drop-shadow-md">
                       {amountDueToPay.toLocaleString('vi-VN')} VNĐ
@@ -4174,29 +4583,41 @@ export default function ManagementSystem() {
                       <button
                         type="button"
                         onClick={handleSaveOrder}
-                        className="w-full py-3 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                        title="Đưa hóa đơn này vào sân đang đá để khách thanh toán sau"
+                        className="w-full py-3 px-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        title="Lưu đơn hàng: đưa vào sân đang đá hoặc lưu đơn lẻ để khách thanh toán sau"
                       >
                         <Save className="w-4 h-4" />
-                        <span>{hasAddedExtraServices ? 'LƯU DỊCH VỤ' : 'LƯU'}</span>
+                        <span>
+                          {selectedPitches.length === 0 && selectedServices.length > 0
+                            ? 'LƯU ĐƠN LẺ'
+                            : (hasAddedExtraServices || editingInvoiceId ? 'LƯU DỊCH VỤ' : 'LƯU')}
+                        </span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => handlePayOrder()}
-                        className="w-full py-3 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                        title="Thanh toán nốt số tiền còn lại và hoàn tất"
+                        className="w-full py-3 px-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        title="Thanh toán số tiền tương ứng (chọn Tiền mặt hoặc Chuyển khoản QR)"
                       >
                         <CreditCard className="w-4 h-4" />
-                        <span>{hasAddedExtraServices ? 'THANH TOÁN DỊCH VỤ' : 'THANH TOÁN'}</span>
+                        <span>
+                          {selectedPitches.length === 0 && selectedServices.length > 0
+                            ? 'THANH TOÁN LẺ'
+                            : (hasAddedExtraServices || editingInvoiceId ? 'THANH TOÁN' : 'THANH TOÁN')}
+                        </span>
                       </button>
                     </div>
 
-                    {Number(loadedBookingState?.so_tien_da_tra || 0) > 0 && (
+                    {Number(loadedBookingState?.so_tien_da_tra || 0) > 0 ? (
                       <p className="text-[10px] text-amber-400 text-center font-bold">
                         ℹ Khách đã cọc {Number(loadedBookingState?.so_tien_da_tra).toLocaleString('vi-VN')}đ (30%). Nhấn <strong>"LƯU"</strong> để đưa vào sân đang đá (thanh toán sau), hoặc <strong>"THANH TOÁN"</strong> để trả nốt.
                       </p>
-                    )}
+                    ) : (loadedBookingState && !isOrderFullyPaid) ? (
+                      <p className="text-[10px] text-amber-400 text-center font-bold">
+                        ℹ Đơn chưa thanh toán tiền sân (đá trả sau). Nhấn <strong>"THANH TOÁN"</strong> để thu tiền khách ({amountDueToPay.toLocaleString('vi-VN')}đ).
+                      </p>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -4817,7 +5238,7 @@ export default function ManagementSystem() {
                   <div className="mt-2 text-center w-full pt-1 border-t border-slate-100">
                     <div className="text-[11px] font-bold text-slate-500 uppercase tracking-tight">Số tiền cần thanh toán</div>
                     <div className="text-2xl font-black text-rose-600 font-mono">
-                      {grandTotal.toLocaleString('vi-VN')} VNĐ
+                      {(amountDueToPay > 0 ? amountDueToPay : grandTotal).toLocaleString('vi-VN')} VNĐ
                     </div>
                   </div>
                 </div>
@@ -4879,8 +5300,9 @@ export default function ManagementSystem() {
                   <button
                     type="button"
                     onClick={async () => {
+                      const payAmount = amountDueToPay > 0 ? amountDueToPay : grandTotal;
                       setIsVietQRModalOpen(false);
-                      await handlePayOrder();
+                      await handlePayOrder(undefined, true);
 
                       // Kích hoạt âm thanh chuông báo nhận tiền
                       playNotificationChime();
@@ -4889,10 +5311,10 @@ export default function ManagementSystem() {
                       const notif: POSNotification = {
                         id: `qr_${Date.now()}`,
                         title: '💰 Nhận Chuyển Khoản VietQR Thành Công!',
-                        message: `Đã xác nhận nhận chuyển khoản ${grandTotal.toLocaleString('vi-VN')}đ từ khách hàng ${customerName || 'Khách vãng lai'}.`,
+                        message: `Đã xác nhận nhận chuyển khoản ${payAmount.toLocaleString('vi-VN')}đ từ khách hàng ${customerName || 'Khách vãng lai'}.`,
                         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
                         isRead: false,
-                        amount: grandTotal,
+                        amount: payAmount,
                         type: 'payment',
                       };
                       setNotifications((prev) => [notif, ...prev.slice(0, 29)]);
@@ -4911,6 +5333,302 @@ export default function ManagementSystem() {
                     Đóng lại
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================== 5.5 MODAL GIA HẠN THỜI GIAN ĐÁ HOẶC ĐỔI SÂN ==================== */}
+        {isExtendingModalOpen && extendingBooking && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+            <div className={`w-full max-w-xl rounded-3xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col ${
+              isDarkMode ? 'bg-[#0f172a] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+            }`}>
+              {/* Header Modal */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-700 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-slate-950 font-black shadow-md shadow-amber-500/30">
+                    <Clock className="w-5 h-5 text-slate-950" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base text-white">Gia Hạn / Đổi Sân Đá Tiếp</h3>
+                    <p className="text-[11px] text-amber-400 font-bold">
+                      {extendingBooking.ten_san || 'Sân đang đá'} • {extendingBooking.ten_khach_hang}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsExtendingModalOpen(false)}
+                  className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Body Modal */}
+              <div className="flex-1 overflow-y-auto my-4 space-y-4 pr-1 custom-scrollbar text-xs">
+                {/* 1. Thông tin giờ đá hiện tại */}
+                <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div>
+                    <span className="text-slate-400 block text-[10.5px]">Sân bóng hiện tại:</span>
+                    <strong className="text-white text-sm font-black">{extendingBooking.ten_san}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10.5px]">Khách hàng:</span>
+                    <strong className="text-emerald-400 font-bold">{extendingBooking.ten_khach_hang}</strong>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <span className="text-slate-400 block text-[10.5px]">Khung giờ hiện tại:</span>
+                    <strong className="text-amber-300 font-mono font-bold">
+                      {extendingBooking.gio_bat_dau?.slice(0, 5)} - {extendingBooking.gio_ket_thuc?.slice(0, 5)}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* 2. Chọn số phút muốn đá thêm */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" /> Chọn thời gian muốn đá thêm:
+                    </span>
+                    <span className="text-amber-400 font-mono font-black text-sm">+{extendMinutes} phút</span>
+                  </div>
+
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {[15, 30, 45, 60, 90].map((mins) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        onClick={() => handleChangeExtendMinutes(mins)}
+                        className={`py-2 px-1 rounded-xl font-bold text-xs transition-all cursor-pointer text-center ${
+                          extendMinutes === mins
+                            ? 'bg-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/25 ring-2 ring-amber-400 scale-[1.03]'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                        }`}
+                      >
+                        +{mins}p
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. Tình trạng kiểm tra lịch */}
+                {isCheckingExtend ? (
+                  <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 text-center space-y-2">
+                    <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
+                    <p className="text-slate-400 text-xs font-medium">Đang kiểm tra lịch trống của sân và các sân khác...</p>
+                  </div>
+                ) : extendCheckResult ? (
+                  <div className="space-y-3">
+                    {/* TRƯỜNG HỢP 1: SÂN NÀY CÒN TRỐNG LỊCH -> CHO PHÉP GIA HẠN TẠI CHỖ */}
+                    {extendCheckResult.co_the_gia_han === 1 ? (
+                      <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/50 space-y-3">
+                        <div className="flex items-start gap-2.5">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                          <div>
+                            <h4 className="font-extrabold text-sm text-emerald-300">
+                              ✓ Sân {extendingBooking.ten_san} hoàn toàn trống lịch!
+                            </h4>
+                            <p className="text-slate-300 text-xs mt-0.5 leading-relaxed">
+                              Khách có thể tiếp tục thi đấu trực tiếp trên sân này đến{' '}
+                              <strong className="text-white font-mono">{extendCheckResult.gio_ket_thuc_moi}</strong>.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-xl bg-slate-900/90 border border-emerald-500/20 flex items-center justify-between">
+                          <span className="text-slate-400">Tiền sân thêm ({extendMinutes} phút):</span>
+                          <span className="text-emerald-400 font-mono font-black text-sm">
+                            +{Number(extendCheckResult.tien_san_them || 0).toLocaleString('vi-VN')} VNĐ
+                          </span>
+                        </div>
+
+                        {/* Tùy chọn thanh toán */}
+                        <div className="space-y-2 pt-1 border-t border-emerald-500/20">
+                          <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-300">
+                            <input
+                              type="checkbox"
+                              checked={extendPayNow}
+                              onChange={(e) => setExtendPayNow(e.target.checked)}
+                              className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                            />
+                            <span>Khách muốn thanh toán luôn số tiền giờ đá thêm này</span>
+                          </label>
+
+                          {extendPayNow && (
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => setExtendPaymentMethod('TIEN_MAT')}
+                                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                  extendPaymentMethod === 'TIEN_MAT'
+                                    ? 'bg-emerald-500 text-slate-950 font-black shadow-md ring-2 ring-emerald-400'
+                                    : 'bg-slate-900 text-slate-300 border border-slate-700'
+                                }`}
+                              >
+                                <Banknote className="w-3.5 h-3.5" />
+                                <span>Tiền mặt</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setExtendPaymentMethod('CHUYEN_KHOAN')}
+                                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                  extendPaymentMethod === 'CHUYEN_KHOAN'
+                                    ? 'bg-blue-600 text-white font-black shadow-md ring-2 ring-blue-400'
+                                    : 'bg-slate-900 text-slate-300 border border-slate-700'
+                                }`}
+                              >
+                                <Smartphone className="w-3.5 h-3.5" />
+                                <span>Chuyển khoản QR</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleConfirmExtendSamePitch}
+                          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>⚽ Xác Nhận Gia Hạn Thêm {extendMinutes} Phút (Sân Này)</span>
+                        </button>
+                      </div>
+                    ) : (
+                      /* TRƯỜNG HỢP 2: SÂN NÀY BỊ TRÙNG LỊCH -> YÊU CẦU ĐỔI SANG SÂN KHÁC */
+                      <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-500/50 space-y-3">
+                        <div className="flex items-start gap-2.5">
+                          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                          <div>
+                            <h4 className="font-extrabold text-sm text-rose-300">
+                              ⚠️ Sân {extendingBooking.ten_san} đã có người đặt lúc {extendCheckResult.trung_luc}!
+                            </h4>
+                            <p className="text-slate-300 text-xs mt-0.5 leading-relaxed">
+                              Không thể gia hạn trực tiếp trên sân này. Vui lòng chuyển khách sang sân khác còn trống để đá tiếp ({extendCheckResult.gio_ket_thuc_cu} - {extendCheckResult.gio_ket_thuc_moi}).
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 pt-1 border-t border-rose-500/20">
+                          <span className="font-bold text-slate-300 uppercase tracking-wider text-[11px] block">
+                            Danh sách sân khác còn trống trong khung giờ này:
+                          </span>
+
+                          {!extendCheckResult.san_thay_the || extendCheckResult.san_thay_the.length === 0 ? (
+                            <div className="p-3 rounded-xl bg-slate-900/80 text-center text-slate-400">
+                              Rất tiếc! Hiện không có sân nào khác còn trống trong khung giờ này.
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {extendCheckResult.san_thay_the.map((pitch: any) => {
+                                const isSelected = selectedAlternativePitch?.ma_san === pitch.ma_san;
+                                return (
+                                  <div
+                                    key={pitch.ma_san}
+                                    onClick={() => setSelectedAlternativePitch(pitch)}
+                                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                                      isSelected
+                                        ? 'bg-blue-950/70 border-blue-400 ring-2 ring-blue-500 shadow-md'
+                                        : 'bg-slate-900/90 border-slate-700/80 hover:border-slate-500'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${
+                                        isSelected ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'
+                                      }`}>
+                                        <LandPlot className="w-4 h-4" />
+                                      </div>
+                                      <div>
+                                        <div className="font-black text-white text-xs">{pitch.ten_san}</div>
+                                        <div className="text-[10.5px] text-slate-400">{pitch.ten_loai || 'Sân bóng'} • {Number(pitch.gia_co_ban).toLocaleString('vi-VN')}đ/h</div>
+                                      </div>
+                                    </div>
+
+                                    <div className="text-right">
+                                      <div className="text-emerald-400 font-mono font-black text-xs">
+                                        +{Number(pitch.tien_san_du_kien || 0).toLocaleString('vi-VN')}đ
+                                      </div>
+                                      <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
+                                        isSelected ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'
+                                      }`}>
+                                        {isSelected ? '✓ Đã chọn sân này' : 'Bấm để chọn'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {selectedAlternativePitch && (
+                          <div className="space-y-2 pt-2 border-t border-slate-800">
+                            {/* Tùy chọn thanh toán */}
+                            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-300">
+                              <input
+                                type="checkbox"
+                                checked={extendPayNow}
+                                onChange={(e) => setExtendPayNow(e.target.checked)}
+                                className="rounded border-slate-700 bg-slate-900 text-emerald-500 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                              />
+                              <span>Khách thanh toán luôn tiền sân mới (Ngược lại: thanh toán sau khi đá xong)</span>
+                            </label>
+
+                            {extendPayNow && (
+                              <div className="grid grid-cols-2 gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setExtendPaymentMethod('TIEN_MAT')}
+                                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                    extendPaymentMethod === 'TIEN_MAT'
+                                      ? 'bg-emerald-500 text-slate-950 font-black shadow-md ring-2 ring-emerald-400'
+                                      : 'bg-slate-900 text-slate-300 border border-slate-700'
+                                  }`}
+                                >
+                                  <Banknote className="w-3.5 h-3.5" />
+                                  <span>Tiền mặt</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setExtendPaymentMethod('CHUYEN_KHOAN')}
+                                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                    extendPaymentMethod === 'CHUYEN_KHOAN'
+                                      ? 'bg-blue-600 text-white font-black shadow-md ring-2 ring-blue-400'
+                                      : 'bg-slate-900 text-slate-300 border border-slate-700'
+                                  }`}
+                                >
+                                  <Smartphone className="w-3.5 h-3.5" />
+                                  <span>Chuyển khoản QR</span>
+                                </button>
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={handleConfirmSwitchPitch}
+                              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                            >
+                              <ArrowRightLeft className="w-4 h-4" />
+                              <span>🔄 Chuyển Khách Sang {selectedAlternativePitch.ten_san} Đá Tiếp (Tạo Đơn Mới)</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Footer Modal */}
+              <div className="pt-3 border-t border-slate-700 flex justify-end shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsExtendingModalOpen(false)}
+                  className="py-2 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs transition-all cursor-pointer"
+                >
+                  HỦY BỎ
+                </button>
               </div>
             </div>
           </div>
