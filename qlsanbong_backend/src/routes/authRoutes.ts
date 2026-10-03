@@ -7,14 +7,15 @@
 import express, { Router } from 'express';
 import * as authController from '../controllers/authController';
 import { verifyToken } from '../middlewares/authMiddleware';
+import { invisibleCaptchaGuard } from '../middlewares/captchaGuard';
 
 const router: Router = express.Router();
 
-// Đăng ký tài khoản mới
-router.post('/register', authController.dangKy);
+// Đăng ký tài khoản mới (Bảo vệ bởi Captcha ngầm & Anti-Bot Guard)
+router.post('/register', invisibleCaptchaGuard, authController.dangKy);
 
-// Đăng nhập
-router.post('/login', authController.dangNhap);
+// Đăng nhập (Bảo vệ bởi Captcha ngầm & Anti-Bot Guard)
+router.post('/login', invisibleCaptchaGuard, authController.dangNhap);
 
 // Lấy thông tin tài khoản hiện tại (Profile / Me)
 router.get('/profile', verifyToken, authController.layThongTinCaNhan);

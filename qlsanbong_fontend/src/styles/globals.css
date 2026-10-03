@@ -63,3 +63,11 @@ body {
   }
 }
 
+/* Ẩn hoàn toàn phù hiệu nổi Google reCAPTCHA ở góc màn hình (Chạy ngầm 100%) */
+.grecaptcha-badge {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+

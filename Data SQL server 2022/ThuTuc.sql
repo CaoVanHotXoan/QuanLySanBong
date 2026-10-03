@@ -1056,7 +1056,7 @@ BEGIN
         INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
         WHERE d.ngay_da = @ngay_da
           AND (@ma_san IS NULL OR d.ma_san = @ma_san)
-          AND d.trang_thai NOT IN ('DA_HUY', 'CHO_THANH_TOAN')
+          AND d.trang_thai <> 'DA_HUY'
         ORDER BY d.gio_bat_dau ASC;
     END TRY
     BEGIN CATCH

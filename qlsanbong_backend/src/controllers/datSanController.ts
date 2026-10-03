@@ -394,12 +394,24 @@ export const layTatCaDonDat = async (req: AuthRequest, res: Response) => {
         const detailsRes = await pool.request().execute('sp_LayDanhSachChiTietDichVu');
         const allDetails = detailsRes.recordset || [];
 
+        // Lấy toàn bộ lịch sử thanh toán để tính so_tien_da_tra
+        let allPayments: any[] = [];
+        try {
+            const paymentsRes = await pool.request().execute('sp_LayDanhSachThanhToan');
+            allPayments = paymentsRes.recordset || [];
+        } catch (payErr: any) {
+            console.warn('Lỗi sp_LayDanhSachThanhToan:', payErr.message);
+        }
+
         const merged = bookings.map((b: any) => {
             const services = allDetails.filter((d: any) => d.ma_don_dat === b.id);
+            const payments = allPayments.filter((p: any) => p.ma_don_dat === b.id);
+            const so_tien_da_tra = payments.reduce((sum: number, p: any) => sum + (Number(p.so_tien) || 0), 0);
             return {
                 ...b,
                 chi_tiet_dich_vu: services,
-                dich_vu_da_dung: services
+                dich_vu_da_dung: services,
+                so_tien_da_tra
             };
         });
 
@@ -443,10 +455,36 @@ export const layLichSan = async (req: AuthRequest, res: Response) => {
         }
 
         const result = await request.execute('sp_LayLichSan');
+        const rawList = result.recordset || [];
+
+        // Lấy chi tiết dịch vụ và thanh toán để gắn vào từng booking
+        const detailsRes = await pool.request().execute('sp_LayDanhSachChiTietDichVu');
+        const allDetails = detailsRes.recordset || [];
+
+        let allPayments: any[] = [];
+        try {
+            const paymentsRes = await pool.request().execute('sp_LayDanhSachThanhToan');
+            allPayments = paymentsRes.recordset || [];
+        } catch (payErr: any) {
+            console.warn('Lỗi sp_LayDanhSachThanhToan:', payErr.message);
+        }
+
+        const merged = rawList.map((b: any) => {
+            const bId = b.ma_don_dat || b.id;
+            const services = allDetails.filter((d: any) => d.ma_don_dat === bId);
+            const payments = allPayments.filter((p: any) => p.ma_don_dat === bId);
+            const so_tien_da_tra = payments.reduce((sum: number, p: any) => sum + (Number(p.so_tien) || 0), 0);
+            return {
+                ...b,
+                chi_tiet_dich_vu: services,
+                dich_vu_da_dung: services,
+                so_tien_da_tra
+            };
+        });
 
         return res.status(200).json({
             success: true,
-            data: result.recordset
+            data: merged
         });
     } catch (error: any) {
         console.error('Lỗi sp_LayLichSan:', error.message);
@@ -681,7 +719,14 @@ export const datSan = async (req: AuthRequest, res: Response) => {
         const io = req.app.get('io');
         if (io) {
             io.emit('booking_updated');
-            io.emit('payment_success');
+            if (isTraHet) {
+                io.emit('payment_success', {
+                    id: donDatId,
+                    ma_don_dat: donDatId,
+                    ten_khach_hang: ten_khach,
+                    so_tien: tong_tien
+                });
+            }
         }
 
         return res.status(201).json({
@@ -1329,6 +1374,33 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
             .execute('sp_SuaDonDatVaThanhToan');
 
         if (Array.isArray(req.body.dich_vu_list)) {
+            // Lấy danh sách dịch vụ hiện có của đơn
+            let currentServices: any[] = [];
+            try {
+                const existingDetailsRes = await pool.request().execute('sp_LayDanhSachChiTietDichVu');
+                currentServices = (existingDetailsRes.recordset || []).filter((d: any) => d.ma_don_dat === parseInt(id, 10));
+            } catch (e: any) {
+                console.warn('Lỗi lấy chi tiết dịch vụ cũ:', e.message);
+            }
+
+            const newServiceIds = new Set(req.body.dich_vu_list.map((item: any) => parseInt(item.ma_dich_vu, 10)));
+
+            // Xóa các dịch vụ cũ không còn trong danh sách mới (hoặc đã xóa hết)
+            for (const oldSvc of currentServices) {
+                if (!newServiceIds.has(oldSvc.ma_dich_vu)) {
+                    try {
+                        await pool.request()
+                            .input('ma_don_dat', sql.Int, parseInt(id, 10))
+                            .input('ma_dich_vu', sql.Int, parseInt(oldSvc.ma_dich_vu, 10))
+                            .input('so_luong_moi', sql.Int, 0)
+                            .execute('sp_CapNhatDichVuDonDat');
+                    } catch (e: any) {
+                        console.warn('Lỗi xóa dịch vụ cũ:', e.message);
+                    }
+                }
+            }
+
+            // Cập nhật hoặc thêm dịch vụ mới
             for (const item of req.body.dich_vu_list) {
                 if (item.ma_dich_vu) {
                     try {
@@ -1344,16 +1416,48 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
             }
         }
 
+        // Lấy lại đơn đặt sau khi đã cập nhật dịch vụ từ CSDL SQL Server
+        let finalData = result.recordset?.[0];
+        try {
+            const freshBooking = await pool.request()
+                .input('id', sql.Int, parseInt(id, 10))
+                .query(`
+                    SELECT 
+                        d.id, d.ma_san, sb.ten_san, ls.ten_loai, d.ma_nguoi_dung,
+                        nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai, d.ngay_da,
+                        CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+                        CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+                        d.tien_san, d.tong_tien, d.phuong_thuc, d.ghi_chu, d.trang_thai, d.ngay_tao
+                    FROM Don_Dat_San d
+                    INNER JOIN San_Bong sb ON d.ma_san = sb.id
+                    INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+                    INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+                    WHERE d.id = @id
+                `);
+            if (freshBooking.recordset && freshBooking.recordset.length > 0) {
+                finalData = freshBooking.recordset[0];
+            }
+        } catch (fetchErr: any) {
+            console.warn('Lỗi đọc lại đơn sau sửa:', fetchErr.message);
+        }
+
         const io = req.app.get('io');
         if (io) {
             io.emit('booking_updated');
-            io.emit('payment_success');
+            if (trang_thai_chuan === 'DA_THANH_TOAN') {
+                io.emit('payment_success', {
+                    id,
+                    ma_don_dat: id,
+                    ten_khach_hang: tenKhach,
+                    so_tien: finalData?.tong_tien || tong_tien_val
+                });
+            }
         }
 
         return res.status(200).json({
             success: true,
             message: 'Cập nhật đơn đặt sân thành công!',
-            data: result.recordset[0]
+            data: finalData
         });
     } catch (error: any) {
         console.error('Lỗi sp_SuaDonDatVaThanhToan:', error.message);

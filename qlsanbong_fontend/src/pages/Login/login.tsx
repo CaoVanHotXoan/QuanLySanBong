@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { User, Mail, Phone, Lock, Eye, EyeOff, X, Sparkles, LogIn, UserPlus } from "lucide-react";
+import { User, Mail, Phone, Lock, Eye, EyeOff, X, Sparkles, LogIn, UserPlus, ShieldCheck, ShieldAlert } from "lucide-react";
 
 // Định nghĩa kiểu dữ liệu người dùng khi xác thực thành công từ CSDL SQL Server
 export interface AuthUser {
@@ -66,12 +66,29 @@ export default function Login({
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [successMessage, setSuccessMessage] = useState<string>("");
 
+  // STATE BẢO MẬT CAPTCHA NGẦM & ANTI-BOT
+  const [honeypotVal, setHoneypotVal] = useState<string>("");
+  const [formInitTime, setFormInitTime] = useState<number>(Date.now());
+  const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
+
   // Đồng bộ initialRegister mỗi khi mở Modal
   useEffect(() => {
     if (isOpen) {
       setIsRegister(Boolean(initialRegister));
       setErrorMessage("");
       setSuccessMessage("");
+      setFormInitTime(Date.now());
+      setHoneypotVal("");
+
+      // Nạp script Google reCAPTCHA v3 ngầm nếu chưa có
+      if (typeof window !== "undefined" && !document.getElementById("recaptcha-v3-script")) {
+        const script = document.createElement("script");
+        script.id = "recaptcha-v3-script";
+        script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      }
     }
   }, [isOpen, initialRegister]);
 
@@ -127,6 +144,22 @@ export default function Login({
   };
 
   // Xử lý gửi Form (Đăng ký / Đăng nhập trực tiếp với Cơ sở dữ liệu SQL Server)
+  // Hàm lấy Token reCAPTCHA v3 chạy ngầm (Không làm phiền người dùng)
+  const getInvisibleCaptchaToken = async (actionName: string): Promise<string> => {
+    if (typeof window === "undefined") return "";
+    try {
+      const grecaptcha = (window as any).grecaptcha;
+      if (grecaptcha && grecaptcha.execute) {
+        await new Promise((resolve) => grecaptcha.ready(resolve));
+        const token = await grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: actionName });
+        return token || "";
+      }
+    } catch (err) {
+      console.warn("[Captcha Ngầm] Không thể lấy token reCAPTCHA, kích hoạt tầng bảo vệ Honeypot & Timing:", err);
+    }
+    return "";
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -173,6 +206,10 @@ export default function Login({
             so_dien_thoai: soDienThoai.trim() || null,
             mat_khau: password,
             vai_tro: "KHACH_HANG",
+            // Payload bảo mật Captcha ngầm đa tầng
+            website_url_hp: honeypotVal,
+            _t_init: formInitTime,
+            captchaToken: await getInvisibleCaptchaToken("register"),
           }),
         });
 
@@ -209,6 +246,10 @@ export default function Login({
           body: JSON.stringify({
             email: fullEmail,
             mat_khau: password,
+            // Payload bảo mật Captcha ngầm đa tầng
+            website_url_hp: honeypotVal,
+            _t_init: formInitTime,
+            captchaToken: await getInvisibleCaptchaToken("login"),
           }),
         });
 
