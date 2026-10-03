@@ -1049,7 +1049,9 @@ BEGIN
             d.phuong_thuc,
             DATEDIFF(MINUTE, CAST(d.gio_bat_dau AS TIME), CAST(d.gio_ket_thuc AS TIME)) AS so_phut_da,
             d.ghi_chu,
-            d.trang_thai
+            d.trang_thai,
+            ISNULL(d.da_vao_san, 0) AS da_vao_san,
+            CONVERT(VARCHAR(5), d.gio_vao_san, 108) AS gio_vao_san
         FROM Don_Dat_San d
         INNER JOIN San_Bong sb ON d.ma_san = sb.id
         INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
@@ -1091,6 +1093,8 @@ BEGIN
             d.ngay_tao,
             nd.ho_ten AS ten_khach_hang,
             nd.so_dien_thoai AS sdt_khach_hang,
+            ISNULL(d.da_vao_san, 0) AS da_vao_san,
+            CONVERT(VARCHAR(5), d.gio_vao_san, 108) AS gio_vao_san,
             ISNULL((
                 SELECT SUM(tt.so_tien) 
                 FROM Thanh_Toan tt 

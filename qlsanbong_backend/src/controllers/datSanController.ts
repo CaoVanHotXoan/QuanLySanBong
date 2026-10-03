@@ -1499,3 +1499,46 @@ export const xoaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
         });
     }
 };
+
+/**
+ * 23. Xác nhận vào sân / Đưa đơn vào sân đang đá
+ * Method: POST /api/dat-san/vao-san/:id
+ */
+export const vaoSan = async (req: AuthRequest, res: Response) => {
+    try {
+        const id = parseInt(String(req.params.id), 10);
+        const { trang_thai } = req.body;
+        const pool = await poolPromise;
+        const newStatus = trang_thai || 'DANG_DA';
+
+        await pool.request()
+            .input('id', sql.Int, id)
+            .input('trang_thai', sql.VarChar(20), newStatus)
+            .query(`
+                UPDATE Don_Dat_San 
+                SET da_vao_san = 1, 
+                    gio_vao_san = CONVERT(TIME, GETDATE()),
+                    trang_thai = @trang_thai
+                WHERE id = @id
+            `);
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('pitch_updated');
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Xác nhận vào sân thành công!',
+            data: { id, da_vao_san: 1, trang_thai: newStatus }
+        });
+    } catch (error: any) {
+        console.error('Lỗi khi xác nhận vào sân:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xác nhận vào sân'
+        });
+    }
+};
+

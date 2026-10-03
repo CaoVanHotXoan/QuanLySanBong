@@ -94,10 +94,26 @@ CREATE TABLE Don_Dat_San (
     tong_tien DECIMAL(10, 2) NULL,
     phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'CHUYEN_KHOAN')) NOT NULL,
     ghi_chu NVARCHAR(255) NULL,
-    trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_THANH_TOAN', 'CHO_XAC_NHAN', 'DA_COC', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY', 'DA_CHOT')) DEFAULT 'DA_COC',
+    trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_THANH_TOAN', 'CHO_XAC_NHAN', 'DA_COC', 'DANG_DA', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY', 'DA_CHOT')) DEFAULT 'DA_COC',
+    da_vao_san BIT DEFAULT 0,
+    gio_vao_san TIME NULL,
     ngay_tao DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
     FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE NO ACTION
+);
+GO
+
+-- 4.6. Bảng Thanh_Toan (Lịch sử thanh toán cọc 30% và thanh toán toàn phần)
+CREATE TABLE Thanh_Toan (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ma_don_dat INT NOT NULL,
+    phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'CHUYEN_KHOAN')) NOT NULL,
+    loai_thanh_toan VARCHAR(20) CHECK (loai_thanh_toan IN ('DAT_COC', 'TRA_HET', 'THANH_TOAN_SAU')) NOT NULL,
+    so_tien DECIMAL(10, 2) NOT NULL,
+    ma_giao_dich VARCHAR(100) NULL,
+    trang_thai_gd VARCHAR(20) CHECK (trang_thai_gd IN ('DANG_CHO', 'THANH_CONG', 'THAT_BAI', 'HOAN_TIEN')) DEFAULT 'THANH_CONG',
+    ngay_thanh_toan DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id) ON DELETE CASCADE
 );
 GO
 

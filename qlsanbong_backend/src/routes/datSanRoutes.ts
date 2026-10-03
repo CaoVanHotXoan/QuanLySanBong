@@ -43,6 +43,7 @@ router.get('/tat-ca-don', datSanController.layTatCaDonDat);
 router.post('/don-dat-thanh-toan', datSanController.themDonDatVaThanhToan);
 router.put('/don-dat-thanh-toan/:id', datSanController.suaDonDatVaThanhToan);
 router.delete('/don-dat-thanh-toan/:id', datSanController.xoaDonDatVaThanhToan);
+router.post('/vao-san/:id', datSanController.vaoSan);
 
 // Lấy lịch đặt sân theo ngày
 router.get('/lich-san', datSanController.layLichSan);

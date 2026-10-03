@@ -8,3 +8,12 @@
 Làm thêm đặt trực tiếp
 - đặt bất cứ giờ nào
 - thêm 2 sân dự phòng
+
+
+Chức năng nhân viên:
+1. Mục sân đang đá:
+    + Hiện thị danh sách các khách đã đặt vào ngày hôm nay
+    + khi nhấn vào thì điền thông tin vào thông tin order
+    (nếu thanh toán đầy đủ thì hiện nút vào sân, 
+    nếu chỉ thanh toán 30% thì sẽ hiện 2 nút lưu và thanh toán)
+    + nhấn nút lưu thì sẽ đưa hóa đơn này vào sân đang đá để khách hàng thanh toán sau

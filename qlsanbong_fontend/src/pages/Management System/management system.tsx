@@ -378,6 +378,8 @@ export default function ManagementSystem() {
     ten_san?: string;
     gio_da?: string;
     ngay_da?: string;
+    so_tien_da_tra?: number;
+    tong_tien?: number;
   } | null>(null);
 
   // State Khung Giờ Đá Tùy Chọn Bất Kì & Hình Thức Thanh Toán
@@ -425,6 +427,24 @@ export default function ManagementSystem() {
   const [selectedInvoiceDetail, setSelectedInvoiceDetail] = useState<DonDatSanPOS | null>(null);
   // State lưu đơn hàng lịch sử đang xem chi tiết (Modal Read-only)
   const [selectedHistoryOrder, setSelectedHistoryOrder] = useState<any | null>(null);
+
+  // State thông báo Toast nổi trên màn hình
+  const [toastMessage, setToastMessage] = useState<{
+    type: 'success' | 'error' | 'info' | 'warning';
+    title?: string;
+    message: string;
+  } | null>(null);
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'success', title?: string) => {
+    setToastMessage({ type, message, title });
+  }, []);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   // Refs
   const socketRef = useRef<Socket | null>(null);
@@ -773,7 +793,7 @@ export default function ManagementSystem() {
   }, [selectedCustomerForHistory, historyBookings, rawBookings]);
 
   // Xử lý khi nhấn vào một đơn trong Modal Lịch sử để nạp thông tin vào Order POS
-  const handleSelectBookingToOrder = (booking: any) => {
+  const handleSelectCustomerHistoryBookingToOrder = (booking: any) => {
     // Kiểm tra nếu đơn đặt đã qua ngày hoặc qua thời gian kết thúc thì không cho nạp
     if (isBookingExpired(booking)) {
       alert('Ca đặt này đã qua ngày hoặc qua thời gian thi đấu, không thể nạp vào Order POS!');
@@ -877,6 +897,7 @@ export default function ManagementSystem() {
       // Tìm booking đang hoạt động trong khung giờ hiện tại
       const matched = allBookingsToday.find((b) => {
         if (b.ma_san !== san.id && b.ten_san !== san.ten_san) return false;
+        if (b.trang_thai === 'DANG_DA' || b.da_vao_san === 1 || b.da_vao_san === true) return true;
         const bStart = (b.gio_bat_dau || '').substring(0, 5);
         const bEnd = (b.gio_ket_thuc || '').substring(0, 5);
         if (!bStart || !bEnd) return false;
@@ -918,13 +939,25 @@ export default function ManagementSystem() {
     return activeList;
   }, [sanBongList, rawBookings, historyBookings, formattedDateISO]);
 
-  // Tất cả các ca đá có lịch trong ngày hôm nay (dành cho theo dõi mở rộng)
+  // Tất cả các ca đá có lịch trong ngày hôm nay (chưa vào sân thi đấu)
   const allTodayBookings = useMemo(() => {
     const viewingDateISO = formattedDateISO;
+    const playingBookingIds = new Set(
+      currentlyPlayingPitches.map((p) => String(p.ma_don_dat || p.booking?.id || p.booking?.ma_don_dat))
+    );
+
     const list = [...rawBookings, ...historyBookings].filter((b) => {
       if (b.trang_thai === 'DA_HUY' || b.trang_thai === 'Đã hủy') return false;
+      if (b.trang_thai === 'HOAN_THANH' || b.trang_thai === 'DA_CHOT') return false;
       const bDate = (b.ngay_da || '').substring(0, 10);
-      return bDate === viewingDateISO;
+      if (bDate !== viewingDateISO) return false;
+
+      // Khi nhấn vào sân hoặc đang đá: hóa đơn này sẽ biến mất khỏi danh sách chờ bên dưới
+      const bId = String(b.ma_don_dat || b.id);
+      const isAlreadyInPitch = b.da_vao_san === 1 || b.da_vao_san === true || b.trang_thai === 'DANG_DA' || playingBookingIds.has(bId);
+      if (isAlreadyInPitch) return false;
+
+      return true;
     });
 
     // Lọc trùng ID
@@ -936,8 +969,12 @@ export default function ManagementSystem() {
       }
     });
 
-    return Array.from(uniqueMap.values());
-  }, [rawBookings, historyBookings, formattedDateISO]);
+    return Array.from(uniqueMap.values()).sort((a, b) => {
+      const aStart = (a.gio_bat_dau || '').substring(0, 5);
+      const bStart = (b.gio_bat_dau || '').substring(0, 5);
+      return aStart.localeCompare(bStart);
+    });
+  }, [rawBookings, historyBookings, formattedDateISO, currentlyPlayingPitches]);
 
   // Danh sách lịch sử gộp & lọc theo điều kiện từ SQL Server & POS
   const filteredHistoryList = useMemo(() => {
@@ -1571,23 +1608,29 @@ export default function ManagementSystem() {
   // Kiểm tra đơn đã thanh toán đủ hay chưa
   const isOrderFullyPaid = useMemo(() => {
     if (!loadedBookingState) return false;
+    const soTienDaTra = Number(loadedBookingState.so_tien_da_tra || 0);
+    const tongTien = Number(loadedBookingState.tong_tien || grandTotal || 0);
+    if (soTienDaTra > 0 && soTienDaTra >= tongTien) return true;
+    const rawSt = (loadedBookingState.trang_thai || '').toUpperCase().replace(/\s+/g, '_');
+    if (rawSt.includes('DA_COC') || rawSt.includes('CHO') || rawSt.includes('CHUA') || rawSt.includes('TAM')) return false;
     return Boolean(
       loadedBookingState.isPaid ||
-      loadedBookingState.trang_thai === 'Đã thanh toán' ||
-      loadedBookingState.trang_thai === 'DA_CHOT' ||
-      loadedBookingState.trang_thai === 'Đã chốt'
+      rawSt.includes('DA_THANH_TOAN') ||
+      rawSt.includes('THANH_TOAN') ||
+      rawSt === 'HOAN_THANH'
     );
-  }, [loadedBookingState]);
+  }, [loadedBookingState, grandTotal]);
 
   // Số tiền thực tế cần thanh toán:
   // - Nếu ĐÃ TRẢ TIỀN SÂN: Chỉ tính tiền dịch vụ phát sinh
-  // - Nếu CHƯA TRẢ TIỀN SÂN: Tính toàn bộ (Tiền sân + Tiền dịch vụ)
+  // - Nếu CHƯA TRẢ TIỀN SÂN: Tính số tiền còn nợ (Tổng - Đã cọc) + Tiền dịch vụ
   const amountDueToPay = useMemo(() => {
+    const soTienDaTra = Number(loadedBookingState?.so_tien_da_tra || 0);
     if (isOrderFullyPaid) {
       return totalServicePrice;
     }
-    return grandTotal;
-  }, [isOrderFullyPaid, totalServicePrice, grandTotal]);
+    return Math.max(0, grandTotal - soTienDaTra);
+  }, [isOrderFullyPaid, totalServicePrice, grandTotal, loadedBookingState]);
 
   // Kiểm tra khách hàng có mua thêm dịch vụ mới hay không
   const hasAddedExtraServices = useMemo(() => {
@@ -1603,9 +1646,9 @@ export default function ManagementSystem() {
   }, [loadedBookingState, isOrderFullyPaid, selectedServices]);
 
   // Xử lý khi bấm nút "VÀO SÂN" (khi khách đã thanh toán đủ)
-  const handleCheckInPitch = () => {
+  const handleCheckInPitch = async () => {
     if (!customerName && selectedPitches.length === 0) {
-      alert('Vui lòng chọn hoặc nạp thông tin sân bóng trước khi vào sân!');
+      showToast('Vui lòng chọn hoặc nạp thông tin sân bóng trước khi vào sân!', 'warning', 'Chưa có thông tin sân');
       return;
     }
 
@@ -1615,6 +1658,20 @@ export default function ManagementSystem() {
     const start = firstP ? firstP.startTime : (loadedBookingState?.gio_da?.split(' - ')[0] || '17:00');
     const end = firstP ? firstP.endTime : (loadedBookingState?.gio_da?.split(' - ')[1] || '18:30');
 
+    // 1. Gọi API Backend để lưu trạng thái vào CSDL SQL Server
+    if (editingInvoiceId && !String(editingInvoiceId).startsWith('temp_')) {
+      try {
+        await fetch(`${API_BASE_URL}/dat-san/vao-san/${editingInvoiceId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trang_thai: 'DANG_DA' }),
+        });
+      } catch (err) {
+        console.warn('Lỗi gọi API vao-san:', err);
+      }
+    }
+
+    // 2. Cập nhật state đồng bộ
     updateSyncOrderStatus(orderId, 'Đã thanh toán', {
       ten_khach_hang: customerName || 'Khách vào sân',
       so_dien_thoai: customerPhone || '',
@@ -1627,8 +1684,43 @@ export default function ManagementSystem() {
       gio_vao_san: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
     });
 
-    alert(`⚽ Khách hàng ${customerName || 'Khách'} đã vào sân thi đấu thành công! Chuyển sang theo dõi sân.`);
+    // 3. Tải lại dữ liệu mới nhất
+    await fetchLichSan(formattedDateISO, sanBongList);
+    fetchHistory();
+
+    showToast(`⚽ Khách hàng ${customerName || 'Khách'} đã vào sân thi đấu thành công! Đơn đã chuyển vào Sân đang đá.`, 'success', 'Vào Sân Thành Công');
+    handleClearOrder();
     setActiveTab('pitch');
+  };
+
+  // Cho khách vào sân trực tiếp từ danh sách đơn đặt hôm nay
+  const handleDirectCheckIn = async (b: any, status: 'DANG_DA' = 'DANG_DA') => {
+    const bookingId = b.ma_don_dat || b.id;
+    if (bookingId && !String(bookingId).startsWith('temp_')) {
+      try {
+        await fetch(`${API_BASE_URL}/dat-san/vao-san/${bookingId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trang_thai: status }),
+        });
+      } catch (err) {
+        console.warn('Lỗi gọi API vao-san:', err);
+      }
+    }
+    updateSyncOrderStatus(bookingId, b.trang_thai || 'Đã thanh toán', {
+      ten_khach_hang: b.ten_khach_hang || 'Khách vào sân',
+      so_dien_thoai: b.so_dien_thoai || '',
+      ten_san: b.ten_san || 'Sân bóng',
+      gio_bat_dau: (b.gio_bat_dau || '').substring(0, 5) || '17:00',
+      gio_ket_thuc: (b.gio_ket_thuc || '').substring(0, 5) || '18:30',
+      ngay_da: b.ngay_da || formattedDateISO,
+      trang_thai_vao_san: 'DANG_DA',
+      da_vao_san: true,
+      gio_vao_san: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+    });
+    await fetchLichSan(formattedDateISO, sanBongList);
+    fetchHistory();
+    showToast(`⚽ Đã đưa đơn #${bookingId} (${b.ten_khach_hang || 'Khách'}) vào danh sách Sân đang đá thành công!`, 'success', 'Vào Sân Thành Công');
   };
 
   // -------------------------------------------------------------
@@ -1636,7 +1728,7 @@ export default function ManagementSystem() {
   // -------------------------------------------------------------
   const handleSaveOrder = async () => {
     if (selectedPitches.length === 0 && selectedServices.length === 0) {
-      alert('Giỏ hàng đang trống! Vui lòng chọn ít nhất 1 sân hoặc dịch vụ trước khi lưu.');
+      showToast('Giỏ hàng đang trống! Vui lòng chọn ít nhất 1 sân hoặc dịch vụ trước khi lưu.', 'warning', 'Giỏ Hàng Trống');
       return;
     }
 
@@ -1657,6 +1749,7 @@ export default function ManagementSystem() {
       if (editingInvoiceId && !String(editingInvoiceId).startsWith('temp_')) {
         // CẬP NHẬT HÓA ĐƠN ĐANG SỬA TRÊN CSDL SQL SERVER (sp_SuaDonDatVaThanhToan)
         const firstP = selectedPitches[0];
+        const targetStatus = (isOrderFullyPaid && !hasAddedExtraServices) ? 'DA_THANH_TOAN' : 'DANG_DA';
         const res = await fetch(`${API_BASE_URL}/dat-san/don-dat-thanh-toan/${editingInvoiceId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -1671,7 +1764,7 @@ export default function ManagementSystem() {
             tien_san: totalPitchPrice,
             tong_tien: grandTotal,
             ghi_chu: customerName ? `Khách: ${customerName} - ${customerPhone}` : 'Khách vãng lai POS',
-            trang_thai: (isOrderFullyPaid && !hasAddedExtraServices) ? 'DA_THANH_TOAN' : 'CHO_THANH_TOAN',
+            trang_thai: targetStatus,
             phuong_thuc: paymentMethod,
             loai_thanh_toan: null,
             so_tien: isOrderFullyPaid ? grandTotal : 0,
@@ -1682,6 +1775,17 @@ export default function ManagementSystem() {
         const data = await res.json();
         if (!data.success) {
           console.warn('Lỗi khi cập nhật CSDL SQL Server:', data.message);
+        }
+
+        // Đảm bảo cập nhật vao-san trên SQL Server nếu đưa vào sân đá trước trả sau
+        try {
+          await fetch(`${API_BASE_URL}/dat-san/vao-san/${editingInvoiceId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trang_thai: targetStatus }),
+          });
+        } catch (e: any) {
+          console.warn('Lỗi vao-san:', e.message);
         }
       } else {
         // TẠO CÁC ĐƠN ĐẶT SÂN MỚI TRÊN CSDL SQL SERVER (sp_ThemDonDatVaThanhToan)
@@ -1700,7 +1804,7 @@ export default function ManagementSystem() {
           const isFirst = i === 0;
           const pitchDichVu = isFirst ? dichVuListPayload : [];
           const pitchGrandTotal = p.price + (isFirst ? totalServicePrice : 0);
-        const pitchAmountToCharge = (isOrderFullyPaid && isFirst) ? totalServicePrice : pitchGrandTotal;
+          const pitchAmountToCharge = (isOrderFullyPaid && isFirst) ? totalServicePrice : pitchGrandTotal;
 
           await fetch(`${API_BASE_URL}/dat-san/don-dat-thanh-toan`, {
             method: 'POST',
@@ -1743,6 +1847,8 @@ export default function ManagementSystem() {
         tien_san: totalPitchPrice,
         dich_vu: serviceItems,
         tong_tien: grandTotal,
+        trang_thai_vao_san: 'DANG_DA',
+        da_vao_san: true,
       });
 
       if (loadedBookingState) {
@@ -1752,7 +1858,7 @@ export default function ManagementSystem() {
         } : null);
       }
 
-      alert('Đã cập nhật dịch vụ và lưu CSDL thành công!');
+      showToast('💾 Đã lưu và đưa hóa đơn này vào danh sách Sân đang đá để khách thi đấu và thanh toán sau!', 'success', 'Lưu Đơn Thành Công');
     } else {
       const newInvoice: DonDatSanPOS = {
         id: Date.now(),
@@ -1770,12 +1876,13 @@ export default function ManagementSystem() {
         ngay_tao: new Date().toISOString(),
       };
       addSyncOrder(newInvoice);
-      alert(`Đã lưu ${selectedPitches.length > 0 ? selectedPitches.length : 1} đơn đặt sân vào CSDL SQL Server!`);
+      showToast(`💾 Đã lưu ${selectedPitches.length > 0 ? selectedPitches.length : 1} đơn đặt sân vào hệ thống thành công!`, 'success', 'Lưu Đơn Thành Công');
     }
 
     fetchLichSan(formattedDateISO, sanBongList);
     fetchHistory();
     handleClearOrder();
+    setActiveTab('pitch');
   };
 
   const handlePayOrder = async (invoiceToPay?: DonDatSanPOS) => {
@@ -1801,12 +1908,12 @@ export default function ManagementSystem() {
       setSelectedInvoiceDetail(null);
       fetchLichSan(formattedDateISO, sanBongList);
       fetchHistory();
-      alert('Thanh toán đơn thành công và đã lưu CSDL SQL Server!');
+      showToast('💳 Thanh toán đơn thành công và đã lưu hệ thống!', 'success', 'Thanh Toán Thành Công');
       return;
     }
 
     if (selectedPitches.length === 0 && selectedServices.length === 0) {
-      alert('Giỏ hàng đang trống! Vui lòng chọn sân hoặc dịch vụ trước khi thanh toán.');
+      showToast('Giỏ hàng đang trống! Vui lòng chọn sân hoặc dịch vụ trước khi thanh toán.', 'warning', 'Giỏ Hàng Trống');
       return;
     }
 
@@ -1894,11 +2001,11 @@ export default function ManagementSystem() {
         });
         fetchLichSan(formattedDateISO, sanBongList);
         fetchHistory();
-        alert('Đã thanh toán dịch vụ bổ sung và lưu CSDL thành công! Bây giờ bạn có thể cho khách Vào Sân.');
+        showToast('💳 Đã thanh toán dịch vụ bổ sung thành công! Bây giờ bạn có thể cho khách Vào Sân.', 'success', 'Thanh Toán Thành Công');
         return;
       }
 
-      alert('Thanh toán thành công và đã lưu CSDL SQL Server!');
+      showToast('💳 Thanh toán thành công và đã lưu hệ thống!', 'success', 'Thanh Toán Thành Công');
     } else {
       const newId = Date.now();
       const paidOrder: DonDatSanPOS = {
@@ -1917,7 +2024,7 @@ export default function ManagementSystem() {
         ngay_tao: new Date().toISOString(),
       };
       addSyncOrder(paidOrder);
-      alert('Thanh toán thành công và đã lưu CSDL SQL Server!');
+      showToast('💳 Thanh toán thành công và đã lưu hệ thống!', 'success', 'Thanh Toán Thành Công');
     }
 
     fetchLichSan(formattedDateISO, sanBongList);
@@ -1995,6 +2102,84 @@ export default function ManagementSystem() {
     // 4. Đóng chi tiết modal (nếu có) & chuyển sang Tab Dịch vụ với Cột Order tự động mở
     setSelectedInvoiceDetail(null);
     setActiveTab('services');
+  };
+
+  // Nạp thông tin đơn đặt sân trong ngày vào cột Order (Mục Sân Đang Đá)
+  const handleSelectBookingToOrder = (invoice: any) => {
+    if (!invoice) return;
+
+    // 1. Nạp sân bóng vào selectedPitches
+    const startT = (invoice.gio_bat_dau || '').substring(0, 5) || '17:00';
+    const endT = (invoice.gio_ket_thuc || '').substring(0, 5) || '18:30';
+    const [sh, sm] = startT.split(':').map(Number);
+    const [eh, em] = endT.split(':').map(Number);
+    const durMin = Math.max(1, (eh * 60 + (em || 0)) - (sh * 60 + (sm || 0)));
+
+    const matchedSan = sanBongList.find((s) => s.id === invoice.ma_san || s.ten_san === invoice.ten_san);
+    const unitPrice = matchedSan ? Number(matchedSan.don_gia_phut) : 5000;
+    const pitchPrice = Number(invoice.tien_san || (durMin * unitPrice));
+
+    const targetPitch: SanBong = matchedSan || {
+      id: Number(invoice.ma_san || invoice.id || 1),
+      ma_loai_san: 1,
+      ten_san: invoice.ten_san || 'Sân bóng',
+      ten_loai: invoice.ten_loai || 'Sân bóng',
+      don_gia_phut: unitPrice,
+      trang_thai: 'SAN_SANG',
+    };
+
+    setSelectedPitches([
+      {
+        pitch: targetPitch,
+        startTime: startT,
+        endTime: endT,
+        durationMin: durMin,
+        price: pitchPrice,
+      },
+    ]);
+
+    // 2. Nạp dịch vụ đi kèm
+    const loadedSvc: SelectedServiceItem[] = [];
+    const rawServices = invoice.chi_tiet_dich_vu || invoice.dich_vu_da_dung || invoice.dich_vu || [];
+    if (Array.isArray(rawServices) && rawServices.length > 0) {
+      rawServices.forEach((dv: any) => {
+        loadedSvc.push({
+          id: dv.id || dv.ma_dich_vu,
+          ten_dich_vu: dv.ten_dich_vu || dv.name,
+          so_luong: dv.so_luong || dv.quantity || 1,
+          don_gia: Number(dv.don_gia || dv.price || 0),
+          don_vi: dv.don_vi_tinh || dv.don_vi || 'Phần',
+        });
+      });
+    }
+    setSelectedServices(loadedSvc);
+
+    // 3. Nạp thông tin khách hàng & số tiền đã trả
+    setCustomerName(invoice.ten_khach_hang || '');
+    setCustomerPhone(invoice.so_dien_thoai || '');
+    const bookingId = invoice.ma_don_dat || invoice.id;
+    setEditingInvoiceId(bookingId);
+
+    const soTienDaTra = Number(invoice.so_tien_da_tra || 0);
+    const tongTien = Number(invoice.tong_tien || pitchPrice);
+    const rawStatus = (invoice.trang_thai || '').toUpperCase().replace(/\s+/g, '_');
+    const isPaid = (soTienDaTra > 0 && soTienDaTra >= tongTien) || 
+      (!rawStatus.includes('DA_COC') && !rawStatus.includes('CHO') && (rawStatus.includes('DA_THANH_TOAN') || rawStatus.includes('THANH_TOAN') || rawStatus === 'HOAN_THANH'));
+
+    setLoadedBookingState({
+      id: bookingId,
+      ma_don_dat: bookingId,
+      trang_thai: isPaid ? 'Đã thanh toán' : (soTienDaTra > 0 ? 'Đã cọc' : 'Chờ thanh toán'),
+      isPaid,
+      so_tien_da_tra: soTienDaTra,
+      tong_tien: tongTien,
+      initialServices: JSON.parse(JSON.stringify(loadedSvc)),
+      ten_san: invoice.ten_san,
+      gio_da: `${startT} - ${endT}`,
+      ngay_da: invoice.ngay_da,
+    });
+
+    setSelectedInvoiceDetail(null);
   };
 
   return (
@@ -2500,7 +2685,6 @@ export default function ManagementSystem() {
                                 <th className="py-3 px-4">Khung Giờ</th>
                                 <th className="py-3 px-4">Tiến Độ Trận Đấu</th>
                                 <th className="py-3 px-4">Khách Hàng</th>
-                                <th className="py-3 px-4 text-right text-amber-400">Tiền Chưa Thanh Toán</th>
                                 <th className="py-3 px-4 text-center">Thao Tác</th>
                               </tr>
                             </thead>
@@ -2550,33 +2734,6 @@ export default function ManagementSystem() {
                                         <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1 mt-0.5">
                                           <Phone className="w-3 h-3" /> {item.so_dien_thoai}
                                         </span>
-                                      )}
-                                    </td>
-                                    <td className="py-3 px-4 text-right">
-                                      {isPaid || unpaidAmount === 0 ? (
-                                        <div className="flex flex-col items-end gap-0.5">
-                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                            Đã thanh toán đủ
-                                          </span>
-                                          <span className="text-[10px] text-slate-400 font-mono">
-                                            Tổng: {tongTien.toLocaleString('vi-VN')} VNĐ
-                                          </span>
-                                        </div>
-                                      ) : (
-                                        <div className="flex flex-col items-end gap-0.5">
-                                          <span className="font-mono font-black text-sm text-amber-400">
-                                            {unpaidAmount.toLocaleString('vi-VN')} VNĐ
-                                          </span>
-                                          {soTienDaTra > 0 ? (
-                                            <span className="text-[10px] text-slate-400 font-mono">
-                                              (Đã cọc: {soTienDaTra.toLocaleString('vi-VN')}đ / Tổng: {tongTien.toLocaleString('vi-VN')}đ)
-                                            </span>
-                                          ) : (
-                                            <span className="text-[10px] text-slate-400 font-mono">
-                                              (Tổng: {tongTien.toLocaleString('vi-VN')} VNĐ)
-                                            </span>
-                                          )}
-                                        </div>
                                       )}
                                     </td>
                                     <td className="py-3 px-4 text-center">
@@ -2684,31 +2841,6 @@ export default function ManagementSystem() {
                                     <strong className="font-mono text-emerald-400">{item.so_dien_thoai}</strong>
                                   </div>
                                 )}
-
-                                <div className="flex items-center justify-between pt-1 border-t border-slate-800">
-                                  <span className="text-slate-400">Chưa thanh toán:</span>
-                                  {isPaid || unpaidAmount === 0 ? (
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                        Đã thanh toán đủ
-                                      </span>
-                                      <span className="text-[10px] text-slate-400 font-mono">
-                                        ({tongTien.toLocaleString('vi-VN')}đ)
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div className="text-right">
-                                      <strong className="text-amber-400 font-mono text-sm font-black">
-                                        {unpaidAmount.toLocaleString('vi-VN')} VNĐ
-                                      </strong>
-                                      {soTienDaTra > 0 && (
-                                        <div className="text-[10px] text-slate-400 font-mono">
-                                          (Đã cọc: {soTienDaTra.toLocaleString('vi-VN')}đ)
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
                               </div>
 
                               <div className="mt-3.5 flex items-center gap-2">
@@ -2746,10 +2878,182 @@ export default function ManagementSystem() {
                     <Clock className="w-12 h-12 text-slate-500 mx-auto mb-3 opacity-60" />
                     <h3 className="text-base font-bold text-white">Hiện tại chưa có ca đặt sân nào đang thi đấu</h3>
                     <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                      Bạn có thể chuyển sang tab <strong>Order</strong> để chọn sân và đặt ca mới cho khách.
+                      Bạn có thể chọn một ca đặt bên dưới để cho khách vào sân thi đấu.
                     </p>
                   </div>
                 )}
+
+                {/* 2. KHỐI CÁC CA ĐÃ ĐẶT VÀO NGÀY HÔM NAY */}
+                <div className="space-y-3 pt-4 border-t border-slate-800/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                        <CalendarCheck className="w-4 h-4 text-amber-400" />
+                        Danh sách các khách đã đặt vào ngày hôm nay - Chờ vào sân ({allTodayBookings.length})
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        👉 <strong>Nhấn vào một ca đặt</strong> để nạp sang <strong>Thông tin Order (mục Home)</strong> (Thanh toán đủ: bấm "VÀO SÂN" • Mới cọc 30%: bấm "LƯU" để vào sân trước trả sau hoặc "THANH TOÁN"), hoặc thao tác nhanh bằng nút bấm bên dưới. <em>Ca đặt sau khi vào sân sẽ tự động biến mất khỏi danh sách này.</em>
+                      </p>
+                    </div>
+                  </div>
+
+                  {allTodayBookings.length === 0 ? (
+                    <div className={`p-8 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
+                      <CalendarCheck className="w-10 h-10 text-emerald-400 mx-auto mb-2 opacity-80" />
+                      <p className="text-xs text-slate-300 font-bold">Tất cả ca đặt hôm nay đã vào sân thi đấu hoặc chưa có ca đặt mới.</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-800 bg-slate-900/90 overflow-hidden shadow-xl">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-800 bg-slate-950/80 text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                              <th className="py-3 px-4">Mã Đơn</th>
+                              <th className="py-3 px-4">Khách Hàng</th>
+                              <th className="py-3 px-4">Sân Bóng</th>
+                              <th className="py-3 px-4">Khung Giờ</th>
+                              <th className="py-3 px-4 text-right">Thanh Toán</th>
+                              <th className="py-3 px-4 text-center">Trạng Thái</th>
+                              <th className="py-3 px-4 text-center">Thao Tác</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/80">
+                            {allTodayBookings.map((b, idx) => {
+                              const bId = b.ma_don_dat || b.id || `POS-${idx + 1}`;
+                              const isSelected = editingInvoiceId === bId;
+                              const isPaid = isBookingPaid(b);
+                              const soTienDaTra = Number(b.so_tien_da_tra || 0);
+                              const tongTien = Number(b.tong_tien || b.tien_san || 0);
+                              const unpaid = isPaid ? 0 : Math.max(0, tongTien - soTienDaTra);
+                              const isPlaying = b.trang_thai === 'DANG_DA' || b.da_vao_san === 1 || b.da_vao_san === true;
+
+                              return (
+                                <tr
+                                  key={bId}
+                                  onClick={() => {
+                                    handleSelectBookingToOrder(b);
+                                    setActiveTab('home');
+                                  }}
+                                  className={`transition-colors cursor-pointer ${
+                                    isSelected 
+                                      ? 'bg-emerald-500/10 border-l-4 border-l-emerald-500' 
+                                      : 'hover:bg-slate-800/50'
+                                  }`}
+                                  title="Nhấn để nạp thông tin đơn sang cột Thông tin Order bên mục Home"
+                                >
+                                  <td className="py-3 px-4">
+                                    <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                      #{bId}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <div className="font-bold text-white flex items-center gap-1.5">
+                                      <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+                                      <span>{b.ten_khach_hang || 'Khách đặt sân'}</span>
+                                    </div>
+                                    {b.so_dien_thoai && (
+                                      <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1 mt-0.5">
+                                        <Phone className="w-3 h-3" /> {b.so_dien_thoai}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <div className="font-bold text-white">{b.ten_san}</div>
+                                    <span className="text-[10px] text-slate-400">{b.ten_loai || 'Sân bóng'}</span>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <div className="font-mono font-bold text-white flex items-center gap-1">
+                                      <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                                      <span>{(b.gio_bat_dau || '').substring(0, 5)} - {(b.gio_ket_thuc || '').substring(0, 5)}</span>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 text-right">
+                                    {isPaid || unpaid === 0 ? (
+                                      <div className="flex flex-col items-end gap-0.5">
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                          ✓ Đã trả đủ 100%
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-mono">
+                                          ({tongTien.toLocaleString('vi-VN')}đ)
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div className="flex flex-col items-end gap-0.5">
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                          Đã cọc 30%: {soTienDaTra.toLocaleString('vi-VN')}đ
+                                        </span>
+                                        <span className="text-[10px] text-rose-400 font-mono font-bold">
+                                          Còn nợ: {unpaid.toLocaleString('vi-VN')}đ
+                                        </span>
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    {isPlaying ? (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse inline-flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                        Đang trong sân
+                                      </span>
+                                    ) : (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                                        Chưa vào sân
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 text-center">
+                                    <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                      {!isPlaying && (
+                                        isPaid || unpaid === 0 ? (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDirectCheckIn(b);
+                                            }}
+                                            className="py-1 px-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow flex items-center gap-1 cursor-pointer"
+                                            title="Cho khách vào sân trực tiếp ngay"
+                                          >
+                                            <span>⚽ Vào sân</span>
+                                          </button>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDirectCheckIn(b, 'DANG_DA');
+                                            }}
+                                            className="py-1 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow flex items-center gap-1 cursor-pointer"
+                                            title="Lưu đơn vào Sân đang đá để khách đá trước thanh toán sau"
+                                          >
+                                            <Save className="w-3 h-3" />
+                                            <span>Lưu vào sân</span>
+                                          </button>
+                                        )
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleSelectBookingToOrder(b);
+                                          setActiveTab('home');
+                                        }}
+                                        className="py-1 px-2.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                        title="Nạp vào cột Thông tin Order bên mục Home để thao tác"
+                                      >
+                                        <ShoppingBag className="w-3 h-3" />
+                                        <span>Mở Order (Home)</span>
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })()}
@@ -3832,7 +4136,7 @@ export default function ManagementSystem() {
                   </div>
                   <div className="flex justify-between items-center text-sm font-black pt-1.5 border-t border-slate-700">
                     <span className="text-white uppercase tracking-wider text-xs flex items-center gap-1">
-                      {isOrderFullyPaid ? 'CẦN THANH TOÁN (DỊCH VỤ):' : 'TỔNG TIỀN THANH TOÁN:'}
+                      {isOrderFullyPaid ? 'CẦN THANH TOÁN (DỊCH VỤ):' : (Number(loadedBookingState?.so_tien_da_tra || 0) > 0 ? 'CẦN THANH TOÁN (CÒN LẠI):' : 'TỔNG TIỀN THANH TOÁN:')}
                     </span>
                     <span className="text-amber-400 font-mono text-lg font-black tracking-tight drop-shadow-md">
                       {amountDueToPay.toLocaleString('vi-VN')} VNĐ
@@ -3853,11 +4157,11 @@ export default function ManagementSystem() {
                       <span>⚽ VÀO SÂN</span>
                     </button>
                     <p className="text-[10px] text-emerald-400 text-center font-bold">
-                      ✓ Đơn đã thanh toán đủ. Nhấn "VÀO SÂN" để bắt đầu trận đấu.
+                      ✓ Đơn đã thanh toán đủ 100%. Nhấn "VÀO SÂN" để bắt đầu trận đấu.
                     </p>
                   </div>
                 ) : (
-                  /* Ngược lại: Hiển thị 2 nút LƯU & THANH TOÁN (kèm cảnh báo nếu có thêm dịch vụ phát sinh) */
+                  /* Ngược lại (ví dụ chỉ mới thanh toán 30%): Hiển thị 2 nút LƯU & THANH TOÁN */
                   <div className="space-y-1.5 pt-0.5">
                     {hasAddedExtraServices && (
                       <div className="text-[10px] text-amber-300 text-center font-bold bg-amber-500/15 py-1 px-2 rounded-lg border border-amber-500/30 flex items-center justify-center gap-1">
@@ -3871,7 +4175,7 @@ export default function ManagementSystem() {
                         type="button"
                         onClick={handleSaveOrder}
                         className="w-full py-3 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                        title="Lưu tạm vào tab Hóa đơn"
+                        title="Đưa hóa đơn này vào sân đang đá để khách thanh toán sau"
                       >
                         <Save className="w-4 h-4" />
                         <span>{hasAddedExtraServices ? 'LƯU DỊCH VỤ' : 'LƯU'}</span>
@@ -3881,12 +4185,18 @@ export default function ManagementSystem() {
                         type="button"
                         onClick={() => handlePayOrder()}
                         className="w-full py-3 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                        title="Thanh toán ngay và lưu đơn vào hệ thống"
+                        title="Thanh toán nốt số tiền còn lại và hoàn tất"
                       >
                         <CreditCard className="w-4 h-4" />
                         <span>{hasAddedExtraServices ? 'THANH TOÁN DỊCH VỤ' : 'THANH TOÁN'}</span>
                       </button>
                     </div>
+
+                    {Number(loadedBookingState?.so_tien_da_tra || 0) > 0 && (
+                      <p className="text-[10px] text-amber-400 text-center font-bold">
+                        ℹ Khách đã cọc {Number(loadedBookingState?.so_tien_da_tra).toLocaleString('vi-VN')}đ (30%). Nhấn <strong>"LƯU"</strong> để đưa vào sân đang đá (thanh toán sau), hoặc <strong>"THANH TOÁN"</strong> để trả nốt.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -4329,7 +4639,7 @@ export default function ManagementSystem() {
                       return (
                         <div
                           key={item.id || item.ma_don_dat || idx}
-                          onClick={!isExpired ? () => handleSelectBookingToOrder(item) : undefined}
+                          onClick={!isExpired ? () => handleSelectCustomerHistoryBookingToOrder(item) : undefined}
                           className={`p-4 rounded-2xl border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm ${
                             isExpired
                               ? 'bg-slate-950/60 border-slate-800/80 opacity-60 cursor-not-allowed'
@@ -4410,7 +4720,7 @@ export default function ManagementSystem() {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleSelectBookingToOrder(item);
+                                  handleSelectCustomerHistoryBookingToOrder(item);
                                 }}
                                 className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center gap-1 cursor-pointer"
                               >
@@ -4749,38 +5059,16 @@ export default function ManagementSystem() {
             {/* 3. Home (Xem Lịch Đặt Sân trong Management System) */}
             <button
               type="button"
-              onClick={() => {
-                setActiveTab('home');
-              }}
-              className="group relative -top-3 flex flex-col items-center focus:outline-none cursor-pointer"
-            >
-              <div className={`flex h-13 w-13 items-center justify-center rounded-2xl shadow-xl transition-all duration-300 group-active:scale-95 ${activeTab === 'home'
-                ? 'bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 shadow-emerald-500/40 scale-105 ring-4 ring-slate-900 dark:ring-slate-950'
-                : isDarkMode
-                  ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 ring-4 ring-slate-900'
-                  : 'bg-emerald-500 text-white hover:bg-emerald-600 ring-4 ring-white shadow-emerald-500/20'
-                }`}>
-                <Home className="h-6 w-6" />
-              </div>
-              <span className={`text-[11px] font-black mt-0.5 tracking-tight ${activeTab === 'home' ? 'text-emerald-400' : isDarkMode ? 'text-slate-400' : 'text-slate-600'
-                }`}>
-                Home
-              </span>
-            </button>
-
-            {/* 4. Hóa đơn */}
-            <button
-              type="button"
-              onClick={() => setActiveTab('invoices')}
-              className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-2xl transition-all duration-200 cursor-pointer ${activeTab === 'invoices'
+              onClick={() => setActiveTab('home')}
+              className={`flex flex-col items-center justify-center gap-1 py-1 px-4 rounded-2xl transition-all duration-200 cursor-pointer ${activeTab === 'home'
                 ? 'text-emerald-400 font-extrabold scale-105'
                 : isDarkMode
                   ? 'text-slate-400 hover:text-slate-200'
                   : 'text-slate-500 hover:text-slate-800'
                 }`}
             >
-              <Receipt className="h-5 w-5" />
-              <span className="text-[11px] tracking-tight">Hóa đơn</span>
+              <Home className="h-5 w-5" />
+              <span className="text-[11px] tracking-tight">Home</span>
             </button>
 
             {/* 5. Lịch sử */}
@@ -4809,6 +5097,57 @@ export default function ManagementSystem() {
         onClose={() => setIsLoginModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
       />
+
+      {/* ==================== 8. THÔNG BÁO NỔI TOAST HIỆN ĐẠI ==================== */}
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-[99999] max-w-sm sm:max-w-md w-full animate-in slide-in-from-top-4 fade-in duration-300 pointer-events-auto shadow-2xl">
+          <div
+            className={`p-4 rounded-2xl border backdrop-blur-xl flex items-start gap-3 transition-all ${
+              toastMessage.type === 'success'
+                ? 'bg-slate-900/95 border-emerald-500/50 text-white shadow-emerald-500/25 ring-1 ring-emerald-500/30'
+                : toastMessage.type === 'error'
+                ? 'bg-slate-900/95 border-rose-500/50 text-white shadow-rose-500/25 ring-1 ring-rose-500/30'
+                : toastMessage.type === 'warning'
+                ? 'bg-slate-900/95 border-amber-500/50 text-white shadow-amber-500/25 ring-1 ring-amber-500/30'
+                : 'bg-slate-900/95 border-cyan-500/50 text-white shadow-cyan-500/25 ring-1 ring-cyan-500/30'
+            }`}
+          >
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                toastMessage.type === 'success'
+                  ? 'bg-emerald-500/20 text-emerald-400'
+                  : toastMessage.type === 'error'
+                  ? 'bg-rose-500/20 text-rose-400'
+                  : toastMessage.type === 'warning'
+                  ? 'bg-amber-500/20 text-amber-400'
+                  : 'bg-cyan-500/20 text-cyan-400'
+              }`}
+            >
+              {toastMessage.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
+              {toastMessage.type === 'error' && <AlertCircle className="w-5 h-5" />}
+              {toastMessage.type === 'warning' && <AlertCircle className="w-5 h-5" />}
+              {toastMessage.type === 'info' && <Sparkles className="w-5 h-5" />}
+            </div>
+
+            <div className="flex-1 min-w-0 pt-0.5">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">
+                {toastMessage.title || (toastMessage.type === 'success' ? 'Thành Công' : toastMessage.type === 'error' ? 'Lỗi' : 'Thông Báo')}
+              </h4>
+              <p className="text-xs font-semibold text-slate-100 mt-0.5 leading-relaxed break-words">
+                {toastMessage.message}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors shrink-0 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
