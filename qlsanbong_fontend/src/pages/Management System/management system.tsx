@@ -2395,12 +2395,6 @@ export default function ManagementSystem() {
                 return st.includes('DA_THANH_TOAN') || st.includes('THANH_TOAN') || st === 'HOAN_THANH';
               };
 
-              const hasUnpaidCurrentlyPlaying = currentlyPlayingPitches.some((item) => {
-                const isPaid = isBookingPaid(item.booking);
-                const unpaid = Math.max(0, item.tong_tien - Number(item.booking?.so_tien_da_tra || 0));
-                return !isPaid && unpaid > 0;
-              });
-
               return (
               <div className="space-y-5 animate-in fade-in duration-300">
                 {/* Header Tab */}
@@ -2506,15 +2500,16 @@ export default function ManagementSystem() {
                                 <th className="py-3 px-4">Khung Giờ</th>
                                 <th className="py-3 px-4">Tiến Độ Trận Đấu</th>
                                 <th className="py-3 px-4">Khách Hàng</th>
-                                {hasUnpaidCurrentlyPlaying && (
-                                  <th className="py-3 px-4 text-right text-amber-400">Tiền Chưa Thanh Toán</th>
-                                )}
+                                <th className="py-3 px-4 text-right text-amber-400">Tiền Chưa Thanh Toán</th>
                                 <th className="py-3 px-4 text-center">Thao Tác</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/80">
                               {currentlyPlayingPitches.map((item, idx) => {
                                 const isPaid = isBookingPaid(item.booking);
+                                const soTienDaTra = Number(item.booking?.so_tien_da_tra || 0);
+                                const tongTien = Number(item.tong_tien || item.booking?.tong_tien || 0);
+                                const unpaidAmount = isPaid ? 0 : Math.max(0, tongTien - soTienDaTra);
                                 return (
                                   <tr key={item.san.id || idx} className="hover:bg-rose-500/5 transition-colors">
                                     <td className="py-3 px-4">
@@ -2558,9 +2553,31 @@ export default function ManagementSystem() {
                                       )}
                                     </td>
                                     <td className="py-3 px-4 text-right">
-                                      <span className="font-mono font-black text-sm text-amber-400">
-                                        {item.tong_tien.toLocaleString('vi-VN')} VNĐ
-                                      </span>
+                                      {isPaid || unpaidAmount === 0 ? (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                            Đã thanh toán đủ
+                                          </span>
+                                          <span className="text-[10px] text-slate-400 font-mono">
+                                            Tổng: {tongTien.toLocaleString('vi-VN')} VNĐ
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                          <span className="font-mono font-black text-sm text-amber-400">
+                                            {unpaidAmount.toLocaleString('vi-VN')} VNĐ
+                                          </span>
+                                          {soTienDaTra > 0 ? (
+                                            <span className="text-[10px] text-slate-400 font-mono">
+                                              (Đã cọc: {soTienDaTra.toLocaleString('vi-VN')}đ / Tổng: {tongTien.toLocaleString('vi-VN')}đ)
+                                            </span>
+                                          ) : (
+                                            <span className="text-[10px] text-slate-400 font-mono">
+                                              (Tổng: {tongTien.toLocaleString('vi-VN')} VNĐ)
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
                                     </td>
                                     <td className="py-3 px-4 text-center">
                                       <div className="flex items-center justify-center gap-1.5">
@@ -2601,6 +2618,9 @@ export default function ManagementSystem() {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {currentlyPlayingPitches.map((item, idx) => {
                           const isPaid = isBookingPaid(item.booking);
+                          const soTienDaTra = Number(item.booking?.so_tien_da_tra || 0);
+                          const tongTien = Number(item.tong_tien || item.booking?.tong_tien || 0);
+                          const unpaidAmount = isPaid ? 0 : Math.max(0, tongTien - soTienDaTra);
                           return (
                             <div
                               key={item.san.id || idx}
@@ -2666,10 +2686,28 @@ export default function ManagementSystem() {
                                 )}
 
                                 <div className="flex items-center justify-between pt-1 border-t border-slate-800">
-                                  <span className="text-slate-400">Tiền sân:</span>
-                                  <strong className="text-amber-400 font-mono text-sm font-black">
-                                    {item.tong_tien.toLocaleString('vi-VN')} VNĐ
-                                  </strong>
+                                  <span className="text-slate-400">Chưa thanh toán:</span>
+                                  {isPaid || unpaidAmount === 0 ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                        Đã thanh toán đủ
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 font-mono">
+                                        ({tongTien.toLocaleString('vi-VN')}đ)
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="text-right">
+                                      <strong className="text-amber-400 font-mono text-sm font-black">
+                                        {unpaidAmount.toLocaleString('vi-VN')} VNĐ
+                                      </strong>
+                                      {soTienDaTra > 0 && (
+                                        <div className="text-[10px] text-slate-400 font-mono">
+                                          (Đã cọc: {soTienDaTra.toLocaleString('vi-VN')}đ)
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
