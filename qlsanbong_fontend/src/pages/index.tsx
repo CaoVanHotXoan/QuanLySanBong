@@ -48,6 +48,7 @@ import Login, { AuthUser } from './Login/login';
 import Profile from '../profile/profile';
 import SoccerLoader from '../components/SoccerLoader';
 import DateNavigationBar from '../components/DateNavigationBar';
+import { useBookingSync } from '../hooks/useBookingSync';
 
 /**
  * Interface Dữ liệu trả về từ Cổng thanh toán PayOS (MB Bank VietQR)
@@ -229,6 +230,9 @@ function SoccerBallIcon({ className = "w-6 h-6" }: { className?: string }) {
 
 export default function HomePage() {
   const router = useRouter();
+
+  // Hook đồng bộ Real-time với Management System (qua localStorage SYSTEM_ORDERS)
+  const { orders: syncOrders } = useBookingSync();
 
   // -------------------------------------------------------------
   // A. CÁC STATE QUẢN LÝ DỮ LIỆU THỰC TỪ SQL SERVER
@@ -1585,7 +1589,21 @@ export default function HomePage() {
                             const slotKey = `${san.id}_${slot.start}`;
                             const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
                             const slotData = gridSlots[slotKey];
-                            const isBooked = slotData && slotData.trang_thai === 'DA_CHOT';
+
+                            // Kiểm tra đơn từ Management System (sync qua localStorage SYSTEM_ORDERS)
+                            const matchedSyncOrder = syncOrders.find((order) => {
+                              if ((order.ngay_da || '').substring(0, 10) !== filterNgayDa) return false;
+                              if (order.trang_thai === 'Đã hủy') return false;
+                              const matchSan = (order.ma_san && order.ma_san === san.id) ||
+                                (order.ten_san && (order.ten_san.includes(san.ten_san) || san.ten_san.includes(order.ten_san)));
+                              if (!matchSan) return false;
+                              return isTimeOverlapping(slot.start, slot.end,
+                                (order.gio_bat_dau || '').substring(0, 5),
+                                (order.gio_ket_thuc || '').substring(0, 5));
+                            });
+                            const isSyncBooked = !!matchedSyncOrder;
+
+                            const isBooked = (slotData && slotData.trang_thai === 'DA_CHOT') || isSyncBooked;
                             const isPast = isSlotInThePast(slot.start);
                             const isLockedByOther =
                               lockedSlots.includes(slotKeyRealtime) && !myLockedSlotIds.includes(slotKeyRealtime);
@@ -1746,7 +1764,21 @@ export default function HomePage() {
                         const slotKey = `${san.id}_${slot.start}`;
                         const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
                         const slotData = gridSlots[slotKey];
-                        const isBooked = slotData && slotData.trang_thai === 'DA_CHOT';
+
+                        // Kiểm tra đơn từ Management System (sync qua localStorage SYSTEM_ORDERS)
+                        const matchedSyncOrder2 = syncOrders.find((order) => {
+                          if ((order.ngay_da || '').substring(0, 10) !== filterNgayDa) return false;
+                          if (order.trang_thai === 'Đã hủy') return false;
+                          const matchSan = (order.ma_san && order.ma_san === san.id) ||
+                            (order.ten_san && (order.ten_san.includes(san.ten_san) || san.ten_san.includes(order.ten_san)));
+                          if (!matchSan) return false;
+                          return isTimeOverlapping(slot.start, slot.end,
+                            (order.gio_bat_dau || '').substring(0, 5),
+                            (order.gio_ket_thuc || '').substring(0, 5));
+                        });
+                        const isSyncBooked2 = !!matchedSyncOrder2;
+
+                        const isBooked = (slotData && slotData.trang_thai === 'DA_CHOT') || isSyncBooked2;
                         const isPast = isSlotInThePast(slot.start);
 
                         // Kiểm tra nếu ô đang bị người khác giữ chỗ Real-time

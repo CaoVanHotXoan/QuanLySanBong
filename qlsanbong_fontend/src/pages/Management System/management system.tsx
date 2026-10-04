@@ -152,6 +152,7 @@ export interface DonDatSanPOS {
   tong_tien: number;
   so_tien_da_tra?: number;
   trang_thai: 'Chờ thanh toán' | 'Đã thanh toán' | 'Đã hủy' | string;
+  nguon_dat?: 'pos' | 'web' | string;
   trang_thai_vao_san?: string;
   da_vao_san?: boolean;
   gio_vao_san?: string;
@@ -213,6 +214,34 @@ function formatDateToISO(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+function isWaitingBookingExpired(order: any, now: Date = new Date()): boolean {
+  if (!order || order.da_vao_san === true || order.da_vao_san === 1 || String(order.trang_thai_vao_san || '').toUpperCase() === 'DANG_DA') {
+    return false;
+  }
+
+  const status = String(order.trang_thai || '').toLowerCase();
+  if (status === 'da_huy' || status === 'đã hủy' || status === 'ket_thuc' || status === 'hoan_thanh') {
+    return false;
+  }
+
+  const today = formatDateToISO(now);
+  const rawDate = String(order.ngay_da || '').trim();
+  const slashDate = rawDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  const orderDate = slashDate
+    ? `${slashDate[3]}-${slashDate[2].padStart(2, '0')}-${slashDate[1].padStart(2, '0')}`
+    : rawDate.substring(0, 10);
+  if (orderDate && orderDate > today) return false;
+  if (orderDate && orderDate < today) return true;
+
+  const endTime = String(order.khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
+    String(order.gio_ket_thuc || '').match(/\d{1,2}:\d{2}/)?.[0];
+  if (!endTime) return false;
+
+  const [endHour, endMinute] = endTime.split(':').map(Number);
+  return Number.isInteger(endHour) && Number.isInteger(endMinute) &&
+    now.getHours() * 60 + now.getMinutes() >= endHour * 60 + endMinute;
 }
 
 // Helper kiểm tra đơn đặt/hóa đơn đã qua ngày hoặc qua thời gian kết thúc chưa
@@ -288,6 +317,15 @@ export default function ManagementSystem() {
   const router = useRouter();
 
   // -------------------------------------------------------------
+  // REAL-TIME SYNC HOOK (localStorage + CustomEvent cross-tab)
+  // -------------------------------------------------------------
+  const {
+    orders: syncOrders,
+    addOrder: addSyncOrder,
+    updateOrderStatus: updateSyncOrderStatus,
+  } = useBookingSync();
+
+  // -------------------------------------------------------------
   // STATE GIAO DIỆN & THEME CŨ
   // -------------------------------------------------------------
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
@@ -308,6 +346,59 @@ export default function ManagementSystem() {
   const [gridSlots, setGridSlots] = useState<Record<string, SlotLichSan>>({});
   const [lockedSlots, setLockedSlots] = useState<string[]>([]);
   const [rawBookings, setRawBookings] = useState<any[]>([]);
+  const isLoadedFromStorageRef = useRef<boolean>(false);
+
+  // Nạp dữ liệu từ localStorage khi mount trên Client để tránh lỗi Hydration Mismatch của Next.js
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('POS_ORDERS_DATA');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRawBookings(parsed);
+        }
+      }
+    } catch (error) {
+      console.error('Lỗi khi đọc dữ liệu từ localStorage:', error);
+    } finally {
+      isLoadedFromStorageRef.current = true;
+    }
+  }, []);
+
+  // Tự động lưu vào localStorage mỗi khi rawBookings thay đổi
+  useEffect(() => {
+    if (!isLoadedFromStorageRef.current || typeof window === 'undefined') return;
+    try {
+      if (rawBookings && rawBookings.length > 0) {
+        localStorage.setItem('POS_ORDERS_DATA', JSON.stringify(rawBookings));
+      }
+    } catch (error) {
+      console.error('Lỗi khi lưu POS_ORDERS_DATA vào localStorage:', error);
+    }
+  }, [rawBookings]);
+
+  // Lắng nghe sự kiện Storage để đồng bộ đa Tab / Cross-tab Real-time
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleCrossTabSync = (event: StorageEvent) => {
+      if (event.key === 'POS_ORDERS_DATA' && event.newValue) {
+        try {
+          const updatedOrders = JSON.parse(event.newValue);
+          if (Array.isArray(updatedOrders)) {
+            setRawBookings(updatedOrders);
+          }
+        } catch (error) {
+          console.error('Lỗi khi phân tích dữ liệu đồng bộ giữa các tab:', error);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleCrossTabSync);
+    return () => {
+      window.removeEventListener('storage', handleCrossTabSync);
+    };
+  }, []);
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
@@ -347,7 +438,7 @@ export default function ManagementSystem() {
   const [playingViewMode, setPlayingViewMode] = useState<'list' | 'grid'>('list');
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
-  
+
   // State tìm kiếm khách hàng theo Tên / Số điện thoại ở Header
   const [userList, setUserList] = useState<Array<{
     id: number;
@@ -418,13 +509,6 @@ export default function ManagementSystem() {
     [notifications]
   );
 
-  // Hook đồng bộ Real-time giả lập (localStorage & Window Storage Event)
-  const {
-    orders: syncOrders,
-    addOrder: addSyncOrder,
-    updateOrderStatus: updateSyncOrderStatus,
-  } = useBookingSync();
-
   // State lưu ID hóa đơn đang được chỉnh sửa thêm dịch vụ
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | number | null>(null);
   const [selectedInvoiceDetail, setSelectedInvoiceDetail] = useState<DonDatSanPOS | null>(null);
@@ -470,7 +554,7 @@ export default function ManagementSystem() {
   // Kiểm tra quyền Admin / Nhân viên cũ
   const checkIsAuthorizedRole = (user?: AuthUser | string | null): boolean => {
     if (!user) return true; // Cho phép mở giao diện POS nếu chưa đăng nhập để thao tác bán hàng
-    const role = typeof user === 'string' 
+    const role = typeof user === 'string'
       ? user.trim().toUpperCase().replace(/\s+/g, '_')
       : (user.vai_tro || '').trim().toUpperCase().replace(/\s+/g, '_');
     const email = typeof user === 'string' ? '' : (user.email || '').trim().toLowerCase();
@@ -875,20 +959,52 @@ export default function ManagementSystem() {
     setTimeout(() => setCustomerSearchAlert(null), 3500);
   };
 
-  // Danh sách các sân đang sử dụng / đang đá trong thời gian hiện tại
+  // Danh sách các sân đang sử dụng / đang đá trong thời gian hiện tại (Hỗ trợ nhiều đơn cùng lúc)
   const currentlyPlayingPitches = useMemo(() => {
     const now = new Date();
     const currentHours = now.getHours();
     const currentMinutes = now.getMinutes();
-    const currentHM = `${String(currentHours).padStart(2, '0')}:${String(currentMinutes).padStart(2, '0')}`;
     const todayISO = formatDateToISO(now);
     const viewingDateISO = formattedDateISO;
 
-    // Gộp tất cả đơn đặt hôm nay/ngày xem (bao gồm cả syncOrders vừa tạo)
-    const allBookingsToday = [...rawBookings, ...historyBookings, ...syncOrders].filter((b) => {
+    // Gộp tất cả đơn đặt và lọc các đơn có trang_thai === 'dang_da'
+    const playingBookings = [...rawBookings, ...historyBookings, ...syncOrders].filter((b) => {
       if (b.trang_thai === 'DA_HUY' || b.trang_thai === 'Đã hủy') return false;
+      const statusNorm = String(b.trang_thai || '').toLowerCase();
+      // Loại bỏ các đơn đã kết thúc (tự động dọn sân sau khi hết giờ)
+      if (statusNorm === 'ket_thuc' || statusNorm === 'da_hoan_thanh' || statusNorm === 'hoan_thanh') return false;
+      const isDangDa = statusNorm === 'dang_da' || b.trang_thai === 'DANG_DA' || b.da_vao_san === 1 || b.da_vao_san === true || b.trang_thai_vao_san === 'DANG_DA';
       const bDate = (b.ngay_da || '').substring(0, 10);
-      return bDate === viewingDateISO || bDate === todayISO || !b.ngay_da;
+      const isDateMatch = bDate === viewingDateISO || bDate === todayISO || !b.ngay_da;
+      const endTime = String(b.khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
+        String(b.gio_ket_thuc || '').match(/\d{1,2}:\d{2}/)?.[0];
+      let isExpired = false;
+      if (bDate && bDate < todayISO) {
+        isExpired = true;
+      } else if (bDate === todayISO && endTime) {
+        const [endHour, endMinute] = endTime.split(':').map(Number);
+        isExpired = currentHours * 60 + currentMinutes >= endHour * 60 + endMinute;
+      }
+      return isDateMatch && isDangDa && !isExpired;
+    });
+
+    // Ưu tiên mã đơn/ID để không gộp nhầm nhiều hóa đơn hợp lệ cùng sân và khung giờ.
+    // Chỉ dùng khóa sân + ngày + khung giờ cho bản ghi không có định danh.
+    const uniqueBookingsMap = new Map<string, any>();
+    playingBookings.forEach((b) => {
+      const bookingId = b.ma_don_dat || b.id;
+      const bookingKey = bookingId
+        ? `id_${String(bookingId)}`
+        : `slot_${b.ma_san || b.ten_san || 'san'}_${String(b.ngay_da || todayISO).substring(0, 10)}_${String(b.gio_bat_dau || '').substring(0, 5)}_${String(b.gio_ket_thuc || '').substring(0, 5)}`;
+      const existing = uniqueBookingsMap.get(bookingKey);
+      if (!existing) {
+        uniqueBookingsMap.set(bookingKey, b);
+        return;
+      }
+
+      const existingCreatedAt = Date.parse(String(existing.ngay_tao || '')) || 0;
+      const currentCreatedAt = Date.parse(String(b.ngay_tao || '')) || 0;
+      if (currentCreatedAt >= existingCreatedAt) uniqueBookingsMap.set(bookingKey, b);
     });
 
     const activeList: Array<{
@@ -906,47 +1022,74 @@ export default function ManagementSystem() {
       trang_thai_da: 'DANG_DA' | 'SAP_DA';
     }> = [];
 
-    sanBongList.forEach((san) => {
-      // Tìm booking đang hoạt động trong khung giờ hiện tại HOẶC được kích hoạt DANG_DA
-      const matched = allBookingsToday.find((b) => {
-        if (b.ma_san !== san.id && b.ten_san !== san.ten_san) return false;
-        if (b.trang_thai === 'DANG_DA' || b.da_vao_san === 1 || b.da_vao_san === true || b.trang_thai_vao_san === 'DANG_DA') return true;
-        const bStart = (b.gio_bat_dau || '').substring(0, 5);
-        const bEnd = (b.gio_ket_thuc || '').substring(0, 5);
-        if (!bStart || !bEnd) return false;
-        return isTimeOverlapping(currentHM, currentHM > '23:30' ? '23:59' : `${String(currentHours).padStart(2, '0')}:${String(currentMinutes + 1).padStart(2, '0')}`, bStart, bEnd) ||
-               (bStart <= currentHM && currentHM <= bEnd);
+    Array.from(uniqueBookingsMap.values()).forEach((matched) => {
+      const matchedSan = sanBongList.find((s) => s.id === matched.ma_san || s.ten_san === matched.ten_san) || {
+        id: matched.ma_san || 1,
+        ten_san: matched.ten_san || 'Sân bóng',
+        ten_loai: matched.ten_loai || 'Sân bóng',
+        ma_loai_san: 1,
+        don_gia_phut: 5000,
+        trang_thai: 'SAN_SANG' as const,
+      };
+
+      const bStart = (matched.gio_bat_dau || '').substring(0, 5) || '17:00';
+      const bEnd = (matched.gio_ket_thuc || '').substring(0, 5) || '18:30';
+      const [sh, sm] = bStart.split(':').map(Number);
+      const [eh, em] = bEnd.split(':').map(Number);
+      const startTotalMin = (sh || 0) * 60 + (sm || 0);
+      const endTotalMin = (eh || 0) * 60 + (em || 0);
+      const curTotalMin = currentHours * 60 + currentMinutes;
+      const totalDuration = Math.max(1, endTotalMin - startTotalMin);
+
+      const phut_da_da = Math.min(totalDuration, Math.max(0, curTotalMin - startTotalMin));
+      const phut_con_lai = Math.max(0, endTotalMin - curTotalMin);
+      const phan_tram_tien_do = Math.min(100, Math.round((phut_da_da / totalDuration) * 100));
+
+      activeList.push({
+        san: matchedSan,
+        booking: matched,
+        gio_bat_dau: bStart,
+        gio_ket_thuc: bEnd,
+        ten_khach_hang: matched.ten_khach_hang || 'Khách đang đá',
+        so_dien_thoai: matched.so_dien_thoai || '',
+        tong_tien: Number(matched.tong_tien || matched.tien_san || (matchedSan.don_gia_phut * totalDuration)),
+        ma_don_dat: matched.ma_don_dat || matched.id || `POS-${matchedSan.id}`,
+        phut_da_da,
+        phut_con_lai,
+        phan_tram_tien_do,
+        trang_thai_da: 'DANG_DA',
       });
+    });
+    // Sắp xếp: Đơn chưa thanh toán lên đầu, đơn mới nhất lên trước
+    activeList.sort((a, b) => {
+      // Ưu tiên 1: Đơn chưa thanh toán luôn đứng trước đơn đã thanh toán.
+      const aStatus = String(a.booking?.trang_thai || '').toLowerCase().replace(/\s+/g, '_');
+      const bStatus = String(b.booking?.trang_thai || '').toLowerCase().replace(/\s+/g, '_');
+      const aIsPaid = a.booking?.da_thanh_toan === true ||
+        aStatus.includes('da_thanh_toan') ||
+        aStatus.includes('đã_thanh_toán') ||
+        aStatus.includes('da_chot') ||
+        aStatus.includes('đã_chốt') ||
+        aStatus === 'hoan_thanh' ||
+        aStatus === 'hoàn_thành';
+      const bIsPaid = b.booking?.da_thanh_toan === true ||
+        bStatus.includes('da_thanh_toan') ||
+        bStatus.includes('đã_thanh_toán') ||
+        bStatus.includes('da_chot') ||
+        bStatus.includes('đã_chốt') ||
+        bStatus === 'hoan_thanh' ||
+        bStatus === 'hoàn_thành';
+      if (aIsPaid !== bIsPaid) return aIsPaid ? 1 : -1;
 
-      if (matched) {
-        const bStart = (matched.gio_bat_dau || '').substring(0, 5);
-        const bEnd = (matched.gio_ket_thuc || '').substring(0, 5);
-        const [sh, sm] = bStart.split(':').map(Number);
-        const [eh, em] = bEnd.split(':').map(Number);
-        const startTotalMin = (sh || 0) * 60 + (sm || 0);
-        const endTotalMin = (eh || 0) * 60 + (em || 0);
-        const curTotalMin = currentHours * 60 + currentMinutes;
-        const totalDuration = Math.max(1, endTotalMin - startTotalMin);
+      // Ưu tiên 2: Thời gian tạo mới nhất lên trước.
+      const aCreatedAt = Date.parse(String(a.booking?.ngay_tao || '')) || 0;
+      const bCreatedAt = Date.parse(String(b.booking?.ngay_tao || '')) || 0;
+      if (aCreatedAt !== bCreatedAt) return bCreatedAt - aCreatedAt;
 
-        const phut_da_da = Math.min(totalDuration, Math.max(0, curTotalMin - startTotalMin));
-        const phut_con_lai = Math.max(0, endTotalMin - curTotalMin);
-        const phan_tram_tien_do = Math.min(100, Math.round((phut_da_da / totalDuration) * 100));
-
-        activeList.push({
-          san,
-          booking: matched,
-          gio_bat_dau: bStart,
-          gio_ket_thuc: bEnd,
-          ten_khach_hang: matched.ten_khach_hang || 'Khách đang đá',
-          so_dien_thoai: matched.so_dien_thoai || '',
-          tong_tien: Number(matched.tong_tien || matched.tien_san || (san.don_gia_phut * totalDuration)),
-          ma_don_dat: matched.ma_don_dat || matched.id || `POS-${san.id}`,
-          phut_da_da,
-          phut_con_lai,
-          phan_tram_tien_do,
-          trang_thai_da: 'DANG_DA',
-        });
-      }
+      // Fallback: ID lớn hơn lên trước nếu thiếu ngày tạo.
+      const aId = Number(a.booking?.id || 0);
+      const bId = Number(b.booking?.id || 0);
+      return bId - aId;
     });
 
     return activeList;
@@ -964,6 +1107,7 @@ export default function ManagementSystem() {
       if (b.trang_thai === 'HOAN_THANH' || b.trang_thai === 'DA_CHOT') return false;
       const bDate = (b.ngay_da || '').substring(0, 10);
       if (bDate !== viewingDateISO) return false;
+      if (isWaitingBookingExpired(b)) return false;
 
       // Khi nhấn vào sân hoặc đang đá: hóa đơn này sẽ biến mất khỏi danh sách chờ bên dưới
       const bId = String(b.ma_don_dat || b.id);
@@ -1102,7 +1246,37 @@ export default function ManagementSystem() {
       const res = await fetch(`${API_BASE_URL}/dat-san/lich-san?ngay_da=${ngayISO}`);
       const data = await res.json();
       const bookings = data.success && Array.isArray(data.data) ? data.data : [];
-      setRawBookings(bookings);
+
+      // Hợp nhất dữ liệu từ API với trạng thái cục bộ đã lưu trong localStorage để không mất khi F5
+      let mergedBookings = bookings;
+      try {
+        const saved = typeof window !== 'undefined' ? localStorage.getItem('POS_ORDERS_DATA') : null;
+        if (saved) {
+          const localData: any[] = JSON.parse(saved);
+          const localMap = new Map(localData.map((d) => [String(d.ma_don_dat || d.id), d]));
+          mergedBookings = bookings.map((b: any) => {
+            const bId = String(b.ma_don_dat || b.id);
+            if (localMap.has(bId)) {
+              const localItem = localMap.get(bId)!;
+              return {
+                ...b,
+                trang_thai: localItem.trang_thai || b.trang_thai,
+                da_vao_san: localItem.da_vao_san !== undefined ? localItem.da_vao_san : b.da_vao_san,
+                trang_thai_vao_san: localItem.trang_thai_vao_san || b.trang_thai_vao_san,
+                gio_vao_san: localItem.gio_vao_san || b.gio_vao_san,
+                // Bảo tồn trạng thái thanh toán từ localStorage (tránh bị ghi đè bởi API cũ)
+                da_thanh_toan: localItem.da_thanh_toan !== undefined ? localItem.da_thanh_toan : b.da_thanh_toan,
+                so_tien_da_tra: localItem.so_tien_da_tra || b.so_tien_da_tra,
+              };
+            }
+            return b;
+          });
+        }
+      } catch (e) {
+        console.error('Lỗi hợp nhất localStorage:', e);
+      }
+
+      setRawBookings(mergedBookings);
 
       const newGrid: Record<string, SlotLichSan> = {};
       const activeSlots = timeSlotsList.length > 0 ? timeSlotsList : DEFAULT_TIME_SLOTS;
@@ -1235,9 +1409,8 @@ export default function ManagementSystem() {
       const notif: POSNotification = {
         id: `pay_${Date.now()}_${Math.random()}`,
         title: '💰 Nhận Chuyển Khoản Thành Công!',
-        message: `Khách hàng ${customer} vừa chuyển khoản ${
-          amount ? Number(amount).toLocaleString('vi-VN') + 'đ' : ''
-        } cho đơn #${orderCode}.`,
+        message: `Khách hàng ${customer} vừa chuyển khoản ${amount ? Number(amount).toLocaleString('vi-VN') + 'đ' : ''
+          } cho đơn #${orderCode}.`,
         time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         isRead: false,
         amount: Number(amount),
@@ -1254,6 +1427,114 @@ export default function ManagementSystem() {
       socket.disconnect();
     };
   }, [formattedDateISO, sanBongList, fetchLichSan, fetchHistory]);
+
+  // -------------------------------------------------------------
+  // AUTO-CLEANUP: Tự động dọn sân khi hết giờ (Background Worker - 60s)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const cleanupExpiredOrders = async () => {
+      const now = new Date();
+
+      const isExpiredPlayingOrder = (order: any) => {
+        const status = String(order.trang_thai || '').toLowerCase();
+        const isPlaying =
+          status === 'dang_da' ||
+          order.da_vao_san === true ||
+          order.da_vao_san === 1 ||
+          String(order.trang_thai_vao_san || '').toUpperCase() === 'DANG_DA';
+
+        if (
+          !isPlaying ||
+          status === 'ket_thuc' ||
+          status === 'hoan_thanh' ||
+          status === 'da_huy' ||
+          status === 'đã hủy'
+        ) {
+          return false;
+        }
+
+        const timeRange = String(order.khung_gio || '').match(
+          /(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/
+        );
+        const endTime = timeRange?.[2] || String(order.gio_ket_thuc || '').match(/\d{1,2}:\d{2}/)?.[0];
+        if (!endTime) return false;
+
+        const [endHour, endMinute] = endTime.split(':').map(Number);
+        if (!Number.isInteger(endHour) || !Number.isInteger(endMinute) || endHour > 23 || endMinute > 59) {
+          return false;
+        }
+
+        const todayDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const rawOrderDate = String(order.ngay_da || '').trim();
+        const slashDate = rawOrderDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        const orderDate = slashDate
+          ? `${slashDate[3]}-${slashDate[2].padStart(2, '0')}-${slashDate[1].padStart(2, '0')}`
+          : rawOrderDate.substring(0, 10);
+        if (orderDate && orderDate > todayDate) return false;
+        if (orderDate && orderDate < todayDate) return true;
+
+        const endDate = new Date(now);
+        endDate.setHours(endHour, endMinute, 0, 0);
+        return now >= endDate;
+      };
+
+      setRawBookings((prevOrders) =>
+        prevOrders.map((order) =>
+          isExpiredPlayingOrder(order) ? { ...order, trang_thai: 'hoan_thanh' } : order
+        )
+      );
+
+      setHistoryBookings((prevOrders) =>
+        prevOrders.map((order) =>
+          isExpiredPlayingOrder(order) ? { ...order, trang_thai: 'hoan_thanh' } : order
+        )
+      );
+
+      syncOrders.forEach((order) => {
+        if (isExpiredPlayingOrder(order)) {
+          updateSyncOrderStatus(order.id || order.ma_don_dat, 'hoan_thanh');
+        }
+      });
+
+      const expiredWaitingOrders = [...rawBookings, ...historyBookings, ...syncOrders]
+        .filter((order) => isWaitingBookingExpired(order, now));
+      const expiredKeys = new Set(
+        expiredWaitingOrders.map((order) => String(order.ma_don_dat || order.id))
+      );
+
+      if (expiredKeys.size > 0) {
+        const keepActive = (order: any) => !expiredKeys.has(String(order.ma_don_dat || order.id));
+        setRawBookings((prevOrders) => prevOrders.filter(keepActive));
+        setHistoryBookings((prevOrders) => prevOrders.filter(keepActive));
+
+        if (typeof window !== 'undefined') {
+          try {
+            const saved = JSON.parse(localStorage.getItem('POS_ORDERS_DATA') || '[]');
+            if (Array.isArray(saved)) {
+              localStorage.setItem('POS_ORDERS_DATA', JSON.stringify(saved.filter(keepActive)));
+            }
+          } catch (error) {
+            console.warn('Không thể dọn hóa đơn quá giờ trong POS_ORDERS_DATA:', error);
+          }
+        }
+
+        await Promise.all(expiredWaitingOrders.map(async (order) => {
+          const databaseId = Number(order.id);
+          if (!Number.isInteger(databaseId)) return;
+          try {
+            await fetch(`${API_BASE_URL}/dat-san/don-dat-thanh-toan/${databaseId}`, { method: 'DELETE' });
+          } catch (error) {
+            console.warn(`Không thể xóa đơn quá giờ #${databaseId}:`, error);
+          }
+        }));
+      }
+    };
+
+    void cleanupExpiredOrders();
+    const autoCleanupInterval = setInterval(cleanupExpiredOrders, 60000);
+
+    return () => clearInterval(autoCleanupInterval);
+  }, [rawBookings, historyBookings, syncOrders, updateSyncOrderStatus]);
 
   // Đăng nhập thành công từ modal
   const handleLoginSuccess = (userData: AuthUser) => {
@@ -1717,33 +1998,90 @@ export default function ManagementSystem() {
   };
 
   // Cho khách vào sân trực tiếp từ danh sách đơn đặt hôm nay
-  const handleDirectCheckIn = async (b: any, status: 'DANG_DA' = 'DANG_DA') => {
-    const bookingId = b.ma_don_dat || b.id;
-    if (bookingId && !String(bookingId).startsWith('temp_')) {
+  const handleVaoSan = async (maDon: string | number, databaseId?: string | number) => {
+    if (!maDon) return;
+    const targetId = String(maDon);
+    const gioVaoSan = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const markAsPlaying = (order: any) => {
+      const currentId = String(order.ma_don_dat || order.id);
+      return currentId === targetId
+        ? {
+          ...order,
+          trang_thai: 'dang_da',
+          da_vao_san: true,
+          trang_thai_vao_san: 'DANG_DA',
+          gio_vao_san: gioVaoSan,
+        }
+        : order;
+    };
+
+    // 1. Immutable update state: CHỈ cập nhật đơn khớp mã, TẤT CẢ đơn khác return y nguyên
+    setRawBookings((prev) => prev.map(markAsPlaying));
+    setHistoryBookings((prev) => prev.map(markAsPlaying));
+
+    // Persist the local POS copy so a refresh cannot restore the waiting status.
+    if (typeof window !== 'undefined') {
       try {
-        await fetch(`${API_BASE_URL}/dat-san/vao-san/${bookingId}`, {
+        const saved = JSON.parse(localStorage.getItem('POS_ORDERS_DATA') || '[]');
+        if (Array.isArray(saved)) {
+          localStorage.setItem('POS_ORDERS_DATA', JSON.stringify(saved.map(markAsPlaying)));
+        }
+      } catch (error) {
+        console.warn('Không thể lưu trạng thái vào sân vào POS_ORDERS_DATA:', error);
+      }
+    }
+
+    updateSyncOrderStatus(maDon, 'dang_da', {
+      trang_thai: 'dang_da',
+      trang_thai_vao_san: 'DANG_DA',
+      da_vao_san: true,
+      gio_vao_san: gioVaoSan,
+    });
+
+    // 2. Đồng bộ xuống Backend API SQL Server
+    const apiId = String(databaseId ?? maDon);
+    if (!apiId.startsWith('temp_') && Number.isInteger(Number(apiId))) {
+      try {
+        await fetch(`${API_BASE_URL}/dat-san/vao-san/${apiId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trang_thai: status }),
+          body: JSON.stringify({ trang_thai: 'DANG_DA' }),
         });
       } catch (err) {
         console.warn('Lỗi gọi API vao-san:', err);
       }
     }
-    updateSyncOrderStatus(bookingId, b.trang_thai || 'Đã thanh toán', {
-      ten_khach_hang: b.ten_khach_hang || 'Khách vào sân',
-      so_dien_thoai: b.so_dien_thoai || '',
-      ten_san: b.ten_san || 'Sân bóng',
-      gio_bat_dau: (b.gio_bat_dau || '').substring(0, 5) || '17:00',
-      gio_ket_thuc: (b.gio_ket_thuc || '').substring(0, 5) || '18:30',
+
+    showToast(`⚽ Đơn #${maDon} đã vào sân thi đấu thành công!`, 'success', 'Vào Sân Thành Công');
+    setActiveTab('pitch');
+  };
+
+  // Mở Modal Drawer Xác Nhận & Chi Tiết Thanh Toán cho đơn đang đá
+  const handleOpenPaymentModal = (item: any) => {
+    const b = item.booking || item;
+    const inv: DonDatSanPOS = {
+      id: b.id || item.ma_don_dat || b.ma_don_dat,
+      ma_don_dat: String(b.ma_don_dat || item.ma_don_dat || b.id),
+      ten_khach_hang: b.ten_khach_hang || item.ten_khach_hang || 'Khách đang đá',
+      so_dien_thoai: b.so_dien_thoai || item.so_dien_thoai || '',
+      ten_san: item.san?.ten_san || b.ten_san || 'Sân bóng',
+      ma_san: item.san?.id || b.ma_san,
+      gio_bat_dau: (b.gio_bat_dau || item.gio_bat_dau || '17:00').substring(0, 5),
+      gio_ket_thuc: (b.gio_ket_thuc || item.gio_ket_thuc || '18:30').substring(0, 5),
       ngay_da: b.ngay_da || formattedDateISO,
-      trang_thai_vao_san: 'DANG_DA',
-      da_vao_san: true,
-      gio_vao_san: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-    });
-    await fetchLichSan(formattedDateISO, sanBongList);
-    fetchHistory();
-    showToast(`⚽ Đã đưa đơn #${bookingId} (${b.ten_khach_hang || 'Khách'}) vào danh sách Sân đang đá thành công!`, 'success', 'Vào Sân Thành Công');
+      tien_san: Number(b.tien_san || item.tong_tien || 0),
+      dich_vu: b.dich_vu || b.chi_tiet_dich_vu || [],
+      tong_tien: Number(b.tong_tien || item.tong_tien || b.tien_san || 0),
+      so_tien_da_tra: Number(b.so_tien_da_tra || 0),
+      trang_thai: b.trang_thai || 'DANG_DA',
+      ngay_tao: b.ngay_tao || new Date().toISOString(),
+    };
+    setSelectedInvoiceDetail(inv);
+  };
+
+  const handleDirectCheckIn = async (b: any, status: 'DANG_DA' = 'DANG_DA') => {
+    const bookingId = b.ma_don_dat || b.id;
+    await handleVaoSan(bookingId);
   };
 
   // -------------------------------------------------------------
@@ -1845,12 +2183,12 @@ export default function ManagementSystem() {
         const pitchesToSave = selectedPitches.length > 0
           ? selectedPitches
           : [{
-              pitch: sanBongList[0],
-              startTime: '17:00',
-              endTime: '18:30',
-              durationMin: 90,
-              price: 0,
-            }];
+            pitch: sanBongList[0],
+            startTime: '17:00',
+            endTime: '18:30',
+            durationMin: 90,
+            price: 0,
+          }];
 
         for (let i = 0; i < pitchesToSave.length; i++) {
           const p = pitchesToSave[i];
@@ -1925,9 +2263,10 @@ export default function ManagementSystem() {
         dich_vu: serviceItems,
         tong_tien: grandTotal,
         so_tien_da_tra: 0,
-        trang_thai: 'DANG_DA',
+        trang_thai: 'dang_da',
         trang_thai_vao_san: 'DANG_DA',
         da_vao_san: true,
+        nguon_dat: 'pos',
         ngay_tao: new Date().toISOString(),
       };
       addSyncOrder(newInvoice);
@@ -1949,8 +2288,63 @@ export default function ManagementSystem() {
     };
 
     if (invoiceToPay) {
-      try {
-        if (invoiceToPay.id && !String(invoiceToPay.id).startsWith('temp_')) {
+      // Chuẩn bị tất cả các dạng ID có thể (số nguyên DB, chuỗi mã đơn IHD-...)
+      const targetNumId = String(invoiceToPay.id || '');
+      const targetMaDon = String(invoiceToPay.ma_don_dat || invoiceToPay.id || '');
+      const orderTotal = Number(invoiceToPay.tong_tien || invoiceToPay.tien_san || 0);
+
+      // Hàm kiểm tra ID khớp theo cả 2 dạng (số nguyên DB và mã đơn hiển thị)
+      const isMatchingId = (order: any): boolean => {
+        const maDon = String(order.ma_don_dat || '');
+        const numId = String(order.id || '');
+        return (
+          maDon === targetMaDon || maDon === targetNumId ||
+          numId === targetNumId || numId === targetMaDon
+        );
+      };
+
+      // Cập nhật functional update cho rawBookings & historyBookings
+      setRawBookings((prevOrders) =>
+        prevOrders.map((order) => {
+          if (isMatchingId(order)) {
+            return {
+              ...order,
+              trang_thai: 'da_thanh_toan',
+              trang_thai_vao_san: 'DA_THANH_TOAN',
+              so_tien_da_tra: orderTotal,
+              da_thanh_toan: true,
+            };
+          }
+          return order;
+        })
+      );
+
+      setHistoryBookings((prevOrders) =>
+        prevOrders.map((order) => {
+          if (isMatchingId(order)) {
+            return {
+              ...order,
+              trang_thai: 'da_thanh_toan',
+              trang_thai_vao_san: 'DA_THANH_TOAN',
+              so_tien_da_tra: orderTotal,
+              da_thanh_toan: true,
+            };
+          }
+          return order;
+        })
+      );
+
+      updateSyncOrderStatus(targetMaDon, 'Đã thanh toán', {
+        trang_thai: 'da_thanh_toan',
+        trang_thai_vao_san: 'DA_THANH_TOAN',
+        so_tien_da_tra: orderTotal,
+        da_thanh_toan: true,
+      });
+
+      setSelectedInvoiceDetail(null);
+
+      if (invoiceToPay.id && !String(invoiceToPay.id).startsWith('temp_')) {
+        try {
           await fetch(`${API_BASE_URL}/thanh-toan`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1961,17 +2355,30 @@ export default function ManagementSystem() {
               so_tien: (invoiceToPay.tien_san && (invoiceToPay.trang_thai === 'DA_THANH_TOAN' || (invoiceToPay as any).trang_thai_thanh_toan === 'DA_THANH_TOAN')) ? ((invoiceToPay.tong_tien || 0) - (invoiceToPay.tien_san || 0)) : (invoiceToPay.tong_tien || 0),
             }),
           });
+        } catch (err) {
+          console.warn('Lỗi thanh toán đơn qua API:', err);
         }
-      } catch (err) {
-        console.warn('Lỗi thanh toán đơn qua API:', err);
       }
 
-      updateSyncOrderStatus(invoiceToPay.id, 'Đã thanh toán');
-      setSelectedInvoiceDetail(null);
-      fetchLichSan(formattedDateISO, sanBongList);
-      fetchHistory();
       playNotificationChime();
       showToast(getPaymentSuccessMsg(`Đơn #${invoiceToPay.id}`), 'success', paymentMethod === 'CHUYEN_KHOAN' ? 'Chuyển Khoản Thành Công' : 'Thanh Toán Thành Công');
+
+      // Ghi trạng thái thanh toán vào localStorage NGAY LẬP TỨC trước fetchLichSan
+      // (tránh race condition: fetchLichSan đọc localStorage cũ rồi ghi đè state vừa update)
+      try {
+        const storedOrders = JSON.parse(localStorage.getItem('POS_ORDERS_DATA') || '[]');
+        const updatedStored = (Array.isArray(storedOrders) ? storedOrders : []).map((o: any) => {
+          if (isMatchingId(o)) {
+            return { ...o, trang_thai: 'da_thanh_toan', trang_thai_vao_san: 'DA_THANH_TOAN', da_thanh_toan: true, so_tien_da_tra: orderTotal };
+          }
+          return o;
+        });
+        localStorage.setItem('POS_ORDERS_DATA', JSON.stringify(updatedStored));
+      } catch (_e) { /* bở qua nếu localStorage không hỗ trợ */ }
+
+      // Refresh bảng sân đang đá (ẩn nút Thanh Toán) & đưa hóa đơn vào Lịch Sử
+      fetchLichSan(formattedDateISO, sanBongList);
+      fetchHistory();
       return;
     }
 
@@ -2081,12 +2488,12 @@ export default function ManagementSystem() {
       const pitchesToPay = selectedPitches.length > 0
         ? selectedPitches
         : [{
-            pitch: sanBongList[0],
-            startTime: '17:00',
-            endTime: '18:30',
-            durationMin: 90,
-            price: 0,
-          }];
+          pitch: sanBongList[0],
+          startTime: '17:00',
+          endTime: '18:30',
+          durationMin: 90,
+          price: 0,
+        }];
 
       for (let i = 0; i < pitchesToPay.length; i++) {
         const p = pitchesToPay[i];
@@ -2139,7 +2546,10 @@ export default function ManagementSystem() {
       tien_san: totalPitchPrice,
       dich_vu: serviceItems,
       tong_tien: grandTotal,
-      trang_thai: 'Đã thanh toán',
+      trang_thai: 'dang_da',
+      trang_thai_vao_san: 'DANG_DA',
+      da_vao_san: true,
+      nguon_dat: 'pos',
       ngay_tao: new Date().toISOString(),
     };
     addSyncOrder(paidOrder);
@@ -2472,7 +2882,7 @@ export default function ManagementSystem() {
     const soTienDaTra = Number(invoice.so_tien_da_tra || 0);
     const tongTien = Number(invoice.tong_tien || pitchPrice);
     const rawStatus = (invoice.trang_thai || '').toUpperCase().replace(/\s+/g, '_');
-    const isPaid = (soTienDaTra > 0 && soTienDaTra >= tongTien) || 
+    const isPaid = (soTienDaTra > 0 && soTienDaTra >= tongTien) ||
       (!rawStatus.includes('DA_COC') && !rawStatus.includes('CHO') && (rawStatus.includes('DA_THANH_TOAN') || rawStatus.includes('THANH_TOAN') || rawStatus === 'HOAN_THANH'));
 
     setLoadedBookingState({
@@ -2546,13 +2956,12 @@ export default function ManagementSystem() {
 
             {/* Cụm giữa: Thanh tìm kiếm Tên khách hàng hoặc Số điện thoại (Thay thế điều hướng ngày) */}
             <div ref={customerSearchRef} className="relative flex-1 max-w-lg mx-2 sm:mx-6">
-              <div className={`relative flex items-center gap-2 px-3 py-1.5 sm:py-2 rounded-2xl border transition-all duration-200 shadow-sm ${
-                isDarkMode 
-                  ? 'bg-slate-900/90 border-slate-700/80 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20' 
-                  : 'bg-white border-slate-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20'
-              }`}>
+              <div className={`relative flex items-center gap-2 px-3 py-1.5 sm:py-2 rounded-2xl border transition-all duration-200 shadow-sm ${isDarkMode
+                ? 'bg-slate-900/90 border-slate-700/80 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20'
+                : 'bg-white border-slate-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20'
+                }`}>
                 <Search className="w-4 h-4 text-emerald-400 shrink-0" />
-                
+
                 <input
                   type="text"
                   placeholder="Tìm kiếm tên khách hàng hoặc số điện thoại..."
@@ -2568,9 +2977,8 @@ export default function ManagementSystem() {
                       handleApplyCustomSearch();
                     }
                   }}
-                  className={`w-full bg-transparent text-xs font-semibold focus:outline-none placeholder:text-slate-400 ${
-                    isDarkMode ? 'text-white' : 'text-slate-900'
-                  }`}
+                  className={`w-full bg-transparent text-xs font-semibold focus:outline-none placeholder:text-slate-400 ${isDarkMode ? 'text-white' : 'text-slate-900'
+                    }`}
                 />
 
                 {customerSearchQuery && (
@@ -2606,9 +3014,8 @@ export default function ManagementSystem() {
 
               {/* Dropdown Gợi ý & Kết quả tìm kiếm khách hàng */}
               {isCustomerSearchOpen && (
-                <div className={`absolute left-0 right-0 top-12 z-50 rounded-2xl border p-2 shadow-2xl backdrop-blur-2xl max-h-80 overflow-y-auto animate-in fade-in zoom-in-95 duration-150 ${
-                  isDarkMode ? 'bg-[#0f172a]/98 border-slate-700 text-white' : 'bg-white/98 border-slate-200 text-slate-900'
-                }`}>
+                <div className={`absolute left-0 right-0 top-12 z-50 rounded-2xl border p-2 shadow-2xl backdrop-blur-2xl max-h-80 overflow-y-auto animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-[#0f172a]/98 border-slate-700 text-white' : 'bg-white/98 border-slate-200 text-slate-900'
+                  }`}>
                   <div className="px-2.5 py-1.5 flex items-center justify-between border-b border-slate-700/50 mb-1">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                       <Users className="w-3 h-3 text-emerald-400" />
@@ -2638,11 +3045,10 @@ export default function ManagementSystem() {
                         <div
                           key={cust.id || `${cust.ho_ten}_${cust.so_dien_thoai}_${idx}`}
                           onClick={() => handleSelectCustomer(cust)}
-                          className={`flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer group ${
-                            isDarkMode 
-                              ? 'hover:bg-slate-800/80 active:bg-slate-800' 
-                              : 'hover:bg-slate-100 active:bg-slate-200'
-                          }`}
+                          className={`flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer group ${isDarkMode
+                            ? 'hover:bg-slate-800/80 active:bg-slate-800'
+                            : 'hover:bg-slate-100 active:bg-slate-200'
+                            }`}
                         >
                           <div className="flex items-center gap-2.5 overflow-hidden">
                             <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-emerald-500 group-hover:text-slate-950 transition-colors">
@@ -2703,13 +3109,12 @@ export default function ManagementSystem() {
                     setIsNotificationOpen(!isNotificationOpen);
                     setIsCalendarOpen(false);
                   }}
-                  className={`relative flex h-9 w-9 items-center justify-center rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
-                    isNotificationOpen
-                      ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
-                      : isDarkMode
-                        ? 'border-slate-700 bg-slate-800 text-amber-400 hover:bg-slate-700'
-                        : 'border-slate-200 bg-white text-amber-500 hover:bg-slate-100 shadow-sm'
-                  }`}
+                  className={`relative flex h-9 w-9 items-center justify-center rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${isNotificationOpen
+                    ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
+                    : isDarkMode
+                      ? 'border-slate-700 bg-slate-800 text-amber-400 hover:bg-slate-700'
+                      : 'border-slate-200 bg-white text-amber-500 hover:bg-slate-100 shadow-sm'
+                    }`}
                   title="Thông báo chuyển tiền / hệ thống"
                   aria-label="Thông báo chuyển tiền"
                 >
@@ -2725,9 +3130,8 @@ export default function ManagementSystem() {
                 {isNotificationOpen && (
                   <div
                     ref={notificationRef}
-                    className={`absolute right-0 top-12 z-50 w-80 sm:w-96 rounded-2xl border p-3.5 shadow-2xl backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150 ${
-                      isDarkMode ? 'bg-[#0f172a]/98 border-slate-700 text-white' : 'bg-white/98 border-slate-200 text-slate-900'
-                    }`}
+                    className={`absolute right-0 top-12 z-50 w-80 sm:w-96 rounded-2xl border p-3.5 shadow-2xl backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150 ${isDarkMode ? 'bg-[#0f172a]/98 border-slate-700 text-white' : 'bg-white/98 border-slate-200 text-slate-900'
+                      }`}
                   >
                     <div className="flex items-center justify-between pb-2.5 border-b border-slate-700 mb-2.5">
                       <div className="flex items-center gap-2">
@@ -2764,15 +3168,14 @@ export default function ManagementSystem() {
                         notifications.map((notif) => (
                           <div
                             key={notif.id}
-                            className={`p-2.5 rounded-xl border text-xs transition-all ${
-                              !notif.isRead
-                                ? isDarkMode
-                                  ? 'bg-amber-500/10 border-amber-500/30'
-                                  : 'bg-amber-50 border-amber-200'
-                                : isDarkMode
-                                  ? 'bg-slate-900/60 border-slate-800'
-                                  : 'bg-slate-50 border-slate-200'
-                            }`}
+                            className={`p-2.5 rounded-xl border text-xs transition-all ${!notif.isRead
+                              ? isDarkMode
+                                ? 'bg-amber-500/10 border-amber-500/30'
+                                : 'bg-amber-50 border-amber-200'
+                              : isDarkMode
+                                ? 'bg-slate-900/60 border-slate-800'
+                                : 'bg-slate-50 border-slate-200'
+                              }`}
                           >
                             <div className="flex items-start justify-between gap-1 mb-1">
                               <span className="font-bold text-[11px] text-amber-300 flex items-center gap-1">
@@ -2872,215 +3275,512 @@ export default function ManagementSystem() {
         <div className="flex-1 flex overflow-hidden">
 
           {/* ----------------- CỘT TRÁI (ĐỘNG: 75% KHI CÓ GIỎ HÀNG, 100% KHI ẨN GIỎ HÀNG) ----------------- */}
-          <main className={`h-full overflow-y-auto p-4 sm:p-6 pb-6 space-y-6 transition-all duration-300 ${
-            activeTab === 'home' || activeTab === 'services' ? 'w-[75%]' : 'w-full'
-          }`}>
+          <main className={`h-full overflow-y-auto p-4 sm:p-6 pb-6 space-y-6 transition-all duration-300 ${activeTab === 'home' || activeTab === 'services' ? 'w-[75%]' : 'w-full'
+            }`}>
 
             {/* TAB 1: SÂN ĐANG ĐÁ (CURRENTLY PLAYING PITCHES) */}
             {activeTab === 'pitch' && (() => {
               const isBookingPaid = (b: any) => {
                 if (!b) return false;
-                const soTienDaTra = Number(b.so_tien_da_tra || 0);
-                const tongTien = Number(b.tong_tien || b.tien_san || 0);
+                // Tra cứu trạng thái MỚI NHẤT từ rawBookings/historyBookings theo ID
+                const bId = String(b.id || b.ma_don_dat || '');
+                const latestFromState = bId
+                  ? [...rawBookings, ...historyBookings].find((r: any) => {
+                    const rId = String(r.id || r.ma_don_dat || '');
+                    return rId === bId && rId !== '';
+                  })
+                  : null;
+                // Ưu tiên trạng thái mới nhất từ state (đã được cập nhật bởi handlePayOrder)
+                const source = latestFromState || b;
+                const soTienDaTra = Number(source.so_tien_da_tra || 0);
+                const tongTien = Number(source.tong_tien || source.tien_san || 0);
                 if (soTienDaTra > 0 && soTienDaTra >= tongTien) return true;
-                const st = (b.trang_thai || b.trang_thai_thanh_toan || '').toUpperCase().replace(/\s+/g, '_');
+                if (source.da_thanh_toan === true) return true;
+                const st = (source.trang_thai || source.trang_thai_thanh_toan || '').toUpperCase().replace(/\s+/g, '_');
                 if (st.includes('CHO') || st.includes('CHUA') || st.includes('TAM')) return false;
                 if (st.includes('DA_HUY') || st.includes('HUY')) return false;
                 return st.includes('DA_THANH_TOAN') || st.includes('THANH_TOAN') || st === 'HOAN_THANH';
               };
 
               return (
-              <div className="space-y-5 animate-in fade-in duration-300">
-                {/* Header Tab */}
-                <div className={`p-5 rounded-2xl border shadow-lg ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'}`}>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center font-black shrink-0 relative shadow-inner">
-                        <Activity className="w-6 h-6 animate-pulse" />
-                        {currentlyPlayingPitches.length > 0 && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-ping" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-base sm:text-lg font-black leading-tight text-white">
-                            Danh Sách Sân Đang Đá & Ca Đặt Trong Ngày
-                          </h2>
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                            {currentlyPlayingPitches.length} Sân đang đá trực tiếp
-                          </span>
+                <div className="space-y-5 animate-in fade-in duration-300">
+                  {/* Header Tab */}
+                  <div className={`p-5 rounded-2xl border shadow-lg ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200'}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center font-black shrink-0 relative shadow-inner">
+                          <Activity className="w-6 h-6 animate-pulse" />
+                          {currentlyPlayingPitches.length > 0 && (
+                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full animate-ping" />
+                          )}
                         </div>
-                        <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
-                          <span>Ngày: <strong className="text-emerald-400">{formatVietnameseDate(currentDate)}</strong></span>
-                          <span>•</span>
-                          <span>Thời gian hiện tại: <strong className="text-amber-400 font-mono">{new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</strong></span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-base sm:text-lg font-black leading-tight text-white">
+                              Danh Sách Sân Đang Đá & Ca Đặt Trong Ngày
+                            </h2>
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                              {currentlyPlayingPitches.length} Sân đang đá trực tiếp
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+                            <span>Ngày: <strong className="text-emerald-400">{formatVietnameseDate(currentDate)}</strong></span>
+                            <span>•</span>
+                            <span>Thời gian hiện tại: <strong className="text-amber-400 font-mono">{new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</strong></span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* Nút chuyển đổi Dạng Danh Sách (List) vs Dạng Lưới (Grid) */}
+                        <div className="flex items-center p-1 rounded-xl bg-slate-950/80 border border-slate-700/80">
+                          <button
+                            type="button"
+                            onClick={() => setPlayingViewMode('list')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${playingViewMode === 'list'
+                              ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/20'
+                              : 'text-slate-400 hover:text-white'
+                              }`}
+                            title="Hiển thị dạng bảng danh sách"
+                          >
+                            <List className="w-3.5 h-3.5" />
+                            <span>Danh sách</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPlayingViewMode('grid')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${playingViewMode === 'grid'
+                              ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/20'
+                              : 'text-slate-400 hover:text-white'
+                              }`}
+                            title="Hiển thị dạng lưới thẻ"
+                          >
+                            <LayoutGrid className="w-3.5 h-3.5" />
+                            <span>Lưới thẻ</span>
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => fetchLichSan(formattedDateISO, sanBongList)}
+                          className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                            }`}
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Cập nhật</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('home')}
+                          className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
+                        >
+                          <CalendarCheck className="w-4 h-4" />
+                          <span>Xem Lịch Đặt Sân (Home)</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 1. KHỐI SÂN ĐANG ĐÁ TRỰC TIẾP */}
+                  {currentlyPlayingPitches.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-black text-rose-400 uppercase tracking-wider flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                          Trận đấu đang diễn ra trực tiếp ({currentlyPlayingPitches.length})
+                        </h3>
+                      </div>
+
+                      {playingViewMode === 'list' ? (
+                        /* DẠNG LIST CHO SÂN ĐANG ĐÁ */
+                        <div className="rounded-2xl border border-rose-500/30 bg-slate-900/90 overflow-hidden shadow-xl shadow-rose-950/10">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead>
+                                <tr className="border-b border-slate-800 bg-slate-950/80 text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                                  <th className="py-3 px-4">Mã Đơn</th>
+                                  <th className="py-3 px-4">Sân Bóng</th>
+                                  <th className="py-3 px-4">Khung Giờ</th>
+                                  <th className="py-3 px-4">Tiến Độ Trận Đấu</th>
+                                  <th className="py-3 px-4">Khách Hàng</th>
+                                  <th className="py-3 px-4 text-center">Thao Tác</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-800/80">
+                                {currentlyPlayingPitches.map((item, idx) => {
+                                  const isPaid = isBookingPaid(item.booking);
+                                  const soTienDaTra = Number(item.booking?.so_tien_da_tra || 0);
+                                  const tongTien = Number(item.tong_tien || item.booking?.tong_tien || 0);
+                                  const unpaidAmount = isPaid ? 0 : Math.max(0, tongTien - soTienDaTra);
+                                  return (
+                                    <tr key={`${item.ma_don_dat}-${item.booking?.id || idx}`} className="hover:bg-rose-500/5 transition-colors">
+                                      <td className="py-3 px-4">
+                                        <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-black bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                          #{item.ma_don_dat}
+                                        </span>
+                                      </td>
+                                      <td className="py-3 px-4">
+                                        <div className="font-bold text-white text-sm">{item.san.ten_san}</div>
+                                        <span className="text-[10px] text-slate-400">{item.san.ten_loai || 'Sân bóng'}</span>
+                                      </td>
+                                      <td className="py-3 px-4">
+                                        <div className="font-mono font-bold text-white flex items-center gap-1.5">
+                                          <Clock className="w-3.5 h-3.5 text-rose-400" />
+                                          <span>{item.gio_bat_dau} - {item.gio_ket_thuc}</span>
+                                        </div>
+                                      </td>
+                                      <td className="py-3 px-4 min-w-[200px]">
+                                        <div className="space-y-1">
+                                          <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                            <div
+                                              className="bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 h-full rounded-full transition-all duration-500"
+                                              style={{ width: `${item.phan_tram_tien_do}%` }}
+                                            />
+                                          </div>
+                                          <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 font-bold">
+                                            <span>Đã đá: <strong className="text-emerald-400">{item.phut_da_da}p</strong></span>
+                                            <span>Còn lại: <strong className="text-rose-400">{item.phut_con_lai}p</strong></span>
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="py-3 px-4">
+                                        <div className="font-bold text-white flex items-center gap-1.5">
+                                          <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+                                          <span>{item.ten_khach_hang}</span>
+                                        </div>
+                                        {item.so_dien_thoai && (
+                                          <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1 mt-0.5">
+                                            <Phone className="w-3 h-3" /> {item.so_dien_thoai}
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="py-3 px-4 text-center">
+                                        <div className="flex items-center justify-center gap-1.5">
+                                          {/* Nút + Dịch Vụ: Nạp dữ liệu vào Order và mở tab Dịch Vụ */}
+                                          <button
+                                            type="button"
+                                            onClick={() => handleAddMoreService(item.booking)}
+                                            className="py-1.5 px-2.5 rounded-lg bg-blue-600/25 hover:bg-blue-600 text-cyan-300 hover:text-white font-black text-xs border border-blue-500/40 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                            title="Tự động điền đơn vào Cột Order và mở gọi thêm dịch vụ"
+                                          >
+                                            <Plus className="w-3.5 h-3.5 text-cyan-300" />
+                                            <span>Dịch Vụ</span>
+                                          </button>
+
+                                          {/* Nút + Thêm Giờ: Gia hạn thời gian hoặc đổi sân đá tiếp */}
+                                          <button
+                                            type="button"
+                                            onClick={() => handleOpenExtendModal(item.booking)}
+                                            className="py-1.5 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-black text-xs border border-amber-500/40 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                            title="Gia hạn thời gian đá hoặc chuyển sân khác đá tiếp"
+                                          >
+                                            <Clock className="w-3.5 h-3.5" />
+                                            <span>Thêm Giờ</span>
+                                          </button>
+
+                                          {/* Nút Thanh Toán: Mở Modal Drawer Chi Tiết & Xác Nhận Thanh Toán */}
+                                          {!isPaid && (
+                                            <button
+                                              type="button"
+                                              onClick={() => handleOpenPaymentModal(item)}
+                                              className="py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-md flex items-center gap-1 cursor-pointer"
+                                              title="Xem chi tiết và xác nhận thanh toán"
+                                            >
+                                              <CreditCard className="w-3.5 h-3.5" />
+                                              <span>Thanh Toán</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : (
+                        /* DẠNG GRID CHO SÂN ĐANG ĐÁ */
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {currentlyPlayingPitches.map((item, idx) => {
+                            const isPaid = isBookingPaid(item.booking);
+                            const soTienDaTra = Number(item.booking?.so_tien_da_tra || 0);
+                            const tongTien = Number(item.tong_tien || item.booking?.tong_tien || 0);
+                            const unpaidAmount = isPaid ? 0 : Math.max(0, tongTien - soTienDaTra);
+                            return (
+                              <div
+                                key={`${item.ma_don_dat}-${item.booking?.id || idx}`}
+                                className={`p-5 rounded-2xl border transition-all duration-200 shadow-xl relative overflow-hidden ${isDarkMode
+                                  ? 'bg-slate-900/90 border-rose-500/40 hover:border-rose-500/70 shadow-rose-950/20'
+                                  : 'bg-white border-rose-300 hover:border-rose-400 shadow-sm'
+                                  }`}
+                              >
+                                <div className="flex items-start justify-between gap-2 mb-3">
+                                  <div>
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                                      <span className="text-[10px] font-black uppercase tracking-wider text-rose-400">
+                                        Đang Đá Trực Tiếp
+                                      </span>
+                                    </div>
+                                    <h3 className="font-extrabold text-base text-white">{item.san.ten_san}</h3>
+                                    <span className="text-[10px] text-slate-400">{item.san.ten_loai || 'Sân bóng'}</span>
+                                  </div>
+
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-black border bg-rose-500/15 text-rose-400 border-rose-500/30">
+                                    #{item.ma_don_dat}
+                                  </span>
+                                </div>
+
+                                <div className="my-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2">
+                                  <div className="flex items-center justify-between text-[11px] font-bold">
+                                    <span className="text-slate-400 flex items-center gap-1">
+                                      <Clock className="w-3.5 h-3.5 text-rose-400" /> Khung giờ:
+                                    </span>
+                                    <span className="text-white font-mono text-xs">{item.gio_bat_dau} - {item.gio_ket_thuc}</span>
+                                  </div>
+
+                                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                    <div
+                                      className="bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 h-full rounded-full transition-all duration-500"
+                                      style={{ width: `${item.phan_tram_tien_do}%` }}
+                                    />
+                                  </div>
+
+                                  <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-400">
+                                    <span>Đã đá: <strong className="text-emerald-400">{item.phut_da_da} phút</strong></span>
+                                    <span>Còn lại: <strong className="text-rose-400">{item.phut_con_lai} phút</strong></span>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1.5 py-2 text-xs text-slate-300">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-slate-400 flex items-center gap-1">
+                                      <UserIcon className="w-3.5 h-3.5 text-emerald-400" /> Khách hàng:
+                                    </span>
+                                    <strong className="text-white truncate max-w-[150px]">{item.ten_khach_hang}</strong>
+                                  </div>
+
+                                  {item.so_dien_thoai && (
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-slate-400 flex items-center gap-1">
+                                        <Phone className="w-3.5 h-3.5 text-emerald-400" /> Số điện thoại:
+                                      </span>
+                                      <strong className="font-mono text-emerald-400">{item.so_dien_thoai}</strong>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="mt-3.5 flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddMoreService(item.booking)}
+                                    className="flex-1 py-2 px-1.5 rounded-xl bg-blue-600/25 hover:bg-blue-600 text-cyan-300 hover:text-white font-bold text-xs border border-blue-500/40 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                    title="Tự động điền đơn vào Cột Order và mở gọi thêm dịch vụ"
+                                  >
+                                    <Plus className="w-3.5 h-3.5 text-cyan-300" />
+                                    <span>Dịch Vụ</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenExtendModal(item.booking)}
+                                    className="flex-1 py-2 px-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-bold text-xs border border-amber-500/40 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                    title="Gia hạn thời gian đá hoặc chuyển sân khác đá tiếp"
+                                  >
+                                    <Clock className="w-3.5 h-3.5" />
+                                    <span>+ Giờ</span>
+                                  </button>
+
+                                  {!isPaid && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenPaymentModal(item)}
+                                      className="flex-1 py-2 px-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
+                                      title="Xem chi tiết và xác nhận thanh toán"
+                                    >
+                                      <CreditCard className="w-3.5 h-3.5" />
+                                      <span>Thanh Toán</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {currentlyPlayingPitches.length === 0 && (
+                    <div className={`p-10 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
+                      <Clock className="w-12 h-12 text-slate-500 mx-auto mb-3 opacity-60" />
+                      <h3 className="text-base font-bold text-white">Hiện tại chưa có ca đặt sân nào đang thi đấu</h3>
+                      <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                        Bạn có thể chọn một ca đặt bên dưới để cho khách vào sân thi đấu.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 2. KHỐI CÁC CA ĐÃ ĐẶT VÀO NGÀY HÔM NAY */}
+                  <div className="space-y-3 pt-4 border-t border-slate-800/80">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                          <CalendarCheck className="w-4 h-4 text-amber-400" />
+                          Danh sách các khách đã đặt vào ngày hôm nay - Chờ vào sân ({allTodayBookings.length})
+                        </h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          👉 <strong>Nhấn vào một ca đặt</strong> để nạp sang <strong>Thông tin Order (mục Home)</strong> (Thanh toán đủ: bấm "VÀO SÂN" • Mới cọc 30%: bấm "LƯU" để vào sân trước trả sau hoặc "THANH TOÁN"), hoặc thao tác nhanh bằng nút bấm bên dưới. <em>Ca đặt sau khi vào sân sẽ tự động biến mất khỏi danh sách này.</em>
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {/* Nút chuyển đổi Dạng Danh Sách (List) vs Dạng Lưới (Grid) */}
-                      <div className="flex items-center p-1 rounded-xl bg-slate-950/80 border border-slate-700/80">
-                        <button
-                          type="button"
-                          onClick={() => setPlayingViewMode('list')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                            playingViewMode === 'list'
-                              ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/20'
-                              : 'text-slate-400 hover:text-white'
-                          }`}
-                          title="Hiển thị dạng bảng danh sách"
-                        >
-                          <List className="w-3.5 h-3.5" />
-                          <span>Danh sách</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPlayingViewMode('grid')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                            playingViewMode === 'grid'
-                              ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/20'
-                              : 'text-slate-400 hover:text-white'
-                          }`}
-                          title="Hiển thị dạng lưới thẻ"
-                        >
-                          <LayoutGrid className="w-3.5 h-3.5" />
-                          <span>Lưới thẻ</span>
-                        </button>
+                    {allTodayBookings.length === 0 ? (
+                      <div className={`p-8 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
+                        <CalendarCheck className="w-10 h-10 text-emerald-400 mx-auto mb-2 opacity-80" />
+                        <p className="text-xs text-slate-300 font-bold">Tất cả ca đặt hôm nay đã vào sân thi đấu hoặc chưa có ca đặt mới.</p>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => fetchLichSan(formattedDateISO, sanBongList)}
-                        className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
-                        }`}
-                      >
-                        <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Cập nhật</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('home')}
-                        className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer"
-                      >
-                        <CalendarCheck className="w-4 h-4" />
-                        <span>Xem Lịch Đặt Sân (Home)</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 1. KHỐI SÂN ĐANG ĐÁ TRỰC TIẾP */}
-                {currentlyPlayingPitches.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-black text-rose-400 uppercase tracking-wider flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                        Trận đấu đang diễn ra trực tiếp ({currentlyPlayingPitches.length})
-                      </h3>
-                    </div>
-
-                    {playingViewMode === 'list' ? (
-                      /* DẠNG LIST CHO SÂN ĐANG ĐÁ */
-                      <div className="rounded-2xl border border-rose-500/30 bg-slate-900/90 overflow-hidden shadow-xl shadow-rose-950/10">
+                    ) : (
+                      <div className="rounded-2xl border border-slate-800 bg-slate-900/90 overflow-hidden shadow-xl">
                         <div className="overflow-x-auto">
                           <table className="w-full text-left text-xs border-collapse">
                             <thead>
                               <tr className="border-b border-slate-800 bg-slate-950/80 text-[11px] font-black uppercase text-slate-400 tracking-wider">
                                 <th className="py-3 px-4">Mã Đơn</th>
+                                <th className="py-3 px-4">Khách Hàng</th>
                                 <th className="py-3 px-4">Sân Bóng</th>
                                 <th className="py-3 px-4">Khung Giờ</th>
-                                <th className="py-3 px-4">Tiến Độ Trận Đấu</th>
-                                <th className="py-3 px-4">Khách Hàng</th>
+                                <th className="py-3 px-4 text-right">Thanh Toán</th>
+                                <th className="py-3 px-4 text-center">Trạng Thái</th>
                                 <th className="py-3 px-4 text-center">Thao Tác</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/80">
-                              {currentlyPlayingPitches.map((item, idx) => {
-                                const isPaid = isBookingPaid(item.booking);
-                                const soTienDaTra = Number(item.booking?.so_tien_da_tra || 0);
-                                const tongTien = Number(item.tong_tien || item.booking?.tong_tien || 0);
-                                const unpaidAmount = isPaid ? 0 : Math.max(0, tongTien - soTienDaTra);
+                              {allTodayBookings.map((b, idx) => {
+                                const bId = b.ma_don_dat || b.id || `POS-${idx + 1}`;
+                                const isSelected = editingInvoiceId === bId;
+                                const isPaid = isBookingPaid(b);
+                                const soTienDaTra = Number(b.so_tien_da_tra || 0);
+                                const tongTien = Number(b.tong_tien || b.tien_san || 0);
+                                const unpaid = isPaid ? 0 : Math.max(0, tongTien - soTienDaTra);
+                                const isPlaying = b.trang_thai === 'DANG_DA' || b.da_vao_san === 1 || b.da_vao_san === true;
+
                                 return (
-                                  <tr key={item.san.id || idx} className="hover:bg-rose-500/5 transition-colors">
+                                  <tr
+                                    key={bId}
+                                    onClick={() => {
+                                      handleVaoSan(b.ma_don_dat || b.id);
+                                    }}
+                                    className={`transition-colors cursor-pointer ${isSelected
+                                      ? 'bg-emerald-500/10 border-l-4 border-l-emerald-500'
+                                      : 'hover:bg-slate-800/50'
+                                      }`}
+                                    title="Nhấn để nạp thông tin đơn sang cột Thông tin Order bên mục Home"
+                                  >
                                     <td className="py-3 px-4">
-                                      <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-black bg-rose-500/15 text-rose-400 border border-rose-500/30">
-                                        #{item.ma_don_dat}
+                                      <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                        #{bId}
                                       </span>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                      <div className="font-bold text-white text-sm">{item.san.ten_san}</div>
-                                      <span className="text-[10px] text-slate-400">{item.san.ten_loai || 'Sân bóng'}</span>
-                                    </td>
-                                    <td className="py-3 px-4">
-                                      <div className="font-mono font-bold text-white flex items-center gap-1.5">
-                                        <Clock className="w-3.5 h-3.5 text-rose-400" />
-                                        <span>{item.gio_bat_dau} - {item.gio_ket_thuc}</span>
-                                      </div>
-                                    </td>
-                                    <td className="py-3 px-4 min-w-[200px]">
-                                      <div className="space-y-1">
-                                        <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                          <div
-                                            className="bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 h-full rounded-full transition-all duration-500"
-                                            style={{ width: `${item.phan_tram_tien_do}%` }}
-                                          />
-                                        </div>
-                                        <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 font-bold">
-                                          <span>Đã đá: <strong className="text-emerald-400">{item.phut_da_da}p</strong></span>
-                                          <span>Còn lại: <strong className="text-rose-400">{item.phut_con_lai}p</strong></span>
-                                        </div>
-                                      </div>
                                     </td>
                                     <td className="py-3 px-4">
                                       <div className="font-bold text-white flex items-center gap-1.5">
                                         <UserIcon className="w-3.5 h-3.5 text-slate-400" />
-                                        <span>{item.ten_khach_hang}</span>
+                                        <span>{b.ten_khach_hang || 'Khách đặt sân'}</span>
                                       </div>
-                                      {item.so_dien_thoai && (
+                                      {b.so_dien_thoai && (
                                         <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1 mt-0.5">
-                                          <Phone className="w-3 h-3" /> {item.so_dien_thoai}
+                                          <Phone className="w-3 h-3" /> {b.so_dien_thoai}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <div className="font-bold text-white">{b.ten_san}</div>
+                                      <span className="text-[10px] text-slate-400">{b.ten_loai || 'Sân bóng'}</span>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                      <div className="font-mono font-bold text-white flex items-center gap-1">
+                                        <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                                        <span>{(b.gio_bat_dau || '').substring(0, 5)} - {(b.gio_ket_thuc || '').substring(0, 5)}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-4 text-right">
+                                      {isPaid || unpaid === 0 ? (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                            ✓ Đã trả đủ 100%
+                                          </span>
+                                          <span className="text-[10px] text-slate-400 font-mono">
+                                            ({tongTien.toLocaleString('vi-VN')}đ)
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                            Đã cọc 30%: {soTienDaTra.toLocaleString('vi-VN')}đ
+                                          </span>
+                                          <span className="text-[10px] text-rose-400 font-mono font-bold">
+                                            Còn nợ: {unpaid.toLocaleString('vi-VN')}đ
+                                          </span>
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-4 text-center">
+                                      {isPlaying ? (
+                                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse inline-flex items-center gap-1">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                          Đang trong sân
+                                        </span>
+                                      ) : (
+                                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
+                                          Chưa vào sân
                                         </span>
                                       )}
                                     </td>
                                     <td className="py-3 px-4 text-center">
-                                      <div className="flex items-center justify-center gap-1.5">
-                                        {/* Nút + Dịch Vụ: Nạp dữ liệu vào Order và mở tab Dịch Vụ */}
-                                        <button
-                                          type="button"
-                                          onClick={() => handleAddMoreService(item.booking)}
-                                          className="py-1.5 px-2.5 rounded-lg bg-blue-600/25 hover:bg-blue-600 text-cyan-300 hover:text-white font-black text-xs border border-blue-500/40 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
-                                          title="Tự động điền đơn vào Cột Order và mở gọi thêm dịch vụ"
-                                        >
-                                          <Plus className="w-3.5 h-3.5 text-cyan-300" />
-                                          <span>Dịch Vụ</span>
-                                        </button>
-
-                                        {/* Nút + Thêm Giờ: Gia hạn thời gian hoặc đổi sân đá tiếp */}
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenExtendModal(item.booking)}
-                                          className="py-1.5 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-black text-xs border border-amber-500/40 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
-                                          title="Gia hạn thời gian đá hoặc chuyển sân khác đá tiếp"
-                                        >
-                                          <Clock className="w-3.5 h-3.5" />
-                                          <span>Thêm Giờ</span>
-                                        </button>
-
-                                        {/* Nút Thanh Toán: Chỉ hiển thị khi đơn CHƯA thanh toán đủ hoặc Lưu tạm */}
-                                        {!isPaid && (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleSelectBookingForPayment(item.booking)}
-                                            className="py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow-md flex items-center gap-1 cursor-pointer"
-                                            title="Chuyển đơn này sang Order để xem thông tin và thanh toán"
-                                          >
-                                            <CreditCard className="w-3.5 h-3.5" />
-                                            <span>Thanh Toán</span>
-                                          </button>
+                                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                        {!isPlaying && (
+                                          isPaid || unpaid === 0 ? (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleVaoSan(b.ma_don_dat || b.id, b.id || b.ma_don_dat);
+                                              }}
+                                              className="py-1 px-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow flex items-center gap-1 cursor-pointer"
+                                              title="Cho khách vào sân trực tiếp ngay"
+                                            >
+                                              <span>⚽ Vào sân</span>
+                                            </button>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleVaoSan(b.ma_don_dat || b.id, b.id || b.ma_don_dat);
+                                              }}
+                                              className="py-1 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow flex items-center gap-1 cursor-pointer"
+                                              title="Lưu đơn vào Sân đang đá để khách đá trước thanh toán sau"
+                                            >
+                                              <Save className="w-3 h-3" />
+                                              <span>Lưu vào sân</span>
+                                            </button>
+                                          )
                                         )}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleSelectBookingToOrder(b);
+                                            setActiveTab('home');
+                                          }}
+                                          className="py-1 px-2.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                          title="Nạp vào cột Thông tin Order bên mục Home để thao tác"
+                                        >
+                                          <ShoppingBag className="w-3 h-3" />
+                                          <span>Mở Order (Home)</span>
+                                        </button>
                                       </div>
                                     </td>
                                   </tr>
@@ -3090,304 +3790,11 @@ export default function ManagementSystem() {
                           </table>
                         </div>
                       </div>
-                    ) : (
-                      /* DẠNG GRID CHO SÂN ĐANG ĐÁ */
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {currentlyPlayingPitches.map((item, idx) => {
-                          const isPaid = isBookingPaid(item.booking);
-                          const soTienDaTra = Number(item.booking?.so_tien_da_tra || 0);
-                          const tongTien = Number(item.tong_tien || item.booking?.tong_tien || 0);
-                          const unpaidAmount = isPaid ? 0 : Math.max(0, tongTien - soTienDaTra);
-                          return (
-                            <div
-                              key={item.san.id || idx}
-                              className={`p-5 rounded-2xl border transition-all duration-200 shadow-xl relative overflow-hidden ${
-                                isDarkMode 
-                                ? 'bg-slate-900/90 border-rose-500/40 hover:border-rose-500/70 shadow-rose-950/20' 
-                                : 'bg-white border-rose-300 hover:border-rose-400 shadow-sm'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-2 mb-3">
-                                <div>
-                                  <div className="flex items-center gap-1.5 mb-1">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-                                    <span className="text-[10px] font-black uppercase tracking-wider text-rose-400">
-                                      Đang Đá Trực Tiếp
-                                    </span>
-                                  </div>
-                                  <h3 className="font-extrabold text-base text-white">{item.san.ten_san}</h3>
-                                  <span className="text-[10px] text-slate-400">{item.san.ten_loai || 'Sân bóng'}</span>
-                                </div>
-
-                                <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-black border bg-rose-500/15 text-rose-400 border-rose-500/30">
-                                  #{item.ma_don_dat}
-                                </span>
-                              </div>
-
-                              <div className="my-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2">
-                                <div className="flex items-center justify-between text-[11px] font-bold">
-                                  <span className="text-slate-400 flex items-center gap-1">
-                                    <Clock className="w-3.5 h-3.5 text-rose-400" /> Khung giờ:
-                                  </span>
-                                  <span className="text-white font-mono text-xs">{item.gio_bat_dau} - {item.gio_ket_thuc}</span>
-                                </div>
-
-                                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                  <div
-                                    className="bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 h-full rounded-full transition-all duration-500"
-                                    style={{ width: `${item.phan_tram_tien_do}%` }}
-                                  />
-                                </div>
-
-                                <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-400">
-                                  <span>Đã đá: <strong className="text-emerald-400">{item.phut_da_da} phút</strong></span>
-                                  <span>Còn lại: <strong className="text-rose-400">{item.phut_con_lai} phút</strong></span>
-                                </div>
-                              </div>
-
-                              <div className="space-y-1.5 py-2 text-xs text-slate-300">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-slate-400 flex items-center gap-1">
-                                    <UserIcon className="w-3.5 h-3.5 text-emerald-400" /> Khách hàng:
-                                  </span>
-                                  <strong className="text-white truncate max-w-[150px]">{item.ten_khach_hang}</strong>
-                                </div>
-
-                                {item.so_dien_thoai && (
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-slate-400 flex items-center gap-1">
-                                      <Phone className="w-3.5 h-3.5 text-emerald-400" /> Số điện thoại:
-                                    </span>
-                                    <strong className="font-mono text-emerald-400">{item.so_dien_thoai}</strong>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="mt-3.5 flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddMoreService(item.booking)}
-                                  className="flex-1 py-2 px-1.5 rounded-xl bg-blue-600/25 hover:bg-blue-600 text-cyan-300 hover:text-white font-bold text-xs border border-blue-500/40 transition-all flex items-center justify-center gap-1 cursor-pointer"
-                                  title="Tự động điền đơn vào Cột Order và mở gọi thêm dịch vụ"
-                                >
-                                  <Plus className="w-3.5 h-3.5 text-cyan-300" />
-                                  <span>Dịch Vụ</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenExtendModal(item.booking)}
-                                  className="flex-1 py-2 px-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-bold text-xs border border-amber-500/40 transition-all flex items-center justify-center gap-1 cursor-pointer"
-                                  title="Gia hạn thời gian đá hoặc chuyển sân khác đá tiếp"
-                                >
-                                  <Clock className="w-3.5 h-3.5" />
-                                  <span>+ Giờ</span>
-                                </button>
-
-                                {!isPaid && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectBookingForPayment(item.booking)}
-                                    className="flex-1 py-2 px-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
-                                    title="Chuyển đơn này sang Order để xem thông tin và thanh toán"
-                                  >
-                                    <CreditCard className="w-3.5 h-3.5" />
-                                    <span>Thanh Toán</span>
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
                     )}
                   </div>
-                )}
-
-                {currentlyPlayingPitches.length === 0 && (
-                  <div className={`p-10 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
-                    <Clock className="w-12 h-12 text-slate-500 mx-auto mb-3 opacity-60" />
-                    <h3 className="text-base font-bold text-white">Hiện tại chưa có ca đặt sân nào đang thi đấu</h3>
-                    <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                      Bạn có thể chọn một ca đặt bên dưới để cho khách vào sân thi đấu.
-                    </p>
-                  </div>
-                )}
-
-                {/* 2. KHỐI CÁC CA ĐÃ ĐẶT VÀO NGÀY HÔM NAY */}
-                <div className="space-y-3 pt-4 border-t border-slate-800/80">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <h3 className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
-                        <CalendarCheck className="w-4 h-4 text-amber-400" />
-                        Danh sách các khách đã đặt vào ngày hôm nay - Chờ vào sân ({allTodayBookings.length})
-                      </h3>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        👉 <strong>Nhấn vào một ca đặt</strong> để nạp sang <strong>Thông tin Order (mục Home)</strong> (Thanh toán đủ: bấm "VÀO SÂN" • Mới cọc 30%: bấm "LƯU" để vào sân trước trả sau hoặc "THANH TOÁN"), hoặc thao tác nhanh bằng nút bấm bên dưới. <em>Ca đặt sau khi vào sân sẽ tự động biến mất khỏi danh sách này.</em>
-                      </p>
-                    </div>
-                  </div>
-
-                  {allTodayBookings.length === 0 ? (
-                    <div className={`p-8 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
-                      <CalendarCheck className="w-10 h-10 text-emerald-400 mx-auto mb-2 opacity-80" />
-                      <p className="text-xs text-slate-300 font-bold">Tất cả ca đặt hôm nay đã vào sân thi đấu hoặc chưa có ca đặt mới.</p>
-                    </div>
-                  ) : (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900/90 overflow-hidden shadow-xl">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead>
-                            <tr className="border-b border-slate-800 bg-slate-950/80 text-[11px] font-black uppercase text-slate-400 tracking-wider">
-                              <th className="py-3 px-4">Mã Đơn</th>
-                              <th className="py-3 px-4">Khách Hàng</th>
-                              <th className="py-3 px-4">Sân Bóng</th>
-                              <th className="py-3 px-4">Khung Giờ</th>
-                              <th className="py-3 px-4 text-right">Thanh Toán</th>
-                              <th className="py-3 px-4 text-center">Trạng Thái</th>
-                              <th className="py-3 px-4 text-center">Thao Tác</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-800/80">
-                            {allTodayBookings.map((b, idx) => {
-                              const bId = b.ma_don_dat || b.id || `POS-${idx + 1}`;
-                              const isSelected = editingInvoiceId === bId;
-                              const isPaid = isBookingPaid(b);
-                              const soTienDaTra = Number(b.so_tien_da_tra || 0);
-                              const tongTien = Number(b.tong_tien || b.tien_san || 0);
-                              const unpaid = isPaid ? 0 : Math.max(0, tongTien - soTienDaTra);
-                              const isPlaying = b.trang_thai === 'DANG_DA' || b.da_vao_san === 1 || b.da_vao_san === true;
-
-                              return (
-                                <tr
-                                  key={bId}
-                                  onClick={() => {
-                                    handleSelectBookingToOrder(b);
-                                    setActiveTab('home');
-                                  }}
-                                  className={`transition-colors cursor-pointer ${
-                                    isSelected 
-                                      ? 'bg-emerald-500/10 border-l-4 border-l-emerald-500' 
-                                      : 'hover:bg-slate-800/50'
-                                  }`}
-                                  title="Nhấn để nạp thông tin đơn sang cột Thông tin Order bên mục Home"
-                                >
-                                  <td className="py-3 px-4">
-                                    <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                                      #{bId}
-                                    </span>
-                                  </td>
-                                  <td className="py-3 px-4">
-                                    <div className="font-bold text-white flex items-center gap-1.5">
-                                      <UserIcon className="w-3.5 h-3.5 text-slate-400" />
-                                      <span>{b.ten_khach_hang || 'Khách đặt sân'}</span>
-                                    </div>
-                                    {b.so_dien_thoai && (
-                                      <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1 mt-0.5">
-                                        <Phone className="w-3 h-3" /> {b.so_dien_thoai}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="py-3 px-4">
-                                    <div className="font-bold text-white">{b.ten_san}</div>
-                                    <span className="text-[10px] text-slate-400">{b.ten_loai || 'Sân bóng'}</span>
-                                  </td>
-                                  <td className="py-3 px-4">
-                                    <div className="font-mono font-bold text-white flex items-center gap-1">
-                                      <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                                      <span>{(b.gio_bat_dau || '').substring(0, 5)} - {(b.gio_ket_thuc || '').substring(0, 5)}</span>
-                                    </div>
-                                  </td>
-                                  <td className="py-3 px-4 text-right">
-                                    {isPaid || unpaid === 0 ? (
-                                      <div className="flex flex-col items-end gap-0.5">
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                          ✓ Đã trả đủ 100%
-                                        </span>
-                                        <span className="text-[10px] text-slate-400 font-mono">
-                                          ({tongTien.toLocaleString('vi-VN')}đ)
-                                        </span>
-                                      </div>
-                                    ) : (
-                                      <div className="flex flex-col items-end gap-0.5">
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                                          Đã cọc 30%: {soTienDaTra.toLocaleString('vi-VN')}đ
-                                        </span>
-                                        <span className="text-[10px] text-rose-400 font-mono font-bold">
-                                          Còn nợ: {unpaid.toLocaleString('vi-VN')}đ
-                                        </span>
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="py-3 px-4 text-center">
-                                    {isPlaying ? (
-                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30 animate-pulse inline-flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                                        Đang trong sân
-                                      </span>
-                                    ) : (
-                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                                        Chưa vào sân
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="py-3 px-4 text-center">
-                                    <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                                      {!isPlaying && (
-                                        isPaid || unpaid === 0 ? (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleDirectCheckIn(b);
-                                            }}
-                                            className="py-1 px-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-all shadow flex items-center gap-1 cursor-pointer"
-                                            title="Cho khách vào sân trực tiếp ngay"
-                                          >
-                                            <span>⚽ Vào sân</span>
-                                          </button>
-                                        ) : (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleDirectCheckIn(b, 'DANG_DA');
-                                            }}
-                                            className="py-1 px-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-all shadow flex items-center gap-1 cursor-pointer"
-                                            title="Lưu đơn vào Sân đang đá để khách đá trước thanh toán sau"
-                                          >
-                                            <Save className="w-3 h-3" />
-                                            <span>Lưu vào sân</span>
-                                          </button>
-                                        )
-                                      )}
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleSelectBookingToOrder(b);
-                                          setActiveTab('home');
-                                        }}
-                                        className="py-1 px-2.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 text-emerald-400 border border-emerald-500/30 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
-                                        title="Nạp vào cột Thông tin Order bên mục Home để thao tác"
-                                      >
-                                        <ShoppingBag className="w-3 h-3" />
-                                        <span>Mở Order (Home)</span>
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
                 </div>
-              </div>
-            );
-          })()}
+              );
+            })()}
 
             {/* TAB 2: DỊCH VỤ (SERVICES TỪ CSDL) */}
             {activeTab === 'services' && (
@@ -3664,9 +4071,8 @@ export default function ManagementSystem() {
                 </div>
 
                 {/* Danh sách lịch sử hiển thị dạng LIST (TABLE LIST VIEW) */}
-                <div className={`rounded-2xl border shadow-xl backdrop-blur-xl overflow-hidden ${
-                  isDarkMode ? 'border-slate-800 bg-[#0f172a]/90' : 'border-slate-200 bg-white'
-                }`}>
+                <div className={`rounded-2xl border shadow-xl backdrop-blur-xl overflow-hidden ${isDarkMode ? 'border-slate-800 bg-[#0f172a]/90' : 'border-slate-200 bg-white'
+                  }`}>
                   {filteredHistoryList.length === 0 ? (
                     <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
                       <AlertCircle className="w-10 h-10 text-amber-500/80 mb-1" />
@@ -3677,9 +4083,8 @@ export default function ManagementSystem() {
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse text-xs">
                         <thead>
-                          <tr className={`border-b ${
-                            isDarkMode ? 'border-slate-800 bg-slate-950/80 text-slate-400' : 'border-slate-200 bg-slate-100/90 text-slate-600'
-                          }`}>
+                          <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950/80 text-slate-400' : 'border-slate-200 bg-slate-100/90 text-slate-600'
+                            }`}>
                             <th className="py-3.5 px-4 font-black uppercase tracking-wider text-[11px] w-32">Mã Đơn</th>
                             <th className="py-3.5 px-4 font-black uppercase tracking-wider text-[11px] min-w-[200px]">Khách Hàng</th>
                             <th className="py-3.5 px-4 font-black uppercase tracking-wider text-[11px] min-w-[160px]">Sân Bóng</th>
@@ -3700,11 +4105,10 @@ export default function ManagementSystem() {
                               <tr
                                 key={item.id || `${maDon}_${idx}`}
                                 onClick={() => setSelectedHistoryOrder(item)}
-                                className={`group transition-all cursor-pointer ${
-                                  isDarkMode 
-                                    ? 'hover:bg-slate-800/50 active:bg-slate-800/70' 
-                                    : 'hover:bg-slate-50 active:bg-slate-100'
-                                }`}
+                                className={`group transition-all cursor-pointer ${isDarkMode
+                                  ? 'hover:bg-slate-800/50 active:bg-slate-800/70'
+                                  : 'hover:bg-slate-50 active:bg-slate-100'
+                                  }`}
                               >
                                 {/* Mã Đơn */}
                                 <td className="py-3 px-4 font-mono font-black text-emerald-400">
@@ -3895,9 +4299,8 @@ export default function ManagementSystem() {
                       return (
                         <div className="p-4 sm:p-6 space-y-4">
                           {/* Banner Thông Tin Sân Đã Chọn */}
-                          <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg ${
-                            isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
-                          }`}>
+                          <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+                            }`}>
                             <div className="flex items-center gap-4">
                               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/25 shrink-0">
                                 <LandPlot className="w-6 h-6" />
@@ -3950,66 +4353,83 @@ export default function ManagementSystem() {
                               const slotKey = `${san.id}_${slot.start}`;
                               const slotKeyRealtime = `${formattedDateISO}_${san.id}_${slot.start}`;
                               const slotData = gridSlots[slotKey];
-                              const isBooked = slotData && slotData.trang_thai === 'DA_CHOT';
-
-                              // Kiểm tra đơn từ hook useBookingSync (Real-time giả lập qua localStorage)
-                              const matchedSyncOrder = syncOrders.find((order) => {
-                                if (order.ngay_da !== formattedDateISO || order.trang_thai === 'Đã hủy') return false;
-                                const matchSan = (order.ma_san && order.ma_san === san.id) ||
-                                  (order.ten_san && (order.ten_san.includes(san.ten_san) || san.ten_san.includes(order.ten_san)));
-                                if (!matchSan) return false;
-                                return isTimeOverlapping(slot.start, slot.end, order.gio_bat_dau, order.gio_ket_thuc);
-                              });
-
-                              const isSyncPaid = matchedSyncOrder?.trang_thai === 'Đã thanh toán';
-                              const isSyncPending = matchedSyncOrder?.trang_thai === 'Chờ thanh toán';
-
                               const slotIdInCart = `pitch_${san.id}_${slot.start}`;
                               const isSelectedInCart = selectedSlots.some((s) => s.id === slotIdInCart);
                               const isLockedByOther = lockedSlots.includes(slotKeyRealtime) && !isSelectedInCart;
 
-                              if (isBooked || isSyncPaid) {
+                              // Tìm đơn khớp từ tất cả nguồn: rawBookings, historyBookings, syncOrders
+                              const findMatchingOrder = (list: any[]) => list.find((b) => {
+                                const bNgay = (b.ngay_da || '').substring(0, 10);
+                                if (bNgay !== formattedDateISO) return false;
+                                if (['DA_HUY', 'Đã hủy'].includes(b.trang_thai)) return false;
+                                const matchSan = (b.ma_san && b.ma_san === san.id) ||
+                                  (b.ten_san && (b.ten_san.includes(san.ten_san) || san.ten_san.includes(b.ten_san)));
+                                if (!matchSan) return false;
+                                const bStart = (b.gio_bat_dau || '').substring(0, 5);
+                                const bEnd = (b.gio_ket_thuc || '').substring(0, 5);
+                                return isTimeOverlapping(slot.start, slot.end, bStart, bEnd);
+                              });
+
+                              const matchedOrder =
+                                findMatchingOrder([...rawBookings, ...historyBookings]) ||
+                                findMatchingOrder(syncOrders);
+
+                              // Xác định trạng thái ô (3 mức: HOLDING / BOOKED / EMPTY)
+                              const orderStatus = String(matchedOrder?.trang_thai || slotData?.trang_thai || '').toLowerCase();
+                              const isHolding = matchedOrder && (
+                                orderStatus.includes('cho_thanh_toan') || orderStatus.includes('chờ thanh toán') ||
+                                orderStatus.includes('luu_don') || orderStatus.includes('pending')
+                              );
+                              const isFullyBooked = !isHolding && (
+                                (slotData && slotData.trang_thai === 'DA_CHOT') ||
+                                (matchedOrder && (
+                                  orderStatus.includes('dang_da') || orderStatus.includes('da_vao_san') ||
+                                  orderStatus.includes('cho_vao_san') || orderStatus.includes('da_thanh_toan') ||
+                                  orderStatus.includes('thanh_toan') || orderStatus.includes('đã thanh toán')
+                                ))
+                              );
+
+                              // TRẠNG THÁI 3: ĐÃ ĐẶT (Đỏ sậm) - dang_da / da_thanh_toan / DA_CHOT
+                              if (isFullyBooked) {
                                 return (
                                   <button
                                     key={slot.start}
                                     type="button"
                                     onClick={() => {
-                                      if (slotData) {
-                                        setSelectedSlotDetail({ san, slot, slotData });
-                                      } else if (matchedSyncOrder) {
-                                        setSelectedInvoiceDetail(matchedSyncOrder as any);
-                                      }
+                                      if (slotData) setSelectedSlotDetail({ san, slot, slotData });
+                                      else if (matchedOrder) setSelectedInvoiceDetail(matchedOrder as any);
                                     }}
-                                    className="w-full h-24 sm:h-28 p-2.5 rounded-2xl border border-rose-500/70 bg-gradient-to-b from-[#2a0b12] to-[#1a060b] text-rose-200 flex flex-col items-center justify-center gap-1.5 shadow-lg shadow-rose-950/40 hover:scale-[1.03] transition-all cursor-pointer select-none text-center group"
-                                    title={`Đã đặt: ${slotData?.ten_khach_hang || matchedSyncOrder?.ten_khach_hang || 'Có khách'}`}
+                                    className="w-full h-24 sm:h-28 p-2.5 rounded-2xl border border-rose-500/70 bg-gradient-to-b from-[#2a0b12] to-[#1a060b] flex flex-col items-center justify-center gap-1.5 shadow-lg shadow-rose-950/40 hover:scale-[1.03] transition-all cursor-pointer select-none text-center group"
+                                    title={`Đã đặt: ${slotData?.ten_khach_hang || matchedOrder?.ten_khach_hang || 'Có khách'} | ${slot.label}`}
                                   >
                                     <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-rose-400 shrink-0" strokeWidth={2.2} />
                                     <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-rose-200">
                                       ĐÃ ĐẶT
                                     </span>
+                                    <span className="text-[10px] font-mono text-rose-400/70">{slot.label}</span>
                                   </button>
                                 );
                               }
 
-                              if (isSyncPending) {
+                              // TRẠNG THÁI 2: ĐANG GIỮ CHỔ (Vàng/Cam) - đơn đã lưu nhưng chưa vào sân
+                              if (isHolding) {
                                 return (
                                   <div
                                     key={slot.start}
-                                    onClick={() => matchedSyncOrder && setSelectedInvoiceDetail(matchedSyncOrder as any)}
-                                    className="w-full h-24 sm:h-28 p-2.5 rounded-2xl border border-slate-700 bg-slate-900/90 text-slate-400 flex flex-col items-center justify-center gap-1 select-none cursor-pointer transition-all shadow-md"
-                                    title={`Đang chờ thanh toán: ${matchedSyncOrder?.ten_khach_hang} (${matchedSyncOrder?.ma_don_dat})`}
+                                    onClick={() => matchedOrder && setSelectedInvoiceDetail(matchedOrder as any)}
+                                    className="w-full h-24 sm:h-28 p-2.5 rounded-2xl border border-amber-500/60 bg-gradient-to-b from-amber-950/60 to-amber-900/30 flex flex-col items-center justify-center gap-1 select-none cursor-pointer transition-all shadow-md hover:scale-[1.02]"
+                                    title={`Đang giữ chỗ: ${matchedOrder?.ten_khach_hang || ''} | ${slot.label}`}
                                   >
-                                    <Clock className="w-5 h-5 text-amber-400" />
-                                    <span className="text-xs font-bold text-amber-400 uppercase">
-                                      CHỜ XÁC NHẬN
+                                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse mb-0.5" />
+                                    <span className="text-xs font-black text-amber-400 uppercase tracking-wider">
+                                      GIỮ CHỔ
                                     </span>
-                                    <span className="text-[10px] text-slate-400 font-mono">
-                                      {slot.label}
-                                    </span>
+                                    <span className="text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
                                   </div>
                                 );
                               }
 
+                              // Trong giỏ POS
                               if (isSelectedInCart) {
                                 return (
                                   <button
@@ -4019,34 +4439,28 @@ export default function ManagementSystem() {
                                     className="w-full h-24 sm:h-28 p-2.5 rounded-2xl border-2 border-emerald-300 bg-gradient-to-b from-emerald-500 to-teal-500 text-slate-950 flex flex-col items-center justify-center gap-1 shadow-xl shadow-emerald-500/30 ring-2 ring-emerald-400/50 scale-[1.03] transition-all cursor-pointer select-none text-center"
                                     title="Bấm để bỏ chọn khỏi giỏ hàng POS"
                                   >
-                                    <span className="text-xs sm:text-sm font-black uppercase tracking-wider">
-                                      TRONG GIỎ
-                                    </span>
-                                    <span className="text-xs sm:text-sm font-black font-mono">
-                                      {slot.label}
-                                    </span>
+                                    <span className="text-xs sm:text-sm font-black uppercase tracking-wider">TRONG GIỏ</span>
+                                    <span className="text-xs sm:text-sm font-black font-mono">{slot.label}</span>
                                   </button>
                                 );
                               }
 
+                              // Giữ chỗ realtime (Socket.IO)
                               if (isLockedByOther) {
                                 return (
                                   <div
                                     key={slot.start}
-                                    className="w-full h-24 sm:h-28 p-2.5 rounded-2xl border border-amber-500/40 bg-amber-950/40 text-amber-300 flex flex-col items-center justify-center gap-1 opacity-80 cursor-not-allowed select-none shadow-md text-center"
+                                    className="w-full h-24 sm:h-28 p-2.5 rounded-2xl border border-amber-500/40 bg-amber-950/40 flex flex-col items-center justify-center gap-1 opacity-80 cursor-not-allowed select-none shadow-md text-center"
                                     title="Đang có khách giữ chỗ"
                                   >
                                     <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping mb-0.5" />
-                                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                                      GIỮ CHỖ
-                                    </span>
-                                    <span className="text-[10px] text-amber-300/80 font-mono">
-                                      {slot.label}
-                                    </span>
+                                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">GIỮ CHỔ</span>
+                                    <span className="text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
                                   </div>
                                 );
                               }
 
+                              // TRẠNG THÁI 1: TRỐNG (Xanh lá) - Mặc định
                               return (
                                 <button
                                   key={slot.start}
@@ -4055,12 +4469,8 @@ export default function ManagementSystem() {
                                   className="w-full h-24 sm:h-28 p-2.5 rounded-2xl border border-emerald-500/50 bg-gradient-to-b from-[#0b241c]/90 to-[#061712]/90 hover:from-[#0e2e24] hover:to-[#081e17] hover:border-emerald-400 flex flex-col items-center justify-center gap-1 shadow-md hover:scale-[1.03] transition-all cursor-pointer select-none text-center group"
                                   title={`Trống: Bấm để chọn ${san.ten_san} ca ${slot.start} - ${slot.end}`}
                                 >
-                                  <span className="text-xs sm:text-sm font-black text-emerald-400 group-hover:text-emerald-300 uppercase tracking-wider">
-                                    TRỐNG
-                                  </span>
-                                  <span className="text-xs sm:text-sm font-bold text-teal-300 font-mono">
-                                    {slot.label}
-                                  </span>
+                                  <span className="text-xs sm:text-sm font-black text-emerald-400 group-hover:text-emerald-300 uppercase tracking-wider">TRỐNG</span>
+                                  <span className="text-xs sm:text-sm font-bold text-teal-300 font-mono">{slot.label}</span>
                                 </button>
                               );
                             })}
@@ -4119,101 +4529,101 @@ export default function ManagementSystem() {
                               const slotKey = `${san.id}_${slot.start}`;
                               const slotKeyRealtime = `${formattedDateISO}_${san.id}_${slot.start}`;
                               const slotData = gridSlots[slotKey];
-                              const isBooked = slotData && slotData.trang_thai === 'DA_CHOT';
-
-                              // Kiểm tra đơn từ hook useBookingSync (Real-time giả lập qua localStorage)
-                              const matchedSyncOrder = syncOrders.find((order) => {
-                                if (order.ngay_da !== formattedDateISO || order.trang_thai === 'Đã hủy') return false;
-                                const matchSan = (order.ma_san && order.ma_san === san.id) ||
-                                  (order.ten_san && (order.ten_san.includes(san.ten_san) || san.ten_san.includes(order.ten_san)));
-                                if (!matchSan) return false;
-                                return isTimeOverlapping(slot.start, slot.end, order.gio_bat_dau, order.gio_ket_thuc);
-                              });
-
-                              const isSyncPaid = matchedSyncOrder?.trang_thai === 'Đã thanh toán';
-                              const isSyncPending = matchedSyncOrder?.trang_thai === 'Chờ thanh toán';
-
                               const slotIdInCart = `pitch_${san.id}_${slot.start}`;
                               const isSelectedInCart = selectedSlots.some((s) => s.id === slotIdInCart);
                               const isLockedByOther = lockedSlots.includes(slotKeyRealtime) && !isSelectedInCart;
+
+                              const findMatchingOrder2 = (list: any[]) => list.find((b) => {
+                                const bNgay = (b.ngay_da || '').substring(0, 10);
+                                if (bNgay !== formattedDateISO) return false;
+                                if (['DA_HUY', 'Đã hủy'].includes(b.trang_thai)) return false;
+                                const matchSan = (b.ma_san && b.ma_san === san.id) ||
+                                  (b.ten_san && (b.ten_san.includes(san.ten_san) || san.ten_san.includes(b.ten_san)));
+                                if (!matchSan) return false;
+                                const bStart = (b.gio_bat_dau || '').substring(0, 5);
+                                const bEnd = (b.gio_ket_thuc || '').substring(0, 5);
+                                return isTimeOverlapping(slot.start, slot.end, bStart, bEnd);
+                              });
+
+                              const matchedOrder2 =
+                                findMatchingOrder2([...rawBookings, ...historyBookings]) ||
+                                findMatchingOrder2(syncOrders);
+
+                              const orderStatus2 = String(matchedOrder2?.trang_thai || slotData?.trang_thai || '').toLowerCase();
+                              const isHolding2 = matchedOrder2 && (
+                                orderStatus2.includes('cho_thanh_toan') || orderStatus2.includes('chờ thanh toán') ||
+                                orderStatus2.includes('luu_don') || orderStatus2.includes('pending')
+                              );
+                              const isFullyBooked2 = !isHolding2 && (
+                                (slotData && slotData.trang_thai === 'DA_CHOT') ||
+                                (matchedOrder2 && (
+                                  orderStatus2.includes('dang_da') || orderStatus2.includes('da_vao_san') ||
+                                  orderStatus2.includes('cho_vao_san') || orderStatus2.includes('da_thanh_toan') ||
+                                  orderStatus2.includes('thanh_toan') || orderStatus2.includes('đã thanh toán')
+                                ))
+                              );
 
                               return (
                                 <td
                                   key={slot.start}
                                   className={`p-1.5 border-l text-center transition-colors ${isDarkMode ? 'border-slate-800/70' : 'border-slate-200'}`}
                                 >
-                                  {isBooked || isSyncPaid ? (
+                                  {isFullyBooked2 ? (
+                                    // TRẠNG THÁI 3: ĐÃ ĐẶT (Đỏ)
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        if (slotData) {
-                                          setSelectedSlotDetail({ san, slot, slotData });
-                                        } else if (matchedSyncOrder) {
-                                          setSelectedInvoiceDetail(matchedSyncOrder as any);
-                                        }
+                                        if (slotData) setSelectedSlotDetail({ san, slot, slotData });
+                                        else if (matchedOrder2) setSelectedInvoiceDetail(matchedOrder2 as any);
                                       }}
-                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-rose-500/70 bg-gradient-to-b from-[#2a0b12] to-[#1a060b] text-rose-200 flex flex-col items-center justify-center gap-1.5 shadow-lg shadow-rose-950/40 hover:scale-[1.03] transition-all cursor-pointer select-none text-center group"
-                                      title={`Đã đặt: ${slotData?.ten_khach_hang || matchedSyncOrder?.ten_khach_hang || 'Có khách'}`}
+                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-rose-500/70 bg-gradient-to-b from-[#2a0b12] to-[#1a060b] flex flex-col items-center justify-center gap-1.5 shadow-lg shadow-rose-950/40 hover:scale-[1.03] transition-all cursor-pointer select-none text-center"
+                                      title={`Đã đặt: ${slotData?.ten_khach_hang || matchedOrder2?.ten_khach_hang || 'Có khách'}`}
                                     >
                                       <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-rose-400 shrink-0" strokeWidth={2.2} />
-                                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-rose-200">
-                                        ĐÃ ĐẶT
-                                      </span>
+                                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-rose-200">ĐÃ ĐẶT</span>
                                     </button>
-                                  ) : isSyncPending ? (
+                                  ) : isHolding2 ? (
+                                    // TRẠNG THÁI 2: GIỮ CHỔ (Vàng)
                                     <div
-                                      onClick={() => matchedSyncOrder && setSelectedInvoiceDetail(matchedSyncOrder as any)}
-                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-slate-700 bg-slate-900/90 text-slate-400 flex flex-col items-center justify-center gap-1 select-none cursor-pointer transition-all shadow-md"
-                                      title={`Đang chờ thanh toán: ${matchedSyncOrder?.ten_khach_hang} (${matchedSyncOrder?.ma_don_dat})`}
+                                      onClick={() => matchedOrder2 && setSelectedInvoiceDetail(matchedOrder2 as any)}
+                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-amber-500/60 bg-gradient-to-b from-amber-950/60 to-amber-900/30 flex flex-col items-center justify-center gap-1 select-none cursor-pointer transition-all hover:scale-[1.02]"
+                                      title={`Đang giữ chỗ: ${matchedOrder2?.ten_khach_hang || ''} | ${slot.label}`}
                                     >
-                                      <Clock className="w-5 h-5 text-amber-400" />
-                                      <span className="text-xs font-bold text-amber-400 uppercase">
-                                        CHỜ XÁC NHẬN
-                                      </span>
-                                      <span className="text-[10px] text-slate-400 font-mono">
-                                        {slot.label}
-                                      </span>
+                                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse mb-0.5" />
+                                      <span className="text-xs font-black text-amber-400 uppercase tracking-wider">GIỮ CHỔ</span>
+                                      <span className="text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
                                     </div>
                                   ) : isSelectedInCart ? (
+                                    // TRONG GIỏ POS
                                     <button
                                       type="button"
                                       onClick={() => handleToggleSlotFromMatrix(san, slot, slotData)}
                                       className="w-full h-20 sm:h-24 p-2 rounded-2xl border-2 border-emerald-300 bg-gradient-to-b from-emerald-500 to-teal-500 text-slate-950 flex flex-col items-center justify-center gap-1 shadow-xl shadow-emerald-500/30 ring-2 ring-emerald-400/50 scale-[1.03] transition-all cursor-pointer select-none text-center"
                                       title="Bấm để bỏ chọn khỏi giỏ hàng POS"
                                     >
-                                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider">
-                                        TRONG GIỎ
-                                      </span>
-                                      <span className="text-xs sm:text-sm font-black font-mono">
-                                        {slot.label}
-                                      </span>
+                                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider">TRONG GIỏ</span>
+                                      <span className="text-xs sm:text-sm font-black font-mono">{slot.label}</span>
                                     </button>
                                   ) : isLockedByOther ? (
+                                    // GIỮ CHỔ REALTIME (Socket.IO)
                                     <div
-                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-amber-500/40 bg-amber-950/40 text-amber-300 flex flex-col items-center justify-center gap-1 opacity-80 cursor-not-allowed select-none shadow-md text-center"
+                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-amber-500/40 bg-amber-950/40 flex flex-col items-center justify-center gap-1 opacity-80 cursor-not-allowed select-none shadow-md text-center"
                                       title="Đang có khách giữ chỗ"
                                     >
                                       <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping mb-0.5" />
-                                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                                        GIỮ CHỖ
-                                      </span>
-                                      <span className="text-[10px] text-amber-300/80 font-mono">
-                                        {slot.label}
-                                      </span>
+                                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">GIỮ CHỔ</span>
+                                      <span className="text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
                                     </div>
                                   ) : (
+                                    // TRẠNG THÁI 1: TRỐNG (Xanh lá)
                                     <button
                                       type="button"
                                       onClick={() => handleToggleSlotFromMatrix(san, slot, slotData)}
                                       className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-emerald-500/50 bg-gradient-to-b from-[#0b241c]/90 to-[#061712]/90 hover:from-[#0e2e24] hover:to-[#081e17] hover:border-emerald-400 flex flex-col items-center justify-center gap-1 shadow-md hover:scale-[1.03] transition-all cursor-pointer select-none text-center group"
                                       title={`Trống: Bấm để chọn ${san.ten_san} ca ${slot.start} - ${slot.end}`}
                                     >
-                                      <span className="text-xs sm:text-sm font-black text-emerald-400 group-hover:text-emerald-300 uppercase tracking-wider">
-                                        TRỐNG
-                                      </span>
-                                      <span className="text-xs sm:text-sm font-bold text-teal-300 font-mono">
-                                        {slot.label}
-                                      </span>
+                                      <span className="text-xs sm:text-sm font-black text-emerald-400 group-hover:text-emerald-300 uppercase tracking-wider">TRỐNG</span>
+                                      <span className="text-xs sm:text-sm font-bold text-teal-300 font-mono">{slot.label}</span>
                                     </button>
                                   )}
                                 </td>
@@ -4475,11 +4885,10 @@ export default function ManagementSystem() {
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('TIEN_MAT')}
-                      className={`py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        paymentMethod === 'TIEN_MAT'
-                          ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400 scale-[1.02]'
-                          : 'bg-slate-900/90 text-slate-300 border border-slate-700 hover:bg-slate-800 hover:text-white'
-                      }`}
+                      className={`py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${paymentMethod === 'TIEN_MAT'
+                        ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/25 ring-2 ring-emerald-400 scale-[1.02]'
+                        : 'bg-slate-900/90 text-slate-300 border border-slate-700 hover:bg-slate-800 hover:text-white'
+                        }`}
                     >
                       <Banknote className="w-4 h-4 shrink-0" />
                       <span>Tiền mặt</span>
@@ -4489,11 +4898,10 @@ export default function ManagementSystem() {
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('CHUYEN_KHOAN')}
-                      className={`py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        paymentMethod === 'CHUYEN_KHOAN'
-                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-400 scale-[1.02]'
-                          : 'bg-slate-900/90 text-slate-300 border border-slate-700 hover:bg-slate-800 hover:text-white'
-                      }`}
+                      className={`py-2.5 px-2 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${paymentMethod === 'CHUYEN_KHOAN'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 ring-2 ring-blue-400 scale-[1.02]'
+                        : 'bg-slate-900/90 text-slate-300 border border-slate-700 hover:bg-slate-800 hover:text-white'
+                        }`}
                       title="Thanh toán quét mã VietQR tự động"
                     >
                       <Smartphone className="w-4 h-4 shrink-0 text-cyan-300" />
@@ -4543,8 +4951,8 @@ export default function ManagementSystem() {
 
                   <div className="flex justify-between items-center text-sm font-black pt-1.5 border-t border-slate-700">
                     <span className="text-white uppercase tracking-wider text-xs flex items-center gap-1">
-                      {isOrderFullyPaid 
-                        ? 'CẦN THANH TOÁN (DỊCH VỤ):' 
+                      {isOrderFullyPaid
+                        ? 'CẦN THANH TOÁN (DỊCH VỤ):'
                         : (Number(loadedBookingState?.so_tien_da_tra || 0) > 0 ? 'CẦN THANH TOÁN (CÒN LẠI):' : 'TỔNG TIỀN PHẢI TRẢ:')}
                     </span>
                     <span className="text-amber-400 font-mono text-lg font-black tracking-tight drop-shadow-md">
@@ -4627,8 +5035,8 @@ export default function ManagementSystem() {
 
         </div>
 
-        
-{/* ==================== 3. MODAL CHI TIẾT SLOT LỊCH CŨ ==================== */}
+
+        {/* ==================== 3. MODAL CHI TIẾT SLOT LỊCH CŨ ==================== */}
         {selectedSlotDetail && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
             <div className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200 ${isDarkMode ? 'bg-[#0f172a] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
@@ -4725,102 +5133,111 @@ export default function ManagementSystem() {
           </div>
         )}
 
-        {/* ==================== 4. MODAL CHI TIẾT HÓA ĐƠN POS (MỚI) ==================== */}
+        {/* ==================== 4. MODAL CHI TIẾT & XÁC NHẬN THANH TOÁN (SLIDE-IN FROM RIGHT) ==================== */}
         {selectedInvoiceDetail && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
-            <div className="w-full max-w-lg rounded-3xl border border-slate-700 bg-[#0f172a] text-white p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-              
-              <div className="flex items-center justify-between pb-3.5 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center font-black">
-                    <FileText className="w-5 h-5" />
+          <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/75 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
+            {/* Định nghĩa Keyframes trực tiếp trong thẻ <style> (Không cần cấu hình tailwind.config.js) */}
+            <style>{`
+              @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0.8; }
+                to { transform: translateX(0); opacity: 1; }
+              }
+              @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+              }
+            `}</style>
+
+            {/* Khung Drawer trượt từ mép phải màn hình vào */}
+            <div className="h-full w-full max-w-md sm:max-w-lg bg-[#0f172a] text-white p-6 shadow-2xl border-l border-slate-700 flex flex-col justify-between overflow-y-auto animate-[slideInRight_0.3s_ease-out_forwards]">
+
+              <div>
+                {/* Header Modal */}
+                <div className="flex items-center justify-between pb-3.5 border-b border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center font-black">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-base leading-tight">Chi Tiết Hóa Đơn #{selectedInvoiceDetail.ma_don_dat}</h3>
+                      <p className="text-[11px] text-slate-400">Ngày tạo: {new Date(selectedInvoiceDetail.ngay_tao).toLocaleString('vi-VN')}</p>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedInvoiceDetail(null)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Nội dung chi tiết đơn */}
+                <div className="my-4 space-y-2.5 text-xs">
+                  <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Khách hàng:</span>
+                      <strong className="text-white font-bold">{selectedInvoiceDetail.ten_khach_hang}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Số điện thoại:</span>
+                      <strong className="text-emerald-400 font-mono">{selectedInvoiceDetail.so_dien_thoai}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Sân đặt:</span>
+                      <strong className="text-white">{selectedInvoiceDetail.ten_san}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Khung giờ đá:</span>
+                      <strong className="text-amber-400 font-mono">{selectedInvoiceDetail.gio_bat_dau} - {selectedInvoiceDetail.gio_ket_thuc} ({selectedInvoiceDetail.ngay_da})</strong>
+                    </div>
+                  </div>
+
                   <div>
-                    <h3 className="font-black text-base leading-tight">Chi Tiết Hóa Đơn #{selectedInvoiceDetail.ma_don_dat}</h3>
-                    <p className="text-[11px] text-slate-400">Ngày tạo: {new Date(selectedInvoiceDetail.ngay_tao).toLocaleString('vi-VN')}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedInvoiceDetail(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="my-4 space-y-2.5 text-xs">
-                <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Khách hàng:</span>
-                    <strong className="text-white font-bold">{selectedInvoiceDetail.ten_khach_hang}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Số điện thoại:</span>
-                    <strong className="text-emerald-400 font-mono">{selectedInvoiceDetail.so_dien_thoai}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Sân đặt:</span>
-                    <strong className="text-white">{selectedInvoiceDetail.ten_san}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Khung giờ đá:</span>
-                    <strong className="text-amber-400 font-mono">{selectedInvoiceDetail.gio_bat_dau} - {selectedInvoiceDetail.gio_ket_thuc} ({selectedInvoiceDetail.ngay_da})</strong>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Dịch Vụ Khách Đã Gọi:</h4>
-                  {selectedInvoiceDetail.dich_vu.length === 0 ? (
-                    <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800 text-center text-slate-500 italic">
-                      Chưa có dịch vụ nào được gọi.
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-slate-800 overflow-hidden">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-900 border-b border-slate-800 text-slate-400">
-                          <tr>
-                            <th className="p-2.5">Tên món</th>
-                            <th className="p-2.5 text-center">SL</th>
-                            <th className="p-2.5 text-right">Đơn giá</th>
-                            <th className="p-2.5 text-right">Thành tiền</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/60">
-                          {selectedInvoiceDetail.dich_vu.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-slate-900/40">
-                              <td className="p-2.5 font-bold text-white">{item.ten_dich_vu}</td>
-                              <td className="p-2.5 text-center font-mono font-bold text-emerald-400">x{item.so_luong}</td>
-                              <td className="p-2.5 text-right font-mono text-slate-300">{item.don_gia.toLocaleString('vi-VN')}đ</td>
-                              <td className="p-2.5 text-right font-mono font-bold text-emerald-400">{item.thanh_tien.toLocaleString('vi-VN')}đ</td>
+                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Dịch Vụ Khách Đã Gọi:</h4>
+                    {selectedInvoiceDetail.dich_vu.length === 0 ? (
+                      <div className="p-3.5 rounded-2xl bg-slate-900/40 border border-slate-800 text-center text-slate-500 italic">
+                        Chưa có dịch vụ nào được gọi.
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-slate-800 overflow-hidden">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-900 border-b border-slate-800 text-slate-400">
+                            <tr>
+                              <th className="p-2.5">Tên món</th>
+                              <th className="p-2.5 text-center">SL</th>
+                              <th className="p-2.5 text-right">Đơn giá</th>
+                              <th className="p-2.5 text-right">Thành tiền</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/60">
+                            {selectedInvoiceDetail.dich_vu.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-900/40">
+                                <td className="p-2.5 font-bold text-white">{item.ten_dich_vu}</td>
+                                <td className="p-2.5 text-center font-mono font-bold text-emerald-400">x{item.so_luong}</td>
+                                <td className="p-2.5 text-right font-mono text-slate-300">{item.don_gia.toLocaleString('vi-VN')}đ</td>
+                                <td className="p-2.5 text-right font-mono font-bold text-emerald-400">{item.thanh_tien.toLocaleString('vi-VN')}đ</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
 
-                <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-sm">
-                  <span className="font-black text-slate-300">TỔNG TIỀN THANH TOÁN:</span>
-                  <span className="font-black text-emerald-400 font-mono text-lg">{selectedInvoiceDetail.tong_tien.toLocaleString('vi-VN')} VNĐ</span>
+                  <div className="p-3.5 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-sm">
+                    <span className="font-black text-slate-300">TỔNG TIỀN THANH TOÁN:</span>
+                    <span className="font-black text-emerald-400 font-mono text-lg">{selectedInvoiceDetail.tong_tien.toLocaleString('vi-VN')} VNĐ</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => handleAddMoreService(selectedInvoiceDetail)}
-                  className="w-full py-2.5 px-4 rounded-xl bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 font-bold text-xs border border-blue-500/40 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  <span>THÊM DỊCH VỤ</span>
-                </button>
-
+              {/* Footer Nút Thao Tác */}
+              <div className="pt-4 border-t border-slate-800 shrink-0">
                 <button
                   type="button"
                   onClick={() => handlePayOrder(selectedInvoiceDetail)}
-                  className="w-full py-2.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                 >
                   <CreditCard className="w-4 h-4" />
                   <span>THANH TOÁN</span>
@@ -4835,7 +5252,7 @@ export default function ManagementSystem() {
         {selectedHistoryOrder && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
             <div className="w-full max-w-lg rounded-3xl border border-slate-700 bg-slate-900 text-white p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 select-none">
-              
+
               {/* Header Modal */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-800">
                 <div className="flex items-center gap-2.5">
@@ -4862,7 +5279,7 @@ export default function ManagementSystem() {
 
               {/* Nội dung thông tin (Read-only) */}
               <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 text-xs">
-                
+
                 {/* Thông tin Khách hàng & Ngày giờ */}
                 <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2">
                   <div className="flex items-center justify-between">
@@ -4967,7 +5384,7 @@ export default function ManagementSystem() {
         {isCustomerHistoryModalOpen && selectedCustomerForHistory && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-200">
             <div className="w-full max-w-2xl rounded-3xl border border-slate-700 bg-[#0f172a] text-white p-5 sm:p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-              
+
               {/* Header Modal */}
               <div className="flex items-start justify-between pb-3.5 border-b border-slate-800 shrink-0">
                 <div className="flex items-center gap-3">
@@ -5061,11 +5478,10 @@ export default function ManagementSystem() {
                         <div
                           key={item.id || item.ma_don_dat || idx}
                           onClick={!isExpired ? () => handleSelectCustomerHistoryBookingToOrder(item) : undefined}
-                          className={`p-4 rounded-2xl border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm ${
-                            isExpired
-                              ? 'bg-slate-950/60 border-slate-800/80 opacity-60 cursor-not-allowed'
-                              : 'border-slate-800 bg-slate-900/80 hover:bg-slate-850 hover:border-emerald-500/60 cursor-pointer group'
-                          }`}
+                          className={`p-4 rounded-2xl border transition-all duration-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm ${isExpired
+                            ? 'bg-slate-950/60 border-slate-800/80 opacity-60 cursor-not-allowed'
+                            : 'border-slate-800 bg-slate-900/80 hover:bg-slate-850 hover:border-emerald-500/60 cursor-pointer group'
+                            }`}
                         >
                           <div className="space-y-1.5 overflow-hidden">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -5191,9 +5607,8 @@ export default function ManagementSystem() {
         {/* ==================== 5. MODAL VIETQR THANH TOÁN CHUYỂN KHOẢN CỐ ĐỊNH / ĐỘNG ==================== */}
         {isVietQRModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-            <div className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200 ${
-              isDarkMode ? 'bg-[#0f172a] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-            }`}>
+            <div className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200 ${isDarkMode ? 'bg-[#0f172a] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+              }`}>
               {/* Header Modal */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-700 mb-4">
                 <div className="flex items-center gap-2.5">
@@ -5341,9 +5756,8 @@ export default function ManagementSystem() {
         {/* ==================== 5.5 MODAL GIA HẠN THỜI GIAN ĐÁ HOẶC ĐỔI SÂN ==================== */}
         {isExtendingModalOpen && extendingBooking && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-            <div className={`w-full max-w-xl rounded-3xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col ${
-              isDarkMode ? 'bg-[#0f172a] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-            }`}>
+            <div className={`w-full max-w-xl rounded-3xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col ${isDarkMode ? 'bg-[#0f172a] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+              }`}>
               {/* Header Modal */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-700 shrink-0">
                 <div className="flex items-center gap-2.5">
@@ -5401,11 +5815,10 @@ export default function ManagementSystem() {
                         key={mins}
                         type="button"
                         onClick={() => handleChangeExtendMinutes(mins)}
-                        className={`py-2 px-1 rounded-xl font-bold text-xs transition-all cursor-pointer text-center ${
-                          extendMinutes === mins
-                            ? 'bg-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/25 ring-2 ring-amber-400 scale-[1.03]'
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
-                        }`}
+                        className={`py-2 px-1 rounded-xl font-bold text-xs transition-all cursor-pointer text-center ${extendMinutes === mins
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-lg shadow-amber-500/25 ring-2 ring-amber-400 scale-[1.03]'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                          }`}
                       >
                         +{mins}p
                       </button>
@@ -5461,11 +5874,10 @@ export default function ManagementSystem() {
                               <button
                                 type="button"
                                 onClick={() => setExtendPaymentMethod('TIEN_MAT')}
-                                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                                  extendPaymentMethod === 'TIEN_MAT'
-                                    ? 'bg-emerald-500 text-slate-950 font-black shadow-md ring-2 ring-emerald-400'
-                                    : 'bg-slate-900 text-slate-300 border border-slate-700'
-                                }`}
+                                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${extendPaymentMethod === 'TIEN_MAT'
+                                  ? 'bg-emerald-500 text-slate-950 font-black shadow-md ring-2 ring-emerald-400'
+                                  : 'bg-slate-900 text-slate-300 border border-slate-700'
+                                  }`}
                               >
                                 <Banknote className="w-3.5 h-3.5" />
                                 <span>Tiền mặt</span>
@@ -5473,11 +5885,10 @@ export default function ManagementSystem() {
                               <button
                                 type="button"
                                 onClick={() => setExtendPaymentMethod('CHUYEN_KHOAN')}
-                                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                                  extendPaymentMethod === 'CHUYEN_KHOAN'
-                                    ? 'bg-blue-600 text-white font-black shadow-md ring-2 ring-blue-400'
-                                    : 'bg-slate-900 text-slate-300 border border-slate-700'
-                                }`}
+                                className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${extendPaymentMethod === 'CHUYEN_KHOAN'
+                                  ? 'bg-blue-600 text-white font-black shadow-md ring-2 ring-blue-400'
+                                  : 'bg-slate-900 text-slate-300 border border-slate-700'
+                                  }`}
                               >
                                 <Smartphone className="w-3.5 h-3.5" />
                                 <span>Chuyển khoản QR</span>
@@ -5527,16 +5938,14 @@ export default function ManagementSystem() {
                                   <div
                                     key={pitch.ma_san}
                                     onClick={() => setSelectedAlternativePitch(pitch)}
-                                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                                      isSelected
-                                        ? 'bg-blue-950/70 border-blue-400 ring-2 ring-blue-500 shadow-md'
-                                        : 'bg-slate-900/90 border-slate-700/80 hover:border-slate-500'
-                                    }`}
+                                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${isSelected
+                                      ? 'bg-blue-950/70 border-blue-400 ring-2 ring-blue-500 shadow-md'
+                                      : 'bg-slate-900/90 border-slate-700/80 hover:border-slate-500'
+                                      }`}
                                   >
                                     <div className="flex items-center gap-2.5">
-                                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${
-                                        isSelected ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'
-                                      }`}>
+                                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-300'
+                                        }`}>
                                         <LandPlot className="w-4 h-4" />
                                       </div>
                                       <div>
@@ -5549,9 +5958,8 @@ export default function ManagementSystem() {
                                       <div className="text-emerald-400 font-mono font-black text-xs">
                                         +{Number(pitch.tien_san_du_kien || 0).toLocaleString('vi-VN')}đ
                                       </div>
-                                      <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${
-                                        isSelected ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'
-                                      }`}>
+                                      <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded ${isSelected ? 'bg-blue-500 text-white' : 'bg-slate-800 text-slate-400'
+                                        }`}>
                                         {isSelected ? '✓ Đã chọn sân này' : 'Bấm để chọn'}
                                       </span>
                                     </div>
@@ -5580,11 +5988,10 @@ export default function ManagementSystem() {
                                 <button
                                   type="button"
                                   onClick={() => setExtendPaymentMethod('TIEN_MAT')}
-                                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                                    extendPaymentMethod === 'TIEN_MAT'
-                                      ? 'bg-emerald-500 text-slate-950 font-black shadow-md ring-2 ring-emerald-400'
-                                      : 'bg-slate-900 text-slate-300 border border-slate-700'
-                                  }`}
+                                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${extendPaymentMethod === 'TIEN_MAT'
+                                    ? 'bg-emerald-500 text-slate-950 font-black shadow-md ring-2 ring-emerald-400'
+                                    : 'bg-slate-900 text-slate-300 border border-slate-700'
+                                    }`}
                                 >
                                   <Banknote className="w-3.5 h-3.5" />
                                   <span>Tiền mặt</span>
@@ -5592,11 +5999,10 @@ export default function ManagementSystem() {
                                 <button
                                   type="button"
                                   onClick={() => setExtendPaymentMethod('CHUYEN_KHOAN')}
-                                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                                    extendPaymentMethod === 'CHUYEN_KHOAN'
-                                      ? 'bg-blue-600 text-white font-black shadow-md ring-2 ring-blue-400'
-                                      : 'bg-slate-900 text-slate-300 border border-slate-700'
-                                  }`}
+                                  className={`py-2 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${extendPaymentMethod === 'CHUYEN_KHOAN'
+                                    ? 'bg-blue-600 text-white font-black shadow-md ring-2 ring-blue-400'
+                                    : 'bg-slate-900 text-slate-300 border border-slate-700'
+                                    }`}
                                 >
                                   <Smartphone className="w-3.5 h-3.5" />
                                   <span>Chuyển khoản QR</span>
@@ -5640,13 +6046,12 @@ export default function ManagementSystem() {
             id="settings-floating-btn"
             type="button"
             onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-            className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-2xl transition-all duration-300 active:scale-95 cursor-pointer ${
-              isSettingsOpen
-                ? 'bg-emerald-500 border-emerald-400 text-slate-950 rotate-90 scale-105 shadow-emerald-500/30'
-                : isDarkMode
-                  ? 'border-slate-700 bg-slate-800/90 backdrop-blur-xl text-slate-200 hover:bg-slate-700 hover:border-emerald-500/50 hover:text-emerald-400 shadow-slate-900/60'
-                  : 'border-slate-200 bg-white/95 backdrop-blur-xl text-slate-700 hover:bg-slate-100 hover:border-emerald-500 hover:text-emerald-600 shadow-lg'
-            }`}
+            className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-2xl transition-all duration-300 active:scale-95 cursor-pointer ${isSettingsOpen
+              ? 'bg-emerald-500 border-emerald-400 text-slate-950 rotate-90 scale-105 shadow-emerald-500/30'
+              : isDarkMode
+                ? 'border-slate-700 bg-slate-800/90 backdrop-blur-xl text-slate-200 hover:bg-slate-700 hover:border-emerald-500/50 hover:text-emerald-400 shadow-slate-900/60'
+                : 'border-slate-200 bg-white/95 backdrop-blur-xl text-slate-700 hover:bg-slate-100 hover:border-emerald-500 hover:text-emerald-600 shadow-lg'
+              }`}
             title="Cài đặt & Tài khoản"
             aria-label="Cài đặt & Tài khoản"
           >
@@ -5820,26 +6225,24 @@ export default function ManagementSystem() {
       {toastMessage && (
         <div className="fixed top-6 right-6 z-[99999] max-w-sm sm:max-w-md w-full animate-in slide-in-from-top-4 fade-in duration-300 pointer-events-auto shadow-2xl">
           <div
-            className={`p-4 rounded-2xl border backdrop-blur-xl flex items-start gap-3 transition-all ${
-              toastMessage.type === 'success'
-                ? 'bg-slate-900/95 border-emerald-500/50 text-white shadow-emerald-500/25 ring-1 ring-emerald-500/30'
-                : toastMessage.type === 'error'
+            className={`p-4 rounded-2xl border backdrop-blur-xl flex items-start gap-3 transition-all ${toastMessage.type === 'success'
+              ? 'bg-slate-900/95 border-emerald-500/50 text-white shadow-emerald-500/25 ring-1 ring-emerald-500/30'
+              : toastMessage.type === 'error'
                 ? 'bg-slate-900/95 border-rose-500/50 text-white shadow-rose-500/25 ring-1 ring-rose-500/30'
                 : toastMessage.type === 'warning'
-                ? 'bg-slate-900/95 border-amber-500/50 text-white shadow-amber-500/25 ring-1 ring-amber-500/30'
-                : 'bg-slate-900/95 border-cyan-500/50 text-white shadow-cyan-500/25 ring-1 ring-cyan-500/30'
-            }`}
+                  ? 'bg-slate-900/95 border-amber-500/50 text-white shadow-amber-500/25 ring-1 ring-amber-500/30'
+                  : 'bg-slate-900/95 border-cyan-500/50 text-white shadow-cyan-500/25 ring-1 ring-cyan-500/30'
+              }`}
           >
             <div
-              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                toastMessage.type === 'success'
-                  ? 'bg-emerald-500/20 text-emerald-400'
-                  : toastMessage.type === 'error'
+              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${toastMessage.type === 'success'
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : toastMessage.type === 'error'
                   ? 'bg-rose-500/20 text-rose-400'
                   : toastMessage.type === 'warning'
-                  ? 'bg-amber-500/20 text-amber-400'
-                  : 'bg-cyan-500/20 text-cyan-400'
-              }`}
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : 'bg-cyan-500/20 text-cyan-400'
+                }`}
             >
               {toastMessage.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
               {toastMessage.type === 'error' && <AlertCircle className="w-5 h-5" />}
