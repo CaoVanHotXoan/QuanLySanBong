@@ -21,6 +21,8 @@ export interface DonDatSanSync {
   tien_san: number;
   dich_vu: ServiceItemOrder[];
   tong_tien: number;
+  so_tien_da_tra?: number;
+  da_thanh_toan?: boolean;
   trang_thai: 'Chờ thanh toán' | 'Đã thanh toán' | 'Đã hủy' | string;
   trang_thai_vao_san?: string;
   da_vao_san?: boolean;
@@ -100,9 +102,9 @@ export function useBookingSync() {
     [getOrders, notifySameTab]
   );
 
-  // 3. Hàm updateOrderStatus: Cập nhật trạng thái đơn (Chờ thanh toán, Đã thanh toán, Đã hủy)
+  // 3. Hàm updateOrderStatus: Cập nhật trạng thái đơn
   const updateOrderStatus = useCallback(
-    (id: number | string, newStatus: 'Chờ thanh toán' | 'Đã thanh toán' | 'Đã hủy', extraUpdates?: Partial<DonDatSanSync>) => {
+    (id: number | string, newStatus: 'dang_da' | 'cho_vao_san' | 'Chờ thanh toán' | 'Đã thanh toán' | 'Đã hủy' | string, extraUpdates?: Partial<DonDatSanSync>) => {
       if (typeof window === 'undefined') return;
       const currentList = getOrders();
       const updatedList = currentList.map((order) => {
