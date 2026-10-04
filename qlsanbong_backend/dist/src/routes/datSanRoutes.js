@@ -73,6 +73,7 @@ router.get('/tat-ca-don', datSanController.layTatCaDonDat);
 router.post('/don-dat-thanh-toan', datSanController.themDonDatVaThanhToan);
 router.put('/don-dat-thanh-toan/:id', datSanController.suaDonDatVaThanhToan);
 router.delete('/don-dat-thanh-toan/:id', datSanController.xoaDonDatVaThanhToan);
+router.post('/vao-san/:id', datSanController.vaoSan);
 // Lấy lịch đặt sân theo ngày
 router.get('/lich-san', datSanController.layLichSan);
 // Lấy lịch sử đặt sân của khách hàng (CSDL SQL Server)
@@ -86,4 +87,9 @@ router.post('/checkin-linh-hoat', datSanController.batDauDaLinhHoat);
 router.post('/checkout-linh-hoat', datSanController.ketThucDaLinhHoat);
 // Hủy đơn đặt sân và hoàn cọc (sp_HuyDonVaHoanCoc)
 router.post('/huy-don', datSanController.huyDonVaHoanCoc);
+// Gia hạn thời gian sân đang đá & Chuyển sân đá tiếp & Bán lẻ dịch vụ
+router.post('/kiem-tra-gia-han', datSanController.kiemTraGiaHan);
+router.post('/xac-nhan-gia-han', datSanController.xacNhanGiaHan);
+router.post('/chuyen-san-da-tiep', datSanController.chuyenSanDaTiep);
+router.post('/ban-le-dich-vu', datSanController.banLeDichVu);
 exports.default = router;

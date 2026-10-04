@@ -101,6 +101,17 @@ export type TabType =
   | 'NGUOI_DUNG'
   | 'VAI_TRO';
 
+// Danh sách các khung giờ 24h từ 00:00 đến 24:00
+export const TIME_OPTIONS_24H: string[] = [
+  '00:00', '00:30', '01:00', '01:30', '02:00', '02:30', '03:00', '03:30',
+  '04:00', '04:30', '05:00', '05:30', '06:00', '06:30', '07:00', '07:30',
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
+  '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30',
+  '20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '23:30',
+  '24:00'
+];
+
 // 1. San_Bong
 export interface SanBong {
   id: number;
@@ -3432,98 +3443,78 @@ export default function AdminDashboard() {
                 <div>
                   <label className="block font-black uppercase mb-1 flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Giờ Bắt Đầu *</span>
+                    <span>Giờ Bắt Đầu (24h) *</span>
                   </label>
-                  <div className="relative flex items-center">
-                    <input
-                      id="modal_gio_bat_dau"
-                      type="time"
-                      step="any"
-                      required
-                      value={(bookingModal.data.gio_bat_dau || '17:00').substring(0, 5)}
-                      onChange={(e) => {
-                        const newStart = e.target.value;
-                        const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
-                        const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
-                        const autoPrice = calculateBookingPitchPrice(curSanId, newStart, curEnd);
-                        const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
-                        const finalPrice = autoPrice > 0 ? autoPrice : (bookingModal.data.tien_san || 0);
-                        setBookingModal({
-                          ...bookingModal,
-                          data: {
-                            ...bookingModal.data,
-                            gio_bat_dau: newStart,
-                            tien_san: finalPrice,
-                            tong_tien: finalPrice + totalDv,
-                          },
-                        });
-                      }}
-                      className={`w-full p-2.5 pl-8 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const el = document.getElementById('modal_gio_bat_dau') as HTMLInputElement | null;
-                        if (el && typeof el.showPicker === 'function') {
-                          el.showPicker();
-                        } else if (el) {
-                          el.focus();
-                        }
-                      }}
-                      className="absolute left-2.5 text-emerald-400 hover:text-emerald-300 cursor-pointer p-0.5"
-                      title="Nhấn để mở đồng hồ chọn giờ hoặc nhập tự do"
-                    >
-                      <Clock className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <select
+                    id="modal_gio_bat_dau"
+                    required
+                    value={(bookingModal.data.gio_bat_dau || '17:00').substring(0, 5)}
+                    onChange={(e) => {
+                      const newStart = e.target.value;
+                      const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
+                      const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
+                      const autoPrice = calculateBookingPitchPrice(curSanId, newStart, curEnd);
+                      const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
+                      const finalPrice = autoPrice > 0 ? autoPrice : (bookingModal.data.tien_san || 0);
+                      setBookingModal({
+                        ...bookingModal,
+                        data: {
+                          ...bookingModal.data,
+                          gio_bat_dau: newStart,
+                          tien_san: finalPrice,
+                          tong_tien: finalPrice + totalDv,
+                        },
+                      });
+                    }}
+                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  >
+                    {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_bat_dau || '').substring(0, 5)) && bookingModal.data.gio_bat_dau && (
+                      <option value={(bookingModal.data.gio_bat_dau || '').substring(0, 5)}>
+                        {(bookingModal.data.gio_bat_dau || '').substring(0, 5)} (Tùy chỉnh)
+                      </option>
+                    )}
+                    {TIME_OPTIONS_24H.map((t) => (
+                      <option key={`start_${t}`} value={t}>{t}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block font-black uppercase mb-1 flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Giờ Kết Thúc *</span>
+                    <span>Giờ Kết Thúc (24h) *</span>
                   </label>
-                  <div className="relative flex items-center">
-                    <input
-                      id="modal_gio_ket_thuc"
-                      type="time"
-                      step="any"
-                      required
-                      value={(bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5)}
-                      onChange={(e) => {
-                        const newEnd = e.target.value;
-                        const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
-                        const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
-                        const autoPrice = calculateBookingPitchPrice(curSanId, curStart, newEnd);
-                        const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
-                        const finalPrice = autoPrice > 0 ? autoPrice : (bookingModal.data.tien_san || 0);
-                        setBookingModal({
-                          ...bookingModal,
-                          data: {
-                            ...bookingModal.data,
-                            gio_ket_thuc: newEnd,
-                            tien_san: finalPrice,
-                            tong_tien: finalPrice + totalDv,
-                          },
-                        });
-                      }}
-                      className={`w-full p-2.5 pl-8 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const el = document.getElementById('modal_gio_ket_thuc') as HTMLInputElement | null;
-                        if (el && typeof el.showPicker === 'function') {
-                          el.showPicker();
-                        } else if (el) {
-                          el.focus();
-                        }
-                      }}
-                      className="absolute left-2.5 text-emerald-400 hover:text-emerald-300 cursor-pointer p-0.5"
-                      title="Nhấn để mở đồng hồ chọn giờ hoặc nhập tự do"
-                    >
-                      <Clock className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <select
+                    id="modal_gio_ket_thuc"
+                    required
+                    value={(bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5)}
+                    onChange={(e) => {
+                      const newEnd = e.target.value;
+                      const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
+                      const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
+                      const autoPrice = calculateBookingPitchPrice(curSanId, curStart, newEnd);
+                      const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
+                      const finalPrice = autoPrice > 0 ? autoPrice : (bookingModal.data.tien_san || 0);
+                      setBookingModal({
+                        ...bookingModal,
+                        data: {
+                          ...bookingModal.data,
+                          gio_ket_thuc: newEnd,
+                          tien_san: finalPrice,
+                          tong_tien: finalPrice + totalDv,
+                        },
+                      });
+                    }}
+                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  >
+                    {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_ket_thuc || '').substring(0, 5)) && bookingModal.data.gio_ket_thuc && (
+                      <option value={(bookingModal.data.gio_ket_thuc || '').substring(0, 5)}>
+                        {(bookingModal.data.gio_ket_thuc || '').substring(0, 5)} (Tùy chỉnh)
+                      </option>
+                    )}
+                    {TIME_OPTIONS_24H.map((t) => (
+                      <option key={`end_${t}`} value={t}>{t}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

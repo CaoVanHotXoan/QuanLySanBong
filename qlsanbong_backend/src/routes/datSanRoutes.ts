@@ -68,5 +68,6 @@ router.post('/kiem-tra-gia-han', datSanController.kiemTraGiaHan);
 router.post('/xac-nhan-gia-han', datSanController.xacNhanGiaHan);
 router.post('/chuyen-san-da-tiep', datSanController.chuyenSanDaTiep);
 router.post('/ban-le-dich-vu', datSanController.banLeDichVu);
+router.post('/ket-thuc-tran-dau', datSanController.ketThucTranDau);
 
 export default router;

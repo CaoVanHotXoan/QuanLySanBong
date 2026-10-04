@@ -20,3 +20,10 @@ Chức năng nhân viên:
 
 Có thể tùy chỉnh CSDL nhưng phải dùng procedure và cập nhật vào 
 2 file QuanLySanBong.sql và Thủ tục.sql
+xóa cột mã đơn
+Bạn có thể tùy chỉnh csdl nhưng cập nhật 2 file QuanLySanBong.sql và ThuTuc.sql
+Ở danh sách đang đá xóa nút + dịch vụ đi
+Tôi muốn nhấn vào sân đang thì điền những thông tin của sân đó vào thông tin order.
+Lúc này tôi sẽ thêm dịch vụ 
+nhấn lưu nhảy sang lại sân đang đá, lúc này sẽ hiện lên mục chua thanh toán với số tiền đó.
+rồi tự nhiên tôi muốn xóa bớt dịch chưa trả đi thì nhấn vào lại sân đó cũng điền lại những thông tin sân cùng những cái tôi đã thêm mà chưa thanh toán,

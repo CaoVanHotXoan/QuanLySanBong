@@ -22,6 +22,27 @@ import { Response } from 'express';
 import { sql, poolPromise } from '../config/db';
 import { AuthRequest } from '../types';
 
+export const cleanTimeForSql = (val: any, fallback: string = '00:00:00'): string => {
+    if (!val) return fallback;
+    let s = String(val).trim();
+    if (s.startsWith('24:00')) return '23:59:59';
+    if (s.length === 5) return `${s}:00`;
+    if (s.length === 8) return s;
+    const match = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (match) {
+        let h = parseInt(match[1], 10);
+        let m = parseInt(match[2], 10);
+        let sec = match[3] ? parseInt(match[3], 10) : 0;
+        if (h >= 24) {
+            h = 23;
+            m = 59;
+            sec = 59;
+        }
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    }
+    return fallback;
+};
+
 /**
  * 1. Lấy danh sách tất cả các sân bóng
  * Method: GET /api/dat-san/danh-sach-san
@@ -404,13 +425,16 @@ export const layTatCaDonDat = async (req: AuthRequest, res: Response) => {
         }
 
         const merged = bookings.map((b: any) => {
-            const services = allDetails.filter((d: any) => d.ma_don_dat === b.id);
-            const payments = allPayments.filter((p: any) => p.ma_don_dat === b.id);
+            const bId = Number(b.id || b.ma_don_dat || 0);
+            const services = allDetails.filter((d: any) => Number(d.ma_don_dat) === bId);
+            const payments = allPayments.filter((p: any) => Number(p.ma_don_dat) === bId);
             const so_tien_da_tra = payments.reduce((sum: number, p: any) => sum + (Number(p.so_tien) || 0), 0);
             return {
                 ...b,
+                id: bId,
                 chi_tiet_dich_vu: services,
                 dich_vu_da_dung: services,
+                dich_vu: services,
                 so_tien_da_tra
             };
         });
@@ -470,14 +494,16 @@ export const layLichSan = async (req: AuthRequest, res: Response) => {
         }
 
         const merged = rawList.map((b: any) => {
-            const bId = b.ma_don_dat || b.id;
-            const services = allDetails.filter((d: any) => d.ma_don_dat === bId);
-            const payments = allPayments.filter((p: any) => p.ma_don_dat === bId);
+            const bId = Number(b.ma_don_dat || b.id || 0);
+            const services = allDetails.filter((d: any) => Number(d.ma_don_dat) === bId);
+            const payments = allPayments.filter((p: any) => Number(p.ma_don_dat) === bId);
             const so_tien_da_tra = payments.reduce((sum: number, p: any) => sum + (Number(p.so_tien) || 0), 0);
             return {
                 ...b,
+                id: bId,
                 chi_tiet_dich_vu: services,
                 dich_vu_da_dung: services,
+                dich_vu: services,
                 so_tien_da_tra
             };
         });
@@ -1040,6 +1066,46 @@ export const ketThucDaLinhHoat = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * 17b. Kết thúc trận đấu, giải phóng sân và mở lại các khung giờ
+ * Method: POST /api/dat-san/ket-thuc-tran-dau
+ * Procedure: sp_KetThucTranDau
+ */
+export const ketThucTranDau = async (req: AuthRequest, res: Response) => {
+    try {
+        const { ma_don_dat } = req.body;
+        if (!ma_don_dat) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp mã đơn đặt sân (ma_don_dat)!'
+            });
+        }
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+            .execute('sp_KetThucTranDau');
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated', { ma_don_dat });
+            io.emit('slots_updated');
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: '⚽ Đã kết thúc trận đấu và giải phóng sân thành công!',
+            data: result.recordset && result.recordset[0]
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_KetThucTranDau:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi kết thúc trận đấu'
+        });
+    }
+};
+
+/**
  * 18. Lấy danh sách khung giờ từ CSDL (Bảng Khung_Gio)
  * Method: GET /api/dat-san/khung-gio
  * Procedure: sp_LayDanhSachKhungGio
@@ -1273,10 +1339,13 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
         const phuong_thuc_chuan = (phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT';
         const tien_san_val = parseFloat(tien_san) || parseFloat(tong_tien) || 0;
         const tong_tien_val = parseFloat(tong_tien) || tien_san_val;
-        const so_tien_val = so_tien ? parseFloat(so_tien) : tien_san_val;
+        const so_tien_val = (so_tien !== undefined && so_tien !== null)
+            ? parseFloat(so_tien)
+            : (trang_thai_chuan === 'DA_THANH_TOAN' ? tong_tien_val : (loai_thanh_toan ? tien_san_val : 0));
+        const loai_tt_val = loai_thanh_toan || (trang_thai_chuan === 'DA_THANH_TOAN' ? 'TRA_HET' : (so_tien_val > 0 ? 'DAT_COC' : null));
         const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
-        const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
-        const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '18:30:00');
+        const gio_bd_clean = cleanTimeForSql(gio_bat_dau, '17:00:00');
+        const gio_kt_clean = cleanTimeForSql(gio_ket_thuc, '18:30:00');
 
         // Phân giải mã người dùng: Nếu có điền tên/SĐT khách -> Lưu theo khách đó. Nếu không điền -> Lưu theo tài khoản đang đăng nhập
         const tenKhach = ten_khach_hang || (ghi_chu?.includes('Khách:') ? ghi_chu.replace('Khách:', '').split('-')[0].trim() : '');
@@ -1294,7 +1363,7 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
             .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
             .input('trang_thai', sql.VarChar(30), trang_thai_chuan)
             .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
-            .input('loai_thanh_toan', sql.VarChar(20), loai_thanh_toan || 'DAT_COC')
+            .input('loai_thanh_toan', sql.VarChar(20), loai_tt_val)
             .input('so_tien', sql.Decimal(10, 2), so_tien_val)
             .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
             .input('ten_khach_hang', sql.NVarChar(100), tenKhach || null)
@@ -1348,6 +1417,13 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
 export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
     try {
         const id = String(req.params.id);
+        const parsedId = parseInt(id, 10);
+        if (isNaN(parsedId) || parsedId > 2147483647 || parsedId < -2147483648) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID đơn đặt không hợp lệ'
+            });
+        }
         const { ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai } = req.body;
 
         const pool = await poolPromise;
@@ -1357,14 +1433,14 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
         const tong_tien_val = tong_tien !== undefined ? parseFloat(tong_tien) : null;
         const so_tien_val = so_tien !== undefined ? parseFloat(so_tien) : null;
         const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
-        const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
-        const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '18:30:00');
+        const gio_bd_clean = cleanTimeForSql(gio_bat_dau, '17:00:00');
+        const gio_kt_clean = cleanTimeForSql(gio_ket_thuc, '18:30:00');
 
         const tenKhach = ten_khach_hang || (ghi_chu?.includes('Khách:') ? ghi_chu.replace('Khách:', '').split('-')[0].trim() : '');
         const sdtKhach = so_dien_thoai || (ghi_chu?.includes('-') ? ghi_chu.split('-')[1].trim() : '');
 
         const result = await pool.request()
-            .input('id', sql.Int, parseInt(id, 10))
+            .input('id', sql.Int, parsedId)
             .input('ma_nguoi_dung', sql.Int, ma_nguoi_dung ? parseInt(ma_nguoi_dung, 10) : (req.user?.id || 1))
             .input('ma_san', sql.Int, ma_san ? parseInt(ma_san, 10) : null)
             .input('ngay_da', sql.Date, ngay_da_clean)
@@ -1485,9 +1561,16 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
 export const xoaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
     try {
         const id = String(req.params.id);
+        const parsedId = parseInt(id, 10);
+        if (isNaN(parsedId) || parsedId > 2147483647 || parsedId < -2147483648) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID đơn đặt không hợp lệ'
+            });
+        }
         const pool = await poolPromise;
         await pool.request()
-            .input('id', sql.Int, parseInt(id, 10))
+            .input('id', sql.Int, parsedId)
             .execute('sp_XoaDonDatVaThanhToan');
 
         const io = req.app.get('io');
@@ -1516,6 +1599,12 @@ export const xoaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
 export const vaoSan = async (req: AuthRequest, res: Response) => {
     try {
         const id = parseInt(String(req.params.id), 10);
+        if (isNaN(id) || id > 2147483647 || id < -2147483648) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID đơn đặt không hợp lệ'
+            });
+        }
         const { trang_thai } = req.body;
         const pool = await poolPromise;
         const newStatus = trang_thai || 'DANG_DA';

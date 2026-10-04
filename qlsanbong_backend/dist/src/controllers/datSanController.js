@@ -19,7 +19,7 @@
  * =====================================================================
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = void 0;
+exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = void 0;
 const db_1 = require("../config/db");
 /**
  * 1. Lấy danh sách tất cả các sân bóng
@@ -384,12 +384,24 @@ const layTatCaDonDat = async (req, res) => {
         // Lấy toàn bộ chi tiết dịch vụ cho các đơn bằng Procedure sp_LayDanhSachChiTietDichVu
         const detailsRes = await pool.request().execute('sp_LayDanhSachChiTietDichVu');
         const allDetails = detailsRes.recordset || [];
+        // Lấy toàn bộ lịch sử thanh toán để tính so_tien_da_tra
+        let allPayments = [];
+        try {
+            const paymentsRes = await pool.request().execute('sp_LayDanhSachThanhToan');
+            allPayments = paymentsRes.recordset || [];
+        }
+        catch (payErr) {
+            console.warn('Lỗi sp_LayDanhSachThanhToan:', payErr.message);
+        }
         const merged = bookings.map((b) => {
             const services = allDetails.filter((d) => d.ma_don_dat === b.id);
+            const payments = allPayments.filter((p) => p.ma_don_dat === b.id);
+            const so_tien_da_tra = payments.reduce((sum, p) => sum + (Number(p.so_tien) || 0), 0);
             return {
                 ...b,
                 chi_tiet_dich_vu: services,
-                dich_vu_da_dung: services
+                dich_vu_da_dung: services,
+                so_tien_da_tra
             };
         });
         return res.status(200).json({
@@ -430,9 +442,33 @@ const layLichSan = async (req, res) => {
             request.input('ma_san', db_1.sql.Int, null);
         }
         const result = await request.execute('sp_LayLichSan');
+        const rawList = result.recordset || [];
+        // Lấy chi tiết dịch vụ và thanh toán để gắn vào từng booking
+        const detailsRes = await pool.request().execute('sp_LayDanhSachChiTietDichVu');
+        const allDetails = detailsRes.recordset || [];
+        let allPayments = [];
+        try {
+            const paymentsRes = await pool.request().execute('sp_LayDanhSachThanhToan');
+            allPayments = paymentsRes.recordset || [];
+        }
+        catch (payErr) {
+            console.warn('Lỗi sp_LayDanhSachThanhToan:', payErr.message);
+        }
+        const merged = rawList.map((b) => {
+            const bId = b.ma_don_dat || b.id;
+            const services = allDetails.filter((d) => d.ma_don_dat === bId);
+            const payments = allPayments.filter((p) => p.ma_don_dat === bId);
+            const so_tien_da_tra = payments.reduce((sum, p) => sum + (Number(p.so_tien) || 0), 0);
+            return {
+                ...b,
+                chi_tiet_dich_vu: services,
+                dich_vu_da_dung: services,
+                so_tien_da_tra
+            };
+        });
         return res.status(200).json({
             success: true,
-            data: result.recordset
+            data: merged
         });
     }
     catch (error) {
@@ -526,7 +562,16 @@ const datSan = async (req, res) => {
         }
         // 2. Chuẩn hóa trạng thái và phương thức thanh toán
         const isTraHet = (loai_thanh_toan === 'TRA_HET' || trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan');
-        const trang_thai_chuan = isTraHet ? 'DA_THANH_TOAN' : 'DA_COC';
+        let trang_thai_chuan = 'DANG_DA';
+        if (isTraHet) {
+            trang_thai_chuan = 'DA_THANH_TOAN';
+        }
+        else if (trang_thai === 'DA_COC' || loai_thanh_toan === 'DAT_COC') {
+            trang_thai_chuan = 'DA_COC';
+        }
+        else if (trang_thai) {
+            trang_thai_chuan = trang_thai;
+        }
         const phuong_thuc_chuan = (phuong_thuc === 'TIEN_MAT') ? 'TIEN_MAT' : 'CHUYEN_KHOAN';
         const tien_san_val = tien_san ? parseFloat(tien_san) : (tong_tien ? parseFloat(tong_tien) : 0);
         const tong_tien_val = tong_tien ? parseFloat(tong_tien) : tien_san_val;
@@ -537,7 +582,7 @@ const datSan = async (req, res) => {
         try {
             const insertRes = await pool.request()
                 .input('ma_nguoi_dung', db_1.sql.Int, ma_nd)
-                .input('ma_san', db_1.sql.Int, parseInt(ma_san, 10))
+                .input('ma_san', db_1.sql.Int, ma_san ? parseInt(ma_san, 10) : null)
                 .input('ngay_da', db_1.sql.Date, ngay_da)
                 .input('gio_bat_dau', db_1.sql.VarChar(8), gio_bd_clean)
                 .input('gio_ket_thuc', db_1.sql.VarChar(8), gio_kt_clean)
@@ -564,7 +609,7 @@ const datSan = async (req, res) => {
             const fallbackTrangThai = isTraHet ? 'Da Thanh Toan' : 'DA_COC';
             const fallbackRes = await pool.request()
                 .input('ma_nguoi_dung', db_1.sql.Int, ma_nd)
-                .input('ma_san', db_1.sql.Int, parseInt(ma_san, 10))
+                .input('ma_san', db_1.sql.Int, ma_san ? parseInt(ma_san, 10) : null)
                 .input('ngay_da', db_1.sql.Date, ngay_da)
                 .input('gio_bat_dau', db_1.sql.VarChar(8), gio_bd_clean)
                 .input('gio_ket_thuc', db_1.sql.VarChar(8), gio_kt_clean)
@@ -586,15 +631,17 @@ const datSan = async (req, res) => {
                 `);
             booking = fallbackRes.recordset && fallbackRes.recordset[0];
         }
-        // 4. Lưu chi tiết dịch vụ vào bảng Chi_Tiet_Dich_Vu và trừ tồn kho Dich_Vu
+        // 4. Lưu chi tiết dịch vụ vào bảng Chi_Tiet_Dich_Vu và cập nhật tồn kho Dich_Vu
         const donDatId = booking ? (booking.id || booking.ma_don_dat) : null;
-        const selectedServices = req.body.dich_vu_chon || req.body.dich_vu || {};
-        if (donDatId && selectedServices) {
+        const selectedServices = req.body.dich_vu_list !== undefined
+            ? req.body.dich_vu_list
+            : (req.body.dich_vu_chon !== undefined ? req.body.dich_vu_chon : req.body.dich_vu);
+        if (donDatId && selectedServices !== undefined) {
             let serviceItems = [];
             if (Array.isArray(selectedServices)) {
                 serviceItems = selectedServices;
             }
-            else if (typeof selectedServices === 'object') {
+            else if (typeof selectedServices === 'object' && selectedServices !== null) {
                 Object.entries(selectedServices).forEach(([dvId, qty]) => {
                     const numQty = parseInt(qty, 10);
                     if (numQty > 0) {
@@ -602,52 +649,63 @@ const datSan = async (req, res) => {
                     }
                 });
             }
-            for (const item of serviceItems) {
-                try {
+            try {
+                // Bước 4.1: Hoàn lại tồn kho cho toàn bộ dịch vụ cũ của đơn này
+                await pool.request()
+                    .input('madon', db_1.sql.Int, donDatId)
+                    .query(`
+                        UPDATE dv
+                        SET dv.ton_kho = dv.ton_kho + ct.so_luong
+                        FROM Dich_Vu dv
+                        INNER JOIN Chi_Tiet_Dich_Vu ct ON dv.id = ct.ma_dich_vu
+                        WHERE ct.ma_don_dat = @madon;
+
+                        DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat = @madon;
+                    `);
+                // Bước 4.2: Chèn lại danh sách dịch vụ mới và trừ kho
+                let totalServiceCalculated = 0;
+                for (const item of serviceItems) {
                     const dvId = item.ma_dich_vu || item.id;
                     const sl = parseInt(item.so_luong, 10) || 1;
                     if (!dvId || sl <= 0)
                         continue;
-                    // Lấy đơn giá và tồn kho hiện tại của dịch vụ
                     const dvRes = await pool.request()
                         .input('dvid', db_1.sql.Int, dvId)
                         .query('SELECT id, don_gia, ton_kho FROM Dich_Vu WHERE id = @dvid');
                     if (dvRes.recordset && dvRes.recordset.length > 0) {
                         const donGia = parseFloat(dvRes.recordset[0].don_gia) || 0;
                         const tongTienDv = sl * donGia;
-                        // Chèn / Cập nhật vào bảng Chi_Tiet_Dich_Vu
+                        totalServiceCalculated += tongTienDv;
                         await pool.request()
                             .input('madon', db_1.sql.Int, donDatId)
                             .input('madv', db_1.sql.Int, dvId)
                             .input('sl', db_1.sql.Int, sl)
                             .input('tongtien', db_1.sql.Decimal(10, 2), tongTienDv)
                             .query(`
-                                IF EXISTS (SELECT 1 FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat = @madon AND ma_dich_vu = @madv)
-                                BEGIN
-                                    UPDATE Chi_Tiet_Dich_Vu 
-                                    SET so_luong = so_luong + @sl, tongtien_dichvu = tongtien_dichvu + @tongtien
-                                    WHERE ma_don_dat = @madon AND ma_dich_vu = @madv
-                                END
-                                ELSE
-                                BEGIN
-                                    INSERT INTO Chi_Tiet_Dich_Vu (ma_don_dat, ma_dich_vu, so_luong, tongtien_dichvu)
-                                    VALUES (@madon, @madv, @sl, @tongtien)
-                                END
-                            `);
-                        // Trừ số lượng tồn tương ứng trong bảng Dich_Vu
-                        await pool.request()
-                            .input('madv', db_1.sql.Int, dvId)
-                            .input('sl', db_1.sql.Int, sl)
-                            .query(`
+                                INSERT INTO Chi_Tiet_Dich_Vu (ma_don_dat, ma_dich_vu, so_luong, tongtien_dichvu)
+                                VALUES (@madon, @madv, @sl, @tongtien);
+
                                 UPDATE Dich_Vu 
                                 SET ton_kho = CASE WHEN ton_kho >= @sl THEN ton_kho - @sl ELSE 0 END
-                                WHERE id = @madv
+                                WHERE id = @madv;
                             `);
                     }
                 }
-                catch (serviceErr) {
-                    console.error('Lỗi khi chèn Chi_Tiet_Dich_Vu và trừ kho:', serviceErr.message);
-                }
+            }
+            catch (serviceErr) {
+                console.error('Lỗi khi đồng bộ Chi_Tiet_Dich_Vu và kho:', serviceErr.message);
+            }
+        }
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            if (isTraHet) {
+                io.emit('payment_success', {
+                    id: donDatId,
+                    ma_don_dat: donDatId,
+                    ten_khach_hang: ten_khach,
+                    so_tien: tong_tien
+                });
             }
         }
         return res.status(201).json({
@@ -752,6 +810,11 @@ const huyDonVaHoanCoc = async (req, res) => {
             .input('ly_do_huy', db_1.sql.NVarChar(255), ly_do_huy || 'Khách hàng hủy đơn')
             .execute('sp_HuyDonVaHoanCoc');
         const cancelResult = result.recordset[0];
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
         return res.status(200).json({
             success: true,
             message: 'Hủy đơn đặt sân và xử lý hoàn tiền thành công!',
@@ -827,6 +890,11 @@ const datSanLinhHoat = async (req, res) => {
             .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || null)
             .input('tien_coc', db_1.sql.Decimal(10, 2), tien_coc ? parseFloat(tien_coc) : 0)
             .execute('sp_DatSanLinhHoat');
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
         return res.status(201).json({
             success: true,
             message: 'Đặt sân tính giờ linh hoạt thành công!',
@@ -865,6 +933,11 @@ const batDauDaLinhHoat = async (req, res) => {
             .input('so_dien_thoai', db_1.sql.VarChar(15), so_dien_thoai || null)
             .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || null)
             .execute('sp_BatDauDaLinhHoat');
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
         return res.status(201).json({
             success: true,
             message: 'Đã check-in và bắt đầu tính giờ đá linh hoạt cho sân!',
@@ -899,6 +972,11 @@ const ketThucDaLinhHoat = async (req, res) => {
             .input('ma_don_dat', db_1.sql.Int, parseInt(ma_don_dat, 10))
             .input('gio_ket_thuc', db_1.sql.VarChar(8), gio_ket_thuc || null)
             .execute('sp_KetThucDaLinhHoat');
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
         return res.status(200).json({
             success: true,
             message: 'Đã chốt giờ và tính tiền sân linh hoạt thành công!',
@@ -1080,6 +1158,53 @@ const resetKhungGio = async (req, res) => {
     }
 };
 exports.resetKhungGio = resetKhungGio;
+async function resolveCustomerUserId(pool, ten_khach_hang, so_dien_thoai, fallbackId = 1) {
+    const ten = (ten_khach_hang || '').trim();
+    const phone = (so_dien_thoai || '').trim();
+    // Nếu KHÔNG điền tên khách hàng VÀ KHÔNG điền số điện thoại -> Dùng tài khoản đang đăng nhập (fallbackId)
+    if (!ten && !phone) {
+        return fallbackId;
+    }
+    try {
+        // 1. Tìm theo SĐT nếu có
+        if (phone) {
+            const res = await pool.request()
+                .input('phone', db_1.sql.VarChar(20), phone)
+                .query('SELECT TOP 1 id FROM Nguoi_Dung WHERE so_dien_thoai = @phone');
+            if (res.recordset[0]?.id) {
+                return res.recordset[0].id;
+            }
+        }
+        // 2. Tìm theo Tên khách hàng
+        if (ten) {
+            const res = await pool.request()
+                .input('ten', db_1.sql.NVarChar(100), ten)
+                .query('SELECT TOP 1 id FROM Nguoi_Dung WHERE ho_ten = @ten');
+            if (res.recordset[0]?.id) {
+                return res.recordset[0].id;
+            }
+        }
+        // 3. Nếu chưa có trong CSDL -> Tự động thêm khách hàng mới vào bảng Nguoi_Dung
+        const email = `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@khachhang.pos`;
+        const insertRes = await pool.request()
+            .input('ho_ten', db_1.sql.NVarChar(100), ten || `Khách ${phone}`)
+            .input('email', db_1.sql.VarChar(255), email)
+            .input('so_dien_thoai', db_1.sql.VarChar(15), phone || null)
+            .input('MaVaiTro', db_1.sql.Int, 3)
+            .query(`
+                INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, MaVaiTro)
+                OUTPUT INSERTED.id
+                VALUES (@ho_ten, @email, @so_dien_thoai, @MaVaiTro)
+            `);
+        if (insertRes.recordset[0]?.id) {
+            return insertRes.recordset[0].id;
+        }
+    }
+    catch (err) {
+        console.warn('Lỗi tự động định danh khách hàng:', err.message);
+    }
+    return fallbackId;
+}
 /**
  * Thêm Đơn Đặt Sân (Admin Dashboard)
  * Method: POST /api/dat-san/don-dat-thanh-toan
@@ -1087,19 +1212,26 @@ exports.resetKhungGio = resetKhungGio;
  */
 const themDonDatVaThanhToan = async (req, res) => {
     try {
-        const { ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd } = req.body;
+        const { ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai } = req.body;
         const pool = await db_1.poolPromise;
         const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan' || loai_thanh_toan === 'TRA_HET') ? 'DA_THANH_TOAN' : (trang_thai || 'DA_COC');
         const phuong_thuc_chuan = (phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT';
         const tien_san_val = parseFloat(tien_san) || parseFloat(tong_tien) || 0;
         const tong_tien_val = parseFloat(tong_tien) || tien_san_val;
         const so_tien_val = so_tien ? parseFloat(so_tien) : tien_san_val;
+        const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
+        const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
+        const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '18:30:00');
+        // Phân giải mã người dùng: Nếu có điền tên/SĐT khách -> Lưu theo khách đó. Nếu không điền -> Lưu theo tài khoản đang đăng nhập
+        const tenKhach = ten_khach_hang || (ghi_chu?.includes('Khách:') ? ghi_chu.replace('Khách:', '').split('-')[0].trim() : '');
+        const sdtKhach = so_dien_thoai || (ghi_chu?.includes('-') ? ghi_chu.split('-')[1].trim() : '');
+        const finalUserId = await resolveCustomerUserId(pool, tenKhach, sdtKhach, parseInt(ma_nguoi_dung, 10) || req.user?.id || 1);
         const result = await pool.request()
-            .input('ma_nguoi_dung', db_1.sql.Int, parseInt(ma_nguoi_dung, 10) || 1)
+            .input('ma_nguoi_dung', db_1.sql.Int, parseInt(ma_nguoi_dung, 10) || req.user?.id || 1)
             .input('ma_san', db_1.sql.Int, parseInt(ma_san, 10))
-            .input('ngay_da', db_1.sql.Date, ngay_da)
-            .input('gio_bat_dau', db_1.sql.VarChar(8), gio_bat_dau)
-            .input('gio_ket_thuc', db_1.sql.VarChar(8), gio_ket_thuc)
+            .input('ngay_da', db_1.sql.Date, ngay_da_clean)
+            .input('gio_bat_dau', db_1.sql.VarChar(8), gio_bd_clean)
+            .input('gio_ket_thuc', db_1.sql.VarChar(8), gio_kt_clean)
             .input('tien_san', db_1.sql.Decimal(10, 2), tien_san_val)
             .input('tong_tien', db_1.sql.Decimal(10, 2), tong_tien_val)
             .input('phuong_thuc', db_1.sql.VarChar(20), phuong_thuc_chuan)
@@ -1108,6 +1240,8 @@ const themDonDatVaThanhToan = async (req, res) => {
             .input('loai_thanh_toan', db_1.sql.VarChar(20), loai_thanh_toan || 'DAT_COC')
             .input('so_tien', db_1.sql.Decimal(10, 2), so_tien_val)
             .input('trang_thai_gd', db_1.sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
+            .input('ten_khach_hang', db_1.sql.NVarChar(100), tenKhach || null)
+            .input('so_dien_thoai', db_1.sql.VarChar(20), sdtKhach || null)
             .execute('sp_ThemDonDatVaThanhToan');
         const orderData = result.recordset[0];
         const orderId = orderData?.id;
@@ -1126,6 +1260,11 @@ const themDonDatVaThanhToan = async (req, res) => {
                     }
                 }
             }
+        }
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
         }
         return res.status(201).json({
             success: true,
@@ -1150,20 +1289,32 @@ exports.themDonDatVaThanhToan = themDonDatVaThanhToan;
 const suaDonDatVaThanhToan = async (req, res) => {
     try {
         const id = String(req.params.id);
-        const { ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd } = req.body;
+        const parsedId = parseInt(id, 10);
+        if (isNaN(parsedId) || parsedId > 2147483647 || parsedId < -2147483648) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID đơn đặt không hợp lệ'
+            });
+        }
+        const { ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai } = req.body;
         const pool = await db_1.poolPromise;
         const phuong_thuc_chuan = phuong_thuc ? ((phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT') : 'TIEN_MAT';
         const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan') ? 'DA_THANH_TOAN' : (trang_thai || 'DA_COC');
         const tien_san_val = tien_san !== undefined ? parseFloat(tien_san) : null;
         const tong_tien_val = tong_tien !== undefined ? parseFloat(tong_tien) : null;
         const so_tien_val = so_tien !== undefined ? parseFloat(so_tien) : null;
+        const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
+        const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
+        const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '18:30:00');
+        const tenKhach = ten_khach_hang || (ghi_chu?.includes('Khách:') ? ghi_chu.replace('Khách:', '').split('-')[0].trim() : '');
+        const sdtKhach = so_dien_thoai || (ghi_chu?.includes('-') ? ghi_chu.split('-')[1].trim() : '');
         const result = await pool.request()
-            .input('id', db_1.sql.Int, parseInt(id, 10))
-            .input('ma_nguoi_dung', db_1.sql.Int, ma_nguoi_dung ? parseInt(ma_nguoi_dung, 10) : null)
-            .input('ma_san', db_1.sql.Int, parseInt(ma_san, 10))
-            .input('ngay_da', db_1.sql.Date, ngay_da)
-            .input('gio_bat_dau', db_1.sql.VarChar(8), gio_bat_dau)
-            .input('gio_ket_thuc', db_1.sql.VarChar(8), gio_ket_thuc)
+            .input('id', db_1.sql.Int, parsedId)
+            .input('ma_nguoi_dung', db_1.sql.Int, ma_nguoi_dung ? parseInt(ma_nguoi_dung, 10) : (req.user?.id || 1))
+            .input('ma_san', db_1.sql.Int, ma_san ? parseInt(ma_san, 10) : null)
+            .input('ngay_da', db_1.sql.Date, ngay_da_clean)
+            .input('gio_bat_dau', db_1.sql.VarChar(8), gio_bd_clean)
+            .input('gio_ket_thuc', db_1.sql.VarChar(8), gio_kt_clean)
             .input('tien_san', db_1.sql.Decimal(10, 2), tien_san_val)
             .input('tong_tien', db_1.sql.Decimal(10, 2), tong_tien_val)
             .input('phuong_thuc', db_1.sql.VarChar(20), phuong_thuc_chuan)
@@ -1172,8 +1323,36 @@ const suaDonDatVaThanhToan = async (req, res) => {
             .input('loai_thanh_toan', db_1.sql.VarChar(20), loai_thanh_toan || 'TRA_HET')
             .input('so_tien', db_1.sql.Decimal(10, 2), so_tien_val)
             .input('trang_thai_gd', db_1.sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
+            .input('ten_khach_hang', db_1.sql.NVarChar(100), tenKhach || null)
+            .input('so_dien_thoai', db_1.sql.VarChar(20), sdtKhach || null)
             .execute('sp_SuaDonDatVaThanhToan');
         if (Array.isArray(req.body.dich_vu_list)) {
+            // Lấy danh sách dịch vụ hiện có của đơn
+            let currentServices = [];
+            try {
+                const existingDetailsRes = await pool.request().execute('sp_LayDanhSachChiTietDichVu');
+                currentServices = (existingDetailsRes.recordset || []).filter((d) => d.ma_don_dat === parseInt(id, 10));
+            }
+            catch (e) {
+                console.warn('Lỗi lấy chi tiết dịch vụ cũ:', e.message);
+            }
+            const newServiceIds = new Set(req.body.dich_vu_list.map((item) => parseInt(item.ma_dich_vu, 10)));
+            // Xóa các dịch vụ cũ không còn trong danh sách mới (hoặc đã xóa hết)
+            for (const oldSvc of currentServices) {
+                if (!newServiceIds.has(oldSvc.ma_dich_vu)) {
+                    try {
+                        await pool.request()
+                            .input('ma_don_dat', db_1.sql.Int, parseInt(id, 10))
+                            .input('ma_dich_vu', db_1.sql.Int, parseInt(oldSvc.ma_dich_vu, 10))
+                            .input('so_luong_moi', db_1.sql.Int, 0)
+                            .execute('sp_CapNhatDichVuDonDat');
+                    }
+                    catch (e) {
+                        console.warn('Lỗi xóa dịch vụ cũ:', e.message);
+                    }
+                }
+            }
+            // Cập nhật hoặc thêm dịch vụ mới
             for (const item of req.body.dich_vu_list) {
                 if (item.ma_dich_vu) {
                     try {
@@ -1189,10 +1368,47 @@ const suaDonDatVaThanhToan = async (req, res) => {
                 }
             }
         }
+        // Lấy lại đơn đặt sau khi đã cập nhật dịch vụ từ CSDL SQL Server
+        let finalData = result.recordset?.[0];
+        try {
+            const freshBooking = await pool.request()
+                .input('id', db_1.sql.Int, parseInt(id, 10))
+                .query(`
+                    SELECT 
+                        d.id, d.ma_san, sb.ten_san, ls.ten_loai, d.ma_nguoi_dung,
+                        nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai, d.ngay_da,
+                        CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+                        CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+                        d.tien_san, d.tong_tien, d.phuong_thuc, d.ghi_chu, d.trang_thai, d.ngay_tao
+                    FROM Don_Dat_San d
+                    INNER JOIN San_Bong sb ON d.ma_san = sb.id
+                    INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+                    INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+                    WHERE d.id = @id
+                `);
+            if (freshBooking.recordset && freshBooking.recordset.length > 0) {
+                finalData = freshBooking.recordset[0];
+            }
+        }
+        catch (fetchErr) {
+            console.warn('Lỗi đọc lại đơn sau sửa:', fetchErr.message);
+        }
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            if (trang_thai_chuan === 'DA_THANH_TOAN') {
+                io.emit('payment_success', {
+                    id,
+                    ma_don_dat: id,
+                    ten_khach_hang: tenKhach,
+                    so_tien: finalData?.tong_tien || tong_tien_val
+                });
+            }
+        }
         return res.status(200).json({
             success: true,
             message: 'Cập nhật đơn đặt sân thành công!',
-            data: result.recordset[0]
+            data: finalData
         });
     }
     catch (error) {
@@ -1212,10 +1428,22 @@ exports.suaDonDatVaThanhToan = suaDonDatVaThanhToan;
 const xoaDonDatVaThanhToan = async (req, res) => {
     try {
         const id = String(req.params.id);
+        const parsedId = parseInt(id, 10);
+        if (isNaN(parsedId) || parsedId > 2147483647 || parsedId < -2147483648) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID đơn đặt không hợp lệ'
+            });
+        }
         const pool = await db_1.poolPromise;
         await pool.request()
-            .input('id', db_1.sql.Int, parseInt(id, 10))
+            .input('id', db_1.sql.Int, parsedId)
             .execute('sp_XoaDonDatVaThanhToan');
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+        }
         return res.status(200).json({
             success: true,
             message: 'Xóa đơn đặt sân thành công!'
@@ -1230,3 +1458,312 @@ const xoaDonDatVaThanhToan = async (req, res) => {
     }
 };
 exports.xoaDonDatVaThanhToan = xoaDonDatVaThanhToan;
+/**
+ * 23. Xác nhận vào sân / Đưa đơn vào sân đang đá
+ * Method: POST /api/dat-san/vao-san/:id
+ */
+const vaoSan = async (req, res) => {
+    try {
+        const id = parseInt(String(req.params.id), 10);
+        if (isNaN(id) || id > 2147483647 || id < -2147483648) {
+            return res.status(400).json({
+                success: false,
+                message: 'ID đơn đặt không hợp lệ'
+            });
+        }
+        const { trang_thai } = req.body;
+        const pool = await db_1.poolPromise;
+        const newStatus = trang_thai || 'DANG_DA';
+        await pool.request()
+            .input('id', db_1.sql.Int, id)
+            .input('trang_thai', db_1.sql.VarChar(20), newStatus)
+            .query(`
+                UPDATE Don_Dat_San 
+                SET da_vao_san = 1, 
+                    gio_vao_san = CONVERT(TIME, GETDATE()),
+                    trang_thai = @trang_thai
+                WHERE id = @id
+            `);
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('pitch_updated');
+        }
+        return res.status(200).json({
+            success: true,
+            message: 'Xác nhận vào sân thành công!',
+            data: { id, da_vao_san: 1, trang_thai: newStatus }
+        });
+    }
+    catch (error) {
+        console.error('Lỗi khi xác nhận vào sân:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xác nhận vào sân'
+        });
+    }
+};
+exports.vaoSan = vaoSan;
+/**
+ * 24. Kiểm tra khả năng gia hạn thêm thời gian đá cho sân đang đá
+ * Method: POST /api/dat-san/kiem-tra-gia-han
+ * Procedure: sp_KiemTraVaGiaHanSan
+ */
+const kiemTraGiaHan = async (req, res) => {
+    try {
+        const { ma_don_dat, so_phut_them, gio_ket_thuc_moi } = req.body;
+        if (!ma_don_dat) {
+            return res.status(400).json({ success: false, message: 'Vui lòng cung cấp ma_don_dat!' });
+        }
+        const pool = await db_1.poolPromise;
+        const request = pool.request()
+            .input('ma_don_dat', db_1.sql.Int, parseInt(ma_don_dat, 10))
+            .input('so_phut_them', db_1.sql.Int, so_phut_them ? parseInt(so_phut_them, 10) : 30)
+            .input('xac_nhan_gia_han', db_1.sql.Bit, 0);
+        if (gio_ket_thuc_moi) {
+            request.input('gio_ket_thuc_moi', db_1.sql.VarChar(8), gio_ket_thuc_moi.length === 5 ? `${gio_ket_thuc_moi}:00` : gio_ket_thuc_moi);
+        }
+        else {
+            request.input('gio_ket_thuc_moi', db_1.sql.VarChar(8), null);
+        }
+        const result = await request.execute('sp_KiemTraVaGiaHanSan');
+        const checkInfo = result.recordsets[0]?.[0];
+        const alternativePitches = result.recordsets[1] || [];
+        return res.status(200).json({
+            success: true,
+            data: {
+                ...checkInfo,
+                san_thay_the: alternativePitches
+            }
+        });
+    }
+    catch (error) {
+        console.error('Lỗi kiemTraGiaHan:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi kiểm tra gia hạn sân'
+        });
+    }
+};
+exports.kiemTraGiaHan = kiemTraGiaHan;
+/**
+ * 25. Xác nhận gia hạn thêm thời gian đá cho sân đang đá
+ * Method: POST /api/dat-san/xac-nhan-gia-han
+ * Procedure: sp_KiemTraVaGiaHanSan
+ */
+const xacNhanGiaHan = async (req, res) => {
+    try {
+        const { ma_don_dat, so_phut_them, gio_ket_thuc_moi, da_thanh_toan_luon, phuong_thuc } = req.body;
+        if (!ma_don_dat) {
+            return res.status(400).json({ success: false, message: 'Vui lòng cung cấp ma_don_dat!' });
+        }
+        const pool = await db_1.poolPromise;
+        const request = pool.request()
+            .input('ma_don_dat', db_1.sql.Int, parseInt(ma_don_dat, 10))
+            .input('so_phut_them', db_1.sql.Int, so_phut_them ? parseInt(so_phut_them, 10) : 30)
+            .input('xac_nhan_gia_han', db_1.sql.Bit, 1);
+        if (gio_ket_thuc_moi) {
+            request.input('gio_ket_thuc_moi', db_1.sql.VarChar(8), gio_ket_thuc_moi.length === 5 ? `${gio_ket_thuc_moi}:00` : gio_ket_thuc_moi);
+        }
+        else {
+            request.input('gio_ket_thuc_moi', db_1.sql.VarChar(8), null);
+        }
+        const result = await request.execute('sp_KiemTraVaGiaHanSan');
+        const updateInfo = result.recordsets[0]?.[0];
+        if (!updateInfo || updateInfo.co_the_gia_han === 0) {
+            return res.status(400).json({
+                success: false,
+                message: updateInfo?.thong_bao || 'Sân đã bị trùng lịch, không thể gia hạn trực tiếp!',
+                data: {
+                    ...updateInfo,
+                    san_thay_the: result.recordsets[1] || []
+                }
+            });
+        }
+        // Nếu khách thanh toán số tiền phát sinh thêm luôn
+        if (da_thanh_toan_luon && updateInfo.tien_san_them > 0) {
+            try {
+                await pool.request()
+                    .input('ma_don_dat', db_1.sql.Int, parseInt(ma_don_dat, 10))
+                    .input('phuong_thuc', db_1.sql.VarChar(20), phuong_thuc || 'TIEN_MAT')
+                    .input('loai_thanh_toan', db_1.sql.VarChar(20), 'TRA_HET')
+                    .input('so_tien', db_1.sql.Decimal(10, 2), updateInfo.tien_san_them)
+                    .input('ma_giao_dich', db_1.sql.VarChar(100), `GD_GIAHAN_${ma_don_dat}_${Date.now()}`)
+                    .input('trang_thai_gd', db_1.sql.VarChar(20), 'THANH_CONG')
+                    .query(`
+                        INSERT INTO Thanh_Toan (ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan)
+                        VALUES (@ma_don_dat, @phuong_thuc, @loai_thanh_toan, @so_tien, @ma_giao_dich, @trang_thai_gd, GETDATE())
+                    `);
+            }
+            catch (payErr) {
+                console.warn('Lỗi ghi nhận thanh toán gia hạn:', payErr.message);
+            }
+        }
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('pitch_updated');
+        }
+        return res.status(200).json({
+            success: true,
+            message: updateInfo.thong_bao || 'Gia hạn thời gian đá sân thành công!',
+            data: updateInfo
+        });
+    }
+    catch (error) {
+        console.error('Lỗi xacNhanGiaHan:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xác nhận gia hạn sân'
+        });
+    }
+};
+exports.xacNhanGiaHan = xacNhanGiaHan;
+/**
+ * 26. Chuyển khách sang sân khác đá tiếp (khi sân cũ hết lịch)
+ * Method: POST /api/dat-san/chuyen-san-da-tiep
+ * Procedure: sp_ChuyenSanDaTiep
+ */
+const chuyenSanDaTiep = async (req, res) => {
+    try {
+        const { ma_don_cu, ma_san_moi, gio_bat_dau, gio_ket_thuc, phuong_thuc, so_tien } = req.body;
+        if (!ma_don_cu || !ma_san_moi || !gio_bat_dau || !gio_ket_thuc) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ: ma_don_cu, ma_san_moi, gio_bat_dau, gio_ket_thuc!'
+            });
+        }
+        const pool = await db_1.poolPromise;
+        const gio_bd_clean = gio_bat_dau.length === 5 ? `${gio_bat_dau}:00` : gio_bat_dau;
+        const gio_kt_clean = gio_ket_thuc.length === 5 ? `${gio_ket_thuc}:00` : gio_ket_thuc;
+        const phuong_thuc_chuan = phuong_thuc === 'CHUYEN_KHOAN' ? 'CHUYEN_KHOAN' : 'TIEN_MAT';
+        const so_tien_val = so_tien ? parseFloat(so_tien) : 0;
+        const result = await pool.request()
+            .input('ma_don_cu', db_1.sql.Int, parseInt(ma_don_cu, 10))
+            .input('ma_san_moi', db_1.sql.Int, parseInt(ma_san_moi, 10))
+            .input('gio_bat_dau', db_1.sql.VarChar(8), gio_bd_clean)
+            .input('gio_ket_thuc', db_1.sql.VarChar(8), gio_kt_clean)
+            .input('phuong_thuc', db_1.sql.VarChar(20), phuong_thuc_chuan)
+            .input('loai_thanh_toan', db_1.sql.VarChar(20), so_tien_val > 0 ? 'TRA_HET' : 'DAT_COC')
+            .input('so_tien', db_1.sql.Decimal(10, 2), so_tien_val)
+            .execute('sp_ChuyenSanDaTiep');
+        const newBooking = result.recordset[0];
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('pitch_updated');
+        }
+        return res.status(201).json({
+            success: true,
+            message: `Chuyển khách sang ${newBooking?.ten_san || 'sân mới'} đá thêm thành công! Đã tạo hóa đơn mới #${newBooking?.id}.`,
+            data: newBooking
+        });
+    }
+    catch (error) {
+        console.error('Lỗi chuyenSanDaTiep:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi chuyển khách sang sân khác đá tiếp'
+        });
+    }
+};
+exports.chuyenSanDaTiep = chuyenSanDaTiep;
+/**
+ * 27. Bán lẻ dịch vụ / nước uống tại quầy (Không cần đặt sân)
+ * Method: POST /api/dat-san/ban-le-dich-vu
+ * Procedure: sp_BanLeDichVu
+ */
+const banLeDichVu = async (req, res) => {
+    try {
+        const { ten_khach_hang, so_dien_thoai, phuong_thuc, ghi_chu, dich_vu_list, da_thanh_toan } = req.body;
+        if (!Array.isArray(dich_vu_list) || dich_vu_list.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng chọn ít nhất 1 dịch vụ / món nước để bán lẻ!'
+            });
+        }
+        const pool = await db_1.poolPromise;
+        const phuong_thuc_chuan = phuong_thuc === 'CHUYEN_KHOAN' ? 'CHUYEN_KHOAN' : 'TIEN_MAT';
+        const trang_thai_chuan = (da_thanh_toan === false || da_thanh_toan === 0) ? 'CHO_THANH_TOAN' : 'DA_THANH_TOAN';
+        // 1. Tạo đơn bán lẻ (ma_san NULL)
+        const orderRes = await pool.request()
+            .input('ma_nguoi_dung', db_1.sql.Int, req.user?.id || 1)
+            .input('ten_khach_hang', db_1.sql.NVarChar(100), ten_khach_hang || 'Khách lẻ quầy')
+            .input('so_dien_thoai', db_1.sql.VarChar(20), so_dien_thoai || null)
+            .input('phuong_thuc', db_1.sql.VarChar(20), phuong_thuc_chuan)
+            .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || 'Bán lẻ dịch vụ / nước uống tại quầy')
+            .input('trang_thai', db_1.sql.VarChar(20), trang_thai_chuan)
+            .execute('sp_BanLeDichVu');
+        const newOrder = orderRes.recordset[0];
+        const ma_don_dat = newOrder.id;
+        // 2. Thêm từng dịch vụ vào Chi_Tiet_Dich_Vu và trừ kho
+        let tongTienDv = 0;
+        for (const item of dich_vu_list) {
+            const dvId = parseInt(item.ma_dich_vu || item.id, 10);
+            const sl = parseInt(item.so_luong, 10) || 1;
+            if (dvId && sl > 0) {
+                try {
+                    const dvItemRes = await pool.request()
+                        .input('ma_don_dat', db_1.sql.Int, ma_don_dat)
+                        .input('ma_dich_vu', db_1.sql.Int, dvId)
+                        .input('so_luong', db_1.sql.Int, sl)
+                        .execute('sp_ThemDichVu');
+                    if (dvItemRes.recordset?.[0]?.tong_tien_don_moi) {
+                        tongTienDv = parseFloat(dvItemRes.recordset[0].tong_tien_don_moi);
+                    }
+                }
+                catch (dvErr) {
+                    console.warn(`Lỗi thêm dịch vụ #${dvId} vào đơn bán lẻ:`, dvErr.message);
+                }
+            }
+        }
+        // 3. Nếu thanh toán ngay -> Lưu vào Thanh_Toan
+        if (trang_thai_chuan === 'DA_THANH_TOAN' && tongTienDv > 0) {
+            try {
+                await pool.request()
+                    .input('ma_don_dat', db_1.sql.Int, ma_don_dat)
+                    .input('phuong_thuc', db_1.sql.VarChar(20), phuong_thuc_chuan)
+                    .input('loai_thanh_toan', db_1.sql.VarChar(20), 'TRA_HET')
+                    .input('so_tien', db_1.sql.Decimal(10, 2), tongTienDv)
+                    .input('ma_giao_dich', db_1.sql.VarChar(100), `GD_BANLE_${ma_don_dat}_${Date.now()}`)
+                    .input('trang_thai_gd', db_1.sql.VarChar(20), 'THANH_CONG')
+                    .query(`
+                        INSERT INTO Thanh_Toan (ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan)
+                        VALUES (@ma_don_dat, @phuong_thuc, @loai_thanh_toan, @so_tien, @ma_giao_dich, @trang_thai_gd, GETDATE())
+                    `);
+            }
+            catch (payErr) {
+                console.warn('Lỗi ghi nhận thanh toán bán lẻ:', payErr.message);
+            }
+        }
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            if (trang_thai_chuan === 'DA_THANH_TOAN') {
+                io.emit('payment_success', {
+                    id: ma_don_dat,
+                    ma_don_dat,
+                    ten_khach_hang: ten_khach_hang || 'Khách lẻ quầy',
+                    so_tien: tongTienDv
+                });
+            }
+        }
+        return res.status(201).json({
+            success: true,
+            message: `Bán lẻ dịch vụ thành công! Đơn hàng #${ma_don_dat} (${trang_thai_chuan === 'DA_THANH_TOAN' ? 'Đã thanh toán' : 'Chờ thanh toán'}).`,
+            data: {
+                ...newOrder,
+                tong_tien: tongTienDv,
+                chi_tiet_dich_vu: dich_vu_list
+            }
+        });
+    }
+    catch (error) {
+        console.error('Lỗi banLeDichVu:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi bán lẻ dịch vụ'
+        });
+    }
+};
+exports.banLeDichVu = banLeDichVu;

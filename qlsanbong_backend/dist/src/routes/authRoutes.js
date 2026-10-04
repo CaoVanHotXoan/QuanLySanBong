@@ -44,11 +44,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const authController = __importStar(require("../controllers/authController"));
 const authMiddleware_1 = require("../middlewares/authMiddleware");
+const captchaGuard_1 = require("../middlewares/captchaGuard");
 const router = express_1.default.Router();
-// Đăng ký tài khoản mới
-router.post('/register', authController.dangKy);
-// Đăng nhập
-router.post('/login', authController.dangNhap);
+// Đăng ký tài khoản mới (Bảo vệ bởi Captcha ngầm & Anti-Bot Guard)
+router.post('/register', captchaGuard_1.invisibleCaptchaGuard, authController.dangKy);
+// Đăng nhập (Bảo vệ bởi Captcha ngầm & Anti-Bot Guard)
+router.post('/login', captchaGuard_1.invisibleCaptchaGuard, authController.dangNhap);
 // Lấy thông tin tài khoản hiện tại (Profile / Me)
 router.get('/profile', authMiddleware_1.verifyToken, authController.layThongTinCaNhan);
 router.get('/me', authMiddleware_1.verifyToken, authController.layThongTinCaNhan);

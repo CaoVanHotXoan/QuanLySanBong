@@ -104,18 +104,17 @@ io.on('connection', (socket) => {
     // Gửi danh sách toàn bộ các ô đang bị khóa cho Client vừa kết nối
     socket.emit('slots_updated', Array.from(lockedSlots.keys()));
 
-    // 1. SỰ KIỆN KHÓA NHIỀU Ô CÙNG LÚC (lock_slots - Áp dụng khi chọn mốc 1h, 1h30, 2h trong Modal)
+    // 1. SỰ KIỆN KHÓA NHIỀU Ô CÙNG LÚC (lock_slots)
     socket.on('lock_slots', (slotIds: string[]) => {
         if (!Array.isArray(slotIds) || slotIds.length === 0) return;
 
-        // Xóa các ô cũ do chính socket này đang giữ trước đó (nếu chuyển từ 1h sang 1h30 hoặc sang sân khác)
+        // Xóa các ô cũ do chính socket này đang giữ trước đó
         for (const [id, holderId] of lockedSlots.entries()) {
             if (holderId === socket.id) {
                 lockedSlots.delete(id);
             }
         }
 
-        // Khóa các ô mới mà socket này vừa chọn
         slotIds.forEach((slotId) => {
             if (slotId && !lockedSlots.has(slotId)) {
                 lockedSlots.set(slotId, socket.id);
@@ -123,15 +122,12 @@ io.on('connection', (socket) => {
         });
 
         console.log(`🔒 [Lock Slots Multi]: Socket ${socket.id} đang giữ các ô:`, slotIds);
-        // Phát sự kiện cập nhật danh sách ô bị khóa tới TẤT CẢ client
         io.emit('slots_updated', Array.from(lockedSlots.keys()));
     });
 
     // 2. SỰ KIỆN KHÓA 1 Ô ĐƠN LẺ (lock_slot)
     socket.on('lock_slot', (slotId: string) => {
         if (!slotId) return;
-
-        // Nếu ô này chưa bị ai khác khóa
         if (!lockedSlots.has(slotId)) {
             lockedSlots.set(slotId, socket.id);
             console.log(`🔒 [Lock Slot]: Slot ${slotId} được giữ bởi ${socket.id}`);
@@ -139,7 +135,7 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 3. SỰ KIỆN GIẢI PHÓNG TOÀN BỘ Ô CỦA USER NÀY (unlock_all - Khi đóng Modal hoặc Đặt xong)
+    // 3. SỰ KIỆN GIẢI PHÓNG TOÀN BỘ Ô CỦA USER NÀY (unlock_all)
     socket.on('unlock_all', () => {
         let hasChanges = false;
         for (const [slotId, holderId] of lockedSlots.entries()) {
@@ -154,29 +150,35 @@ io.on('connection', (socket) => {
         }
     });
 
-    // 4. SỰ KIỆN NHẢ 1 Ô CỤ THỂ (unlock_slot)
+    // 4. SỰ KIỆN NHẢ 1 Ô CỤ THỂ (unlock_slot & force_unlock_slot)
     socket.on('unlock_slot', (slotId: string) => {
         if (!slotId) return;
-
-        // Chỉ cho phép chính socket đang giữ ô đó nhả ra
-        if (lockedSlots.get(slotId) === socket.id) {
+        if (lockedSlots.has(slotId)) {
             lockedSlots.delete(slotId);
-            console.log(`🔓 [Unlock]: Slot ${slotId} đã được nhả bởi ${socket.id}`);
+            console.log(`🔓 [Unlock]: Slot ${slotId} đã được nhả`);
+            io.emit('slots_updated', Array.from(lockedSlots.keys()));
+        }
+    });
+
+    socket.on('force_unlock_slot', (slotId: string) => {
+        if (!slotId) return;
+        if (lockedSlots.has(slotId)) {
+            lockedSlots.delete(slotId);
+            console.log(`🔓 [Force Unlock]: Slot ${slotId} đã được Admin/POS mở khóa`);
             io.emit('slots_updated', Array.from(lockedSlots.keys()));
         }
     });
 
     // 5. SỰ KIỆN NGẮT KẾT NỐI (disconnect)
-    // Tự động giải phóng toàn bộ ô mà user này đang giữ khi tắt tab / mất kết nối
     socket.on('disconnect', () => {
         console.log(`❌ [Socket Disconnected]: ${socket.id}`);
         let hasChanges = false;
 
-        for (const [slotId, holderSocketId] of lockedSlots.entries()) {
-            if (holderSocketId === socket.id) {
+        for (const [slotId, holderId] of lockedSlots.entries()) {
+            if (holderId === socket.id) {
                 lockedSlots.delete(slotId);
                 hasChanges = true;
-                console.log(`🧹 [Auto-Release]: Đã tự động nhả slot ${slotId} do ${socket.id} ngắt kết nối.`);
+                console.log(`🧹 [Auto-Release]: Đã nhả slot ${slotId} do ${socket.id} ngắt kết nối.`);
             }
         }
 

@@ -109,7 +109,7 @@ BEGIN
         tong_tien DECIMAL(10, 2) NOT NULL,
         phuong_thuc VARCHAR(20) CHECK (phuong_thuc IN ('TIEN_MAT', 'CHUYEN_KHOAN')) NOT NULL DEFAULT 'CHUYEN_KHOAN',
         ghi_chu NVARCHAR(MAX) NULL,
-        trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_THANH_TOAN', 'CHO_XAC_NHAN', 'DA_COC', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY', 'DA_CHOT')) DEFAULT 'DA_COC',
+        trang_thai VARCHAR(20) CHECK (trang_thai IN ('CHO_THANH_TOAN', 'CHO_XAC_NHAN', 'DA_COC', 'DANG_DA', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY', 'DA_CHOT', 'DA_DAT')) DEFAULT 'DA_COC',
         ngay_tao DATETIME DEFAULT GETDATE(),
         FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
         FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE NO ACTION
@@ -232,6 +232,13 @@ GO
 IF OBJECT_ID('Chi_Tiet_Dich_Vu', 'U') IS NOT NULL AND COL_LENGTH('Chi_Tiet_Dich_Vu', 'tongtien_dichvu') IS NULL
 BEGIN
     ALTER TABLE Chi_Tiet_Dich_Vu ADD tongtien_dichvu DECIMAL(10, 2) NOT NULL CONSTRAINT DF_ChiTietDichVu_tongtien DEFAULT 0;
+END;
+GO
+
+-- Tự động thêm cột so_luong_da_tra để khóa dịch vụ đã thanh toán không bị xóa
+IF OBJECT_ID('Chi_Tiet_Dich_Vu', 'U') IS NOT NULL AND COL_LENGTH('Chi_Tiet_Dich_Vu', 'so_luong_da_tra') IS NULL
+BEGIN
+    ALTER TABLE Chi_Tiet_Dich_Vu ADD so_luong_da_tra INT NOT NULL CONSTRAINT DF_ChiTietDichVu_soluongdatra DEFAULT 0;
 END;
 GO
 
@@ -1162,6 +1169,7 @@ BEGIN
         ct.ma_dich_vu,
         dv.ten_dich_vu,
         ct.so_luong,
+        ISNULL(ct.so_luong_da_tra, 0) AS so_luong_da_tra,
         dv.don_gia,
         ct.tongtien_dichvu
     FROM Chi_Tiet_Dich_Vu ct
@@ -1871,14 +1879,16 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         SELECT 
-            ROW_NUMBER() OVER (ORDER BY d.ngay_tao DESC, ct.ma_don_dat DESC) AS id,
+            ct.ma_dich_vu AS id,
             ct.ma_don_dat,
             nd.ho_ten AS ten_khach_hang,
             sb.ten_san,
             ct.ma_dich_vu,
             dv.ten_dich_vu,
-            N'Chai' AS don_vi_tinh,
+            N'Phần' AS don_vi_tinh,
             ct.so_luong,
+            ISNULL(ct.so_luong_da_tra, 0) AS so_luong_da_tra,
+            dv.don_gia,
             dv.don_gia AS gia_luc_ban,
             ct.tongtien_dichvu AS thanh_tien,
             d.ngay_tao
@@ -2078,8 +2088,8 @@ CREATE OR ALTER PROCEDURE sp_ThemDonDatVaThanhToan
     @ma_nguoi_dung INT = NULL,
     @ma_san INT = NULL,
     @ngay_da DATE,
-    @gio_bat_dau TIME,
-    @gio_ket_thuc TIME,
+    @gio_bat_dau VARCHAR(8),
+    @gio_ket_thuc VARCHAR(8),
     @tien_san DECIMAL(10, 2) = NULL,
     @tong_tien DECIMAL(10, 2) = NULL,
     @phuong_thuc VARCHAR(20) = 'CHUYEN_KHOAN',
@@ -2095,6 +2105,20 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRANSACTION;
     BEGIN TRY
+        DECLARE @clean_gbd VARCHAR(8) = CASE 
+            WHEN @gio_bat_dau LIKE '24:00%' THEN '23:59:59'
+            WHEN LEN(LTRIM(RTRIM(@gio_bat_dau))) = 5 THEN CONCAT(LTRIM(RTRIM(@gio_bat_dau)), ':00')
+            ELSE LTRIM(RTRIM(@gio_bat_dau))
+        END;
+        DECLARE @clean_gkt VARCHAR(8) = CASE 
+            WHEN @gio_ket_thuc LIKE '24:00%' THEN '23:59:59'
+            WHEN LEN(LTRIM(RTRIM(@gio_ket_thuc))) = 5 THEN CONCAT(LTRIM(RTRIM(@gio_ket_thuc)), ':00')
+            ELSE LTRIM(RTRIM(@gio_ket_thuc))
+        END;
+
+        DECLARE @bd_time TIME = CAST(@clean_gbd AS TIME);
+        DECLARE @kt_time TIME = CAST(@clean_gkt AS TIME);
+
         DECLARE @final_user_id INT = @ma_nguoi_dung;
         DECLARE @clean_ten NVARCHAR(100) = NULLIF(LTRIM(RTRIM(@ten_khach_hang)), '');
         DECLARE @clean_phone VARCHAR(20) = NULLIF(LTRIM(RTRIM(@so_dien_thoai)), '');
@@ -2142,11 +2166,16 @@ BEGIN
             tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao
         )
         VALUES (
-            @final_user_id, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc,
+            @final_user_id, @ma_san, @ngay_da, @bd_time, @kt_time,
             @tien_san_val, @tong_tien_val, @phuong_thuc, @ghi_chu, @trang_thai, GETDATE()
         );
 
         DECLARE @newId INT = SCOPE_IDENTITY();
+
+        IF @trang_thai = 'DA_THANH_TOAN' AND (@so_tien IS NULL OR @so_tien = 0)
+        BEGIN
+            SET @so_tien = @tong_tien_val;
+        END;
 
         IF @so_tien IS NOT NULL AND @so_tien > 0
         BEGIN
@@ -2154,7 +2183,7 @@ BEGIN
                 ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan
             )
             VALUES (
-                @newId, @phuong_thuc, ISNULL(@loai_thanh_toan, 'DAT_COC'), @so_tien, CONCAT('GD_', @newId, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @trang_thai_gd, GETDATE()
+                @newId, @phuong_thuc, CASE WHEN @trang_thai = 'DA_THANH_TOAN' THEN 'TRA_HET' ELSE ISNULL(@loai_thanh_toan, 'DAT_COC') END, @so_tien, CONCAT('GD_', @newId, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @trang_thai_gd, GETDATE()
             );
         END;
 
@@ -2187,8 +2216,8 @@ CREATE OR ALTER PROCEDURE sp_SuaDonDatVaThanhToan
     @ma_nguoi_dung INT = NULL,
     @ma_san INT = NULL,
     @ngay_da DATE,
-    @gio_bat_dau TIME,
-    @gio_ket_thuc TIME,
+    @gio_bat_dau VARCHAR(8),
+    @gio_ket_thuc VARCHAR(8),
     @tien_san DECIMAL(10, 2) = NULL,
     @tong_tien DECIMAL(10, 2) = NULL,
     @phuong_thuc VARCHAR(20) = 'CHUYEN_KHOAN',
@@ -2208,6 +2237,20 @@ BEGIN
         BEGIN
             ;THROW 50055, N'Đơn đặt sân không tồn tại.', 1;
         END;
+
+        DECLARE @clean_gbd VARCHAR(8) = CASE 
+            WHEN @gio_bat_dau LIKE '24:00%' THEN '23:59:59'
+            WHEN LEN(LTRIM(RTRIM(@gio_bat_dau))) = 5 THEN CONCAT(LTRIM(RTRIM(@gio_bat_dau)), ':00')
+            ELSE LTRIM(RTRIM(@gio_bat_dau))
+        END;
+        DECLARE @clean_gkt VARCHAR(8) = CASE 
+            WHEN @gio_ket_thuc LIKE '24:00%' THEN '23:59:59'
+            WHEN LEN(LTRIM(RTRIM(@gio_ket_thuc))) = 5 THEN CONCAT(LTRIM(RTRIM(@gio_ket_thuc)), ':00')
+            ELSE LTRIM(RTRIM(@gio_ket_thuc))
+        END;
+
+        DECLARE @bd_time TIME = CAST(@clean_gbd AS TIME);
+        DECLARE @kt_time TIME = CAST(@clean_gkt AS TIME);
 
         DECLARE @final_user_id INT = @ma_nguoi_dung;
         DECLARE @clean_ten NVARCHAR(100) = NULLIF(LTRIM(RTRIM(@ten_khach_hang)), '');
@@ -2243,8 +2286,8 @@ BEGIN
         SET ma_san = @ma_san,
             ma_nguoi_dung = ISNULL(@final_user_id, ma_nguoi_dung),
             ngay_da = @ngay_da,
-            gio_bat_dau = @gio_bat_dau,
-            gio_ket_thuc = @gio_ket_thuc,
+            gio_bat_dau = @bd_time,
+            gio_ket_thuc = @kt_time,
             tien_san = ISNULL(@tien_san, tien_san),
             tong_tien = ISNULL(@tong_tien, tong_tien),
             phuong_thuc = @phuong_thuc,
@@ -2260,13 +2303,41 @@ BEGIN
                 SET so_tien = @so_tien,
                     phuong_thuc = @phuong_thuc,
                     loai_thanh_toan = ISNULL(@loai_thanh_toan, loai_thanh_toan),
-                    trang_thai_gd = ISNULL(@trang_thai_gd, trang_thai_gd)
+                    trang_thai_gd = @trang_thai_gd,
+                    ngay_thanh_toan = GETDATE()
                 WHERE ma_don_dat = @id;
             END
             ELSE
             BEGIN
-                INSERT INTO Thanh_Toan (ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan)
-                VALUES (@id, @phuong_thuc, ISNULL(@loai_thanh_toan, 'TRA_HET'), @so_tien, CONCAT('GD_', @id), @trang_thai_gd, GETDATE());
+                INSERT INTO Thanh_Toan (
+                    ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan
+                )
+                VALUES (
+                    @id, @phuong_thuc, ISNULL(@loai_thanh_toan, 'TRA_HET'), @so_tien, CONCAT('GD_', @id, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @trang_thai_gd, GETDATE()
+                );
+            END;
+        END
+        ELSE IF @trang_thai = 'DA_THANH_TOAN'
+        BEGIN
+            DECLARE @cur_tong DECIMAL(10,2) = ISNULL(@tong_tien, (SELECT tong_tien FROM Don_Dat_San WHERE id = @id));
+            IF EXISTS (SELECT 1 FROM Thanh_Toan WHERE ma_don_dat = @id)
+            BEGIN
+                UPDATE Thanh_Toan
+                SET so_tien = @cur_tong,
+                    phuong_thuc = @phuong_thuc,
+                    loai_thanh_toan = 'TRA_HET',
+                    trang_thai_gd = @trang_thai_gd,
+                    ngay_thanh_toan = GETDATE()
+                WHERE ma_don_dat = @id;
+            END
+            ELSE
+            BEGIN
+                INSERT INTO Thanh_Toan (
+                    ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan
+                )
+                VALUES (
+                    @id, @phuong_thuc, 'TRA_HET', @cur_tong, CONCAT('GD_', @id, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @trang_thai_gd, GETDATE()
+                );
             END;
         END;
 
@@ -2878,6 +2949,87 @@ BEGIN
         FROM Don_Dat_San d
         INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
         WHERE d.id = @newId;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 30. Thủ tục Lấy lịch đặt sân theo ngày và mã sân (Timeline Grid Matrix)
+CREATE OR ALTER PROCEDURE sp_LayLichSan
+    @ngay_da DATE,
+    @ma_san INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT 
+            d.id AS ma_don_dat,
+            d.ma_san,
+            sb.ten_san,
+            ls.ten_loai,
+            d.ma_nguoi_dung,
+            nd.ho_ten AS ten_khach_hang,
+            nd.so_dien_thoai,
+            d.ngay_da,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+            d.tien_san,
+            d.tong_tien,
+            d.phuong_thuc,
+            DATEDIFF(MINUTE, CAST(d.gio_bat_dau AS TIME), CAST(d.gio_ket_thuc AS TIME)) AS so_phut_da,
+            d.ghi_chu,
+            d.trang_thai,
+            ISNULL(d.da_vao_san, 0) AS da_vao_san,
+            CONVERT(VARCHAR(5), d.gio_vao_san, 108) AS gio_vao_san
+        FROM Don_Dat_San d
+        INNER JOIN San_Bong sb ON d.ma_san = sb.id
+        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        WHERE d.ngay_da = @ngay_da
+          AND (@ma_san IS NULL OR d.ma_san = @ma_san)
+          AND d.trang_thai NOT IN ('DA_HUY', 'HOAN_THANH', 'KET_THUC', N'Đã hủy', N'Hoàn thành', N'Kết thúc')
+        ORDER BY d.gio_bat_dau ASC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 31. Thủ tục Kết thúc trận đấu, giải phóng sân và mở lại các ô giờ trên lịch
+CREATE OR ALTER PROCEDURE sp_KetThucTranDau
+    @ma_don_dat INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Don_Dat_San WHERE id = @ma_don_dat)
+        BEGIN
+            ;THROW 50020, N'Không tìm thấy thông tin đơn đặt sân.', 1;
+        END;
+
+        -- Cập nhật trạng thái đơn thành HOAN_THANH và da_vao_san = 0
+        UPDATE Don_Dat_San
+        SET trang_thai = 'HOAN_THANH',
+            da_vao_san = 0
+        WHERE id = @ma_don_dat;
+
+        COMMIT TRANSACTION;
+
+        SELECT 
+            id,
+            ma_san,
+            ngay_da,
+            gio_bat_dau,
+            gio_ket_thuc,
+            trang_thai,
+            N'Trận đấu đã kết thúc và sân đã được giải phóng thành công!' AS thong_bao
+        FROM Don_Dat_San
+        WHERE id = @ma_don_dat;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;

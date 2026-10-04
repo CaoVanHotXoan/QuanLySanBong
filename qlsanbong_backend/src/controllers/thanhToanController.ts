@@ -14,6 +14,7 @@ import { Response } from 'express';
 import { sql, poolPromise } from '../config/db';
 import payOS from '../config/payos';
 import { AuthRequest } from '../types';
+import { cleanTimeForSql } from './datSanController';
 
 /**
  * 1. Xử lý thanh toán đơn đặt sân (Stored Procedure: sp_ThanhToanDon)
@@ -154,8 +155,8 @@ export const taoThanhToanPayOS = async (req: AuthRequest, res: Response) => {
 
             if (!ma_nd) ma_nd = 1;
 
-            const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '06:00:00');
-            const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '07:30:00');
+            const gio_bd_clean = cleanTimeForSql(gio_bat_dau, '06:00:00');
+            const gio_kt_clean = cleanTimeForSql(gio_ket_thuc, '07:30:00');
             const isTraHet = (loai_thanh_toan === 'TRA_HET');
             const initialStatus = 'CHO_THANH_TOAN';
 
