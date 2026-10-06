@@ -3293,6 +3293,25 @@ export default function ManagementSystem() {
 
   // Mở Modal Xác Nhận Kết Thúc Trận Đấu
   const handleOpenFinishMatchModal = (item: any) => {
+    const bookingObj = item.booking || item;
+    const bookingId = String(bookingObj.ma_don_dat || bookingObj.id || item.ma_don_dat || item.id || '');
+    
+    // Tìm booking mới nhất từ state để kiểm tra trạng thái thanh toán chính xác nhất
+    const latestBooking = bookingId
+      ? [...rawBookings, ...historyBookings].find((r: any) => {
+          const rId = String(r.id || r.ma_don_dat || '');
+          return rId === bookingId && rId !== '';
+        }) || bookingObj
+      : bookingObj;
+
+    const isPaid = isBookingPaid(latestBooking);
+
+    if (!isPaid) {
+      // Nếu chưa thanh toán -> Nạp thông tin sang cột Order bên mục Home để tiến hành thanh toán
+      handleSelectBookingToOrder(latestBooking, 'home', '⚠️ Ca đặt này chưa thanh toán! Đã chuyển sang Thông tin Order để thanh toán.');
+      return;
+    }
+
     setMatchToFinish(item);
     setIsFinishMatchModalOpen(true);
   };
@@ -3346,8 +3365,12 @@ export default function ManagementSystem() {
     }
   };
 
-  // Nạp thông tin đơn đặt sân trong ngày vào cột Order (Mục Sân Đang Đá)
-  const handleSelectBookingToOrder = (rawInput: any) => {
+  // Nạp thông tin đơn đặt sân trong ngày vào cột Order (Mục Sân Đang Đá / Chờ Vào Sân)
+  const handleSelectBookingToOrder = (
+    rawInput: any,
+    targetTab: 'services' | 'home' = 'services',
+    customToastMessage?: string
+  ) => {
     if (!rawInput) return;
     const invoice = rawInput.booking || rawInput;
 
@@ -3470,8 +3493,16 @@ export default function ManagementSystem() {
     });
 
     setSelectedInvoiceDetail(null);
-    setActiveTab('services');
-    showToast(`📋 Đã nạp thông tin ${targetPitch.ten_san} và mở mục Dịch vụ!`, 'info', 'Gọi Dịch Vụ Sân Đang Đá');
+    setIsOrderSidebarCollapsed(false);
+    setActiveTab(targetTab);
+
+    if (customToastMessage) {
+      showToast(customToastMessage, 'info', targetTab === 'home' ? 'Thông Tin Order' : 'Thông Tin Sân');
+    } else if (targetTab === 'services') {
+      showToast(`📋 Đã nạp thông tin ${targetPitch.ten_san} và mở mục Dịch vụ!`, 'info', 'Gọi Dịch Vụ Sân Đang Đá');
+    } else {
+      showToast(`📋 Đã nạp thông tin đơn #${bookingId} vào Thông tin Order!`, 'info', 'Thông Tin Order');
+    }
   };
 
   return (
@@ -4221,8 +4252,7 @@ export default function ManagementSystem() {
                                   <tr
                                     key={bId}
                                     onClick={() => {
-                                      handleSelectBookingToOrder(b);
-                                      setActiveTab('home');
+                                      handleSelectBookingToOrder(b, 'home');
                                     }}
                                     className={`transition-colors cursor-pointer ${isSelected
                                       ? 'bg-emerald-500/10 border-l-4 border-l-emerald-500'
