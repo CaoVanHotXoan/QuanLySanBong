@@ -1332,11 +1332,11 @@ export default function HomePage() {
                       {/* Nút đi tới Management System cho Nhân viên & Admin */}
                       {isUserStaffOrAdmin && (
                         <a
-                          href="/Management System/management system"
+                          href="/management-system"
                           onClick={(e) => {
                             e.preventDefault();
                             setUserDropdownOpen(false);
-                            router.push('/Management System/management system');
+                            router.push('/management-system');
                           }}
                           className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-xs font-black rounded-xl transition-all text-left cursor-pointer mb-1 shadow-sm ${
                             isDarkMode 
