@@ -1218,6 +1218,14 @@ export default function ManagementSystem() {
         return false;
       }
 
+      // Loại bỏ đơn tạm PayOS đang chờ thanh toán (khách chưa chuyển khoản thành công)
+      if (
+        (b.trang_thai === 'CHO_THANH_TOAN' || b.trang_thai === 'CHUA_THANH_TOAN' || statusNorm === 'cho_thanh_toan' || statusNorm === 'chua_thanh_toan') &&
+        String(b.ghi_chu || '').includes('PayOS')
+      ) {
+        return false;
+      }
+
       // Khớp ngày xem (hỗ trợ cả YYYY-MM-DD, DD/MM/YYYY, ISO timestamp)
       const bDate = parseBookingDateISO(b.ngay_da);
       if (bDate && bDate !== viewingDateISO) return false;
