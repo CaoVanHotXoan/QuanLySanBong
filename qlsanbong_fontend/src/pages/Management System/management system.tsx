@@ -924,72 +924,108 @@ export default function ManagementSystem() {
 
   // Xử lý khi nhấn vào một đơn trong Modal Lịch sử để nạp thông tin vào Order POS
   const handleSelectCustomerHistoryBookingToOrder = (booking: any) => {
-    // Kiểm tra nếu đơn đặt đã qua ngày hoặc qua thời gian kết thúc thì không cho nạp
-    if (isBookingExpired(booking)) {
-      alert('Ca đặt này đã qua ngày hoặc qua thời gian thi đấu, không thể nạp vào Order POS!');
-      return;
-    }
+    if (!booking) return;
 
     // 1. Điền Tên và SĐT vào form Order
-    setCustomerName(booking.ten_khach_hang || selectedCustomerForHistory?.ho_ten || '');
-    setCustomerPhone(booking.so_dien_thoai || selectedCustomerForHistory?.so_dien_thoai || '');
+    const custName = booking.ten_khach_hang || selectedCustomerForHistory?.ho_ten || '';
+    const custPhone = booking.so_dien_thoai || selectedCustomerForHistory?.so_dien_thoai || '';
+    setCustomerName(custName);
+    setCustomerPhone(custPhone);
 
-    // 2. Điền thông tin sân bóng vào giỏ hàng
-    if (booking.ten_san || booking.ma_san) {
-      const start = (booking.gio_bat_dau || '17:00').substring(0, 5);
-      const end = (booking.gio_ket_thuc || '18:30').substring(0, 5);
-      setSelectedSlots([
-        {
-          id: `pitch_${booking.ma_san || 1}_${start}`,
-          ten_san: booking.ten_san || 'Sân bóng',
-          gio_da: `${start} - ${end}`,
-          gia_tien: Number(booking.tien_san || booking.tong_tien || 0),
-        },
-      ]);
-    } else {
-      setSelectedSlots([]);
-    }
+    // 2. Điền thông tin sân bóng vào selectedPitches và selectedSlots
+    const startT = (booking.gio_bat_dau || '').substring(0, 5) || '17:00';
+    const endT = (booking.gio_ket_thuc || '').substring(0, 5) || '18:30';
+    const [sh, sm] = startT.split(':').map(Number);
+    const [eh, em] = endT.split(':').map(Number);
+    const durMin = Math.max(1, (eh * 60 + (em || 0)) - (sh * 60 + (sm || 0)));
+
+    const matchedSan = sanBongList.find((s) => s.id === booking.ma_san || s.ten_san === booking.ten_san);
+    const unitPrice = matchedSan ? Number(matchedSan.don_gia_phut) : 5000;
+    const pitchPrice = Number(booking.tien_san || (durMin * unitPrice));
+
+    const targetPitch: SanBong = matchedSan || {
+      id: Number(booking.ma_san || booking.id || 1),
+      ma_loai_san: 1,
+      ten_san: booking.ten_san || 'Sân bóng',
+      ten_loai: booking.ten_loai || 'Sân bóng',
+      don_gia_phut: unitPrice,
+      trang_thai: 'SAN_SANG',
+    };
+
+    const newPitchOrder: SelectedPitchOrder = {
+      pitch: targetPitch,
+      startTime: startT,
+      endTime: endT,
+      durationMin: durMin,
+      price: pitchPrice,
+    };
+
+    setSelectedPitches([newPitchOrder]);
+
+    setSelectedSlots([
+      {
+        id: `pitch_${targetPitch.id}_${startT}`,
+        ten_san: targetPitch.ten_san,
+        gio_da: `${startT} - ${endT}`,
+        gia_tien: pitchPrice,
+      },
+    ]);
 
     // 3. Điền thông tin dịch vụ vào giỏ hàng
+    const rawServices = booking.chi_tiet_dich_vu || booking.dich_vu_da_dung || booking.dich_vu || [];
     const loadedServices: SelectedServiceItem[] = [];
-    if (Array.isArray(booking.dich_vu) && booking.dich_vu.length > 0) {
-      booking.dich_vu.forEach((dv: any, idx: number) => {
+    if (Array.isArray(rawServices) && rawServices.length > 0) {
+      rawServices.forEach((dv: any, idx: number) => {
+        const svcId = Number(dv.id || dv.ma_dich_vu || idx + 1);
+        const matched = dichVuList.find((d) => Number(d.id) === svcId);
         loadedServices.push({
-          id: dv.id || idx + 1,
-          ten_dich_vu: dv.ten_dich_vu,
+          id: svcId,
+          ten_dich_vu: dv.ten_dich_vu || dv.name || matched?.ten_dich_vu || 'Dịch vụ',
           so_luong: Number(dv.so_luong) || 1,
-          don_gia: Number(dv.don_gia) || 0,
-          don_vi: dv.don_vi || 'Phần',
+          don_gia: Number(dv.don_gia || dv.gia_luc_ban || matched?.don_gia || 0),
+          don_vi: dv.don_vi_tinh || dv.don_vi || matched?.don_vi_tinh || 'Phần',
+          so_luong_da_tra: Number(dv.so_luong_da_tra || 0),
         });
       });
     }
     setSelectedServices(loadedServices);
 
     // 4. Xác định trạng thái đã thanh toán đủ hay chưa
+    const soTienDaTra = Number(booking.so_tien_da_tra || 0);
+    const tongTien = Number(booking.tong_tien || pitchPrice);
+    const rawStatus = (booking.trang_thai || '').toUpperCase().replace(/\s+/g, '_');
     const isPaid = (
       booking.trang_thai === 'Đã thanh toán' ||
       booking.trang_thai === 'DA_CHOT' ||
-      booking.trang_thai === 'Đã chốt'
+      booking.trang_thai === 'Đã chốt' ||
+      rawStatus.includes('DA_THANH_TOAN') ||
+      rawStatus.includes('THANH_TOAN') ||
+      rawStatus === 'HOAN_THANH' ||
+      (soTienDaTra > 0 && soTienDaTra >= tongTien)
     );
+    const effectivePaid = isPaid && soTienDaTra < tongTien ? tongTien : soTienDaTra;
+
+    const bookingId = booking.id || booking.ma_don_dat;
 
     setLoadedBookingState({
-      id: booking.id || booking.ma_don_dat,
-      ma_don_dat: booking.ma_don_dat || String(booking.id),
-      trang_thai: booking.trang_thai || (isPaid ? 'Đã thanh toán' : 'Chờ thanh toán'),
+      id: bookingId,
+      ma_don_dat: booking.ma_don_dat || String(bookingId),
+      trang_thai: isPaid ? 'Đã thanh toán' : (effectivePaid > 0 ? 'Đã cọc' : 'Chờ thanh toán'),
       isPaid,
+      so_tien_da_tra: effectivePaid,
+      tong_tien: tongTien,
       initialServices: JSON.parse(JSON.stringify(loadedServices)),
-      ten_san: booking.ten_san,
-      gio_da: `${booking.gio_bat_dau || ''} - ${booking.gio_ket_thuc || ''}`,
-      ngay_da: booking.ngay_da,
+      ten_san: targetPitch.ten_san,
+      gio_da: `${startT} - ${endT}`,
+      ngay_da: booking.ngay_da || formattedDateISO,
     });
 
-    setEditingInvoiceId(booking.id || booking.ma_don_dat);
+    setEditingInvoiceId(bookingId);
 
     // 5. Đóng modal & chuyển về Home
     setIsCustomerHistoryModalOpen(false);
     setActiveTab('home');
-    setCustomerSearchAlert(`✓ Đã nạp thông tin đơn đặt của ${booking.ten_khach_hang || 'khách hàng'} vào Order POS!`);
-    setTimeout(() => setCustomerSearchAlert(null), 3500);
+    showToast(`⚡ Đã điền thông tin đơn #${booking.ma_don_dat || booking.id} vào Thông tin Order!`, 'success', 'Điền Vào Order Thành Công');
   };
 
   // Helper kiểm tra một đơn đặt đã thanh toán đủ 100% hay chưa
@@ -3944,7 +3980,6 @@ export default function ManagementSystem() {
                           <table className="w-full text-left text-xs border-collapse">
                             <thead>
                               <tr className="border-b border-slate-800 bg-slate-950/80 text-[11px] font-black uppercase text-slate-400 tracking-wider">
-                                <th className="py-3 px-4">Mã Đơn</th>
                                 <th className="py-3 px-4">Khách Hàng</th>
                                 <th className="py-3 px-4">Sân Bóng</th>
                                 <th className="py-3 px-4">Khung Giờ</th>
@@ -3976,11 +4011,6 @@ export default function ManagementSystem() {
                                       }`}
                                     title="Nhấn để nạp thông tin đơn sang cột Thông tin Order bên mục Home"
                                   >
-                                    <td className="py-3 px-4">
-                                      <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                                        #{bId}
-                                      </span>
-                                    </td>
                                     <td className="py-3 px-4">
                                       <div className="font-bold text-white flex items-center gap-1.5">
                                         <UserIcon className="w-3.5 h-3.5 text-slate-400" />
@@ -4374,7 +4404,6 @@ export default function ManagementSystem() {
                         <thead>
                           <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950/80 text-slate-400' : 'border-slate-200 bg-slate-100/90 text-slate-600'
                             }`}>
-                            <th className="py-3.5 px-4 font-black uppercase tracking-wider text-[11px] w-32">Mã Đơn</th>
                             <th className="py-3.5 px-4 font-black uppercase tracking-wider text-[11px] min-w-[200px]">Khách Hàng</th>
                             <th className="py-3.5 px-4 font-black uppercase tracking-wider text-[11px] min-w-[160px]">Sân Bóng</th>
                             <th className="py-3.5 px-4 font-black uppercase tracking-wider text-[11px] min-w-[160px]">Thời Gian Đá</th>
@@ -4387,8 +4416,10 @@ export default function ManagementSystem() {
                         <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/60' : 'divide-slate-200'}`}>
                           {filteredHistoryList.map((item, idx) => {
                             const maDon = item.ma_don_dat || item.id || `HD-${idx + 1}`;
-                            const isPaid = (item.trang_thai || '').toLowerCase().includes('thanh toan') || (item.trang_thai || '').toLowerCase().includes('thanh_toan') || item.trang_thai === 'DA_CHOT' || item.trang_thai === 'HOAN_THANH';
-                            const isCancelled = (item.trang_thai || '').toLowerCase().includes('huy');
+                            const rawStatus = (item.trang_thai || '').toLowerCase();
+                            const isPaid = rawStatus.includes('thanh toan') || rawStatus.includes('thanh_toan') || item.trang_thai === 'DA_CHOT' || item.trang_thai === 'HOAN_THANH';
+                            const isDeposit = rawStatus.includes('coc') || rawStatus.includes('cọc');
+                            const isCancelled = rawStatus.includes('huy');
 
                             return (
                               <tr
@@ -4399,11 +4430,6 @@ export default function ManagementSystem() {
                                   : 'hover:bg-slate-50 active:bg-slate-100'
                                   }`}
                               >
-                                {/* Mã Đơn */}
-                                <td className="py-3 px-4 font-mono font-black text-emerald-400">
-                                  #{maDon}
-                                </td>
-
                                 {/* Khách hàng */}
                                 <td className="py-3 px-4">
                                   <div className="flex items-center gap-2.5">
@@ -4462,6 +4488,10 @@ export default function ManagementSystem() {
                                   ) : isPaid ? (
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                                       ✓ Đã thanh toán
+                                    </span>
+                                  ) : isDeposit ? (
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                                      💳 Đã cọc
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
@@ -5103,41 +5133,31 @@ export default function ManagementSystem() {
                               </button>
                             </div>
 
-                            {/* Ô chọn Giờ bắt đầu & Giờ kết thúc bất kỳ (00:00 - 24:00) */}
-                            <div className="grid grid-cols-2 gap-1.5">
+                            {/* Ô nhập Giờ bắt đầu & Giờ kết thúc bất kỳ (00:00 - 23:59) */}
+                            <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <span className="text-[10px] text-slate-400 block mb-0.5 font-bold flex items-center gap-1">
+                                <span className="text-[10px] text-slate-400 block mb-1 font-bold flex items-center gap-1">
                                   <Clock className="w-2.5 h-2.5 text-emerald-400" /> Bắt đầu (24h):
                                 </span>
-                                <select
-                                  value={item.startTime}
+                                <input
+                                  type="time"
+                                  step="60"
+                                  value={item.startTime || '10:30'}
                                   onChange={(e) => handleUpdatePitchTime(item.pitch.id, e.target.value, item.endTime)}
-                                  className="w-full px-2 py-1 rounded-lg border border-slate-700 bg-slate-950 text-white font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
-                                >
-                                  {!TIME_OPTIONS_24H.includes(item.startTime) && item.startTime && (
-                                    <option value={item.startTime}>{item.startTime}</option>
-                                  )}
-                                  {TIME_OPTIONS_24H.map((t) => (
-                                    <option key={`pos_s_${t}`} value={t}>{t}</option>
-                                  ))}
-                                </select>
+                                  className="w-full px-2.5 py-1.5 rounded-xl border border-slate-700 bg-slate-950 text-white font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer"
+                                />
                               </div>
                               <div>
-                                <span className="text-[10px] text-slate-400 block mb-0.5 font-bold flex items-center gap-1">
+                                <span className="text-[10px] text-slate-400 block mb-1 font-bold flex items-center gap-1">
                                   <Clock className="w-2.5 h-2.5 text-amber-400" /> Kết thúc (24h):
                                 </span>
-                                <select
-                                  value={item.endTime}
+                                <input
+                                  type="time"
+                                  step="60"
+                                  value={item.endTime || '11:00'}
                                   onChange={(e) => handleUpdatePitchTime(item.pitch.id, item.startTime, e.target.value)}
-                                  className="w-full px-2 py-1 rounded-lg border border-slate-700 bg-slate-950 text-white font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 cursor-pointer"
-                                >
-                                  {!TIME_OPTIONS_24H.includes(item.endTime) && item.endTime && (
-                                    <option value={item.endTime}>{item.endTime}</option>
-                                  )}
-                                  {TIME_OPTIONS_24H.map((t) => (
-                                    <option key={`pos_e_${t}`} value={t}>{t}</option>
-                                  ))}
-                                </select>
+                                  className="w-full px-2.5 py-1.5 rounded-xl border border-slate-700 bg-slate-950 text-white font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer"
+                                />
                               </div>
                             </div>
 
@@ -5670,136 +5690,193 @@ export default function ManagementSystem() {
         )}
 
         {/* ==================== 6. MODAL CHI TIẾT HÓA ĐƠN LỊCH SỬ (READ-ONLY) ==================== */}
-        {selectedHistoryOrder && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-lg rounded-3xl border border-slate-700 bg-slate-900 text-white p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 select-none">
+        {selectedHistoryOrder && (() => {
+          const rawStatus = (selectedHistoryOrder.trang_thai || '').toLowerCase();
+          const isPaid = rawStatus.includes('thanh toan') || rawStatus.includes('thanh_toan') || selectedHistoryOrder.trang_thai === 'DA_CHOT' || selectedHistoryOrder.trang_thai === 'HOAN_THANH';
+          const isDeposit = rawStatus.includes('coc') || rawStatus.includes('cọc');
+          const isCancelled = rawStatus.includes('huy');
 
-              {/* Header Modal */}
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-black">
-                    <Receipt className="w-5 h-5" />
+          const orderTotal = Number(selectedHistoryOrder.tong_tien || 0);
+          const tienDaNhan = selectedHistoryOrder.tien_da_nhan !== undefined 
+            ? Number(selectedHistoryOrder.tien_da_nhan)
+            : (isPaid ? orderTotal : (isDeposit ? Number(selectedHistoryOrder.tien_coc || orderTotal * 0.3) : 0));
+          const tienConThieu = selectedHistoryOrder.tien_con_thieu !== undefined
+            ? Number(selectedHistoryOrder.tien_con_thieu)
+            : Math.max(0, orderTotal - tienDaNhan);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="w-full max-w-lg rounded-3xl border border-slate-700 bg-slate-900 text-white p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 select-none">
+
+                {/* Header Modal */}
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center font-black">
+                      <Receipt className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-white">
+                        Chi tiết Hóa đơn #{selectedHistoryOrder.ma_don_dat || selectedHistoryOrder.id}
+                      </h3>
+                      {isCancelled ? (
+                        <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                          ✕ ĐÃ HỦY
+                        </span>
+                      ) : isPaid ? (
+                        <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          ✓ ĐÃ THANH TOÁN
+                        </span>
+                      ) : isDeposit ? (
+                        <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                          💳 ĐÃ CỌC
+                        </span>
+                      ) : (
+                        <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                          ⏳ CHỜ THANH TOÁN
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-base font-black text-white">
-                      Chi tiết Hóa đơn #{selectedHistoryOrder.ma_don_dat || selectedHistoryOrder.id}
-                    </h3>
-                    <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                      ✓ ĐÃ THANH TOÁN
-                    </span>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHistoryOrder(null)}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedHistoryOrder(null)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
 
-              {/* Nội dung thông tin (Read-only) */}
-              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 text-xs">
+                {/* Nội dung thông tin (Read-only) */}
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 text-xs">
 
-                {/* Thông tin Khách hàng & Ngày giờ */}
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-emerald-400" /> Khách hàng:
-                    </span>
-                    <strong className="text-white font-bold text-sm">
-                      {selectedHistoryOrder.ten_khach_hang || 'Khách vãng lai'}
-                    </strong>
-                  </div>
-                  {selectedHistoryOrder.so_dien_thoai && (
+                  {/* Thông tin Khách hàng & Ngày giờ */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400 flex items-center gap-1.5">
-                        <Phone className="w-3.5 h-3.5 text-emerald-400" /> Số điện thoại:
+                        <User className="w-3.5 h-3.5 text-emerald-400" /> Khách hàng:
                       </span>
-                      <strong className="text-emerald-400 font-mono">
-                        {selectedHistoryOrder.so_dien_thoai}
+                      <strong className="text-white font-bold text-sm">
+                        {selectedHistoryOrder.ten_khach_hang || 'Khách vãng lai'}
                       </strong>
                     </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400 flex items-center gap-1.5">
-                      <CalendarCheck className="w-3.5 h-3.5 text-emerald-400" /> Ngày đá:
-                    </span>
-                    <strong className="text-slate-200 font-mono">
-                      {selectedHistoryOrder.ngay_da?.substring(0, 10) || formattedDateISO}
-                    </strong>
-                  </div>
-                </div>
-
-                {/* Thông tin Sân bóng */}
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2">
-                  <div className="font-bold text-slate-400 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                    <LandPlot className="w-3.5 h-3.5 text-emerald-400" /> Sân bóng đặt
-                  </div>
-                  <div className="flex items-center justify-between pt-1">
-                    <div>
-                      <div className="font-bold text-white text-sm">
-                        {selectedHistoryOrder.ten_san || 'Sân bóng'}
+                    {selectedHistoryOrder.so_dien_thoai && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 flex items-center gap-1.5">
+                          <Phone className="w-3.5 h-3.5 text-emerald-400" /> Số điện thoại:
+                        </span>
+                        <strong className="text-emerald-400 font-mono">
+                          {selectedHistoryOrder.so_dien_thoai}
+                        </strong>
                       </div>
-                      <div className="text-slate-400 text-[11px] font-mono mt-0.5 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-emerald-400" />
-                        Ca đá: {selectedHistoryOrder.gio_bat_dau?.substring(0, 5)} - {selectedHistoryOrder.gio_ket_thuc?.substring(0, 5)}
-                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 flex items-center gap-1.5">
+                        <CalendarCheck className="w-3.5 h-3.5 text-emerald-400" /> Ngày đá:
+                      </span>
+                      <strong className="text-slate-200 font-mono">
+                        {selectedHistoryOrder.ngay_da?.substring(0, 10) || formattedDateISO}
+                      </strong>
                     </div>
-                    <span className="text-emerald-400 font-mono font-bold text-sm">
-                      {selectedHistoryOrder.tien_san ? Number(selectedHistoryOrder.tien_san).toLocaleString('vi-VN') + 'đ' : ''}
-                    </span>
                   </div>
-                </div>
 
-                {/* Thông tin Dịch vụ đã dùng (nếu có) */}
-                {selectedHistoryOrder.dich_vu && selectedHistoryOrder.dich_vu.length > 0 && (
-                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2.5">
+                  {/* Thông tin Sân bóng */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2">
                     <div className="font-bold text-slate-400 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                      <Shirt className="w-3.5 h-3.5 text-emerald-400" /> Dịch vụ đi kèm ({selectedHistoryOrder.dich_vu.length})
+                      <LandPlot className="w-3.5 h-3.5 text-emerald-400" /> Sân bóng đặt
                     </div>
-                    <div className="divide-y divide-slate-800/80">
-                      {selectedHistoryOrder.dich_vu.map((dv: any, idx: number) => (
-                        <div key={dv.id || idx} className="py-2 flex items-center justify-between text-xs">
-                          <div>
-                            <div className="font-bold text-white">{dv.ten_dich_vu}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">
-                              {dv.don_gia?.toLocaleString('vi-VN')}đ × {dv.so_luong}
-                            </div>
-                          </div>
-                          <span className="text-emerald-400 font-mono font-bold">
-                            {(dv.thanh_tien || dv.don_gia * dv.so_luong).toLocaleString('vi-VN')}đ
-                          </span>
+                    <div className="flex items-center justify-between pt-1">
+                      <div>
+                        <div className="font-bold text-white text-sm">
+                          {selectedHistoryOrder.ten_san || 'Sân bóng'}
                         </div>
-                      ))}
+                        <div className="text-slate-400 text-[11px] font-mono mt-0.5 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-emerald-400" />
+                          Ca đá: {selectedHistoryOrder.gio_bat_dau?.substring(0, 5)} - {selectedHistoryOrder.gio_ket_thuc?.substring(0, 5)}
+                        </div>
+                      </div>
+                      <span className="text-emerald-400 font-mono font-bold text-sm">
+                        {selectedHistoryOrder.tien_san ? Number(selectedHistoryOrder.tien_san).toLocaleString('vi-VN') + 'đ' : ''}
+                      </span>
                     </div>
                   </div>
-                )}
 
-                {/* Tổng tiền thanh toán */}
-                <div className="p-3.5 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 flex items-center justify-between">
-                  <span className="font-black text-slate-300 text-xs">TỔNG TIỀN ĐÃ THANH TOÁN:</span>
-                  <span className="font-black text-amber-400 font-mono text-lg">
-                    {Number(selectedHistoryOrder.tong_tien || 0).toLocaleString('vi-VN')} VNĐ
-                  </span>
+                  {/* Thông tin Dịch vụ đã dùng (nếu có) */}
+                  {selectedHistoryOrder.dich_vu && selectedHistoryOrder.dich_vu.length > 0 && (
+                    <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-2.5">
+                      <div className="font-bold text-slate-400 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                        <Shirt className="w-3.5 h-3.5 text-emerald-400" /> Dịch vụ đi kèm ({selectedHistoryOrder.dich_vu.length})
+                      </div>
+                      <div className="divide-y divide-slate-800/80">
+                        {selectedHistoryOrder.dich_vu.map((dv: any, idx: number) => (
+                          <div key={dv.id || idx} className="py-2 flex items-center justify-between text-xs">
+                            <div>
+                              <div className="font-bold text-white">{dv.ten_dich_vu}</div>
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                {dv.don_gia?.toLocaleString('vi-VN')}đ × {dv.so_luong}
+                              </div>
+                            </div>
+                            <span className="text-emerald-400 font-mono font-bold">
+                              {(dv.thanh_tien || dv.don_gia * dv.so_luong).toLocaleString('vi-VN')}đ
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chi tiết thanh toán */}
+                  <div className="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-slate-300 text-xs">TỔNG TIỀN ĐƠN:</span>
+                      <span className="font-black text-amber-400 font-mono text-base">
+                        {orderTotal.toLocaleString('vi-VN')} VNĐ
+                      </span>
+                    </div>
+                    {tienDaNhan > 0 && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-400">Số tiền đã trả:</span>
+                        <span className="font-bold text-emerald-400 font-mono">
+                          {tienDaNhan.toLocaleString('vi-VN')} VNĐ
+                        </span>
+                      </div>
+                    )}
+                    {tienConThieu > 0 && !isCancelled && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-rose-400">Còn lại chưa thanh toán:</span>
+                        <span className="font-bold text-rose-400 font-mono">
+                          {tienConThieu.toLocaleString('vi-VN')} VNĐ
+                        </span>
+                      </div>
+                    )}
+                    {isPaid && (
+                      <div className="text-[11px] text-emerald-400 font-bold text-right pt-0.5">
+                        ✓ Đã thanh toán đầy đủ
+                      </div>
+                    )}
+                    {isCancelled && (
+                      <div className="text-[11px] text-rose-400 font-bold text-right pt-0.5">
+                        ✕ Đơn đặt đã bị hủy
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+                {/* Footer */}
+                <div className="pt-3 border-t border-slate-800 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHistoryOrder(null)}
+                    className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 transition-all cursor-pointer shadow-sm"
+                  >
+                    ĐÓNG
+                  </button>
                 </div>
 
               </div>
-
-              {/* Footer */}
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-end">
-                <button
-                  type="button"
-                  onClick={() => setSelectedHistoryOrder(null)}
-                  className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 transition-all cursor-pointer shadow-sm"
-                >
-                  ĐÓNG
-                </button>
-              </div>
-
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ==================== 7. MODAL LỊCH SỬ ĐẶT SÂN CỦA KHÁCH HÀNG (KHI TÌM KIẾM/CHỌN GỢI Ý) ==================== */}
         {isCustomerHistoryModalOpen && selectedCustomerForHistory && (
@@ -6650,10 +6727,7 @@ export default function ManagementSystem() {
             {/* 1. Sân đang đá */}
             <button
               type="button"
-              onClick={() => {
-                handleClearOrder();
-                setActiveTab('pitch');
-              }}
+              onClick={() => setActiveTab('pitch')}
               className={`relative flex flex-col items-center justify-center gap-1 py-1 px-3 sm:px-4 rounded-2xl transition-all duration-200 cursor-pointer ${activeTab === 'pitch'
                 ? 'text-emerald-400 font-extrabold scale-105'
                 : isDarkMode
@@ -6671,10 +6745,7 @@ export default function ManagementSystem() {
             {/* 2. Dịch vụ */}
             <button
               type="button"
-              onClick={() => {
-                handleClearOrder();
-                setActiveTab('services');
-              }}
+              onClick={() => setActiveTab('services')}
               className={`flex flex-col items-center justify-center gap-1 py-1 px-3 sm:px-4 rounded-2xl transition-all duration-200 cursor-pointer ${activeTab === 'services'
                 ? 'text-emerald-400 font-extrabold scale-105'
                 : isDarkMode
@@ -6689,10 +6760,7 @@ export default function ManagementSystem() {
             {/* 3. Home (Xem Lịch Đặt Sân trong Management System) */}
             <button
               type="button"
-              onClick={() => {
-                handleClearOrder();
-                setActiveTab('home');
-              }}
+              onClick={() => setActiveTab('home')}
               className={`flex flex-col items-center justify-center gap-1 py-1 px-3 sm:px-4 rounded-2xl transition-all duration-200 cursor-pointer ${activeTab === 'home'
                 ? 'text-emerald-400 font-extrabold scale-105'
                 : isDarkMode
@@ -6707,10 +6775,7 @@ export default function ManagementSystem() {
             {/* 5. Lịch sử */}
             <button
               type="button"
-              onClick={() => {
-                handleClearOrder();
-                setActiveTab('history');
-              }}
+              onClick={() => setActiveTab('history')}
               className={`flex flex-col items-center justify-center gap-1 py-1 px-3 sm:px-4 rounded-2xl transition-all duration-200 cursor-pointer ${activeTab === 'history'
                 ? 'text-emerald-400 font-extrabold scale-105'
                 : isDarkMode

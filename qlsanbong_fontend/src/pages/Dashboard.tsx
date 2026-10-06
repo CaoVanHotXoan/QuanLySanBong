@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
+import { io, Socket } from 'socket.io-client';
 import SoccerLoader from '../components/SoccerLoader';
 import {
   LayoutDashboard,
@@ -369,6 +370,7 @@ export default function AdminDashboard() {
   const [khungGioList, setKhungGioList] = useState<KhungGio[]>([]);
   const [userList, setUserList] = useState<NguoiDung[]>([]);
   const [roleList, setRoleList] = useState<VaiTro[]>([]);
+  const [lockedSlots, setLockedSlots] = useState<string[]>([]);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -553,6 +555,28 @@ export default function AdminDashboard() {
         router.replace('/?login=true&requireAdmin=true');
       }
     });
+  }, []);
+
+  // Lắng nghe Socket Real-time đồng bộ các khung giờ đang chọn và dữ liệu mới
+  useEffect(() => {
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:5000` : 'http://localhost:5000');
+    const socket: Socket = io(socketUrl, { transports: ['websocket', 'polling'] });
+    
+    socket.on('slots_updated', (updatedSlots: string[]) => {
+      setLockedSlots(updatedSlots || []);
+    });
+
+    socket.on('booking_updated', () => {
+      loadAllDataFromBackend();
+    });
+
+    socket.on('payment_success', () => {
+      loadAllDataFromBackend();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   // Xử lý Đăng xuất Admin -> Chuyển hướng ngay về Trang chủ Khách hàng
@@ -1455,6 +1479,88 @@ export default function AdminDashboard() {
     );
   };
 
+  // Helper chuyển đổi giờ "HH:MM" thành số phút trong ngày
+  const timeToMinutes = (t?: string): number => {
+    if (!t) return 0;
+    const clean = String(t).substring(0, 5);
+    const [h, m] = clean.split(':').map(Number);
+    return (isNaN(h) ? 0 : h) * 60 + (isNaN(m) ? 0 : m);
+  };
+
+  // Helper kiểm tra trạng thái khung giờ trong Modal Đặt Sân & Thanh Toán
+  const getBookingModalSlotStatus = (timeStr: string, isEndTime: boolean = false) => {
+    const selectedSanId = Number(bookingModal.data.ma_san || courtList[0]?.id || 1);
+    const selectedDateStr = bookingModal.data.ngay_da 
+      ? String(bookingModal.data.ngay_da).substring(0, 10) 
+      : (selectedDate ? String(selectedDate).substring(0, 10) : new Date().toISOString().substring(0, 10));
+    
+    const curStartMin = timeToMinutes(bookingModal.data.gio_bat_dau || '17:00');
+    const tMin = timeToMinutes(timeStr);
+
+    // Nếu là giờ kết thúc mà nhỏ hơn hoặc bằng giờ bắt đầu -> không cho chọn
+    if (isEndTime && tMin <= curStartMin) {
+      return {
+        disabled: true,
+        label: `${timeStr} (<= giờ bắt đầu)`,
+        isBooked: false,
+        isHolding: false
+      };
+    }
+
+    // 1. Kiểm tra trong danh sách đơn đã đặt trong CSDL (bookingList)
+    const currentBookingId = bookingModal.mode === 'EDIT' ? Number(bookingModal.data.id) : null;
+    
+    const isBooked = bookingList.some((b) => {
+      if (currentBookingId && Number(b.id) === currentBookingId) return false;
+      if (Number(b.ma_san) !== selectedSanId) return false;
+      const bDate = b.ngay_da ? String(b.ngay_da).substring(0, 10) : '';
+      if (bDate !== selectedDateStr) return false;
+      if (['DA_HUY', 'Da Huy', 'Đã hủy', 'DA_HUY_DON'].includes(b.trang_thai)) return false;
+
+      const bStartMin = timeToMinutes(b.gio_bat_dau);
+      const bEndMin = timeToMinutes(b.gio_ket_thuc);
+
+      if (!isEndTime) {
+        // Giờ bắt đầu trùng với khoảng thời gian đã đặt [bStart, bEnd)
+        return tMin >= bStartMin && tMin < bEndMin;
+      } else {
+        // Giờ kết thúc nằm trong khoảng (bStart, bEnd] HOẶC khoảng [curStart, tMin] bao trùm qua đơn đặt của người khác
+        const inSlot = tMin > bStartMin && tMin <= bEndMin;
+        const overlaps = curStartMin < bStartMin && tMin > bStartMin;
+        return inSlot || overlaps;
+      }
+    });
+
+    if (isBooked) {
+      return {
+        disabled: true,
+        label: `${timeStr} (Đã chọn)`,
+        isBooked: true,
+        isHolding: false
+      };
+    }
+
+    // 2. Kiểm tra xem có người đang chọn qua Socket Real-time không (lockedSlots)
+    const slotKeyRealtime = `${selectedDateStr}_${selectedSanId}_${timeStr}`;
+    const isHolding = lockedSlots.includes(slotKeyRealtime);
+
+    if (isHolding) {
+      return {
+        disabled: true,
+        label: `${timeStr} (Đang chọn)`,
+        isBooked: false,
+        isHolding: true
+      };
+    }
+
+    return {
+      disabled: false,
+      label: timeStr,
+      isBooked: false,
+      isHolding: false
+    };
+  };
+
   // Helper tính tiền sân tự động = đơn giá phút * (giờ kết thúc - giờ bắt đầu)
   const calculateBookingPitchPrice = (maSan: number, start: string, end: string): number => {
     if (!start || !end) return 0;
@@ -1484,6 +1590,26 @@ export default function AdminDashboard() {
     const cleanGioBatDau = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
     const cleanGioKetThuc = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '18:30:00');
 
+    const totalTienSan = Number(tien_san || 0);
+    const totalTongTien = Number(tong_tien || totalTienSan || 0);
+    const statusVal = trang_thai || 'DA_COC';
+
+    let finalLoaiTT = loai_thanh_toan;
+    let finalSoTien = (so_tien !== undefined && so_tien !== null) ? Number(so_tien) : undefined;
+
+    if (statusVal === 'DA_THANH_TOAN') {
+      finalLoaiTT = 'TRA_HET';
+      if (finalSoTien === undefined) finalSoTien = totalTongTien;
+    } else if (statusVal === 'DA_COC') {
+      finalLoaiTT = 'DAT_COC';
+      if (finalSoTien === undefined || finalSoTien === 0) {
+        finalSoTien = Math.round(totalTongTien * 0.3);
+      }
+    } else if (statusVal === 'CHO_THANH_TOAN') {
+      finalLoaiTT = null as any;
+      finalSoTien = 0;
+    }
+
     try {
       if (bookingModal.mode === 'ADD') {
         const res = await fetch(`${API_BASE}/dat-san/don-dat-thanh-toan`, {
@@ -1495,14 +1621,14 @@ export default function AdminDashboard() {
             ngay_da: cleanNgayDa,
             gio_bat_dau: cleanGioBatDau,
             gio_ket_thuc: cleanGioKetThuc,
-            tien_san: Number(tien_san || 0),
-            tong_tien: Number(tong_tien || tien_san || 0),
+            tien_san: totalTienSan,
+            tong_tien: totalTongTien,
             ghi_chu: ghi_chu || null,
-            trang_thai: trang_thai || 'DA_CHOT',
+            trang_thai: statusVal,
             phuong_thuc: phuong_thuc || 'TIEN_MAT',
-            loai_thanh_toan: loai_thanh_toan || 'TRA_HET',
-            so_tien: Number(so_tien || tong_tien || tien_san || 0),
-            trang_thai_gd: trang_thai_gd || 'THANH_CONG',
+            loai_thanh_toan: finalLoaiTT,
+            so_tien: finalSoTien,
+            trang_thai_gd: trang_thai_gd || (statusVal === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'),
             dich_vu_list: dich_vu_list || []
           })
         });
@@ -1526,14 +1652,14 @@ export default function AdminDashboard() {
             ngay_da: cleanNgayDa,
             gio_bat_dau: cleanGioBatDau,
             gio_ket_thuc: cleanGioKetThuc,
-            tien_san: Number(tien_san || 0),
-            tong_tien: Number(tong_tien || tien_san || 0),
+            tien_san: totalTienSan,
+            tong_tien: totalTongTien,
             ghi_chu: ghi_chu || null,
-            trang_thai: trang_thai || 'DA_CHOT',
+            trang_thai: statusVal,
             phuong_thuc: phuong_thuc || 'TIEN_MAT',
-            loai_thanh_toan: loai_thanh_toan || 'TRA_HET',
-            so_tien: Number(so_tien || tong_tien || tien_san || 0),
-            trang_thai_gd: trang_thai_gd || 'THANH_CONG',
+            loai_thanh_toan: finalLoaiTT,
+            so_tien: finalSoTien,
+            trang_thai_gd: trang_thai_gd || (statusVal === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'),
             dich_vu_list: dich_vu_list || []
           })
         });
@@ -2563,18 +2689,31 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="p-4 whitespace-nowrap">
-                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                                (b.trang_thai === 'DA_THANH_TOAN' || b.trang_thai === 'Da Thanh Toan') ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' :
-                                (b.trang_thai === 'DA_COC' || b.trang_thai === 'DA_CHOT') ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30' :
-                                b.trang_thai === 'HOAN_THANH' ? 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30' :
-                                b.trang_thai === 'DA_HUY' ? 'bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30' :
-                                'bg-slate-500/20 text-slate-400 border border-slate-500/30'
-                              }`}>
-                                {(b.trang_thai === 'DA_THANH_TOAN' || b.trang_thai === 'Da Thanh Toan') ? 'Đã Thanh Toán' :
-                                 (b.trang_thai === 'DA_COC' || b.trang_thai === 'DA_CHOT') ? 'Đã Cọc' :
-                                 b.trang_thai === 'HOAN_THANH' ? 'Hoàn Thành' :
-                                 b.trang_thai === 'DA_HUY' ? 'Đã Hủy' : b.trang_thai}
-                              </span>
+                              {(() => {
+                                const raw = (b.trang_thai || '').toLowerCase();
+                                const isPaid = raw.includes('thanh toan') || raw.includes('thanh_toan') || b.trang_thai === 'DA_CHOT' || b.trang_thai === 'HOAN_THANH';
+                                const isDeposit = raw.includes('coc') || raw.includes('cọc');
+
+                                if (isPaid) {
+                                  return (
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                      Đã thanh toán
+                                    </span>
+                                  );
+                                }
+                                if (isDeposit) {
+                                  return (
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+                                      Đã cọc
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                    Chưa thanh toán
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td className="p-4 text-slate-500 dark:text-slate-400 text-[11px] max-w-[150px] truncate">
                               {b.ghi_chu || '—'}
@@ -3468,14 +3607,23 @@ export default function AdminDashboard() {
                     }}
                     className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
-                    {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_bat_dau || '').substring(0, 5)) && bookingModal.data.gio_bat_dau && (
-                      <option value={(bookingModal.data.gio_bat_dau || '').substring(0, 5)}>
-                        {(bookingModal.data.gio_bat_dau || '').substring(0, 5)} (Tùy chỉnh)
-                      </option>
-                    )}
-                    {TIME_OPTIONS_24H.map((t) => (
-                      <option key={`start_${t}`} value={t}>{t}</option>
-                    ))}
+                    {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_bat_dau || '').substring(0, 5)) && bookingModal.data.gio_bat_dau && (() => {
+                      const customTime = (bookingModal.data.gio_bat_dau || '').substring(0, 5);
+                      const status = getBookingModalSlotStatus(customTime, false);
+                      return (
+                        <option value={customTime} disabled={status.disabled}>
+                          {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
+                        </option>
+                      );
+                    })()}
+                    {TIME_OPTIONS_24H.map((t) => {
+                      const status = getBookingModalSlotStatus(t, false);
+                      return (
+                        <option key={`start_${t}`} value={t} disabled={status.disabled}>
+                          {status.label}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -3506,14 +3654,23 @@ export default function AdminDashboard() {
                     }}
                     className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
-                    {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_ket_thuc || '').substring(0, 5)) && bookingModal.data.gio_ket_thuc && (
-                      <option value={(bookingModal.data.gio_ket_thuc || '').substring(0, 5)}>
-                        {(bookingModal.data.gio_ket_thuc || '').substring(0, 5)} (Tùy chỉnh)
-                      </option>
-                    )}
-                    {TIME_OPTIONS_24H.map((t) => (
-                      <option key={`end_${t}`} value={t}>{t}</option>
-                    ))}
+                    {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_ket_thuc || '').substring(0, 5)) && bookingModal.data.gio_ket_thuc && (() => {
+                      const customTime = (bookingModal.data.gio_ket_thuc || '').substring(0, 5);
+                      const status = getBookingModalSlotStatus(customTime, true);
+                      return (
+                        <option value={customTime} disabled={status.disabled}>
+                          {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
+                        </option>
+                      );
+                    })()}
+                    {TIME_OPTIONS_24H.map((t) => {
+                      const status = getBookingModalSlotStatus(t, true);
+                      return (
+                        <option key={`end_${t}`} value={t} disabled={status.disabled}>
+                          {status.label}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>
@@ -3697,14 +3854,40 @@ export default function AdminDashboard() {
               <div>
                 <label className="block font-black uppercase mb-1">Trạng Thái Đơn</label>
                 <select
-                  value={bookingModal.data.trang_thai || 'DA_COC'}
-                  onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, trang_thai: e.target.value } })}
+                  value={bookingModal.data.trang_thai || 'CHO_THANH_TOAN'}
+                  onChange={(e) => {
+                    const nextStatus = e.target.value;
+                    const curTotal = Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0);
+                    let nextLoaiTT = 'TRA_HET';
+                    let nextSoTien = curTotal;
+                    if (nextStatus === 'DA_COC') {
+                      nextLoaiTT = 'DAT_COC';
+                      nextSoTien = Math.round(curTotal * 0.3);
+                    } else if (nextStatus === 'CHO_THANH_TOAN') {
+                      nextLoaiTT = '';
+                      nextSoTien = 0;
+                    }
+                    setBookingModal({
+                      ...bookingModal,
+                      data: {
+                        ...bookingModal.data,
+                        trang_thai: nextStatus,
+                        loai_thanh_toan: nextLoaiTT,
+                        so_tien: nextSoTien
+                      }
+                    });
+                  }}
                   className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 >
+                  <option value="DA_THANH_TOAN">Đã Thanh Toán</option>
                   <option value="DA_COC">Đã Cọc (30%)</option>
-                  <option value="DA_THANH_TOAN">Đã Thanh Toán (100%)</option>
-                  <option value="DA_HUY">Đã Hủy</option>
+                  <option value="CHO_THANH_TOAN">Chưa Thanh Toán</option>
                 </select>
+                {bookingModal.data.trang_thai === 'DA_COC' && (
+                  <p className="mt-1 text-[11px] text-sky-500 font-medium">
+                    ⚡ Số tiền cọc cần trả: <strong>{(Number(bookingModal.data.so_tien || Math.round(Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0) * 0.3))).toLocaleString('vi-VN')} đ</strong> (30% tổng đơn)
+                  </p>
+                )}
               </div>
 
               <div>

@@ -50,9 +50,13 @@ export const cleanTimeForSql = (val: any, fallback: string = '00:00:00'): string
  */
 export const layDanhSachSan = async (req: AuthRequest, res: Response) => {
     try {
+        const { ma_loai_san } = req.query;
         const pool = await poolPromise;
-        const result = await pool.request()
-            .execute('sp_LayDanhSachSan');
+        const request = pool.request();
+        if (ma_loai_san && ma_loai_san !== 'ALL') {
+            request.input('ma_loai_san', sql.Int, Number(ma_loai_san));
+        }
+        const result = await request.execute('sp_LayDanhSachSan');
 
         return res.status(200).json({
             success: true,
@@ -1335,14 +1339,26 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
         const { ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai } = req.body;
 
         const pool = await poolPromise;
-        const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan' || loai_thanh_toan === 'TRA_HET') ? 'DA_THANH_TOAN' : (trang_thai || 'DA_COC');
+        const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan')
+            ? 'DA_THANH_TOAN'
+            : (trang_thai === 'DA_COC' ? 'DA_COC' : (trang_thai === 'CHO_THANH_TOAN' ? 'CHO_THANH_TOAN' : (trang_thai || 'DA_COC')));
         const phuong_thuc_chuan = (phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT';
         const tien_san_val = parseFloat(tien_san) || parseFloat(tong_tien) || 0;
         const tong_tien_val = parseFloat(tong_tien) || tien_san_val;
-        const so_tien_val = (so_tien !== undefined && so_tien !== null)
-            ? parseFloat(so_tien)
-            : (trang_thai_chuan === 'DA_THANH_TOAN' ? tong_tien_val : (loai_thanh_toan ? tien_san_val : 0));
-        const loai_tt_val = loai_thanh_toan || (trang_thai_chuan === 'DA_THANH_TOAN' ? 'TRA_HET' : (so_tien_val > 0 ? 'DAT_COC' : null));
+        
+        let so_tien_val = 0;
+        let loai_tt_val: string | null = null;
+        if (trang_thai_chuan === 'DA_THANH_TOAN') {
+            loai_tt_val = 'TRA_HET';
+            so_tien_val = (so_tien !== undefined && so_tien !== null && parseFloat(so_tien) > 0) ? parseFloat(so_tien) : tong_tien_val;
+        } else if (trang_thai_chuan === 'DA_COC') {
+            loai_tt_val = 'DAT_COC';
+            so_tien_val = (so_tien !== undefined && so_tien !== null && parseFloat(so_tien) > 0) ? parseFloat(so_tien) : Math.round(tong_tien_val * 0.3);
+        } else {
+            loai_tt_val = null;
+            so_tien_val = 0;
+        }
+
         const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
         const gio_bd_clean = cleanTimeForSql(gio_bat_dau, '17:00:00');
         const gio_kt_clean = cleanTimeForSql(gio_ket_thuc, '18:30:00');
@@ -1365,7 +1381,7 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
             .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
             .input('loai_thanh_toan', sql.VarChar(20), loai_tt_val)
             .input('so_tien', sql.Decimal(10, 2), so_tien_val)
-            .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
+            .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || (trang_thai_chuan === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'))
             .input('ten_khach_hang', sql.NVarChar(100), tenKhach || null)
             .input('so_dien_thoai', sql.VarChar(20), sdtKhach || null)
             .execute('sp_ThemDonDatVaThanhToan');
@@ -1428,10 +1444,25 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
 
         const pool = await poolPromise;
         const phuong_thuc_chuan = phuong_thuc ? ((phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT') : 'TIEN_MAT';
-        const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan') ? 'DA_THANH_TOAN' : (trang_thai || 'DA_COC');
+        const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan')
+            ? 'DA_THANH_TOAN'
+            : (trang_thai === 'DA_COC' ? 'DA_COC' : (trang_thai === 'CHO_THANH_TOAN' ? 'CHO_THANH_TOAN' : (trang_thai || 'DA_COC')));
         const tien_san_val = tien_san !== undefined ? parseFloat(tien_san) : null;
         const tong_tien_val = tong_tien !== undefined ? parseFloat(tong_tien) : null;
-        const so_tien_val = so_tien !== undefined ? parseFloat(so_tien) : null;
+        
+        let loai_tt_val = loai_thanh_toan;
+        let so_tien_val = so_tien !== undefined ? parseFloat(so_tien) : null;
+        if (trang_thai_chuan === 'DA_THANH_TOAN') {
+            loai_tt_val = 'TRA_HET';
+            if (so_tien_val === null || isNaN(so_tien_val)) so_tien_val = tong_tien_val;
+        } else if (trang_thai_chuan === 'DA_COC') {
+            loai_tt_val = 'DAT_COC';
+            if (so_tien_val === null || isNaN(so_tien_val)) so_tien_val = tong_tien_val ? Math.round(tong_tien_val * 0.3) : null;
+        } else if (trang_thai_chuan === 'CHO_THANH_TOAN') {
+            loai_tt_val = null;
+            so_tien_val = 0;
+        }
+
         const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
         const gio_bd_clean = cleanTimeForSql(gio_bat_dau, '17:00:00');
         const gio_kt_clean = cleanTimeForSql(gio_ket_thuc, '18:30:00');
@@ -1451,9 +1482,9 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
             .input('phuong_thuc', sql.VarChar(20), phuong_thuc_chuan)
             .input('trang_thai', sql.VarChar(30), trang_thai_chuan)
             .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
-            .input('loai_thanh_toan', sql.VarChar(20), loai_thanh_toan || 'TRA_HET')
+            .input('loai_thanh_toan', sql.VarChar(20), loai_tt_val)
             .input('so_tien', sql.Decimal(10, 2), so_tien_val)
-            .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
+            .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || (trang_thai_chuan === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'))
             .input('ten_khach_hang', sql.NVarChar(100), tenKhach || null)
             .input('so_dien_thoai', sql.VarChar(20), sdtKhach || null)
             .execute('sp_SuaDonDatVaThanhToan');

@@ -25,7 +25,9 @@ import {
   ChevronRight,
   Sparkles,
   ExternalLink,
-  DollarSign
+  DollarSign,
+  Eye,
+  FileText
 } from 'lucide-react';
 
 // 1. Định nghĩa Interface đơn đặt sân lấy từ CSDL SQL Server
@@ -106,12 +108,39 @@ export default function History() {
 
   // State PayOS VietQR MB Bank Modal
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<IDonDatSan | null>(null);
+  const [selectedOrderForDetail, setSelectedOrderForDetail] = useState<IDonDatSan | null>(null);
   const [payOSData, setPayOSData] = useState<PayOSData | null>(null);
   const [isCreatingPayOS, setIsCreatingPayOS] = useState<boolean>(false);
   const [isCheckingPayOS, setIsCheckingPayOS] = useState<boolean>(false);
   const [isPaymentSuccess, setIsPaymentSuccess] = useState<boolean>(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [payOSAlertMessage, setPayOSAlertMessage] = useState<string>('');
+
+  // Helper kiểm tra đơn đặt đã qua ngày/giờ thi đấu hay chưa
+  const isOrderPastTime = useCallback((item: IDonDatSan) => {
+    if ((item as any).da_qua_gio === 1 || (item as any).da_qua_gio === true) return true;
+    if (!item.ngay_da) return false;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const currentDate = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${currentYear}-${currentMonth}-${currentDate}`;
+
+    if (item.ngay_da < todayStr) return true;
+    if (item.ngay_da > todayStr) return false;
+
+    const timeToCheck = item.gio_ket_thuc || item.gio_bat_dau;
+    if (!timeToCheck) return false;
+
+    const [h, m] = timeToCheck.split(':').map(Number);
+    const currentH = now.getHours();
+    const currentM = now.getMinutes();
+
+    if (h < currentH) return true;
+    if (h === currentH && (m !== undefined ? m : 0) <= currentM) return true;
+
+    return false;
+  }, []);
 
   // Helper trigger Toast thông báo
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -392,9 +421,28 @@ export default function History() {
   // =========================================================================
   const totalBookings = danhSachDon.length;
 
-  const paidBookingsCount = danhSachDon.filter((don) => {
+  // Số lượng đơn Đã đặt cọc (có tiền đã nhận / trạng thái DA_COC và còn thiếu tiền)
+  const daCocCount = danhSachDon.filter((don) => {
     const st = (don.trang_thai || '').toUpperCase();
-    return st === 'DA_THANH_TOAN' || st === 'DA THANH TOAN' || st === 'DA_COC' || st === 'HOAN_THANH';
+    if (st === 'DA_HUY') return false;
+    const tienCoc = don.tien_coc ?? Math.round((don.tong_tien || 0) * 0.3);
+    const tienDaNhan = don.tien_da_nhan ?? (
+      (st === 'DA_THANH_TOAN' || st === 'HOAN_THANH') ? don.tong_tien : (st === 'DA_COC' ? tienCoc : 0)
+    );
+    const tienThieu = don.tien_thieu ?? Math.max(0, (don.tong_tien || 0) - tienDaNhan);
+    return (st === 'DA_COC' || tienDaNhan > 0) && tienThieu > 0;
+  }).length;
+
+  // Số lượng đơn Đã thanh toán (100% hoặc hoàn thành)
+  const daThanhToanCount = danhSachDon.filter((don) => {
+    const st = (don.trang_thai || '').toUpperCase();
+    if (st === 'DA_HUY') return false;
+    const tienCoc = don.tien_coc ?? Math.round((don.tong_tien || 0) * 0.3);
+    const tienDaNhan = don.tien_da_nhan ?? (
+      (st === 'DA_THANH_TOAN' || st === 'HOAN_THANH') ? don.tong_tien : (st === 'DA_COC' ? tienCoc : 0)
+    );
+    const tienThieu = don.tien_thieu ?? Math.max(0, (don.tong_tien || 0) - tienDaNhan);
+    return st === 'DA_THANH_TOAN' || st === 'DA THANH TOAN' || st === 'HOAN_THANH' || tienThieu <= 0;
   }).length;
 
   const totalSpent = danhSachDon
@@ -510,7 +558,8 @@ export default function History() {
         </div>
 
         {/* Khối tóm tắt thống kê từ CSDL */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Card 1: Tổng số đơn */}
           <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 flex items-center gap-4 shadow-lg shadow-black/40">
             <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
               <Receipt className="w-6 h-6" />
@@ -523,18 +572,33 @@ export default function History() {
             </div>
           </div>
 
+          {/* Card 2: Đã cọc */}
           <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 flex items-center gap-4 shadow-lg shadow-black/40">
-            <div className="p-3 bg-teal-500/10 text-teal-400 rounded-xl border border-teal-500/20">
-              <TrendingUp className="w-6 h-6" />
+            <div className="p-3 bg-amber-500/10 text-amber-400 rounded-xl border border-amber-500/20">
+              <Clock3 className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Đã cọc / Đã thanh toán</p>
-              <p className="text-xl font-extrabold text-teal-300 mt-0.5">
-                {isLoading ? '...' : `${paidBookingsCount} đơn`}
+              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Đã cọc</p>
+              <p className="text-xl font-extrabold text-amber-400 mt-0.5">
+                {isLoading ? '...' : `${daCocCount} đơn`}
               </p>
             </div>
           </div>
 
+          {/* Card 3: Đã thanh toán */}
+          <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 flex items-center gap-4 shadow-lg shadow-black/40">
+            <div className="p-3 bg-teal-500/10 text-teal-400 rounded-xl border border-teal-500/20">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Đã thanh toán</p>
+              <p className="text-xl font-extrabold text-teal-300 mt-0.5">
+                {isLoading ? '...' : `${daThanhToanCount} đơn`}
+              </p>
+            </div>
+          </div>
+
+          {/* Card 4: Tổng giá trị đơn đặt */}
           <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl p-4 flex items-center gap-4 shadow-lg shadow-black/40">
             <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
               <CreditCard className="w-6 h-6" />
@@ -611,6 +675,7 @@ export default function History() {
                 </thead>
                 <tbody className="divide-y divide-slate-800/70 text-xs">
                   {danhSachDon.map((item) => {
+                    const isPast = isOrderPastTime(item);
                     const tienCoc = item.tien_coc ?? Math.round((item.tong_tien || 0) * 0.3);
                     const tienDaNhan = item.tien_da_nhan ?? (
                       (item.trang_thai === 'DA_THANH_TOAN' || item.trang_thai === 'HOAN_THANH')
@@ -625,20 +690,35 @@ export default function History() {
                     return (
                       <tr
                         key={item.id || item.ma_don}
-                        className="hover:bg-slate-850/60 transition-colors group"
+                        className={`transition-all group ${
+                          isPast
+                            ? 'opacity-60 hover:opacity-100 bg-slate-950/40 hover:bg-slate-900/60'
+                            : 'hover:bg-slate-850/60'
+                        }`}
                       >
                         {/* Mã đơn (Hiển thị đẹp, không bị xuống dòng) */}
                         <td className="py-4 px-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[11px] font-mono font-black text-emerald-400 tracking-wider shadow-sm">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg border text-[11px] font-mono font-black tracking-wider shadow-sm ${
+                            isPast 
+                              ? 'bg-slate-800/60 border-slate-700/80 text-slate-300' 
+                              : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                          }`}>
                             {item.ma_don || `DDS-${item.id}`}
                           </span>
                         </td>
 
                         {/* Tên sân */}
                         <td className="py-4 px-4 whitespace-nowrap">
-                          <div className="font-bold text-white group-hover:text-emerald-400 transition-colors">
+                          <div className={`font-bold transition-colors ${
+                            isPast ? 'text-slate-300 group-hover:text-white' : 'text-white group-hover:text-emerald-400'
+                          }`}>
                             {item.ten_san}
                           </div>
+                          {item.ten_loai && (
+                            <div className="text-[10px] text-slate-500">
+                              {item.ten_loai}
+                            </div>
+                          )}
                         </td>
 
                         {/* Ngày & Khung giờ */}
@@ -651,6 +731,12 @@ export default function History() {
                             <Clock className="w-3 h-3 text-slate-500" />
                             <span>{item.gio_bat_dau} - {item.gio_ket_thuc}</span>
                           </div>
+                          {isPast && (
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700/60 text-[10px] text-slate-400 mt-1 font-medium">
+                              <Clock3 className="w-2.5 h-2.5 text-slate-400" />
+                              <span>Đã qua giờ</span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Dịch vụ kèm theo */}
@@ -708,31 +794,55 @@ export default function History() {
                           {renderStatusBadge(item.trang_thai, tienThieu, tienDaNhan)}
                         </td>
 
-                        {/* Hành động (Thêm dịch vụ & Thanh toán) */}
+                        {/* Hành động */}
                         <td className="py-4 px-4 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1.5">
-                            {/* Nút Dịch Vụ: Chỉ hiện khi đơn chưa bị hủy */}
-                            {canAddService && (
+                            {isPast ? (
+                              /* Đơn đã qua giờ: CHỈ HIỆN DUY NHẤT NÚT XEM CHI TIẾT */
                               <button
-                                onClick={() => handleOpenAddServiceModal(item)}
-                                className="px-2.5 py-1.5 text-[11px] font-semibold bg-slate-950 hover:bg-slate-800 text-slate-200 hover:text-emerald-400 rounded-lg border border-slate-700/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-500/50"
-                                title="Thêm nước uống, phụ kiện vào hóa đơn này"
+                                onClick={() => setSelectedOrderForDetail(item)}
+                                className="px-3 py-1.5 text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white rounded-lg border border-slate-700 hover:border-cyan-500/50 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105"
+                                title="Xem chi tiết đơn đặt sân & hóa đơn"
                               >
-                                <Plus className="w-3.5 h-3.5 text-emerald-400" />
-                                <span>Dịch vụ</span>
+                                <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                                <span>Xem chi tiết</span>
                               </button>
-                            )}
+                            ) : (
+                              /* Đơn chưa qua giờ: Hiện các nút tương tác bình thường */
+                              <>
+                                {/* Nút Xem chi tiết nhanh */}
+                                <button
+                                  onClick={() => setSelectedOrderForDetail(item)}
+                                  className="p-1.5 text-slate-400 hover:text-cyan-300 bg-slate-950 hover:bg-slate-800 rounded-lg border border-slate-800 hover:border-cyan-500/50 transition-all cursor-pointer"
+                                  title="Xem chi tiết hóa đơn"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
 
-                            {/* Nút Thanh Toán: Luôn hiện khi còn thiếu tiền (kể cả khi đã thanh toán đủ tiền sân trước đó nhưng thêm dịch vụ phát sinh) */}
-                            {!isCancelled && tienThieu > 0 && (
-                              <button
-                                onClick={() => handleOpenVietQRPayment(item)}
-                                className="px-2.5 py-1.5 text-[11px] font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-lg transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer hover:scale-105"
-                                title={`Quét mã VietQR (MB Bank) để thanh toán số tiền còn thiếu ${formatCurrency(tienThieu)}`}
-                              >
-                                <QrCode className="w-3.5 h-3.5" />
-                                <span>Thanh toán</span>
-                              </button>
+                                {/* Nút Dịch Vụ: Chỉ hiện khi đơn chưa bị hủy */}
+                                {canAddService && (
+                                  <button
+                                    onClick={() => handleOpenAddServiceModal(item)}
+                                    className="px-2.5 py-1.5 text-[11px] font-semibold bg-slate-950 hover:bg-slate-800 text-slate-200 hover:text-emerald-400 rounded-lg border border-slate-700/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-500/50"
+                                    title="Thêm nước uống, phụ kiện vào hóa đơn này"
+                                  >
+                                    <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span>Dịch vụ</span>
+                                  </button>
+                                )}
+
+                                {/* Nút Thanh Toán: Luôn hiện khi còn thiếu tiền */}
+                                {!isCancelled && tienThieu > 0 && (
+                                  <button
+                                    onClick={() => handleOpenVietQRPayment(item)}
+                                    className="px-2.5 py-1.5 text-[11px] font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-lg transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer hover:scale-105"
+                                    title={`Quét mã VietQR (MB Bank) để thanh toán số tiền còn thiếu ${formatCurrency(tienThieu)}`}
+                                  >
+                                    <QrCode className="w-3.5 h-3.5" />
+                                    <span>Thanh toán</span>
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </td>
@@ -1038,6 +1148,168 @@ export default function History() {
                   </div>
                 </>
               ) : null}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: XEM CHI TIẾT HÓA ĐƠN & ĐƠN ĐẶT SÂN */}
+      {/* ========================================================================= */}
+      {selectedOrderForDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col my-auto max-h-[90vh]">
+            
+            {/* Header Modal */}
+            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/20">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>Chi Tiết Hóa Đơn Đặt Sân</span>
+                    {isOrderPastTime(selectedOrderForDetail) && (
+                      <span className="text-[10px] font-normal px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                        Đã qua giờ
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Mã đơn: <span className="font-mono text-emerald-400 font-bold">{selectedOrderForDetail.ma_don || `DDS-${selectedOrderForDetail.id}`}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedOrderForDetail(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Nội dung chi tiết hóa đơn */}
+            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+              {/* Thông tin sân & trận đấu */}
+              <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 space-y-2.5">
+                <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px] pb-1 border-b border-slate-800/60">
+                  Thông Tin Trận Đấu
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-slate-300">
+                  <div>
+                    <span className="text-slate-500 block">Sân bóng:</span>
+                    <span className="font-bold text-white text-sm">{selectedOrderForDetail.ten_san}</span>
+                    {selectedOrderForDetail.ten_loai && (
+                      <span className="text-slate-400 text-[11px] block">({selectedOrderForDetail.ten_loai})</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Ngày thi đấu:</span>
+                    <span className="font-bold text-emerald-400">{formatDateDMY(selectedOrderForDetail.ngay_da)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Khung giờ đá:</span>
+                    <span className="font-mono font-bold text-white">{selectedOrderForDetail.gio_bat_dau} - {selectedOrderForDetail.gio_ket_thuc}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Trạng thái:</span>
+                    <span className="mt-0.5 block">{renderStatusBadge(selectedOrderForDetail.trang_thai, selectedOrderForDetail.tien_thieu || 0, selectedOrderForDetail.tien_da_nhan || 0)}</span>
+                  </div>
+                </div>
+
+                {selectedOrderForDetail.ghi_chu && (
+                  <div className="pt-2 border-t border-slate-800/60 text-slate-400 text-[11px]">
+                    <span className="text-slate-500">Ghi chú:</span> {selectedOrderForDetail.ghi_chu}
+                  </div>
+                )}
+              </div>
+
+              {/* Thông tin khách hàng & đặt sân */}
+              <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 space-y-2 text-slate-300">
+                <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px] pb-1 border-b border-slate-800/60">
+                  Thông Tin Người Đặt
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Khách hàng:</span>
+                  <span className="font-bold text-white">{selectedOrderForDetail.ten_khach_hang || 'Khách vãng lai'}</span>
+                </div>
+                {selectedOrderForDetail.sdt_khach_hang && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Số điện thoại:</span>
+                    <span className="font-mono font-bold text-slate-200">{selectedOrderForDetail.sdt_khach_hang}</span>
+                  </div>
+                )}
+                {selectedOrderForDetail.ngay_tao && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Thời gian tạo đơn:</span>
+                    <span className="text-slate-400 font-mono text-[11px]">{new Date(selectedOrderForDetail.ngay_tao).toLocaleString('vi-VN')}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Phương thức:</span>
+                  <span className="font-semibold text-slate-300">{selectedOrderForDetail.phuong_thuc === 'CHUYEN_KHOAN' ? 'Chuyển khoản (VietQR)' : 'Tiền mặt tại quầy'}</span>
+                </div>
+              </div>
+
+              {/* Chi tiết chi phí */}
+              <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800/80 space-y-2.5">
+                <div className="font-bold text-slate-300 uppercase tracking-wider text-[11px] pb-1 border-b border-slate-800/60">
+                  Bảng Chi Phí & Dịch Vụ
+                </div>
+
+                <div className="flex items-center justify-between text-slate-300">
+                  <span>Tiền thuê sân bóng:</span>
+                  <span className="font-bold text-white font-mono">{formatCurrency(selectedOrderForDetail.tien_san || selectedOrderForDetail.tong_tien)}</span>
+                </div>
+
+                {/* Danh sách dịch vụ nếu có */}
+                {selectedOrderForDetail.chi_tiet_dich_vu && selectedOrderForDetail.chi_tiet_dich_vu.length > 0 ? (
+                  <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
+                    <div className="text-[11px] text-slate-400 font-semibold">Dịch vụ / Nước uống đã gọi:</div>
+                    {selectedOrderForDetail.chi_tiet_dich_vu.map((dv, idx) => (
+                      <div key={idx} className="flex items-center justify-between text-[11px] pl-2 text-slate-300">
+                        <span>• {dv.ten_dich_vu} <span className="text-slate-500">(x{dv.so_luong})</span>:</span>
+                        <span className="font-mono text-emerald-400">{formatCurrency(dv.tongtien_dichvu)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {/* Tổng kết tài chính */}
+                <div className="pt-2.5 border-t border-slate-800/80 space-y-1.5">
+                  <div className="flex items-center justify-between text-sm font-bold">
+                    <span className="text-white">Tổng tiền thanh toán:</span>
+                    <span className="text-emerald-400 font-mono text-base">{formatCurrency(selectedOrderForDetail.tong_tien)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-teal-300">
+                    <span>Tiền cọc quy định:</span>
+                    <span className="font-mono font-semibold">{formatCurrency(selectedOrderForDetail.tien_coc ?? Math.round(selectedOrderForDetail.tong_tien * 0.3))}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-slate-300">
+                    <span>Đã nhận / Đã thanh toán:</span>
+                    <span className="font-mono font-bold text-emerald-400">{formatCurrency(selectedOrderForDetail.tien_da_nhan || 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs font-bold pt-1 border-t border-slate-800/50">
+                    <span className="text-slate-400">Số tiền còn thiếu:</span>
+                    <span className={`font-mono text-sm ${(selectedOrderForDetail.tien_thieu || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      {(selectedOrderForDetail.tien_thieu || 0) > 0 ? formatCurrency(selectedOrderForDetail.tien_thieu || 0) : '0 ₫ (Đã thanh toán đủ)'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedOrderForDetail(null)}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all cursor-pointer"
+              >
+                Đóng
+              </button>
             </div>
 
           </div>

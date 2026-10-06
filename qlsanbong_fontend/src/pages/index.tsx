@@ -749,6 +749,28 @@ export default function HomePage() {
   };
 
 
+  // Danh sách các sân thuộc loại sân đã chọn (loại bỏ hoàn toàn sân dự bị) để hiển thị trong bộ lọc Sân
+  const availableSanOptions = useMemo(() => {
+    let list = sanBongList.filter((s) => !isDuBiPitch(s));
+    if (filterLoaiSan !== 'ALL') {
+      list = list.filter((s) => s.ma_loai_san === Number(filterLoaiSan));
+    }
+    return list;
+  }, [sanBongList, filterLoaiSan]);
+
+  // Xử lý khi thay đổi Loại Sân: tự động kiểm tra và reset Lọc Sân nếu sân đang chọn không thuộc loại mới
+  const handleLoaiSanChange = (newLoaiSan: string) => {
+    setFilterLoaiSan(newLoaiSan);
+    if (newLoaiSan !== 'ALL' && filterSanId !== 'ALL') {
+      const isSanValidInNewLoai = sanBongList.some(
+        (s) => s.id === Number(filterSanId) && s.ma_loai_san === Number(newLoaiSan) && !isDuBiPitch(s)
+      );
+      if (!isSanValidInNewLoai) {
+        setFilterSanId('ALL');
+      }
+    }
+  };
+
   // Lọc danh sách sân theo loại sân, sân cụ thể và từ khóa tìm kiếm (Loại bỏ hoàn toàn sân Dự bị)
   const filteredSanList = useMemo(() => {
     let list = sanBongList.filter((s) => !isDuBiPitch(s));
@@ -1487,7 +1509,33 @@ export default function HomePage() {
           <div className={`mb-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 p-4 rounded-2xl border shadow-lg backdrop-blur-md relative z-30 ${isDarkMode ? 'bg-slate-900/80 border-slate-800 shadow-slate-950/40' : 'bg-white border-slate-200 shadow-slate-200/50'
             }`}>
             <div className="flex flex-wrap items-center gap-3">
-              {/* NÚT LỌC SÂN BÓNG (HIỂN THỊ LỊCH SÂN ĐÓ) */}
+              {/* NÚT LỌC LOẠI SÂN (SÂN 5, SÂN 7, PICKLEBALL... - LOẠI BỎ SÂN DỰ BỊ) */}
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${isDarkMode
+                ? 'bg-slate-950/90 border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500'
+                : 'bg-slate-50 border-slate-300 hover:border-emerald-500 focus-within:border-emerald-500 shadow-sm'
+                }`}>
+                <LandPlot className="w-3.5 h-3.5 text-emerald-500" />
+                <span className={`text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                  Lọc Loại Sân:
+                </span>
+                <select
+                  value={filterLoaiSan}
+                  onChange={(e) => handleLoaiSanChange(e.target.value)}
+                  className={`bg-transparent text-xs font-black focus:outline-none cursor-pointer ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
+                    }`}
+                >
+                  <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
+                    Tất Cả Loại Sân ({loaiSanList.filter((l) => !isDuBiPitch(l)).length} loại)
+                  </option>
+                  {loaiSanList.filter((l) => !isDuBiPitch(l)).map((loai) => (
+                    <option key={loai.id} value={loai.id} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
+                      {loai.ten_loai}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* NÚT LỌC SÂN BÓNG (HIỂN THỊ LỊCH SÂN ĐÓ - ĐỒNG BỘ THEO LOẠI SÂN) */}
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${isDarkMode
                 ? 'bg-slate-950/90 border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500'
                 : 'bg-slate-50 border-slate-300 hover:border-emerald-500 focus-within:border-emerald-500 shadow-sm'
@@ -1503,9 +1551,11 @@ export default function HomePage() {
                     }`}
                 >
                   <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
-                    Tất Cả Các Sân ({sanBongList.filter((s) => !isDuBiPitch(s)).length} sân)
+                    {filterLoaiSan === 'ALL'
+                      ? `Tất Cả Các Sân (${availableSanOptions.length} sân)`
+                      : `Tất Cả Sân Thuộc Loại (${availableSanOptions.length} sân)`}
                   </option>
-                  {sanBongList.filter((s) => !isDuBiPitch(s)).map((san) => (
+                  {availableSanOptions.map((san) => (
                     <option key={san.id} value={san.id} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
                       {san.ten_san}
                     </option>

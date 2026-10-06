@@ -516,8 +516,9 @@ GO
 -- 4.2. THỦ TỤC QUẢN LÝ SÂN BÓNG & LOẠI SÂN (COURTS & COURT TYPES)
 -- ---------------------------------------------------------------------
 
--- Lấy danh sách sân bóng kèm loại sân và đơn giá theo phút
+-- Lấy danh sách sân bóng kèm loại sân và đơn giá theo phút (Hỗ trợ lọc theo loại sân, loại bỏ sân dự bị)
 CREATE OR ALTER PROCEDURE sp_LayDanhSachSan
+    @ma_loai_san INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -533,6 +534,15 @@ BEGIN
             ls.mo_ta
         FROM San_Bong sb
         INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        WHERE (@ma_loai_san IS NULL OR sb.ma_loai_san = @ma_loai_san)
+          AND LOWER(ls.ten_loai) NOT LIKE N'%dự bị%'
+          AND LOWER(ls.ten_loai) NOT LIKE N'%du bi%'
+          AND LOWER(ls.ten_loai) NOT LIKE N'%dự phòng%'
+          AND LOWER(ls.ten_loai) NOT LIKE N'%du phong%'
+          AND LOWER(sb.ten_san) NOT LIKE N'%dự bị%'
+          AND LOWER(sb.ten_san) NOT LIKE N'%du bi%'
+          AND LOWER(sb.ten_san) NOT LIKE N'%dự phòng%'
+          AND LOWER(sb.ten_san) NOT LIKE N'%du phong%'
         ORDER BY sb.id ASC;
     END TRY
     BEGIN CATCH
@@ -541,7 +551,7 @@ BEGIN
 END;
 GO
 
--- Lấy danh sách loại sân
+-- Lấy danh sách loại sân (Loại bỏ loại sân dự bị)
 CREATE OR ALTER PROCEDURE sp_LayDanhSachLoaiSan
 AS
 BEGIN
@@ -549,6 +559,11 @@ BEGIN
     BEGIN TRY
         SELECT id, ten_loai, mo_ta, trang_thai
         FROM Loai_San
+        WHERE (trang_thai = 1 OR trang_thai IS NULL)
+          AND LOWER(ten_loai) NOT LIKE N'%dự bị%'
+          AND LOWER(ten_loai) NOT LIKE N'%du bi%'
+          AND LOWER(ten_loai) NOT LIKE N'%dự phòng%'
+          AND LOWER(ten_loai) NOT LIKE N'%du phong%'
         ORDER BY id ASC;
     END TRY
     BEGIN CATCH
@@ -1081,7 +1096,7 @@ BEGIN
 END;
 GO
 
--- Lấy lịch sử đặt sân của khách hàng (Đầy đủ tiền cọc, tiền đã nhận, tiền còn thiếu)
+-- Lấy lịch sử đặt sân của khách hàng (Đầy đủ tiền cọc, tiền đã nhận, tiền còn thiếu, nhận biết đơn đã qua giờ)
 CREATE OR ALTER PROCEDURE sp_LayLichSuDatSan
     @ma_nguoi_dung INT = NULL,
     @so_dien_thoai VARCHAR(20) = NULL,
@@ -1109,6 +1124,11 @@ BEGIN
             nd.so_dien_thoai AS sdt_khach_hang,
             ISNULL(d.da_vao_san, 0) AS da_vao_san,
             CONVERT(VARCHAR(5), d.gio_vao_san, 108) AS gio_vao_san,
+            CASE 
+                WHEN d.ngay_da < CAST(GETDATE() AS DATE) THEN 1
+                WHEN d.ngay_da = CAST(GETDATE() AS DATE) AND CAST(d.gio_ket_thuc AS TIME) <= CAST(GETDATE() AS TIME) THEN 1
+                ELSE 0
+            END AS da_qua_gio,
             ISNULL((
                 SELECT SUM(tt.so_tien) 
                 FROM Thanh_Toan tt 
@@ -2295,14 +2315,18 @@ BEGIN
             trang_thai = @trang_thai
         WHERE id = @id;
 
-        IF @so_tien IS NOT NULL AND @so_tien > 0
+        IF @trang_thai = 'CHO_THANH_TOAN'
+        BEGIN
+            DELETE FROM Thanh_Toan WHERE ma_don_dat = @id;
+        END
+        ELSE IF @so_tien IS NOT NULL AND @so_tien > 0
         BEGIN
             IF EXISTS (SELECT 1 FROM Thanh_Toan WHERE ma_don_dat = @id)
             BEGIN
                 UPDATE Thanh_Toan
                 SET so_tien = @so_tien,
                     phuong_thuc = @phuong_thuc,
-                    loai_thanh_toan = ISNULL(@loai_thanh_toan, loai_thanh_toan),
+                    loai_thanh_toan = CASE WHEN @trang_thai = 'DA_THANH_TOAN' THEN 'TRA_HET' ELSE ISNULL(@loai_thanh_toan, 'DAT_COC') END,
                     trang_thai_gd = @trang_thai_gd,
                     ngay_thanh_toan = GETDATE()
                 WHERE ma_don_dat = @id;
@@ -2313,7 +2337,7 @@ BEGIN
                     ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan
                 )
                 VALUES (
-                    @id, @phuong_thuc, ISNULL(@loai_thanh_toan, 'TRA_HET'), @so_tien, CONCAT('GD_', @id, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @trang_thai_gd, GETDATE()
+                    @id, @phuong_thuc, CASE WHEN @trang_thai = 'DA_THANH_TOAN' THEN 'TRA_HET' ELSE ISNULL(@loai_thanh_toan, 'DAT_COC') END, @so_tien, CONCAT('GD_', @id, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @trang_thai_gd, GETDATE()
                 );
             END;
         END
@@ -2337,6 +2361,29 @@ BEGIN
                 )
                 VALUES (
                     @id, @phuong_thuc, 'TRA_HET', @cur_tong, CONCAT('GD_', @id, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @trang_thai_gd, GETDATE()
+                );
+            END;
+        END
+        ELSE IF @trang_thai = 'DA_COC'
+        BEGIN
+            DECLARE @cur_coc DECIMAL(10,2) = ROUND(ISNULL(@tong_tien, (SELECT tong_tien FROM Don_Dat_San WHERE id = @id)) * 0.3, 0);
+            IF EXISTS (SELECT 1 FROM Thanh_Toan WHERE ma_don_dat = @id)
+            BEGIN
+                UPDATE Thanh_Toan
+                SET so_tien = @cur_coc,
+                    phuong_thuc = @phuong_thuc,
+                    loai_thanh_toan = 'DAT_COC',
+                    trang_thai_gd = @trang_thai_gd,
+                    ngay_thanh_toan = GETDATE()
+                WHERE ma_don_dat = @id;
+            END
+            ELSE
+            BEGIN
+                INSERT INTO Thanh_Toan (
+                    ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan
+                )
+                VALUES (
+                    @id, @phuong_thuc, 'DAT_COC', @cur_coc, CONCAT('GD_', @id, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @trang_thai_gd, GETDATE()
                 );
             END;
         END;

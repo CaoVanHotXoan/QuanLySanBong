@@ -20,6 +20,8 @@ Chức năng nhân viên:
 
 Có thể tùy chỉnh CSDL nhưng phải dùng procedure và cập nhật vào 
 2 file QuanLySanBong.sql và Thủ tục.sql
+File QuanLySanBong.sql thì chứa dữ liệu table không chứa procedure
+File Thủ tục.sql thì chứa toàn bộ procedure 
 xóa cột mã đơn
 Bạn có thể tùy chỉnh csdl nhưng cập nhật 2 file QuanLySanBong.sql và ThuTuc.sql
 Ở danh sách đang đá xóa nút + dịch vụ đi
