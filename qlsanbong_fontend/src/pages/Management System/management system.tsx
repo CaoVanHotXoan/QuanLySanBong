@@ -62,6 +62,7 @@ import {
 } from 'lucide-react';
 import Login, { AuthUser } from '../Login/login';
 import { useBookingSync } from '../../hooks/useBookingSync';
+import { useAppTheme } from '../../hooks/useAppTheme';
 
 // =====================================================================
 // 1. INTERFACES & API CONFIG (ĐỒNG BỘ CSDL SQL SERVER & REALTIME)
@@ -345,9 +346,9 @@ export default function ManagementSystem() {
   } = useBookingSync();
 
   // -------------------------------------------------------------
-  // STATE GIAO DIỆN & THEME CŨ
+  // STATE GIAO DIỆN & THEME (ĐỒNG BỘ THỜI GIAN THỰC TOÀN HỆ THỐNG)
   // -------------------------------------------------------------
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  const { isDarkMode, setIsDarkMode, toggleTheme } = useAppTheme(true);
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
@@ -461,8 +462,12 @@ export default function ManagementSystem() {
   const [isCustomTimeActive, setIsCustomTimeActive] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<'TIEN_MAT' | 'CHUYEN_KHOAN'>('TIEN_MAT');
 
-  // State Modal VietQR Cố Định / Động
-  const [isVietQRModalOpen, setIsVietQRModalOpen] = useState<boolean>(false);
+
+  // State Modal Tính Tiền Mặt & Tiền Thừa (Cash Calculator)
+  const [isCashCalculatorModalOpen, setIsCashCalculatorModalOpen] = useState<boolean>(false);
+  const [cashAmountDue, setCashAmountDue] = useState<number>(0);
+  const [cashReceivedInput, setCashReceivedInput] = useState<string>('');
+  const [pendingCashPaymentInvoice, setPendingCashPaymentInvoice] = useState<DonDatSanPOS | undefined>(undefined);
 
   // State Chuông Thông Báo (Bell notifications - Tiền vào / Đặt sân)
   const [notifications, setNotifications] = useState<POSNotification[]>([
@@ -1039,14 +1044,17 @@ export default function ManagementSystem() {
       })
       : null;
     const source = latestFromState || b;
-    const soTienDaTra = Number(source.so_tien_da_tra || 0);
+    const soTienDaTra = Number(source.so_tien_da_tra || source.tien_coc_da_tra || 0);
     const tongTien = Number(source.tong_tien || source.tien_san || 0);
     if (tongTien > 0 && soTienDaTra >= tongTien) return true;
-    if (source.da_thanh_toan === true) return true;
     const st = (source.trang_thai || source.trang_thai_thanh_toan || '').toUpperCase().replace(/\s+/g, '_');
     if (st.includes('CHO') || st.includes('CHUA') || st.includes('TAM')) return false;
     if (st.includes('DA_HUY') || st.includes('HUY')) return false;
-    return st.includes('DA_THANH_TOAN') || st.includes('THANH_TOAN') || st === 'HOAN_THANH';
+    if (st.includes('COC') || st.includes('CỌC')) return false;
+    if (st === 'DANG_DA' || st === 'DA_DAT') {
+      return (tongTien > 0 && soTienDaTra >= tongTien);
+    }
+    return st.includes('DA_THANH_TOAN') || st === 'HOAN_THANH';
   };
 
   // Danh sách các sân đang sử dụng / đang đá trong thời gian hiện tại (Hỗ trợ nhiều đơn cùng lúc)
@@ -1268,20 +1276,25 @@ export default function ManagementSystem() {
     return combined.filter((item) => {
       // 1. Lọc theo trạng thái
       if (historyFilterStatus !== 'ALL') {
+        const soTienDaTra = Number(item.so_tien_da_tra || item.tien_coc_da_tra || 0);
+        const tongTien = Number(item.tong_tien || item.tien_san || 0);
         const rawStatus = (item.trang_thai || '').toUpperCase().replace(/\s+/g, '_');
-        if (historyFilterStatus === 'DA_THANH_TOAN') {
-          if (!rawStatus.includes('DA_THANH_TOAN') && !rawStatus.includes('THANH_TOAN') && rawStatus !== 'DA_CHOT' && rawStatus !== 'HOAN_THANH') {
-            return false;
-          }
-        } else if (historyFilterStatus === 'CHUA_THANH_TOAN') {
-          if (!rawStatus.includes('CHO') && !rawStatus.includes('CHUA')) {
-            return false;
-          }
-        } else if (historyFilterStatus === 'DA_HUY') {
-          if (!rawStatus.includes('HUY')) {
-            return false;
-          }
-        }
+        const isCancelled = rawStatus.includes('HUY');
+        const isPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
+          rawStatus.includes('DA_THANH_TOAN') ||
+          rawStatus === 'HOAN_THANH' ||
+          rawStatus.includes('ĐÃ_THANH_TOÁN');
+        const isDeposit = !isPaid && (
+          (soTienDaTra > 0 && soTienDaTra < tongTien) ||
+          rawStatus.includes('COC') ||
+          rawStatus.includes('CỌC')
+        );
+        const isUnpaid = !isPaid && !isDeposit && !isCancelled;
+
+        if (historyFilterStatus === 'DA_THANH_TOAN' && !isPaid) return false;
+        if (historyFilterStatus === 'DA_COC' && !isDeposit) return false;
+        if (historyFilterStatus === 'CHUA_THANH_TOAN' && !isUnpaid) return false;
+        if (historyFilterStatus === 'DA_HUY' && !isCancelled) return false;
       }
 
       // 2. Lọc theo ngày
@@ -1376,8 +1389,8 @@ export default function ManagementSystem() {
 
           const matchedBooking = bookings.find((b: any) => {
             if (!b || b.ma_san !== san.id) return false;
-            const statusNorm = String(b.trang_thai || '').toUpperCase().replace(/\s+/g, '_');
-            if (statusNorm === 'DA_HUY' || statusNorm === 'HOAN_THANH' || statusNorm === 'KET_THUC' || statusNorm === 'DA_HOAN_THANH' || statusNorm === 'HUY') return false;
+            const validStatus = ['DA_THANH_TOAN', 'DA_COC', 'DANG_DA', 'DA_CHOT', 'Da Thanh Toan', 'DA_DAT', 'Đã thanh toán', 'Đã cọc', 'Đang đá', 'Đã chốt', 'Đã đặt'];
+            if (!validStatus.includes(b.trang_thai)) return false;
             const bStart = (b.gio_bat_dau || '').substring(0, 5);
             const bEnd = (b.gio_ket_thuc || '').substring(0, 5);
             return isTimeOverlapping(slot.start, slot.end, bStart, bEnd);
@@ -1786,6 +1799,66 @@ export default function ManagementSystem() {
     return diff > 0 ? diff : 0;
   };
 
+  // Tính toán cộng thêm phút vào mốc giờ "HH:mm" (24h)
+  const addMinutesToTimeStr = (timeStr: string, minutes: number): string => {
+    if (!timeStr) return '17:00';
+    const [h, m] = timeStr.split(':').map(Number);
+    const total = (h || 0) * 60 + (m || 0) + minutes;
+    const clamped = Math.min(23 * 60 + 59, Math.max(0, total));
+    const newH = Math.floor(clamped / 60);
+    const newM = clamped % 60;
+    return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+  };
+
+  // Tìm mốc giờ bắt đầu của ca đặt tiếp theo trên cùng sân (sau một mốc giờ hiện tại)
+  const getNextBookingStartTime = (pitchId: number, afterTime: string, excludeId?: any): string => {
+    const targetSanId = Number(pitchId);
+    const excludeStr = String(excludeId || editingInvoiceId || loadedBookingState?.id || '');
+
+    let earliest = '23:59';
+    rawBookings.forEach((b: any) => {
+      if (Number(b.ma_san) !== targetSanId) return;
+      const bId = String(b.id || b.ma_don_dat || '');
+      if (excludeStr && bId === excludeStr) return;
+      const st = String(b.trang_thai || '').toUpperCase().replace(/\s+/g, '_');
+      if (st === 'DA_HUY' || st === 'HOAN_THANH' || st === 'KET_THUC' || st === 'HUY') return;
+      const bStart = (b.gio_bat_dau || '').substring(0, 5);
+      if (bStart >= afterTime && bStart < earliest) {
+        earliest = bStart;
+      }
+    });
+    return earliest;
+  };
+
+  // Kiểm tra trùng lịch của một sân trong khoảng thời gian [start, end]
+  const checkPitchTimeConflict = (pitchId: number, start: string, end: string, excludeId?: any): { hasConflict: boolean; conflictingBooking?: any } => {
+    const targetId = Number(pitchId);
+    const excludeStr = String(excludeId || editingInvoiceId || loadedBookingState?.id || '');
+
+    for (const b of rawBookings) {
+      if (Number(b.ma_san) !== targetId) continue;
+      const bId = String(b.id || b.ma_don_dat || '');
+      if (excludeStr && bId === excludeStr) continue;
+      const validStatus = ['DA_THANH_TOAN', 'DA_COC', 'DANG_DA', 'DA_CHOT', 'Da Thanh Toan', 'DA_DAT', 'Đã thanh toán', 'Đã cọc', 'Đang đá', 'Đã chốt', 'Đã đặt'];
+      if (!validStatus.includes(b.trang_thai)) continue;
+      const bStart = (b.gio_bat_dau || '').substring(0, 5);
+      const bEnd = (b.gio_ket_thuc || '').substring(0, 5);
+      if (isTimeOverlapping(start, end, bStart, bEnd)) {
+        return { hasConflict: true, conflictingBooking: b };
+      }
+    }
+    return { hasConflict: false };
+  };
+
+  // Tìm danh sách các sân còn trống hoàn toàn trong khung giờ [startTime, endTime]
+  const getAvailablePitchesAtTime = (startTime: string, endTime: string, currentSanId?: number): SanBong[] => {
+    return sanBongList.filter((s) => {
+      if (currentSanId && s.id === currentSanId) return false;
+      const conflict = checkPitchTimeConflict(s.id, startTime, endTime);
+      return !conflict.hasConflict;
+    });
+  };
+
   // Đồng bộ danh sách các sân đã chọn với các slot 30m và phát tín hiệu khóa Real-time (Màu cam)
   const syncPitchesAndSlots = useCallback((pitches: SelectedPitchOrder[]) => {
     setSelectedPitches(pitches);
@@ -1826,36 +1899,78 @@ export default function ManagementSystem() {
   }, [availableTimeSlots, formattedDateISO]);
 
   const handleToggleSlotFromMatrix = (san: SanBong, slot: KhungGioItem, slotData?: SlotLichSan) => {
+    const slotKeyRealtime = `${formattedDateISO}_${san.id}_${slot.start}`;
+    if (lockedSlots.includes(slotKeyRealtime)) {
+      showToast(`⚠️ Ô giờ ${slot.start} - ${slot.end} của ${san.ten_san} đang được giữ chỗ, không thể chọn!`, 'warning', 'Đang Giữ Chỗ');
+      return;
+    }
+
     if (slotData && slotData.trang_thai === 'DA_CHOT') {
       setSelectedSlotDetail({ san, slot, slotData });
       return;
     }
 
-    // Nếu đang có đơn đã nạp từ trước đó, dọn dẹp trước khi chọn ô mới
-    if (editingInvoiceId || loadedBookingState) {
-      setEditingInvoiceId(null);
-      setLoadedBookingState(null);
-      setSelectedServices([]);
-      setCustomerName('');
-      setCustomerPhone('');
-    }
-
     const existingIdx = selectedPitches.findIndex((p) => p.pitch.id === san.id);
 
     if (existingIdx === -1) {
-      // Sân mới -> Chuyển sang chọn sân mới này làm sân Order
-      const durationMin = calculateMinutesDiff(slot.start, slot.end) || 30;
+      // Đặt thêm sân mới vào đơn hiện tại:
+      // Quy tắc: Nếu đã có sân trong đơn/đang đá -> Thời gian bắt đầu của sân mới = Thời gian kết thúc của sân trước đó
+      const previousPitch = selectedPitches[selectedPitches.length - 1];
+      let defaultStart = slot.start;
+      let defaultEnd = slot.end;
+
+      if (previousPitch && previousPitch.endTime) {
+        defaultStart = previousPitch.endTime;
+        defaultEnd = slot.end > defaultStart ? slot.end : addMinutesToTimeStr(defaultStart, 30);
+      }
+
+      if (defaultEnd <= defaultStart) {
+        defaultEnd = addMinutesToTimeStr(defaultStart, 30);
+      }
+
+      // KIỂM TRA TRÙNG LỊCH TRÊN SÂN MỚI ĐƯỢC CHỌN
+      const conflict = checkPitchTimeConflict(san.id, defaultStart, defaultEnd);
+      if (conflict.hasConflict) {
+        const confBooking = conflict.conflictingBooking;
+        const bStart = (confBooking?.gio_bat_dau || '').substring(0, 5);
+        const bEnd = (confBooking?.gio_ket_thuc || '').substring(0, 5);
+        const khach = confBooking?.ten_khach_hang || 'Khách khác';
+
+        // Tìm danh sách các sân khác thực sự còn trống trong khung giờ này
+        const freePitches = getAvailablePitchesAtTime(defaultStart, defaultEnd, san.id);
+        const freeNames = freePitches.map((p) => p.ten_san).join(', ');
+
+        if (freePitches.length > 0) {
+          showToast(
+            `⚠️ Sân ${san.ten_san} đã có ca đặt (${bStart} - ${bEnd} • ${khach}). Gợi ý sân còn trống từ ${defaultStart}: ${freeNames}`,
+            'warning',
+            'Sân Bị Trùng Lịch'
+          );
+        } else {
+          showToast(
+            `⚠️ Sân ${san.ten_san} đã kín lịch lúc ${defaultStart} (${bStart} - ${bEnd}). Hiện tất cả sân đều đã kín trong khung giờ này!`,
+            'error',
+            'Tất Cả Sân Đều Kín Lịch'
+          );
+        }
+        return;
+      }
+
+      const durationMin = calculateMinutesDiff(defaultStart, defaultEnd) || 30;
       const price = Math.round(durationMin * (Number(san.don_gia_phut) || 3000));
-      const newPitches: SelectedPitchOrder[] = [
-        {
-          pitch: san,
-          startTime: slot.start,
-          endTime: slot.end,
-          durationMin,
-          price,
-        },
-      ];
+      const newPitchItem: SelectedPitchOrder = {
+        pitch: san,
+        startTime: defaultStart,
+        endTime: defaultEnd,
+        durationMin,
+        price,
+      };
+      const newPitches = [...selectedPitches, newPitchItem];
       syncPitchesAndSlots(newPitches);
+
+      if (loadedBookingState || editingInvoiceId || selectedPitches.length > 0) {
+        showToast(`⚽ Đã chọn thêm sân ${san.ten_san} (Bắt đầu: ${defaultStart} ngay sau khi hết giờ sân trước)! `, 'success', 'Đặt Thêm Sân Đá Tiếp');
+      }
       return;
     }
 
@@ -1865,7 +1980,7 @@ export default function ManagementSystem() {
     const isThisSlotSelected = selectedSlots.some((s) => s.id === slotId);
 
     if (isThisSlotSelected && curr.startTime === slot.start && curr.endTime === slot.end) {
-      // Bấm lại chính ô duy nhất của sân này -> Xóa sân này khỏi đơn
+      // Bấm lại chính ô duy nhất của sân này -> Xóa sân này khỏi đơn (nếu có nhiều hơn 1 sân hoặc đơn mới)
       const newPitches = selectedPitches.filter((p) => p.pitch.id !== san.id);
       syncPitchesAndSlots(newPitches);
       return;
@@ -1901,6 +2016,25 @@ export default function ManagementSystem() {
   };
 
   const handleUpdatePitchTime = (pitchId: number, newStart: string, newEnd: string) => {
+    // Ràng buộc 1: Thời gian kết thúc KHÔNG được trước hoặc bằng thời gian bắt đầu
+    if (newStart && newEnd && newEnd <= newStart) {
+      showToast(`Thời gian kết thúc (${newEnd}) phải sau thời gian bắt đầu (${newStart})!`, 'warning', 'Giờ Không Hợp Lệ');
+      return;
+    }
+
+    // Ràng buộc 2: Kiểm tra trùng lịch với ca đặt khác trên cùng sân
+    if (newStart && newEnd && newStart.length === 5 && newEnd.length === 5) {
+      const conflict = checkPitchTimeConflict(pitchId, newStart, newEnd, editingInvoiceId);
+      if (conflict.hasConflict) {
+        const confBooking = conflict.conflictingBooking;
+        const bStart = (confBooking?.gio_bat_dau || '').substring(0, 5);
+        const bEnd = (confBooking?.gio_ket_thuc || '').substring(0, 5);
+        const khach = confBooking?.ten_khach_hang || 'Khách khác';
+        showToast(`⚠️ Khung giờ ${newStart} - ${newEnd} bị trùng lịch với ca đặt của ${khach} (${bStart} - ${bEnd}). Vui lòng chọn mốc giờ hoặc sân khác!`, 'warning', 'Trùng Lịch Sân');
+        return;
+      }
+    }
+
     const newPitches = selectedPitches.map((p) => {
       if (p.pitch.id === pitchId) {
         const durationMin = calculateMinutesDiff(newStart, newEnd);
@@ -1910,6 +2044,29 @@ export default function ManagementSystem() {
       return p;
     });
     syncPitchesAndSlots(newPitches);
+  };
+
+  const handleQuickExtendPitch = (pitchId: number, extraMinutes: number) => {
+    const p = selectedPitches.find((x) => x.pitch.id === pitchId);
+    if (!p) return;
+    const newEnd = addMinutesToTimeStr(p.endTime, extraMinutes);
+
+    // Kiểm tra lịch trống phía sau của sân này
+    const maxAvailableTime = getNextBookingStartTime(pitchId, p.startTime, editingInvoiceId);
+
+    if (newEnd > maxAvailableTime) {
+      if (p.endTime >= maxAvailableTime) {
+        showToast(`⚠️ Sân ${p.pitch.ten_san} đã kín lịch từ ${maxAvailableTime} (có ca đặt sau đó). Vui lòng chọn sân khác trên bảng lịch để đá tiếp!`, 'warning', 'Sân Kín Lịch');
+      } else {
+        const diffMins = calculateMinutesDiff(p.endTime, maxAvailableTime);
+        showToast(`⚠️ Sân ${p.pitch.ten_san} chỉ còn trống ${diffMins} phút (đến ${maxAvailableTime}). Đã điều chỉnh đến ${maxAvailableTime}. Bạn có thể chọn sân khác để đá tiếp!`, 'warning', 'Giới Hạn Lịch Trống');
+        handleUpdatePitchTime(pitchId, p.startTime, maxAvailableTime);
+      }
+      return;
+    }
+
+    handleUpdatePitchTime(pitchId, p.startTime, newEnd);
+    showToast(`⏱️ Đã gia hạn +${extraMinutes} phút cho ${p.pitch.ten_san} (Kết thúc mới: ${newEnd})!`, 'info', 'Thêm Giờ Đá');
   };
 
   const handleRemovePitch = (pitchId: number) => {
@@ -2456,7 +2613,79 @@ export default function ManagementSystem() {
     handleClearOrder();
   };
 
-  const handlePayOrder = async (invoiceToPay?: DonDatSanPOS, skipQRCheck: boolean = false) => {
+  const handleNumpadPress = (val: string) => {
+    if (val === 'C') {
+      setCashReceivedInput('');
+    } else if (val === 'BACK') {
+      setCashReceivedInput((prev) => (prev ? prev.slice(0, -1) : ''));
+    } else if (val === 'EXACT') {
+      setCashReceivedInput(String(cashAmountDue));
+    } else if (val === '+10K') {
+      const cur = Number(cashReceivedInput || 0);
+      setCashReceivedInput(String(cur + 10000));
+    } else if (val === '+20K') {
+      const cur = Number(cashReceivedInput || 0);
+      setCashReceivedInput(String(cur + 20000));
+    } else if (val === '+50K') {
+      const cur = Number(cashReceivedInput || 0);
+      setCashReceivedInput(String(cur + 50000));
+    } else if (val === '+100K') {
+      const cur = Number(cashReceivedInput || 0);
+      setCashReceivedInput(String(cur + 100000));
+    } else if (val === '+200K') {
+      const cur = Number(cashReceivedInput || 0);
+      setCashReceivedInput(String(cur + 200000));
+    } else if (val === '+500K') {
+      const cur = Number(cashReceivedInput || 0);
+      setCashReceivedInput(String(cur + 500000));
+    } else if (val === '00' || val === '000') {
+      if (!cashReceivedInput || cashReceivedInput === '0') return;
+      setCashReceivedInput((prev) => prev + val);
+    } else {
+      // Digit 0-9
+      if (cashReceivedInput === '0' || !cashReceivedInput) {
+        setCashReceivedInput(val);
+      } else {
+        setCashReceivedInput((prev) => prev + val);
+      }
+    }
+  };
+
+  const handleConfirmCashPayment = async () => {
+    const received = Number(cashReceivedInput || 0);
+    if (received < cashAmountDue) {
+      showToast(`Tiền đã nhận (${received.toLocaleString('vi-VN')}đ) chưa đủ so với tiền cần trả (${cashAmountDue.toLocaleString('vi-VN')}đ)!`, 'error', 'Chưa Đủ Tiền');
+      return;
+    }
+
+    const change = received - cashAmountDue;
+    setIsCashCalculatorModalOpen(false);
+
+    await handlePayOrder(pendingCashPaymentInvoice, true, true);
+
+    if (change > 0) {
+      showToast(`💵 Tiền khách đưa: ${received.toLocaleString('vi-VN')}đ • Thối lại khách: ${change.toLocaleString('vi-VN')}đ`, 'info', 'Tiền Thừa Trả Khách');
+    }
+  };
+
+  const handlePayOrder = async (invoiceToPay?: DonDatSanPOS, skipQRCheck: boolean = false, skipCashCheck: boolean = false) => {
+    if (!invoiceToPay && selectedPitches.length === 0 && selectedServices.length === 0) {
+      showToast('Giỏ hàng đang trống! Vui lòng chọn sân hoặc dịch vụ trước khi thanh toán.', 'warning', 'Giỏ Hàng Trống');
+      return;
+    }
+
+    if (paymentMethod === 'TIEN_MAT' && !skipCashCheck) {
+      const orderTotal = invoiceToPay 
+        ? Number(invoiceToPay.tong_tien || invoiceToPay.tien_san || 0) 
+        : (amountDueToPay > 0 ? amountDueToPay : grandTotal);
+
+      setPendingCashPaymentInvoice(invoiceToPay);
+      setCashAmountDue(orderTotal);
+      setCashReceivedInput(String(orderTotal));
+      setIsCashCalculatorModalOpen(true);
+      return;
+    }
+
     const getPaymentSuccessMsg = (extraText = '') => {
       if (paymentMethod === 'CHUYEN_KHOAN') {
         return `✅ Khách đã chuyển khoản thành công!${extraText ? ` (${extraText})` : ''}`;
@@ -2522,6 +2751,10 @@ export default function ManagementSystem() {
 
       if (invoiceToPay.id && !String(invoiceToPay.id).startsWith('temp_')) {
         try {
+          const totalOrder = Number(invoiceToPay.tong_tien || invoiceToPay.tien_san || 0);
+          const alreadyPaid = Number(invoiceToPay.so_tien_da_tra || 0);
+          const amountDue = totalOrder > alreadyPaid ? (totalOrder - alreadyPaid) : totalOrder;
+
           await fetch(`${API_BASE_URL}/thanh-toan`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2529,7 +2762,7 @@ export default function ManagementSystem() {
               ma_don_dat: Number(invoiceToPay.id),
               phuong_thuc: paymentMethod,
               loai_thanh_toan: 'TRA_HET',
-              so_tien: (invoiceToPay.tien_san && (invoiceToPay.trang_thai === 'DA_THANH_TOAN' || (invoiceToPay as any).trang_thai_thanh_toan === 'DA_THANH_TOAN')) ? ((invoiceToPay.tong_tien || 0) - (invoiceToPay.tien_san || 0)) : (invoiceToPay.tong_tien || 0),
+              so_tien: amountDue > 0 ? amountDue : totalOrder,
             }),
           });
         } catch (err) {
@@ -2629,7 +2862,7 @@ export default function ManagementSystem() {
             trang_thai: 'DA_THANH_TOAN',
             phuong_thuc: paymentMethod,
             loai_thanh_toan: 'TRA_HET',
-            so_tien: amountDueToPay,
+            so_tien: grandTotal,
             trang_thai_gd: 'THANH_CONG',
             dich_vu_list: dichVuListPayload,
           }),
@@ -3795,19 +4028,7 @@ export default function ManagementSystem() {
                                         )}
                                       </td>
                                       <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                         <div className="flex items-center justify-center gap-1.5">
-                                           {/* Nút + Thêm Giờ: Gia hạn thời gian hoặc đổi sân đá tiếp */}
-                                           <button
-                                             type="button"
-                                             onClick={() => handleOpenExtendModal(item.booking)}
-                                             className="py-1.5 px-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-black text-xs border border-amber-500/40 transition-all flex items-center gap-1 cursor-pointer shadow-sm"
-                                             title="Gia hạn thời gian đá hoặc chuyển sân khác đá tiếp"
-                                           >
-                                             <Clock className="w-3.5 h-3.5" />
-                                             <span>Thêm Giờ</span>
-                                           </button>
-
-                                           {/* Nút Kết Thúc màu đỏ chữ trắng */}
+                                         <div className="flex items-center justify-center">
                                            <button
                                              type="button"
                                              onClick={() => handleOpenFinishMatchModal(item)}
@@ -3916,21 +4137,11 @@ export default function ManagementSystem() {
                                   )}
                                 </div>
 
-                                <div className="mt-3.5 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenExtendModal(item.booking)}
-                                    className="flex-1 py-2 px-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-bold text-xs border border-amber-500/40 transition-all flex items-center justify-center gap-1 cursor-pointer"
-                                    title="Gia hạn thời gian đá hoặc chuyển sân khác đá tiếp"
-                                  >
-                                    <Clock className="w-3.5 h-3.5" />
-                                    <span>+ Giờ</span>
-                                  </button>
-
+                                <div className="mt-3.5 flex items-center" onClick={(e) => e.stopPropagation()}>
                                   <button
                                     type="button"
                                     onClick={() => handleOpenFinishMatchModal(item)}
-                                    className="flex-1 py-2 px-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
+                                    className="w-full py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
                                     title="Kết thúc trận đấu và giải phóng sân"
                                   >
                                     <CheckCircle2 className="w-3.5 h-3.5" />
@@ -4340,7 +4551,8 @@ export default function ManagementSystem() {
                         className="bg-transparent font-bold text-emerald-400 focus:outline-none cursor-pointer"
                       >
                         <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Tất cả</option>
-                        <option value="CHUA_THANH_TOAN" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Chờ thanh toán</option>
+                        <option value="CHUA_THANH_TOAN" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Chưa thanh toán</option>
+                        <option value="DA_COC" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Đã cọc</option>
                         <option value="DA_THANH_TOAN" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Đã thanh toán</option>
                         <option value="DA_HUY" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>Đã hủy</option>
                       </select>
@@ -4416,10 +4628,19 @@ export default function ManagementSystem() {
                         <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/60' : 'divide-slate-200'}`}>
                           {filteredHistoryList.map((item, idx) => {
                             const maDon = item.ma_don_dat || item.id || `HD-${idx + 1}`;
-                            const rawStatus = (item.trang_thai || '').toLowerCase();
-                            const isPaid = rawStatus.includes('thanh toan') || rawStatus.includes('thanh_toan') || item.trang_thai === 'DA_CHOT' || item.trang_thai === 'HOAN_THANH';
-                            const isDeposit = rawStatus.includes('coc') || rawStatus.includes('cọc');
-                            const isCancelled = rawStatus.includes('huy');
+                            const soTienDaTra = Number(item.so_tien_da_tra || item.tien_coc_da_tra || 0);
+                            const tongTien = Number(item.tong_tien || item.tien_san || 0);
+                            const rawStatus = (item.trang_thai || '').toUpperCase().replace(/\s+/g, '_');
+                            const isCancelled = rawStatus.includes('HUY');
+                            const isPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
+                              rawStatus.includes('DA_THANH_TOAN') ||
+                              rawStatus === 'HOAN_THANH' ||
+                              rawStatus.includes('ĐÃ_THANH_TOÁN');
+                            const isDeposit = !isPaid && (
+                              (soTienDaTra > 0 && soTienDaTra < tongTien) ||
+                              rawStatus.includes('COC') ||
+                              rawStatus.includes('CỌC')
+                            );
 
                             return (
                               <tr
@@ -4495,7 +4716,7 @@ export default function ManagementSystem() {
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                      ⏳ Chờ thanh toán
+                                      Chưa thanh toán
                                     </span>
                                   )}
                                 </td>
@@ -4680,7 +4901,8 @@ export default function ManagementSystem() {
                               const findMatchingOrder = (list: any[]) => list.find((b) => {
                                 const bNgay = (b.ngay_da || '').substring(0, 10);
                                 if (bNgay !== formattedDateISO) return false;
-                                if (['DA_HUY', 'Đã hủy'].includes(b.trang_thai)) return false;
+                                if (['DA_HUY', 'Đã hủy', 'HOAN_THANH', 'Hoàn thành', 'KET_THUC', 'Kết thúc'].includes(b.trang_thai)) return false;
+                                if ((b.trang_thai === 'CHO_THANH_TOAN' || b.trang_thai === 'CHUA_THANH_TOAN') && String(b.ghi_chu || '').includes('PayOS')) return false;
                                 const matchSan = (b.ma_san && b.ma_san === san.id) ||
                                   (b.ten_san && (b.ten_san.includes(san.ten_san) || san.ten_san.includes(b.ten_san)));
                                 if (!matchSan) return false;
@@ -4699,13 +4921,10 @@ export default function ManagementSystem() {
                                 orderStatus.includes('cho_thanh_toan') || orderStatus.includes('chờ thanh toán') ||
                                 orderStatus.includes('luu_don') || orderStatus.includes('pending')
                               );
+                              const confirmedList = ['dang_da', 'da_vao_san', 'cho_vao_san', 'da_thanh_toan', 'thanh_toan', 'đã thanh toán', 'da_coc', 'đã cọc', 'da_dat', 'đã đặt', 'da_chot', 'đã chốt'];
+                              const isConfirmedOrder = matchedOrder && confirmedList.some((s) => orderStatus.includes(s));
                               const isFullyBooked = !isHolding && (
-                                (slotData && slotData.trang_thai === 'DA_CHOT') ||
-                                (matchedOrder && (
-                                  orderStatus.includes('dang_da') || orderStatus.includes('da_vao_san') ||
-                                  orderStatus.includes('cho_vao_san') || orderStatus.includes('da_thanh_toan') ||
-                                  orderStatus.includes('thanh_toan') || orderStatus.includes('đã thanh toán')
-                                ))
+                                (slotData && slotData.trang_thai === 'DA_CHOT') || isConfirmedOrder
                               );
 
                               // TRẠNG THÁI 3: ĐÃ ĐẶT (Đỏ sậm) - dang_da / da_thanh_toan / DA_CHOT
@@ -4764,25 +4983,18 @@ export default function ManagementSystem() {
                                 );
                               }
 
-                              // Giữ chỗ realtime (Socket.IO) - Cho phép Quản lý/POS bấm để chọn hoặc mở khóa
+                              // Giữ chỗ realtime (Socket.IO) - Không thể chọn
                               if (isLockedByOther) {
                                 return (
-                                  <button
+                                  <div
                                     key={slot.start}
-                                    type="button"
-                                    onClick={() => {
-                                      if (socketRef.current?.connected) {
-                                        socketRef.current.emit('force_unlock_slot', slotKeyRealtime);
-                                      }
-                                      handleToggleSlotFromMatrix(san, slot, slotData);
-                                    }}
-                                    className="w-full h-24 sm:h-28 p-2.5 rounded-2xl border border-amber-500/70 bg-gradient-to-b from-amber-950/60 to-amber-900/40 hover:from-amber-900/70 hover:to-amber-800/50 hover:border-amber-400 flex flex-col items-center justify-center gap-1 cursor-pointer select-none shadow-md text-center transition-all hover:scale-[1.03]"
-                                    title="Đang có khách giữ chỗ tạm thời. Nhấn để chọn vào giỏ hàng POS hoặc mở khóa"
+                                    className="w-full h-24 sm:h-28 p-2.5 rounded-2xl border border-amber-500/60 bg-gradient-to-b from-amber-950/60 to-amber-900/30 flex flex-col items-center justify-center gap-1 select-none cursor-not-allowed text-center shadow-md opacity-90"
+                                    title={`Đang có khách giữ chỗ tạm thời (${slot.label}). Không thể chọn!`}
                                   >
-                                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping mb-0.5" />
+                                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse mb-0.5" />
                                     <span className="text-xs font-black text-amber-400 uppercase tracking-wider">GIỮ CHỖ</span>
                                     <span className="text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
-                                  </button>
+                                  </div>
                                 );
                               }
 
@@ -4836,7 +5048,7 @@ export default function ManagementSystem() {
                           >
                             <td className={`p-3.5 sticky left-0 z-10 border-r backdrop-blur-md shadow-md ${isDarkMode ? 'bg-slate-900/95 border-slate-800/80' : 'bg-white/95 border-slate-200'}`}>
                               <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
                                 <span className={`font-black text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                                   {san.ten_san}
                                 </span>
@@ -4862,7 +5074,8 @@ export default function ManagementSystem() {
                               const findMatchingOrder2 = (list: any[]) => list.find((b) => {
                                 const bNgay = (b.ngay_da || '').substring(0, 10);
                                 if (bNgay !== formattedDateISO) return false;
-                                if (['DA_HUY', 'Đã hủy'].includes(b.trang_thai)) return false;
+                                if (['DA_HUY', 'Đã hủy', 'HOAN_THANH', 'Hoàn thành', 'KET_THUC', 'Kết thúc'].includes(b.trang_thai)) return false;
+                                if ((b.trang_thai === 'CHO_THANH_TOAN' || b.trang_thai === 'CHUA_THANH_TOAN') && String(b.ghi_chu || '').includes('PayOS')) return false;
                                 const matchSan = (b.ma_san && b.ma_san === san.id) ||
                                   (b.ten_san && (b.ten_san.includes(san.ten_san) || san.ten_san.includes(b.ten_san)));
                                 if (!matchSan) return false;
@@ -4880,13 +5093,10 @@ export default function ManagementSystem() {
                                 orderStatus2.includes('cho_thanh_toan') || orderStatus2.includes('chờ thanh toán') ||
                                 orderStatus2.includes('luu_don') || orderStatus2.includes('pending')
                               );
+                              const confirmedList2 = ['dang_da', 'da_vao_san', 'cho_vao_san', 'da_thanh_toan', 'thanh_toan', 'đã thanh toán', 'da_coc', 'đã cọc', 'da_dat', 'đã đặt', 'da_chot', 'đã chốt'];
+                              const isConfirmedOrder2 = matchedOrder2 && confirmedList2.some((s) => orderStatus2.includes(s));
                               const isFullyBooked2 = !isHolding2 && (
-                                (slotData && slotData.trang_thai === 'DA_CHOT') ||
-                                (matchedOrder2 && (
-                                  orderStatus2.includes('dang_da') || orderStatus2.includes('da_vao_san') ||
-                                  orderStatus2.includes('cho_vao_san') || orderStatus2.includes('da_thanh_toan') ||
-                                  orderStatus2.includes('thanh_toan') || orderStatus2.includes('đã thanh toán')
-                                ))
+                                (slotData && slotData.trang_thai === 'DA_CHOT') || isConfirmedOrder2
                               );
 
                               return (
@@ -4931,22 +5141,15 @@ export default function ManagementSystem() {
                                       <span className="text-xs sm:text-sm font-black font-mono">{slot.label}</span>
                                     </button>
                                   ) : isLockedByOther ? (
-                                    // GIỮ CHỖ REALTIME (Socket.IO) - Cho phép Quản lý/POS bấm để chọn hoặc mở khóa
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (socketRef.current?.connected) {
-                                          socketRef.current.emit('force_unlock_slot', slotKeyRealtime);
-                                        }
-                                        handleToggleSlotFromMatrix(san, slot, slotData);
-                                      }}
-                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-amber-500/70 bg-gradient-to-b from-amber-950/60 to-amber-900/40 hover:from-amber-900/70 hover:to-amber-800/50 hover:border-amber-400 flex flex-col items-center justify-center gap-1 cursor-pointer select-none shadow-md text-center transition-all hover:scale-[1.03]"
-                                      title="Đang có khách giữ chỗ tạm thời. Nhấn để chọn vào giỏ hàng POS hoặc mở khóa"
-                                    >
-                                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping mb-0.5" />
-                                      <span className="text-xs font-black text-amber-400 uppercase tracking-wider">GIỮ CHỖ</span>
-                                      <span className="text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
-                                    </button>
+                                     // GIỮ CHỖ REALTIME (Socket.IO) - Không thể chọn
+                                     <div
+                                       className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-amber-500/60 bg-gradient-to-b from-amber-950/60 to-amber-900/30 flex flex-col items-center justify-center gap-1 select-none cursor-not-allowed text-center shadow-md opacity-90"
+                                       title={`Đang có khách giữ chỗ tạm thời (${slot.label}). Không thể chọn!`}
+                                     >
+                                       <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse mb-0.5" />
+                                       <span className="text-xs font-black text-amber-400 uppercase tracking-wider">GIỮ CHỖ</span>
+                                       <span className="text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
+                                     </div>
                                   ) : (
                                     // TRẠNG THÁI 1: TRỐNG (Xanh lá)
                                     <button
@@ -5070,51 +5273,20 @@ export default function ManagementSystem() {
                       </div>
                     )
                   ) : (
-                    <div className="space-y-2">
-                      {selectedPitches.map((item) => {
-                        const isPitchLocked = Boolean(loadedBookingState || (isOrderFullyPaid && editingInvoiceId) || Number((loadedBookingState as any)?.so_tien_da_tra || 0) > 0);
+                    <div className="space-y-2.5">
+                      {selectedPitches.map((item, pIdx) => {
+                        const isMainLoadedPitch = Boolean(loadedBookingState && pIdx === 0);
+                        const maxAvail = getNextBookingStartTime(item.pitch.id, item.startTime, editingInvoiceId);
+                        const hasNextBooking = maxAvail !== '23:59';
 
-                        return isPitchLocked ? (
-                          /* 1. DẠNG HIỂN THỊ GỌN GÀNG & KHÓA KHI NẠP TỪ SÂN ĐANG ĐÁ / HÓA ĐƠN */
+                        return (
                           <div
-                            key={item.pitch.id}
-                            className="p-2.5 rounded-2xl bg-slate-900/95 border border-emerald-500/40 space-y-1.5 shadow-md shadow-emerald-950/20"
+                            key={`${item.pitch.id}-${pIdx}`}
+                            className={`p-2.5 rounded-2xl border space-y-2 shadow-md transition-all ${
+                              isDarkMode ? 'bg-slate-900/95 border-emerald-500/50 shadow-emerald-950/20' : 'bg-white border-emerald-300 shadow-sm'
+                            }`}
                           >
-                            {/* Tên sân + Loại + Trạng thái Khóa */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 overflow-hidden">
-                                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                                <span className="font-extrabold text-xs text-white truncate">{item.pitch.ten_san}</span>
-                                <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 shrink-0">
-                                  {item.pitch.ten_loai || 'Sân bóng'}
-                                </span>
-                              </div>
-
-                              <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg flex items-center gap-1 shrink-0">
-                                <LockIcon className="w-3 h-3" /> Đã khóa
-                              </span>
-                            </div>
-
-                            {/* Khung Giờ & Tiền Sân gọn gàng */}
-                            <div className="flex items-center justify-between p-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs">
-                              <div className="flex items-center gap-1.5 text-white font-mono font-bold">
-                                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                                <span>{item.startTime} - {item.endTime}</span>
-                                <span className="text-[10px] text-slate-400 font-sans font-normal">({item.durationMin}p)</span>
-                              </div>
-
-                              <span className="text-emerald-400 font-mono font-black text-xs">
-                                {item.price.toLocaleString('vi-VN')}đ
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          /* 2. DẠNG TẠO ĐƠN MỚI - CHO PHÉP TÙY CHỈNH THỜI GIAN BẤT KỲ VÀ XÓA SÂN */
-                          <div
-                            key={item.pitch.id}
-                            className="p-2.5 rounded-2xl bg-slate-900/95 border border-emerald-500/50 space-y-2 shadow-md shadow-emerald-950/20"
-                          >
-                            {/* Tên sân + Loại + Nút xóa */}
+                            {/* Tên sân + Loại + Huy hiệu / Nút xóa */}
                             <div className="flex items-center justify-between pb-1.5 border-b border-slate-700/80">
                               <div className="flex items-center gap-1.5 overflow-hidden">
                                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
@@ -5123,43 +5295,141 @@ export default function ManagementSystem() {
                                   {item.pitch.ten_loai || 'Sân bóng'}
                                 </span>
                               </div>
+
+                              {isMainLoadedPitch ? (
+                                <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg flex items-center gap-1 shrink-0">
+                                  <Clock className="w-2.5 h-2.5" /> Sân hiện tại
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                                    + Sân đá tiếp
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemovePitch(item.pitch.id)}
+                                    className="text-rose-400 hover:text-rose-300 p-1 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                    title="Xóa sân này khỏi đơn"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Ô nhập/chọn Giờ bắt đầu & Giờ kết thúc bất kỳ chuẩn 24h (00:00 - 23:59, không có AM/PM) */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <span className={`text-[10px] block mb-1 font-bold flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  <Clock className="w-2.5 h-2.5 text-emerald-500" /> Bắt đầu (24h):
+                                </span>
+                                <input
+                                  type="text"
+                                  list={`pos_time_list_start_${item.pitch.id}`}
+                                  maxLength={5}
+                                  placeholder="13:30"
+                                  disabled={isMainLoadedPitch}
+                                  value={item.startTime || '10:30'}
+                                  onChange={(e) => {
+                                    let val = e.target.value.replace(/[^0-9:]/g, '');
+                                    if (val.length === 2 && !val.includes(':') && (item.startTime || '').length < 2) {
+                                      val = val + ':';
+                                    }
+                                    handleUpdatePitchTime(item.pitch.id, val, item.endTime);
+                                  }}
+                                  className={`w-full px-2.5 py-1.5 rounded-xl border font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${
+                                    isMainLoadedPitch ? 'opacity-80 bg-slate-900 border-slate-700 cursor-not-allowed text-slate-300' : isDarkMode
+                                      ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-600'
+                                      : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 shadow-sm'
+                                  }`}
+                                />
+                                <datalist id={`pos_time_list_start_${item.pitch.id}`}>
+                                  {TIME_OPTIONS_24H.filter((t) => !item.endTime || t < item.endTime).map((t) => (
+                                    <option key={`opt_s_${t}`} value={t} />
+                                  ))}
+                                </datalist>
+                              </div>
+                              <div>
+                                <span className={`text-[10px] block mb-1 font-bold flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  <Clock className="w-2.5 h-2.5 text-amber-500" /> Kết thúc (24h):
+                                </span>
+                                <input
+                                  type="text"
+                                  list={`pos_time_list_end_${item.pitch.id}`}
+                                  maxLength={5}
+                                  placeholder="14:00"
+                                  value={item.endTime || '11:00'}
+                                  onChange={(e) => {
+                                    let val = e.target.value.replace(/[^0-9:]/g, '');
+                                    if (val.length === 2 && !val.includes(':') && (item.endTime || '').length < 2) {
+                                      val = val + ':';
+                                    }
+                                    if (val.length === 5) {
+                                      if (val <= item.startTime) {
+                                        showToast(`Giờ kết thúc (${val}) phải sau giờ bắt đầu (${item.startTime})!`, 'warning', 'Giờ Không Hợp Lệ');
+                                        return;
+                                      }
+                                      if (isMainLoadedPitch && val > maxAvail) {
+                                        showToast(`⚠️ Sân chỉ trống đến ${maxAvail} (có ca đặt lúc ${maxAvail}). Vui lòng chọn sân khác để đá tiếp!`, 'warning', 'Trùng Lịch Sân');
+                                        return;
+                                      }
+                                    }
+                                    handleUpdatePitchTime(item.pitch.id, item.startTime, val);
+                                  }}
+                                  className={`w-full px-2.5 py-1.5 rounded-xl border font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${
+                                    isDarkMode
+                                      ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-600'
+                                      : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 shadow-sm'
+                                  }`}
+                                />
+                                <datalist id={`pos_time_list_end_${item.pitch.id}`}>
+                                  {TIME_OPTIONS_24H.filter((t) => t > item.startTime && (!isMainLoadedPitch || t <= maxAvail)).map((t) => (
+                                    <option key={`opt_e_${t}`} value={t} />
+                                  ))}
+                                </datalist>
+                              </div>
+                            </div>
+
+                            {/* Nút Thêm Giờ Đá Nhanh (+15p, +30p, +60p) */}
+                            <div className="flex items-center gap-1.5 pt-1">
+                              <span className="text-[9px] font-bold text-slate-400 flex items-center gap-0.5">
+                                <Clock className="w-2.5 h-2.5 text-amber-400" /> +Giờ đá:
+                              </span>
                               <button
                                 type="button"
-                                onClick={() => handleRemovePitch(item.pitch.id)}
-                                className="text-rose-400 hover:text-rose-300 p-1 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
-                                title="Xóa sân này khỏi đơn"
+                                onClick={() => handleQuickExtendPitch(item.pitch.id, 15)}
+                                className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-mono font-bold text-[10px] border border-amber-500/30 transition-all cursor-pointer active:scale-95"
+                                title="Thêm 15 phút"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                +15p
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleQuickExtendPitch(item.pitch.id, 30)}
+                                className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-mono font-bold text-[10px] border border-amber-500/30 transition-all cursor-pointer active:scale-95"
+                                title="Thêm 30 phút"
+                              >
+                                +30p
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleQuickExtendPitch(item.pitch.id, 60)}
+                                className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-950 font-mono font-bold text-[10px] border border-amber-500/30 transition-all cursor-pointer active:scale-95"
+                                title="Thêm 60 phút (1 tiếng)"
+                              >
+                                +60p
                               </button>
                             </div>
 
-                            {/* Ô nhập Giờ bắt đầu & Giờ kết thúc bất kỳ (00:00 - 23:59) */}
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <span className="text-[10px] text-slate-400 block mb-1 font-bold flex items-center gap-1">
-                                  <Clock className="w-2.5 h-2.5 text-emerald-400" /> Bắt đầu (24h):
+                            {/* Thông báo tình trạng lịch trống */}
+                            {isMainLoadedPitch && (
+                              <div className="text-[9.5px] font-mono px-2 py-1 rounded-lg bg-slate-950/80 border border-slate-800 flex items-center justify-between">
+                                <span className="text-slate-400">Trống đến:</span>
+                                <span className={`font-bold ${hasNextBooking ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                  {hasNextBooking ? `${maxAvail} (Có khách sau đó)` : 'Cả ngày (Không giới hạn)'}
                                 </span>
-                                <input
-                                  type="time"
-                                  step="60"
-                                  value={item.startTime || '10:30'}
-                                  onChange={(e) => handleUpdatePitchTime(item.pitch.id, e.target.value, item.endTime)}
-                                  className="w-full px-2.5 py-1.5 rounded-xl border border-slate-700 bg-slate-950 text-white font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer"
-                                />
                               </div>
-                              <div>
-                                <span className="text-[10px] text-slate-400 block mb-1 font-bold flex items-center gap-1">
-                                  <Clock className="w-2.5 h-2.5 text-amber-400" /> Kết thúc (24h):
-                                </span>
-                                <input
-                                  type="time"
-                                  step="60"
-                                  value={item.endTime || '11:00'}
-                                  onChange={(e) => handleUpdatePitchTime(item.pitch.id, item.startTime, e.target.value)}
-                                  className="w-full px-2.5 py-1.5 rounded-xl border border-slate-700 bg-slate-950 text-white font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all cursor-pointer"
-                                />
-                              </div>
-                            </div>
+                            )}
 
                             {/* Thời lượng & Tiền sân tính tự động */}
                             <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[10px] font-bold">
@@ -5173,6 +5443,16 @@ export default function ManagementSystem() {
                           </div>
                         );
                       })}
+
+                      {/* Gợi ý Đặt thêm sân khác */}
+                      <div className="p-2 rounded-xl bg-slate-950/60 border border-dashed border-emerald-500/40 text-center space-y-0.5">
+                        <p className="text-[10px] text-slate-300 font-bold">
+                          👉 <strong className="text-emerald-400">Đổi / Đặt thêm sân khác:</strong>
+                        </p>
+                        <p className="text-[9.5px] text-slate-400">
+                          Nhấn vào sân khác trên bảng lịch, giờ bắt đầu sân mới sẽ <strong>tự động nối tiếp</strong> giờ kết thúc của sân trước.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -5691,18 +5971,22 @@ export default function ManagementSystem() {
 
         {/* ==================== 6. MODAL CHI TIẾT HÓA ĐƠN LỊCH SỬ (READ-ONLY) ==================== */}
         {selectedHistoryOrder && (() => {
-          const rawStatus = (selectedHistoryOrder.trang_thai || '').toLowerCase();
-          const isPaid = rawStatus.includes('thanh toan') || rawStatus.includes('thanh_toan') || selectedHistoryOrder.trang_thai === 'DA_CHOT' || selectedHistoryOrder.trang_thai === 'HOAN_THANH';
-          const isDeposit = rawStatus.includes('coc') || rawStatus.includes('cọc');
-          const isCancelled = rawStatus.includes('huy');
+          const soTienDaTra = Number(selectedHistoryOrder.so_tien_da_tra || selectedHistoryOrder.tien_coc_da_tra || 0);
+          const orderTotal = Number(selectedHistoryOrder.tong_tien || selectedHistoryOrder.tien_san || 0);
+          const rawStatus = (selectedHistoryOrder.trang_thai || '').toUpperCase().replace(/\s+/g, '_');
+          const isCancelled = rawStatus.includes('HUY');
+          const isPaid = (orderTotal > 0 && soTienDaTra >= orderTotal) ||
+            rawStatus.includes('DA_THANH_TOAN') ||
+            rawStatus === 'HOAN_THANH' ||
+            rawStatus.includes('ĐÃ_THANH_TOÁN');
+          const isDeposit = !isPaid && (
+            (soTienDaTra > 0 && soTienDaTra < orderTotal) ||
+            rawStatus.includes('COC') ||
+            rawStatus.includes('CỌC')
+          );
 
-          const orderTotal = Number(selectedHistoryOrder.tong_tien || 0);
-          const tienDaNhan = selectedHistoryOrder.tien_da_nhan !== undefined 
-            ? Number(selectedHistoryOrder.tien_da_nhan)
-            : (isPaid ? orderTotal : (isDeposit ? Number(selectedHistoryOrder.tien_coc || orderTotal * 0.3) : 0));
-          const tienConThieu = selectedHistoryOrder.tien_con_thieu !== undefined
-            ? Number(selectedHistoryOrder.tien_con_thieu)
-            : Math.max(0, orderTotal - tienDaNhan);
+          const tienDaNhan = soTienDaTra > 0 ? soTienDaTra : (isPaid ? orderTotal : 0);
+          const tienConThieu = Math.max(0, orderTotal - tienDaNhan);
 
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -5732,7 +6016,7 @@ export default function ManagementSystem() {
                         </span>
                       ) : (
                         <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                          ⏳ CHỜ THANH TOÁN
+                          CHƯA THANH TOÁN
                         </span>
                       )}
                     </div>
@@ -6102,154 +6386,7 @@ export default function ManagementSystem() {
           </div>
         )}
 
-        {/* ==================== 5. MODAL VIETQR THANH TOÁN CHUYỂN KHOẢN CỐ ĐỊNH / ĐỘNG ==================== */}
-        {isVietQRModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-            <div className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl animate-in zoom-in-95 duration-200 ${isDarkMode ? 'bg-[#0f172a] border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
-              }`}>
-              {/* Header Modal */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-700 mb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black shadow-md shadow-blue-500/30">
-                    <QrCode className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-extrabold text-base text-white">Mã Thanh Toán VietQR 24/7</h3>
-                    <p className="text-[10px] text-emerald-400 font-bold">Quét mã bằng mọi App Ngân Hàng & Ví Điện Tử</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsVietQRModalOpen(false)}
-                  className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
 
-              {/* Khung Ảnh VietQR & Chi tiết */}
-              <div className="space-y-3.5">
-                {/* Khung ảnh VietQR */}
-                <div className="p-4 rounded-2xl bg-white flex flex-col items-center justify-center shadow-lg relative group border border-slate-200">
-                  <div className="w-full flex items-center justify-between px-2 mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="px-2 py-0.5 rounded-md bg-blue-900 text-white text-[10px] font-black">MB BANK</span>
-                      <span className="text-[10px] font-bold text-slate-700">NAPAS 247</span>
-                    </div>
-                    <span className="text-xs font-black text-rose-600 tracking-wider">VietQR</span>
-                  </div>
-
-                  {/* Ảnh QR cố định VietQR từ Cloudinary */}
-                  <div className="w-60 h-60 rounded-xl overflow-hidden bg-white flex items-center justify-center relative p-1 shadow-inner border border-slate-100">
-                    <img
-                      src="https://res.cloudinary.com/hpa8esqe/image/upload/v1790952754/vietqr-0816344504-1790952696098.png"
-                      alt="VietQR Code Cố Định"
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-
-                  <div className="mt-2 text-center w-full pt-1 border-t border-slate-100">
-                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-tight">Số tiền cần thanh toán</div>
-                    <div className="text-2xl font-black text-rose-600 font-mono">
-                      {(amountDueToPay > 0 ? amountDueToPay : grandTotal).toLocaleString('vi-VN')} VNĐ
-                    </div>
-                  </div>
-                </div>
-
-                {/* Thông tin chuyển khoản chi tiết */}
-                <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Ngân hàng:</span>
-                    <strong className="text-white font-bold">MB Bank (Ngân Hàng Quân Đội)</strong>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Số tài khoản:</span>
-                    <div className="flex items-center gap-1.5">
-                      <strong className="text-emerald-400 font-mono font-bold text-sm">0816344504</strong>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText('0816344504');
-                          alert('✓ Đã sao chép STK: 0816344504');
-                        }}
-                        className="text-slate-400 hover:text-emerald-400 p-0.5 cursor-pointer"
-                        title="Sao chép STK"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Chủ tài khoản:</span>
-                    <strong className="text-white font-bold uppercase">QUẢN LÝ SÂN BÓNG</strong>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Nội dung chuyển khoản:</span>
-                    <div className="flex items-center gap-1.5">
-                      <strong className="text-amber-300 font-mono font-bold">
-                        POS{customerPhone ? `_${customerPhone.slice(-4)}` : ''}
-                      </strong>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const content = `POS${customerPhone ? `_${customerPhone.slice(-4)}` : ''}`;
-                          navigator.clipboard.writeText(content);
-                          alert(`✓ Đã sao chép nội dung: ${content}`);
-                        }}
-                        className="text-slate-400 hover:text-amber-400 p-0.5 cursor-pointer"
-                        title="Sao chép nội dung"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Nút Hành Động Xác Nhận */}
-                <div className="space-y-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const payAmount = amountDueToPay > 0 ? amountDueToPay : grandTotal;
-                      setIsVietQRModalOpen(false);
-                      await handlePayOrder(undefined, true);
-
-                      // Kích hoạt âm thanh chuông báo nhận tiền
-                      playNotificationChime();
-
-                      // Gửi thông báo đến Chuông Bell Notification
-                      const notif: POSNotification = {
-                        id: `qr_${Date.now()}`,
-                        title: '💰 Nhận Chuyển Khoản VietQR Thành Công!',
-                        message: `Đã xác nhận nhận chuyển khoản ${payAmount.toLocaleString('vi-VN')}đ từ khách hàng ${customerName || 'Khách vãng lai'}.`,
-                        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-                        isRead: false,
-                        amount: payAmount,
-                        type: 'payment',
-                      };
-                      setNotifications((prev) => [notif, ...prev.slice(0, 29)]);
-                    }}
-                    className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 active:scale-98 text-slate-950 font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span>✓ XÁC NHẬN ĐÃ NHẬN ĐỦ TIỀN CHUYỂN KHOẢN</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsVietQRModalOpen(false)}
-                    className="w-full py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold text-xs transition-all cursor-pointer"
-                  >
-                    Đóng lại
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
 
         {/* ==================== MODAL XÁC NHẬN CHO KHÁCH VÀO SÂN ==================== */}
@@ -6946,6 +7083,197 @@ export default function ManagementSystem() {
           </div>
         </div>
       )}
+    
+      {/* ========================================================================= */}
+      {/* MODAL MÁY TÍNH TIỀN MẶT & TÍNH TIỀN THỪA (CASH CALCULATOR) */}
+      {/* ========================================================================= */}
+      {isCashCalculatorModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-emerald-500/40 shadow-2xl shadow-emerald-950/50 overflow-hidden flex flex-col">
+            
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                  <Banknote className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-white text-base">Thanh Toán Tiền Mặt</h3>
+                  <p className="text-[11px] text-slate-400">Nhập tiền khách đưa để tự động tính tiền thừa thối lại</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCashCalculatorModalOpen(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* 3 CỘT: TIỀN ĐÃ NHẬN - TIỀN CẦN TRẢ - TIỀN THỪA */}
+            <div className="p-4 sm:p-5 space-y-4">
+              <div className="grid grid-cols-3 gap-2.5">
+                {/* Cột 1: Tiền đã nhận */}
+                <div className="p-3 rounded-2xl bg-slate-950 border border-emerald-500/40 text-center flex flex-col justify-between shadow-inner">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Tiền đã nhận</span>
+                  <div className="text-base sm:text-lg font-mono font-black text-emerald-400 my-1 truncate">
+                    {Number(cashReceivedInput || 0).toLocaleString('vi-VN')} <span className="text-[10px]">đ</span>
+                  </div>
+                  <span className="text-[9px] text-slate-500">Khách đưa</span>
+                </div>
+
+                {/* Cột 2: Tiền cần trả */}
+                <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 text-center flex flex-col justify-between shadow-inner">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Tiền cần trả</span>
+                  <div className="text-base sm:text-lg font-mono font-black text-amber-400 my-1 truncate">
+                    {cashAmountDue.toLocaleString('vi-VN')} <span className="text-[10px]">đ</span>
+                  </div>
+                  <span className="text-[9px] text-slate-500">Tổng hóa đơn</span>
+                </div>
+
+                {/* Cột 3: Tiền thừa */}
+                {(() => {
+                  const received = Number(cashReceivedInput || 0);
+                  const change = received - cashAmountDue;
+                  const isEnough = change >= 0;
+                  return (
+                    <div className={`p-3 rounded-2xl bg-slate-950 border text-center flex flex-col justify-between shadow-inner ${isEnough ? 'border-emerald-500/50' : 'border-rose-500/50'}`}>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Tiền thừa</span>
+                      <div className={`text-base sm:text-lg font-mono font-black my-1 truncate ${isEnough ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {isEnough ? `${change.toLocaleString('vi-VN')} đ` : `-${Math.abs(change).toLocaleString('vi-VN')} đ`}
+                      </div>
+                      <span className={`text-[9px] font-bold ${isEnough ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {isEnough ? 'Thối lại khách' : 'Chưa đủ tiền'}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* MỆNH GIÁ NHANH */}
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleNumpadPress('EXACT')}
+                  className="py-1.5 px-1 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-slate-950 font-black text-[11px] border border-emerald-500/30 transition-all cursor-pointer"
+                >
+                  Đủ tiền
+                </button>
+                {['+10K', '+20K', '+50K', '+100K', '+200K', '+500K'].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => handleNumpadPress(amt)}
+                    className="py-1.5 px-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono font-bold text-[11px] border border-slate-700 hover:border-slate-600 transition-all cursor-pointer"
+                  >
+                    {amt}
+                  </button>
+                ))}
+              </div>
+
+              {/* BÀN PHÍM SỐ (NUMPAD) */}
+              <div className="grid grid-cols-4 gap-2 pt-1">
+                {['7', '8', '9'].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => handleNumpadPress(n)}
+                    className="h-12 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-white font-mono font-bold text-lg border border-slate-700/80 shadow-sm transition-all active:scale-95 cursor-pointer"
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => handleNumpadPress('C')}
+                  className="h-12 rounded-2xl bg-rose-500/20 hover:bg-rose-500 text-rose-400 hover:text-white font-bold text-sm border border-rose-500/30 transition-all active:scale-95 cursor-pointer"
+                >
+                  Xóa hết
+                </button>
+
+                {['4', '5', '6'].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => handleNumpadPress(n)}
+                    className="h-12 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-white font-mono font-bold text-lg border border-slate-700/80 shadow-sm transition-all active:scale-95 cursor-pointer"
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => handleNumpadPress('BACK')}
+                  className="h-12 rounded-2xl bg-amber-500/20 hover:bg-amber-500 text-amber-400 hover:text-slate-950 font-bold text-sm border border-amber-500/30 transition-all active:scale-95 cursor-pointer flex items-center justify-center"
+                >
+                  ⌫
+                </button>
+
+                {['1', '2', '3'].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => handleNumpadPress(n)}
+                    className="h-12 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-white font-mono font-bold text-lg border border-slate-700/80 shadow-sm transition-all active:scale-95 cursor-pointer"
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => handleNumpadPress('00')}
+                  className="h-12 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-white font-mono font-bold text-base border border-slate-700/80 transition-all active:scale-95 cursor-pointer"
+                >
+                  00
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleNumpadPress('0')}
+                  className="col-span-2 h-12 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-white font-mono font-bold text-lg border border-slate-700/80 transition-all active:scale-95 cursor-pointer"
+                >
+                  0
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleNumpadPress('000')}
+                  className="col-span-2 h-12 rounded-2xl bg-slate-800/90 hover:bg-slate-700 text-white font-mono font-bold text-base border border-slate-700/80 transition-all active:scale-95 cursor-pointer"
+                >
+                  000
+                </button>
+              </div>
+            </div>
+
+            {/* Footer: 2 nút HỦY và THANH TOÁN */}
+            <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-950/60 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setIsCashCalculatorModalOpen(false)}
+                className="py-3 px-4 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm border border-slate-700 transition-all cursor-pointer"
+              >
+                Hủy
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmCashPayment}
+                disabled={Number(cashReceivedInput || 0) < cashAmountDue}
+                className={`py-3 px-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+                  Number(cashReceivedInput || 0) >= cashAmountDue
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/25 cursor-pointer'
+                    : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-50'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Xác Nhận Thanh Toán</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </>
   );
 }

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { io, Socket } from 'socket.io-client';
+import { useAppTheme } from '@/hooks/useAppTheme';
 import {
   Calendar,
   Clock,
@@ -249,8 +250,8 @@ export default function HomePage() {
   const [myLockedSlotIds, setMyLockedSlotIds] = useState<string[]>([]);
   const myLockedSlotId = myLockedSlotIds[0] || null;
 
-  // Chuyển đổi Giao diện Sáng / Tối
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
+  // Chuyển đổi Giao diện Sáng / Tối (Đồng bộ thời gian thực toàn hệ thống)
+  const { isDarkMode, setIsDarkMode, toggleTheme } = useAppTheme(true);
 
   // Danh sách dữ liệu nạp trực tiếp từ SQL Server
   const [loaiSanList, setLoaiSanList] = useState<LoaiSan[]>([]);
@@ -507,7 +508,9 @@ export default function HomePage() {
 
           // Kiểm tra xem slot 30 phút này có nằm trong khoảng thời gian [gio_bat_dau, gio_ket_thuc) của đơn đặt nào không
           const matchedBooking = bookings.find((b: { ma_san: number; gio_bat_dau: string; gio_ket_thuc: string; trang_thai: string; ten_khach_hang?: string; id?: number; ma_don_dat?: number }) => {
-            if (b.ma_san !== san.id || b.trang_thai === 'DA_HUY') return false;
+            if (b.ma_san !== san.id) return false;
+            const validStatus = ['DA_THANH_TOAN', 'DA_COC', 'DANG_DA', 'DA_CHOT', 'Da Thanh Toan', 'DA_DAT'];
+            if (!validStatus.includes(b.trang_thai)) return false;
             const bStart = (b.gio_bat_dau || '').substring(0, 5);
             const bEnd = (b.gio_ket_thuc || '').substring(0, 5);
             return isTimeOverlapping(slot.start, slot.end, bStart, bEnd);
@@ -613,6 +616,20 @@ export default function HomePage() {
 
     return () => clearInterval(intervalId);
   }, [bookingStep, payOSData?.orderCode, isPaymentSuccess]);
+
+  // Tự động giải phóng đơn tạm thời nếu người dùng tải lại trang hoặc đóng tab khi chưa thanh toán
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (bookingStep === 'QR' && payOSData?.ma_don_dat && !isPaymentSuccess) {
+        try {
+          const blob = new Blob([JSON.stringify({ ma_don_dat: payOSData.ma_don_dat, orderCode: payOSData.orderCode })], { type: 'application/json' });
+          navigator.sendBeacon(`${API_BASE_URL}/thanh-toan/payos/huy-don-tam`, blob);
+        } catch (_e) {}
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [bookingStep, payOSData, isPaymentSuccess]);
 
   // Cập nhật ma trận lịch sân khi danh sách sân bóng hoặc ngày đá thay đổi
   useEffect(() => {
@@ -825,11 +842,13 @@ export default function HomePage() {
     return activeSlots.filter((s) => s.start === filterKhungGio);
   }, [filterKhungGio, timeSlotsList, isSlotInThePast]);
 
-  // Kiểm tra xung đột thời lượng đặt (60p, 90p, 120p) với các đơn đặt đã có trong CSDL
+  // Kiểm tra xung đột thời lượng đặt (30p, 60p, 90p, 120p) với các đơn đặt đã có trong CSDL
   const checkConflictForSan = useCallback((sanId: number, start: string, durationMin: number) => {
     const end = addMinutesToTime(start, durationMin);
     return rawBookings.some((b) => {
-      if (b.ma_san !== sanId || b.trang_thai === 'DA_HUY') return false;
+      if (b.ma_san !== sanId) return false;
+      const validStatus = ['DA_THANH_TOAN', 'DA_COC', 'DANG_DA', 'DA_CHOT', 'Da Thanh Toan', 'DA_DAT'];
+      if (!validStatus.includes(b.trang_thai)) return false;
       const bStart = (b.gio_bat_dau || '').substring(0, 5);
       const bEnd = (b.gio_ket_thuc || '').substring(0, 5);
       return isTimeOverlapping(start, end, bStart, bEnd);
@@ -878,10 +897,11 @@ export default function HomePage() {
     // -------------------------------------------------------------
     // TÍNH TOÁN DANH SÁCH CÁC Ô SLOT THUỘC THỜI LƯỢNG ĐẶT SÂN
     // -------------------------------------------------------------
-    // Mặc định chọn 1 tiếng 30 phút (90 phút) nếu không trùng, hoặc chọn 60 phút
+    // Mặc định chọn 1 tiếng 30 phút (90 phút) nếu không trùng, hoặc chọn 60 phút / 30 phút
     const canDo90 = !checkConflictForSan(san.id, slot.start, 90);
     const canDo60 = !checkConflictForSan(san.id, slot.start, 60);
-    const initialDuration = canDo90 ? 90 : canDo60 ? 60 : 120;
+    const canDo30 = !checkConflictForSan(san.id, slot.start, 30);
+    const initialDuration = canDo90 ? 90 : canDo60 ? 60 : canDo30 ? 30 : 120;
     const initialEndTime = addMinutesToTime(slot.start, initialDuration);
     const donGiaPhut = Number(san.don_gia_phut) || 5000;
     const giaTien = initialDuration * donGiaPhut;
@@ -2105,18 +2125,67 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                {/* Phần chọn 3 nút thời lượng */}
+                {/* Phần chọn 4 nút thời lượng */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                       <Clock className="w-4 h-4" />
                       Chọn Giờ Kết Thúc / Thời Lượng Thuê
                     </h4>
-                    <span className="text-xs text-slate-400 font-medium">Bấm chọn 1 trong 3 mức</span>
+                    <span className="text-xs text-slate-400 font-medium">Bấm chọn 1 trong 4 mức</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* NÚT 1: 1 TIẾNG (60 PHÚT) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {/* NÚT 1: 30 PHÚT */}
+                    {(() => {
+                      const dur = 30;
+                      const endTime = addMinutesToTime(selectedSlot.slot.start, dur);
+                      const donGiaPhut = Number(selectedSlot.san.don_gia_phut) || 5000;
+                      const price = dur * donGiaPhut;
+                      const isConflict = checkConflictForSan(selectedSlot.san.id, selectedSlot.slot.start, dur);
+                      const isSelected = selectedSlot.durationMin === dur;
+
+                      return (
+                        <button
+                          type="button"
+                          disabled={isConflict}
+                          onClick={() => handleSelectDuration(dur)}
+                          className={`p-4 rounded-2xl border text-left transition-all relative cursor-pointer ${isConflict
+                            ? 'opacity-40 border-rose-800 bg-rose-950/20 cursor-not-allowed'
+                            : isSelected
+                              ? 'border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500 shadow-lg shadow-emerald-500/20'
+                              : isDarkMode
+                                ? 'bg-slate-950/60 border-slate-800 hover:border-emerald-500/50 hover:bg-slate-800/60'
+                                : 'bg-slate-50 border-slate-200 hover:border-emerald-500/50 hover:bg-slate-100'
+                            }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`text-base font-black ${isSelected ? 'text-emerald-400' : isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                              30 Phút
+                            </span>
+                            <span className="text-xs font-bold font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                              30 phút
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-slate-400 mb-1">
+                            Giờ kết thúc: <span className="font-bold text-slate-200 font-mono">{endTime}</span>
+                          </div>
+
+                          <div className="text-sm font-extrabold text-emerald-500 mt-2">
+                            {price.toLocaleString('vi-VN')} đ
+                          </div>
+
+                          {isConflict && (
+                            <div className="mt-2 text-[10px] font-bold text-rose-400 flex items-center gap-1">
+                              <XCircle className="w-3 h-3" /> Trùng lịch đã đặt
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })()}
+
+                    {/* NÚT 2: 1 TIẾNG (60 PHÚT) */}
                     {(() => {
                       const dur = 60;
                       const endTime = addMinutesToTime(selectedSlot.slot.start, dur);
@@ -2165,7 +2234,7 @@ export default function HomePage() {
                       );
                     })()}
 
-                    {/* NÚT 2: 1 TIẾNG 30 PHÚT (90 PHÚT) - PHỔ BIẾN */}
+                    {/* NÚT 3: 1 TIẾNG 30 PHÚT (90 PHÚT) - PHỔ BIẾN */}
                     {(() => {
                       const dur = 90;
                       const endTime = addMinutesToTime(selectedSlot.slot.start, dur);
@@ -2215,7 +2284,7 @@ export default function HomePage() {
                       );
                     })()}
 
-                    {/* NÚT 3: 2 TIẾNG (120 PHÚT) */}
+                    {/* NÚT 4: 2 TIẾNG (120 PHÚT) */}
                     {(() => {
                       const dur = 120;
                       const endTime = addMinutesToTime(selectedSlot.slot.start, dur);
@@ -2277,7 +2346,7 @@ export default function HomePage() {
                   <div className="flex justify-between items-center text-slate-400">
                     <span>Thời lượng:</span>
                     <span className="font-bold text-slate-200">
-                      {selectedSlot.durationMin} phút ({selectedSlot.durationMin === 60 ? '1 tiếng' : selectedSlot.durationMin === 90 ? '1 tiếng 30 phút' : '2 tiếng'})
+                      {selectedSlot.durationMin} phút ({selectedSlot.durationMin === 30 ? '30 phút' : selectedSlot.durationMin === 60 ? '1 tiếng' : selectedSlot.durationMin === 90 ? '1 tiếng 30 phút' : `${Math.floor(selectedSlot.durationMin / 60)} tiếng`})
                     </span>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-slate-800 text-sm font-bold">

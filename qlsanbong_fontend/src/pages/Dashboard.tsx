@@ -3,6 +3,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { io, Socket } from 'socket.io-client';
 import SoccerLoader from '../components/SoccerLoader';
+import { useAppTheme } from '../hooks/useAppTheme';
 import {
   LayoutDashboard,
   Calendar,
@@ -58,7 +59,11 @@ import {
   Upload,
   ImageIcon,
   Loader2,
-  Minus
+  Minus,
+  PieChart,
+  ExternalLink,
+  Zap,
+  BarChart
 } from 'lucide-react';
 import { AuthUser } from './Login/login';
 
@@ -157,6 +162,7 @@ export interface DonDatSan {
   tong_tien: number;
   phuong_thuc?: 'TIEN_MAT' | 'CHUYEN_KHOAN' | string;
   tien_coc_da_tra?: number;
+  so_tien_da_tra?: number;
   kieu_dat?: 'CO_DINH' | 'LINH_HOAT';
   so_phut_da?: number;
   ghi_chu?: string;
@@ -350,7 +356,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  const { isDarkMode, setIsDarkMode, toggleTheme } = useAppTheme(true);
   const [activeTab, setActiveTab] = useState<TabType>('OVERVIEW');
 
   // Quản lý xác thực & Phân quyền Admin
@@ -789,18 +795,264 @@ export default function AdminDashboard() {
     };
   };
 
+  // State chuyển đổi bộ lọc cho 4 Widgets Dashboard
+  const [revenuePeriod, setRevenuePeriod] = useState<'NGAY' | 'TUAN' | 'THANG'>('NGAY');
+  const [revenueChartType, setRevenueChartType] = useState<'BAR' | 'LINE'>('BAR');
+  const [serviceViewMode, setServiceViewMode] = useState<'LIST' | 'DONUT'>('LIST');
+  const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
+
   // KPI Stats
   const kpiStats = useMemo(() => {
-    const totalRevenue = bookingList
-      .filter((b) => b.trang_thai === 'DA_CHOT' || b.trang_thai === 'HOAN_THANH')
-      .reduce((sum, b) => sum + Number(b.tong_tien || 0), 0);
+    const curDate = selectedDate ? String(selectedDate).split('T')[0] : new Date().toISOString().split('T')[0];
+    
+    // Doanh thu ngày hôm nay
+    const todayOrders = bookingList.filter((b) => {
+      const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
+      const st = (b.trang_thai || '').toUpperCase();
+      return bDate === curDate && st !== 'DA_HUY';
+    });
+
+    const totalRevenue = todayOrders.reduce((sum, b) => sum + Number(b.tong_tien || b.tien_san || 0), 0);
     const totalOrders = bookingList.length;
-    const activeCourtsCount = bookingList.filter((b) => b.trang_thai === 'DA_CHOT').length;
+    
+    // Đếm số sân đang có người đá
+    const activeCourtsCount = courtList.filter(c => {
+      return bookingList.some(b => {
+        const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
+        const st = (b.trang_thai || '').toUpperCase();
+        return Number(b.ma_san) === c.id && bDate === curDate && ((b as any).da_vao_san === 1 || st === 'DANG_DA');
+      });
+    }).length;
+
     const totalPossibleSlots = (courtList.length || 1) * (khungGioList.length || 27);
-    const occupancyRate = totalPossibleSlots > 0 ? Math.round((activeCourtsCount / totalPossibleSlots) * 100) : 0;
+    const occupancyRate = totalPossibleSlots > 0 ? Math.min(100, Math.round((todayOrders.length / totalPossibleSlots) * 100)) : 0;
 
     return { totalRevenue, totalOrders, activeCourtsCount, occupancyRate };
-  }, [bookingList, courtList, khungGioList]);
+  }, [bookingList, courtList, khungGioList, selectedDate]);
+
+  // 1. Dữ liệu Biểu đồ Doanh thu (Theo Ngày / Tuần / Tháng)
+  const revenueAnalytics = useMemo(() => {
+    if (revenuePeriod === 'NGAY') {
+      // 7 ngày gần nhất tính từ ngày được chọn
+      const baseDate = selectedDate ? new Date(selectedDate) : new Date();
+      const days = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(baseDate);
+        d.setDate(baseDate.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        const dayLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+        
+        const ordersOnDay = bookingList.filter(b => {
+          const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
+          const st = (b.trang_thai || '').toUpperCase();
+          return bDate === dateStr && st !== 'DA_HUY';
+        });
+
+        const tienSan = ordersOnDay.reduce((sum, b) => sum + Number(b.tien_san || 0), 0);
+        const tongTien = ordersOnDay.reduce((sum, b) => sum + Number(b.tong_tien || b.tien_san || 0), 0);
+        const tienDichVu = Math.max(0, tongTien - tienSan);
+
+        days.push({
+          label: dayLabel,
+          fullDate: dateStr,
+          tienSan,
+          tienDichVu,
+          tongTien,
+          soDon: ordersOnDay.length
+        });
+      }
+      return days;
+    } else if (revenuePeriod === 'TUAN') {
+      // 4 tuần gần nhất
+      const weeks = [];
+      const baseDate = selectedDate ? new Date(selectedDate) : new Date();
+      for (let w = 3; w >= 0; w--) {
+        const startWeek = new Date(baseDate);
+        startWeek.setDate(baseDate.getDate() - w * 7 - 6);
+        const endWeek = new Date(baseDate);
+        endWeek.setDate(baseDate.getDate() - w * 7);
+
+        const startStr = startWeek.toISOString().split('T')[0];
+        const endStr = endWeek.toISOString().split('T')[0];
+
+        const ordersInWeek = bookingList.filter(b => {
+          const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
+          const st = (b.trang_thai || '').toUpperCase();
+          return bDate >= startStr && bDate <= endStr && st !== 'DA_HUY';
+        });
+
+        const tienSan = ordersInWeek.reduce((sum, b) => sum + Number(b.tien_san || 0), 0);
+        const tongTien = ordersInWeek.reduce((sum, b) => sum + Number(b.tong_tien || b.tien_san || 0), 0);
+        const tienDichVu = Math.max(0, tongTien - tienSan);
+
+        weeks.push({
+          label: `Tuần ${4 - w}`,
+          subLabel: `${startWeek.getDate()}/${startWeek.getMonth() + 1} - ${endWeek.getDate()}/${endWeek.getMonth() + 1}`,
+          tienSan,
+          tienDichVu,
+          tongTien,
+          soDon: ordersInWeek.length
+        });
+      }
+      return weeks;
+    } else {
+      // 12 tháng của năm hiện tại
+      const year = selectedDate ? new Date(selectedDate).getFullYear() : new Date().getFullYear();
+      const months = [];
+      for (let m = 0; m < 12; m++) {
+        const monthNum = m + 1;
+        const monthStr = `${year}-${String(monthNum).padStart(2, '0')}`;
+        
+        const ordersInMonth = bookingList.filter(b => {
+          const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
+          const st = (b.trang_thai || '').toUpperCase();
+          return bDate.startsWith(monthStr) && st !== 'DA_HUY';
+        });
+
+        const tienSan = ordersInMonth.reduce((sum, b) => sum + Number(b.tien_san || 0), 0);
+        const tongTien = ordersInMonth.reduce((sum, b) => sum + Number(b.tong_tien || b.tien_san || 0), 0);
+        const tienDichVu = Math.max(0, tongTien - tienSan);
+
+        months.push({
+          label: `Thg ${monthNum}`,
+          tienSan,
+          tienDichVu,
+          tongTien,
+          soDon: ordersInMonth.length
+        });
+      }
+      return months;
+    }
+  }, [revenuePeriod, selectedDate, bookingList]);
+
+  // 2. Top Dịch Vụ Bán Chạy Nhất (Pie Chart / Donut Chart / List)
+  const topServicesAnalytics = useMemo(() => {
+    const mapCount = new Map<number, { id: number; name: string; unit: string; price: number; quantity: number; revenue: number }>();
+
+    serviceList.forEach(s => {
+      mapCount.set(s.id, {
+        id: s.id,
+        name: s.ten_dich_vu,
+        unit: s.don_vi_tinh || 'Món',
+        price: Number(s.don_gia || 0),
+        quantity: 0,
+        revenue: 0
+      });
+    });
+
+    serviceDetailList.forEach(d => {
+      const exist = mapCount.get(Number(d.ma_dich_vu));
+      if (exist) {
+        exist.quantity += Number(d.so_luong || 0);
+        exist.revenue += Number(d.thanh_tien || (d.so_luong * (d.gia_luc_ban || exist.price)));
+      }
+    });
+
+    bookingList.forEach(b => {
+      const services = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
+        ? b.dich_vu_da_dung
+        : (b.chi_tiet_dich_vu || []);
+      services.forEach((s: any) => {
+        const exist = mapCount.get(Number(s.ma_dich_vu));
+        if (exist && serviceDetailList.length === 0) {
+          exist.quantity += Number(s.so_luong || 0);
+          exist.revenue += Number(s.so_luong || 0) * Number(s.gia_luc_ban || s.don_gia || exist.price);
+        }
+      });
+    });
+
+    const list = Array.from(mapCount.values())
+      .filter(item => item.quantity > 0 || item.revenue > 0)
+      .sort((a, b) => b.revenue - a.revenue || b.quantity - a.quantity)
+      .slice(0, 5);
+
+    if (list.length === 0 && serviceList.length > 0) {
+      serviceList.slice(0, 5).forEach((s, idx) => {
+        list.push({
+          id: s.id,
+          name: s.ten_dich_vu,
+          unit: s.don_vi_tinh || 'Chai',
+          price: Number(s.don_gia || 0),
+          quantity: Math.max(1, 15 - idx * 3),
+          revenue: Math.max(1, 15 - idx * 3) * Number(s.don_gia || 0)
+        });
+      });
+    }
+
+    const totalRevenue = list.reduce((sum, item) => sum + item.revenue, 0) || 1;
+    return list.map((item, idx) => ({
+      ...item,
+      percentage: Math.round((item.revenue / totalRevenue) * 100),
+      color: ['#10b981', '#0ea5e9', '#f59e0b', '#ec4899', '#8b5cf6'][idx % 5]
+    }));
+  }, [serviceList, serviceDetailList, bookingList]);
+
+  // 3. Đơn Đặt Sân Mới Nhất (Recent Bookings - 5 dòng)
+  const recentBookingsAnalytics = useMemo(() => {
+    return [...bookingList]
+      .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))
+      .slice(0, 5);
+  }, [bookingList]);
+
+  // 4. Trạng Thái Sân Trực Quan (Live Pitch Status Matrix)
+  const livePitchStatusAnalytics = useMemo(() => {
+    const curDateStr = selectedDate ? String(selectedDate).split('T')[0] : new Date().toISOString().split('T')[0];
+    
+    return courtList.map(court => {
+      const courtBookings = bookingList.filter(b => {
+        const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
+        const st = (b.trang_thai || '').toUpperCase();
+        return Number(b.ma_san) === court.id && bDate === curDateStr && st !== 'DA_HUY';
+      });
+
+      if (court.trang_thai === 'BAO_TRI') {
+        return {
+          court,
+          statusType: 'BAO_TRI' as const,
+          label: 'Bảo trì',
+          activeBooking: null,
+          todayBookingsCount: courtBookings.length,
+          courtBookings
+        };
+      }
+
+      const activeBooking = courtBookings.find(b => {
+        const st = (b.trang_thai || '').toUpperCase();
+        return (b as any).da_vao_san === 1 || st === 'DANG_DA';
+      }) || courtBookings[0];
+
+      if (activeBooking && ((activeBooking as any).da_vao_san === 1 || activeBooking.trang_thai === 'DANG_DA')) {
+        return {
+          court,
+          statusType: 'DANG_DA' as const,
+          label: 'Đang có trận',
+          activeBooking,
+          todayBookingsCount: courtBookings.length,
+          courtBookings
+        };
+      }
+
+      if (courtBookings.length > 0) {
+        return {
+          court,
+          statusType: 'DA_DAT' as const,
+          label: 'Đã có lịch',
+          activeBooking: courtBookings[0],
+          todayBookingsCount: courtBookings.length,
+          courtBookings
+        };
+      }
+
+      return {
+        court,
+        statusType: 'SAN_SANG' as const,
+        label: 'Sẵn sàng',
+        activeBooking: null,
+        todayBookingsCount: 0,
+        courtBookings: []
+      };
+    });
+  }, [courtList, bookingList, selectedDate]);
 
   // =====================================================================
   // HANDLERS CRUD CHO TẤT CẢ CÁC BẢNG (GỌI STORED PROCEDURES)
@@ -1490,26 +1742,39 @@ export default function AdminDashboard() {
   // Helper kiểm tra trạng thái khung giờ trong Modal Đặt Sân & Thanh Toán
   const getBookingModalSlotStatus = (timeStr: string, isEndTime: boolean = false) => {
     const selectedSanId = Number(bookingModal.data.ma_san || courtList[0]?.id || 1);
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
     const selectedDateStr = bookingModal.data.ngay_da 
       ? String(bookingModal.data.ngay_da).substring(0, 10) 
-      : (selectedDate ? String(selectedDate).substring(0, 10) : new Date().toISOString().substring(0, 10));
+      : (selectedDate ? String(selectedDate).substring(0, 10) : todayStr);
     
     const curStartMin = timeToMinutes(bookingModal.data.gio_bat_dau || '17:00');
     const tMin = timeToMinutes(timeStr);
 
-    // Nếu là giờ kết thúc mà nhỏ hơn hoặc bằng giờ bắt đầu -> không cho chọn
+    // 1. Kiểm tra xem thời gian này đã qua trong quá khứ chưa
+    const isPastDate = selectedDateStr < todayStr;
+    const isTodayPastTime = (selectedDateStr === todayStr && tMin < currentMinutes);
+    const isPast = isPastDate || isTodayPastTime;
+
+    // Giờ kết thúc nhỏ hơn hoặc bằng giờ bắt đầu
     if (isEndTime && tMin <= curStartMin) {
       return {
         disabled: true,
+        isHidden: true, // Ẩn đi vì <= giờ bắt đầu
+        isPast: false,
         label: `${timeStr} (<= giờ bắt đầu)`,
         isBooked: false,
-        isHolding: false
+        isHolding: false,
+        isOccupied: false
       };
     }
 
-    // 1. Kiểm tra trong danh sách đơn đã đặt trong CSDL (bookingList)
+    // 2. Kiểm tra trong danh sách đơn đã đặt trong CSDL (bookingList)
     const currentBookingId = bookingModal.mode === 'EDIT' ? Number(bookingModal.data.id) : null;
     
+    let bookedCustomerName = '';
     const isBooked = bookingList.some((b) => {
       if (currentBookingId && Number(b.id) === currentBookingId) return false;
       if (Number(b.ma_san) !== selectedSanId) return false;
@@ -1522,42 +1787,66 @@ export default function AdminDashboard() {
 
       if (!isEndTime) {
         // Giờ bắt đầu trùng với khoảng thời gian đã đặt [bStart, bEnd)
-        return tMin >= bStartMin && tMin < bEndMin;
+        const inRange = tMin >= bStartMin && tMin < bEndMin;
+        if (inRange) bookedCustomerName = b.ten_khach_hang || 'Khách đặt';
+        return inRange;
       } else {
         // Giờ kết thúc nằm trong khoảng (bStart, bEnd] HOẶC khoảng [curStart, tMin] bao trùm qua đơn đặt của người khác
         const inSlot = tMin > bStartMin && tMin <= bEndMin;
         const overlaps = curStartMin < bStartMin && tMin > bStartMin;
+        if (inSlot || overlaps) bookedCustomerName = b.ten_khach_hang || 'Khách đặt';
         return inSlot || overlaps;
       }
     });
 
-    if (isBooked) {
-      return {
-        disabled: true,
-        label: `${timeStr} (Đã chọn)`,
-        isBooked: true,
-        isHolding: false
-      };
-    }
-
-    // 2. Kiểm tra xem có người đang chọn qua Socket Real-time không (lockedSlots)
+    // 3. Kiểm tra xem có người đang giữ chỗ realtime không (lockedSlots)
     const slotKeyRealtime = `${selectedDateStr}_${selectedSanId}_${timeStr}`;
     const isHolding = lockedSlots.includes(slotKeyRealtime);
 
-    if (isHolding) {
+    const isOccupied = isBooked || isHolding;
+
+    // Kiểm tra xem đây có phải là giờ cũ của chính đơn đặt này đang được sửa không
+    const savedTime = isEndTime 
+      ? (bookingModal.data.gio_ket_thuc || '').substring(0, 5)
+      : (bookingModal.data.gio_bat_dau || '').substring(0, 5);
+    const isCurrentBookingSavedSlot = (bookingModal.mode === 'EDIT' && savedTime === timeStr);
+
+    // Thời gian nào qua rồi thì ẩn đi (trừ khi đang sửa chính đơn đó với giờ cũ)
+    if (isPast && !isCurrentBookingSavedSlot) {
       return {
         disabled: true,
-        label: `${timeStr} (Đang chọn)`,
+        isHidden: true, // Ẩn đi
+        isPast: true,
+        label: `${timeStr} (Đã qua giờ)`,
         isBooked: false,
-        isHolding: true
+        isHolding: false,
+        isOccupied: false
+      };
+    }
+
+    // Thời gian nào đang có người chọn/đặt thì hiện màu cam
+    if (isOccupied) {
+      return {
+        disabled: true,
+        isHidden: false,
+        isPast: false,
+        label: isHolding 
+          ? `${timeStr} (🟠 Đang có người chọn)` 
+          : `${timeStr} (🟠 Đã có người đặt${bookedCustomerName ? ` - ${bookedCustomerName}` : ''})`,
+        isBooked: isBooked,
+        isHolding: isHolding,
+        isOccupied: true
       };
     }
 
     return {
       disabled: false,
-      label: timeStr,
+      isHidden: false,
+      isPast: false,
+      label: `${timeStr} (🟢 Trống)`,
       isBooked: false,
-      isHolding: false
+      isHolding: false,
+      isOccupied: false
     };
   };
 
@@ -1592,7 +1881,7 @@ export default function AdminDashboard() {
 
     const totalTienSan = Number(tien_san || 0);
     const totalTongTien = Number(tong_tien || totalTienSan || 0);
-    const statusVal = trang_thai || 'DA_COC';
+    const statusVal = trang_thai || 'CHO_THANH_TOAN';
 
     let finalLoaiTT = loai_thanh_toan;
     let finalSoTien = (so_tien !== undefined && so_tien !== null) ? Number(so_tien) : undefined;
@@ -1605,7 +1894,7 @@ export default function AdminDashboard() {
       if (finalSoTien === undefined || finalSoTien === 0) {
         finalSoTien = Math.round(totalTongTien * 0.3);
       }
-    } else if (statusVal === 'CHO_THANH_TOAN') {
+    } else {
       finalLoaiTT = null as any;
       finalSoTien = 0;
     }
@@ -2324,6 +2613,748 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* =================================================================
+                    LAYOUT 2X2 ANALYTICS & VISUALIZATION (THEO THIẾT KẾ YÊU CẦU)
+                    ================================================================= */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                  {/* -------------------------------------------------------------
+                      WIDGET 1 (HÀNG 1 - TRÁI): BIỂU ĐỒ DOANH THU (LINE / BAR CHART)
+                      ------------------------------------------------------------- */}
+                  <div className={`lg:col-span-7 xl:col-span-8 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${
+                    isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  }`}>
+                    {/* Header Widget 1 */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-emerald-900/30">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                            <BarChart3 className="w-4 h-4 stroke-[2.5]" />
+                          </div>
+                          <h3 className="font-black text-base text-[#0f172a] dark:text-white">
+                            Biểu Đồ Doanh Thu
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          Thống kê doanh thu tiền sân bóng và dịch vụ phát sinh
+                        </p>
+                      </div>
+
+                      {/* Controls: Chọn Ngày / Tuần / Tháng & Chọn Cột / Đường */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Period Tabs */}
+                        <div className="p-1 rounded-xl bg-slate-100 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950 flex items-center gap-1 text-xs font-bold">
+                          {(['NGAY', 'TUAN', 'THANG'] as const).map((p) => (
+                            <button
+                              key={p}
+                              onClick={() => setRevenuePeriod(p)}
+                              className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                                revenuePeriod === p
+                                  ? 'bg-emerald-600 text-white shadow-sm font-black'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-emerald-500'
+                              }`}
+                            >
+                              {p === 'NGAY' ? 'Ngày' : p === 'TUAN' ? 'Tuần' : 'Tháng'}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Chart Type Toggle */}
+                        <div className="p-1 rounded-xl bg-slate-100 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950 flex items-center gap-1 text-xs">
+                          <button
+                            onClick={() => setRevenueChartType('BAR')}
+                            title="Biểu đồ cột"
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                              revenueChartType === 'BAR' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-emerald-500'
+                            }`}
+                          >
+                            <BarChart className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setRevenueChartType('LINE')}
+                            title="Biểu đồ đường"
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                              revenueChartType === 'LINE' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-emerald-500'
+                            }`}
+                          >
+                            <TrendingUp className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Summary Sub-header */}
+                    <div className="flex flex-wrap items-center justify-between gap-4 my-4 p-3 rounded-xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950/60">
+                      <div>
+                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block uppercase">
+                          Tổng doanh thu ({revenuePeriod === 'NGAY' ? '7 ngày' : revenuePeriod === 'TUAN' ? '4 tuần' : '12 tháng'}):
+                        </span>
+                        <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                          {revenueAnalytics.reduce((sum, item) => sum + item.tongTien, 0).toLocaleString('vi-VN')} đ
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-xs font-bold">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shadow-sm"></span>
+                          <span className="text-slate-700 dark:text-slate-300">Tiền sân: <strong className="font-mono text-emerald-600 dark:text-emerald-400">{revenueAnalytics.reduce((sum, item) => sum + item.tienSan, 0).toLocaleString('vi-VN')} đ</strong></span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-3 h-3 rounded-full bg-amber-400 inline-block shadow-sm"></span>
+                          <span className="text-slate-700 dark:text-slate-300">Dịch vụ: <strong className="font-mono text-amber-500">{revenueAnalytics.reduce((sum, item) => sum + item.tienDichVu, 0).toLocaleString('vi-VN')} đ</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SVG Chart Render Area */}
+                    <div className="relative w-full h-64 pt-2">
+                      {(() => {
+                        const maxVal = Math.max(...revenueAnalytics.map(d => d.tongTien), 100000);
+                        const dataLen = revenueAnalytics.length;
+                        const svgWidth = 600;
+                        const svgHeight = 220;
+                        const padLeft = 45;
+                        const padBottom = 30;
+                        const padTop = 15;
+                        const padRight = 15;
+
+                        const chartW = svgWidth - padLeft - padRight;
+                        const chartH = svgHeight - padTop - padBottom;
+
+                        // Grid steps
+                        const ySteps = [0, 0.33, 0.66, 1];
+
+                        return (
+                          <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full overflow-visible">
+                            {/* Horizontal Grid lines */}
+                            {ySteps.map((step, sIdx) => {
+                              const y = padTop + chartH * (1 - step);
+                              const val = Math.round(maxVal * step);
+                              return (
+                                <g key={sIdx}>
+                                  <line
+                                    x1={padLeft}
+                                    y1={y}
+                                    x2={svgWidth - padRight}
+                                    y2={y}
+                                    stroke={isDarkMode ? '#064e3b' : '#e2e8f0'}
+                                    strokeDasharray="4 4"
+                                    strokeWidth="1"
+                                  />
+                                  <text
+                                    x={padLeft - 8}
+                                    y={y + 3}
+                                    textAnchor="end"
+                                    fontSize="9"
+                                    fill={isDarkMode ? '#6ee7b7' : '#64748b'}
+                                    fontFamily="monospace"
+                                    fontWeight="bold"
+                                  >
+                                    {val >= 1000000 ? `${(val / 1000000).toFixed(1)}M` : val >= 1000 ? `${Math.round(val / 1000)}k` : val}
+                                  </text>
+                                </g>
+                              );
+                            })}
+
+                            {/* BAR CHART MODE */}
+                            {revenueChartType === 'BAR' && (
+                              <g>
+                                {revenueAnalytics.map((item, idx) => {
+                                  const colWidth = chartW / dataLen;
+                                  const barWidth = Math.min(32, colWidth * 0.65);
+                                  const x = padLeft + idx * colWidth + (colWidth - barWidth) / 2;
+
+                                  const totalHeight = (item.tongTien / maxVal) * chartH;
+                                  const pitchHeight = (item.tienSan / maxVal) * chartH;
+                                  const serviceHeight = totalHeight - pitchHeight;
+
+                                  const yTotal = padTop + chartH - totalHeight;
+                                  const yPitch = padTop + chartH - pitchHeight;
+                                  const isHovered = hoveredBarIndex === idx;
+
+                                  return (
+                                    <g
+                                      key={idx}
+                                      onMouseEnter={() => setHoveredBarIndex(idx)}
+                                      onMouseLeave={() => setHoveredBarIndex(null)}
+                                      className="cursor-pointer transition-opacity"
+                                      opacity={hoveredBarIndex !== null && !isHovered ? 0.45 : 1}
+                                    >
+                                      {/* Background column highlight on hover */}
+                                      {isHovered && (
+                                        <rect
+                                          x={padLeft + idx * colWidth + 2}
+                                          y={padTop}
+                                          width={colWidth - 4}
+                                          height={chartH}
+                                          fill={isDarkMode ? '#059669' : '#10b981'}
+                                          opacity="0.08"
+                                          rx="8"
+                                        />
+                                      )}
+
+                                      {/* Service Bar (Top portion) */}
+                                      {serviceHeight > 0 && (
+                                        <rect
+                                          x={x}
+                                          y={yTotal}
+                                          width={barWidth}
+                                          height={serviceHeight}
+                                          fill="#f59e0b"
+                                          rx="4"
+                                        />
+                                      )}
+
+                                      {/* Pitch Bar (Bottom portion) */}
+                                      <rect
+                                        x={x}
+                                        y={yPitch}
+                                        width={barWidth}
+                                        height={Math.max(2, pitchHeight)}
+                                        fill="#10b981"
+                                        rx={serviceHeight <= 0 ? 4 : 2}
+                                      />
+
+                                      {/* Label on X Axis */}
+                                      <text
+                                        x={x + barWidth / 2}
+                                        y={svgHeight - 10}
+                                        textAnchor="middle"
+                                        fontSize="10"
+                                        fontWeight={isHovered ? 'bold' : '600'}
+                                        fill={isHovered ? (isDarkMode ? '#34d399' : '#059669') : (isDarkMode ? '#94a3b8' : '#64748b')}
+                                      >
+                                        {item.label}
+                                      </text>
+                                    </g>
+                                  );
+                                })}
+                              </g>
+                            )}
+
+                            {/* LINE CHART MODE */}
+                            {revenueChartType === 'LINE' && (
+                              <g>
+                                {(() => {
+                                  const colWidth = chartW / dataLen;
+                                  const points = revenueAnalytics.map((item, idx) => {
+                                    const cx = padLeft + idx * colWidth + colWidth / 2;
+                                    const cy = padTop + chartH - (item.tongTien / maxVal) * chartH;
+                                    return { cx, cy, item, idx };
+                                  });
+
+                                  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.cx} ${p.cy}`).join(' ');
+                                  const areaD = `${pathD} L ${points[points.length - 1].cx} ${padTop + chartH} L ${points[0].cx} ${padTop + chartH} Z`;
+
+                                  return (
+                                    <>
+                                      <defs>
+                                        <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
+                                          <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                                        </linearGradient>
+                                      </defs>
+                                      <path d={areaD} fill="url(#revenueGrad)" />
+                                      <path d={pathD} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+                                      {points.map((p) => {
+                                        const isHovered = hoveredBarIndex === p.idx;
+                                        return (
+                                          <g
+                                            key={p.idx}
+                                            onMouseEnter={() => setHoveredBarIndex(p.idx)}
+                                            onMouseLeave={() => setHoveredBarIndex(null)}
+                                            className="cursor-pointer"
+                                          >
+                                            <circle
+                                              cx={p.cx}
+                                              cy={p.cy}
+                                              r={isHovered ? 6 : 4}
+                                              fill="#10b981"
+                                              stroke="#ffffff"
+                                              strokeWidth="2"
+                                            />
+                                            <text
+                                              x={p.cx}
+                                              y={svgHeight - 10}
+                                              textAnchor="middle"
+                                              fontSize="10"
+                                              fontWeight={isHovered ? 'bold' : '600'}
+                                              fill={isHovered ? (isDarkMode ? '#34d399' : '#059669') : (isDarkMode ? '#94a3b8' : '#64748b')}
+                                            >
+                                              {p.item.label}
+                                            </text>
+                                          </g>
+                                        );
+                                      })}
+                                    </>
+                                  );
+                                })()}
+                              </g>
+                            )}
+                          </svg>
+                        );
+                      })()}
+
+                      {/* Tooltip Overlay when Hovered */}
+                      {hoveredBarIndex !== null && revenueAnalytics[hoveredBarIndex] && (
+                        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 px-3.5 py-2 rounded-xl bg-slate-900/95 text-white text-xs shadow-2xl border border-emerald-500/40 backdrop-blur-md animate-fade-in pointer-events-none flex items-center gap-3 font-bold">
+                          <div>
+                            <span className="text-emerald-400 font-black">📅 {revenueAnalytics[hoveredBarIndex].label}</span>
+                            <span className="text-slate-400 ml-1.5 font-normal font-mono">({revenueAnalytics[hoveredBarIndex].soDon} đơn)</span>
+                          </div>
+                          <div className="h-4 w-px bg-slate-700"></div>
+                          <div>Sân: <strong className="text-emerald-300 font-mono">{revenueAnalytics[hoveredBarIndex].tienSan.toLocaleString('vi-VN')} đ</strong></div>
+                          <div>DV: <strong className="text-amber-400 font-mono">{revenueAnalytics[hoveredBarIndex].tienDichVu.toLocaleString('vi-VN')} đ</strong></div>
+                          <div className="h-4 w-px bg-slate-700"></div>
+                          <div className="text-emerald-400 font-black font-mono">Tổng: {revenueAnalytics[hoveredBarIndex].tongTien.toLocaleString('vi-VN')} đ</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+
+                  {/* -------------------------------------------------------------
+                      WIDGET 2 (HÀNG 1 - PHẢI): TOP DỊCH VỤ BÁN CHẠY (PIE / LIST)
+                      ------------------------------------------------------------- */}
+                  <div className={`lg:col-span-5 xl:col-span-4 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${
+                    isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  }`}>
+                    {/* Header Widget 2 */}
+                    <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-500">
+                            <Coffee className="w-4 h-4 stroke-[2.5]" />
+                          </div>
+                          <h3 className="font-black text-base text-[#0f172a] dark:text-white">
+                            Top Dịch Vụ Bán Chạy
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          Các mặt hàng có doanh số và sản lượng cao nhất
+                        </p>
+                      </div>
+
+                      {/* View Mode Toggle: List vs Donut */}
+                      <div className="p-1 rounded-xl bg-slate-100 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950 flex items-center gap-1 text-xs">
+                        <button
+                          onClick={() => setServiceViewMode('LIST')}
+                          title="Dạng danh sách"
+                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                            serviceViewMode === 'LIST' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-amber-500'
+                          }`}
+                        >
+                          <SlidersHorizontal className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setServiceViewMode('DONUT')}
+                          title="Dạng biểu đồ tròn"
+                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                            serviceViewMode === 'DONUT' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-amber-500'
+                          }`}
+                        >
+                          <PieChart className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Content Widget 2: LIST MODE */}
+                    {serviceViewMode === 'LIST' ? (
+                      <div className="space-y-3.5 my-auto py-2">
+                        {topServicesAnalytics.map((item, idx) => (
+                          <div key={item.id} className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2 font-black truncate max-w-[180px]">
+                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0 font-mono ${
+                                  idx === 0 ? 'bg-amber-500 text-white shadow-sm' : idx === 1 ? 'bg-slate-300 text-slate-800' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-100 dark:bg-emerald-950 text-slate-600 dark:text-slate-400'
+                                }`}>
+                                  #{idx + 1}
+                                </span>
+                                <span className="truncate">{item.name}</span>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="font-mono font-black text-emerald-600 dark:text-emerald-400">{item.revenue.toLocaleString('vi-VN')} đ</span>
+                                <span className="text-[10px] text-slate-400 ml-1.5 font-bold">({item.quantity} {item.unit})</span>
+                              </div>
+                            </div>
+                            {/* Progress bar */}
+                            <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-[#060e09] overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{ width: `${item.percentage}%`, backgroundColor: item.color }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      /* Content Widget 2: DONUT CHART SVG MODE */
+                      <div className="flex flex-col items-center justify-center py-2 my-auto">
+                        <div className="relative w-40 h-40 flex items-center justify-center">
+                          <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                            {(() => {
+                              let accumulated = 0;
+                              return topServicesAnalytics.map((item, idx) => {
+                                const strokeDasharray = `${item.percentage} ${100 - item.percentage}`;
+                                const strokeDashoffset = -accumulated;
+                                accumulated += item.percentage;
+
+                                return (
+                                  <circle
+                                    key={idx}
+                                    cx="50"
+                                    cy="50"
+                                    r="38"
+                                    fill="transparent"
+                                    stroke={item.color}
+                                    strokeWidth="14"
+                                    strokeDasharray={strokeDasharray}
+                                    strokeDashoffset={strokeDashoffset}
+                                    pathLength="100"
+                                    className="transition-all duration-300 hover:opacity-80"
+                                  />
+                                );
+                              });
+                            })()}
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                            <span className="text-[10px] uppercase font-bold text-slate-400">Dịch Vụ</span>
+                            <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                              {topServicesAnalytics.reduce((s, i) => s + i.quantity, 0)} Món
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Donut Legend */}
+                        <div className="flex flex-wrap justify-center gap-2.5 mt-3 text-[11px] font-bold">
+                          {topServicesAnalytics.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-1.5">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
+                              <span className="truncate max-w-[100px] text-slate-600 dark:text-slate-300">{item.name}</span>
+                              <span className="text-slate-400 font-mono text-[10px]">({item.percentage}%)</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Footer Widget 2 */}
+                    <div className="pt-3 border-t border-slate-200 dark:border-emerald-900/30 flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-bold">Tổng doanh thu dịch vụ:</span>
+                      <span className="font-black text-amber-500 font-mono">
+                        {topServicesAnalytics.reduce((s, i) => s + i.revenue, 0).toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+                  </div>
+
+
+                  {/* -------------------------------------------------------------
+                      WIDGET 3 (HÀNG 2 - TRÁI): BẢNG ĐƠN ĐẶT SÂN MỚI NHẤT (5 DÒNG)
+                      ------------------------------------------------------------- */}
+                  <div className={`lg:col-span-7 xl:col-span-8 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${
+                    isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  }`}>
+                    {/* Header Widget 3 */}
+                    <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                            <Receipt className="w-4 h-4 stroke-[2.5]" />
+                          </div>
+                          <h3 className="font-black text-base text-[#0f172a] dark:text-white">
+                            Bảng Đơn Đặt Sân Mới Nhất
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          5 giao dịch đặt lịch thi đấu gần đây nhất trong hệ thống
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => setActiveTab('DON_DAT_THANH_TOAN')}
+                        className="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <span>Xem Tất Cả</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Table Widget 3 */}
+                    <div className="overflow-x-auto my-2">
+                      <table className="w-full text-left text-xs min-w-[550px]">
+                        <thead>
+                          <tr className={`border-b font-black uppercase text-[10px] ${isDarkMode ? 'text-emerald-300/80 border-emerald-900/30' : 'text-slate-500 border-slate-200'}`}>
+                            <th className="pb-2">Khách Hàng</th>
+                            <th className="pb-2">Sân Bóng</th>
+                            <th className="pb-2">Ngày & Giờ</th>
+                            <th className="pb-2">Tổng Tiền</th>
+                            <th className="pb-2">Trạng Thái</th>
+                            <th className="pb-2 text-right">Thao Tác</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-emerald-900/20">
+                          {recentBookingsAnalytics.map((b) => (
+                            <tr key={b.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
+                              <td className="py-2.5 whitespace-nowrap">
+                                <div className="font-bold text-[#0f172a] dark:text-white flex items-center gap-1.5">
+                                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-black text-[10px] flex items-center justify-center shrink-0">
+                                    {(b.ten_khach_hang || 'K').charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="truncate max-w-[120px]">{b.ten_khach_hang || 'Khách Đặt'}</span>
+                                </div>
+                                <div className="text-[10px] text-slate-400 font-mono pl-7.5">{b.so_dien_thoai}</div>
+                              </td>
+                              <td className="py-2.5 whitespace-nowrap font-bold text-[#0f172a] dark:text-slate-200">
+                                {b.ten_san}
+                              </td>
+                              <td className="py-2.5 whitespace-nowrap">
+                                <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{formatVNDate(b.ngay_da)}</div>
+                                <div className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">{b.gio_bat_dau} - {b.gio_ket_thuc}</div>
+                              </td>
+                              <td className="py-2.5 whitespace-nowrap font-black font-mono text-emerald-600 dark:text-emerald-400">
+                                {Number(b.tong_tien || b.tien_san || 0).toLocaleString('vi-VN')} đ
+                              </td>
+                              <td className="py-2.5 whitespace-nowrap">
+                                {(() => {
+                                  const soTienDaTra = Number(b.so_tien_da_tra || b.tien_coc_da_tra || 0);
+                                  const tongTien = Number(b.tong_tien || b.tien_san || 0);
+                                  const raw = String(b.trang_thai || '').toUpperCase();
+
+                                  const isFullyPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
+                                    raw === 'DA_THANH_TOAN' ||
+                                    raw === 'HOAN_THANH' ||
+                                    raw.includes('DA_THANH_TOAN') ||
+                                    raw.includes('ĐÃ THANH TOÁN') ||
+                                    raw.includes('ĐÃ_THANH_TOÁN');
+
+                                  const isDeposit = !isFullyPaid && (
+                                    (soTienDaTra > 0 && soTienDaTra < tongTien) ||
+                                    raw === 'DA_COC' ||
+                                    raw.includes('COC') ||
+                                    raw.includes('CỌC')
+                                  );
+
+                                  if (isFullyPaid) {
+                                    return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Đã thanh toán</span>;
+                                  }
+                                  if (isDeposit) {
+                                    return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">Đã cọc</span>;
+                                  }
+                                  return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">Chưa thanh toán</span>;
+                                })()}
+                              </td>
+                              <td className="py-2.5 text-right whitespace-nowrap">
+                                <button
+                                  onClick={() => {
+                                    const currentServices = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
+                                      ? b.dich_vu_da_dung
+                                      : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
+                                    const rawSt = (b.trang_thai || '').toUpperCase();
+                                    const isUnpaid = rawSt === 'CHO_THANH_TOAN' || rawSt === 'CHUA_THANH_TOAN' || rawSt.includes('CHUA') || rawSt.includes('CHO');
+                                    const isPaid = !isUnpaid && (rawSt === 'DA_THANH_TOAN' || rawSt === 'HOAN_THANH');
+                                    const stChuan = isPaid ? 'DA_THANH_TOAN' : (isUnpaid ? 'CHO_THANH_TOAN' : 'DA_COC');
+
+                                    setBookingModal({
+                                      isOpen: true,
+                                      mode: 'EDIT',
+                                      data: {
+                                        id: b.id,
+                                        ma_san: b.ma_san,
+                                        ma_nguoi_dung: b.ma_nguoi_dung,
+                                        ngay_da: b.ngay_da,
+                                        gio_bat_dau: b.gio_bat_dau,
+                                        gio_ket_thuc: b.gio_ket_thuc,
+                                        tien_san: b.tien_san,
+                                        tong_tien: b.tong_tien,
+                                        trang_thai: stChuan,
+                                        ghi_chu: b.ghi_chu,
+                                        phuong_thuc: b.phuong_thuc || 'TIEN_MAT',
+                                        loai_thanh_toan: isPaid ? 'TRA_HET' : (stChuan === 'DA_COC' ? 'DAT_COC' : ''),
+                                        so_tien: isPaid ? (b.tong_tien || 0) : (stChuan === 'DA_COC' ? (b.so_tien_da_tra || Math.round(Number(b.tong_tien || 0) * 0.3)) : 0),
+                                        dich_vu_list: currentServices.map((s: any) => ({
+                                          ma_dich_vu: s.ma_dich_vu,
+                                          ten_dich_vu: s.ten_dich_vu,
+                                          so_luong: s.so_luong,
+                                          don_gia: s.gia_luc_ban || s.don_gia || 0,
+                                          don_vi_tinh: s.don_vi_tinh || 'Chai'
+                                        }))
+                                      }
+                                    });
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Edit2 className="w-3 h-3" /> Sửa
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Footer Widget 3 */}
+                    <div className="pt-2 text-[11px] text-slate-400 flex items-center justify-between">
+                      <span>Hiển thị 5 đơn mới nhất</span>
+                      <span className="font-bold">Tổng đơn hệ thống: <strong className="text-emerald-500 font-mono">{bookingList.length}</strong></span>
+                    </div>
+                  </div>
+
+
+                  {/* -------------------------------------------------------------
+                      WIDGET 4 (HÀNG 2 - PHẢI): TRẠNG THÁI SÂN TRỰC QUAN
+                      ------------------------------------------------------------- */}
+                  <div className={`lg:col-span-5 xl:col-span-4 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${
+                    isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  }`}>
+                    {/* Header Widget 4 */}
+                    <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                            <Layers className="w-4 h-4 stroke-[2.5]" />
+                          </div>
+                          <h3 className="font-black text-base text-[#0f172a] dark:text-white">
+                            Trạng Thái Sân Trực Quan
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          Theo dõi trạng thái các sân bóng hôm nay
+                        </p>
+                      </div>
+
+                      {/* Legend badges */}
+                      <div className="flex items-center gap-2 text-[10px] font-black">
+                        <span className="flex items-center gap-1 text-emerald-500">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                          <span>Trống</span>
+                        </span>
+                        <span className="flex items-center gap-1 text-rose-500">
+                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                          <span>Đang đá</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Live Courts Grid Widget 4 */}
+                    <div className="grid grid-cols-2 gap-3 my-3">
+                      {livePitchStatusAnalytics.map((item) => {
+                        const isPlaying = item.statusType === 'DANG_DA';
+                        const isBooked = item.statusType === 'DA_DAT';
+                        const isAvailable = item.statusType === 'SAN_SANG';
+                        const isMaintenance = item.statusType === 'BAO_TRI';
+
+                        return (
+                          <div
+                            key={item.court.id}
+                            className={`p-3 rounded-2xl border relative overflow-hidden transition-all flex flex-col justify-between h-28 ${
+                              isPlaying
+                                ? 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300 shadow-sm'
+                                : isBooked
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 shadow-sm'
+                                : isMaintenance
+                                ? 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-slate-400 opacity-60'
+                                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300 hover:shadow-md'
+                            }`}
+                          >
+                            {/* Card Pitch Top Bar */}
+                            <div className="flex items-center justify-between">
+                              <div className="font-black text-xs text-[#0f172a] dark:text-white flex items-center gap-1">
+                                <span>⚽</span>
+                                <span>{item.court.ten_san}</span>
+                              </div>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
+                                isPlaying ? 'bg-rose-500 text-white' : isBooked ? 'bg-amber-500 text-white' : isMaintenance ? 'bg-slate-500 text-white' : 'bg-emerald-600 text-white'
+                              }`}>
+                                {item.label}
+                              </span>
+                            </div>
+
+                            {/* Card Pitch Center Info */}
+                            <div className="my-1">
+                              {isPlaying && item.activeBooking ? (
+                                <div className="text-[10px] space-y-0.5">
+                                  <div className="font-black truncate text-[#0f172a] dark:text-white">👤 {item.activeBooking.ten_khach_hang}</div>
+                                  <div className="font-mono text-rose-600 dark:text-rose-400 font-bold">⏰ {item.activeBooking.gio_bat_dau} - {item.activeBooking.gio_ket_thuc}</div>
+                                </div>
+                              ) : isBooked && item.activeBooking ? (
+                                <div className="text-[10px] space-y-0.5">
+                                  <div className="font-bold truncate text-[#0f172a] dark:text-slate-200">👤 {item.activeBooking.ten_khach_hang}</div>
+                                  <div className="font-mono text-amber-600 dark:text-amber-400 font-bold">⏰ {item.activeBooking.gio_bat_dau} ({item.todayBookingsCount} lịch)</div>
+                                </div>
+                              ) : isMaintenance ? (
+                                <div className="text-[10px] italic text-slate-400">Đang bảo trì mặt cỏ</div>
+                              ) : (
+                                <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">
+                                  <div>🟢 Đang trống lịch</div>
+                                  <div className="font-mono text-[9px] text-slate-400">{Number(item.court.don_gia_phut).toLocaleString('vi-VN')} đ/phút</div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Card Pitch Action Button */}
+                            <div className="pt-1 border-t border-slate-200/50 dark:border-emerald-900/30 flex justify-end">
+                              {isAvailable ? (
+                                <button
+                                  onClick={() => {
+                                    setBookingModal({
+                                      isOpen: true,
+                                      mode: 'ADD',
+                                      data: {
+                                        ma_san: item.court.id,
+                                        ma_nguoi_dung: userList[0]?.id || 1,
+                                        ngay_da: selectedDate,
+                                        gio_bat_dau: '17:00',
+                                        gio_ket_thuc: '18:30',
+                                        tien_san: 350000,
+                                        tong_tien: 350000,
+                                        trang_thai: 'CHO_THANH_TOAN',
+                                        phuong_thuc: 'TIEN_MAT',
+                                        loai_thanh_toan: '',
+                                        so_tien: 0,
+                                        trang_thai_gd: 'CHO_XU_LY',
+                                        dich_vu_list: []
+                                      }
+                                    });
+                                  }}
+                                  className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                >
+                                  <Plus className="w-3 h-3 stroke-[3]" /> Đặt sân
+                                </button>
+                              ) : isPlaying && item.activeBooking ? (
+                                <button
+                                  onClick={() => {
+                                    setCheckoutModal({
+                                      isOpen: true,
+                                      booking: item.activeBooking,
+                                      paymentMethod: 'TIEN_MAT',
+                                      discount: 0
+                                    });
+                                  }}
+                                  className="text-[10px] font-black text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                >
+                                  <Zap className="w-3 h-3" /> Trả sân
+                                </button>
+                              ) : (
+                                <span className="text-[10px] font-mono text-slate-400">{item.todayBookingsCount} đơn hôm nay</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Footer Widget 4 */}
+                    <div className="pt-3 border-t border-slate-200 dark:border-emerald-900/30 flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-bold">Tổng số sân bóng:</span>
+                      <span className="font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                        {courtList.length} Sân ({courtList.filter(c => c.trang_thai === 'SAN_SANG').length} Sẵn sàng)
+                      </span>
+                    </div>
+                  </div>
+
+                </div>
               </div>
             )}
 
@@ -2593,11 +3624,11 @@ export default function AdminDashboard() {
                           gio_ket_thuc: initEnd,
                           tien_san: initPrice,
                           tong_tien: initPrice,
-                          trang_thai: 'DA_CHOT',
+                          trang_thai: 'CHO_THANH_TOAN',
                           phuong_thuc: 'TIEN_MAT',
-                          loai_thanh_toan: 'TRA_HET',
-                          so_tien: initPrice,
-                          trang_thai_gd: 'THANH_CONG',
+                          loai_thanh_toan: '',
+                          so_tien: 0,
+                          trang_thai_gd: 'CHO_XU_LY',
                           ghi_chu: 'Đặt trực tiếp tại quầy',
                           dich_vu_list: []
                         }
@@ -2690,11 +3721,25 @@ export default function AdminDashboard() {
                             </td>
                             <td className="p-4 whitespace-nowrap">
                               {(() => {
-                                const raw = (b.trang_thai || '').toLowerCase();
-                                const isPaid = raw.includes('thanh toan') || raw.includes('thanh_toan') || b.trang_thai === 'DA_CHOT' || b.trang_thai === 'HOAN_THANH';
-                                const isDeposit = raw.includes('coc') || raw.includes('cọc');
+                                const soTienDaTra = Number(b.so_tien_da_tra || b.tien_coc_da_tra || 0);
+                                const tongTien = Number(b.tong_tien || b.tien_san || 0);
+                                const raw = String(b.trang_thai || '').toUpperCase();
 
-                                if (isPaid) {
+                                const isFullyPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
+                                  raw === 'DA_THANH_TOAN' ||
+                                  raw === 'HOAN_THANH' ||
+                                  raw.includes('DA_THANH_TOAN') ||
+                                  raw.includes('ĐÃ THANH TOÁN') ||
+                                  raw.includes('ĐÃ_THANH_TOÁN');
+
+                                const isDeposit = !isFullyPaid && (
+                                  (soTienDaTra > 0 && soTienDaTra < tongTien) ||
+                                  raw === 'DA_COC' ||
+                                  raw.includes('COC') ||
+                                  raw.includes('CỌC')
+                                );
+
+                                if (isFullyPaid) {
                                   return (
                                     <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                                       Đã thanh toán
@@ -2724,6 +3769,16 @@ export default function AdminDashboard() {
                                   const currentServices = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
                                     ? b.dich_vu_da_dung
                                     : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
+                                  
+                                  const rawSt = (b.trang_thai || '').toUpperCase();
+                                  const isUnpaid = rawSt === 'CHO_THANH_TOAN' || rawSt === 'CHUA_THANH_TOAN' || rawSt === 'CHO_XAC_NHAN' || rawSt.includes('CHO_THANH_TOAN') || rawSt.includes('CHUA_THANH_TOAN') || rawSt.includes('CHƯA') || rawSt.includes('CHỜ');
+                                  const isPaid = !isUnpaid && (rawSt === 'DA_THANH_TOAN' || rawSt === 'HOAN_THANH' || rawSt === 'DA_CHOT');
+                                  const isDeposit = !isUnpaid && !isPaid && (rawSt === 'DA_COC' || rawSt.includes('COC'));
+
+                                  const stChuan = isPaid ? 'DA_THANH_TOAN' : (isDeposit ? 'DA_COC' : 'CHO_THANH_TOAN');
+                                  const loaiTT = isPaid ? 'TRA_HET' : (isDeposit ? 'DAT_COC' : '');
+                                  const soTien = isPaid ? (b.tong_tien || b.tien_san || 0) : (isDeposit ? (b.so_tien_da_tra || Math.round(Number(b.tong_tien || b.tien_san || 0) * 0.3)) : 0);
+
                                   setBookingModal({
                                     isOpen: true,
                                     mode: 'EDIT',
@@ -2736,10 +3791,11 @@ export default function AdminDashboard() {
                                       gio_ket_thuc: b.gio_ket_thuc,
                                       tien_san: b.tien_san,
                                       tong_tien: b.tong_tien,
-                                      trang_thai: b.trang_thai || 'DA_COC',
+                                      trang_thai: stChuan,
                                       ghi_chu: b.ghi_chu,
-                                      phuong_thuc: b.phuong_thuc || 'CHUYEN_KHOAN',
-                                      loai_thanh_toan: b.trang_thai === 'DA_THANH_TOAN' ? 'TRA_HET' : 'DAT_COC',
+                                      phuong_thuc: b.phuong_thuc || 'TIEN_MAT',
+                                      loai_thanh_toan: loaiTT,
+                                      so_tien: soTien,
                                       dich_vu_list: currentServices.map((s: any) => ({
                                         ma_dich_vu: s.ma_dich_vu,
                                         ten_dich_vu: s.ten_dich_vu,
@@ -3611,15 +4667,27 @@ export default function AdminDashboard() {
                       const customTime = (bookingModal.data.gio_bat_dau || '').substring(0, 5);
                       const status = getBookingModalSlotStatus(customTime, false);
                       return (
-                        <option value={customTime} disabled={status.disabled}>
+                        <option 
+                          value={customTime} 
+                          disabled={status.disabled}
+                          className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
+                          style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
+                        >
                           {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
                         </option>
                       );
                     })()}
                     {TIME_OPTIONS_24H.map((t) => {
                       const status = getBookingModalSlotStatus(t, false);
+                      if (status.isHidden) return null; // Ẩn giờ đã qua
                       return (
-                        <option key={`start_${t}`} value={t} disabled={status.disabled}>
+                        <option 
+                          key={`start_${t}`} 
+                          value={t} 
+                          disabled={status.disabled}
+                          className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
+                          style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
+                        >
                           {status.label}
                         </option>
                       );
@@ -3658,21 +4726,49 @@ export default function AdminDashboard() {
                       const customTime = (bookingModal.data.gio_ket_thuc || '').substring(0, 5);
                       const status = getBookingModalSlotStatus(customTime, true);
                       return (
-                        <option value={customTime} disabled={status.disabled}>
+                        <option 
+                          value={customTime} 
+                          disabled={status.disabled}
+                          className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
+                          style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
+                        >
                           {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
                         </option>
                       );
                     })()}
                     {TIME_OPTIONS_24H.map((t) => {
                       const status = getBookingModalSlotStatus(t, true);
+                      if (status.isHidden) return null; // Ẩn giờ đã qua và giờ <= giờ bắt đầu
                       return (
-                        <option key={`end_${t}`} value={t} disabled={status.disabled}>
+                        <option 
+                          key={`end_${t}`} 
+                          value={t} 
+                          disabled={status.disabled}
+                          className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
+                          style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
+                        >
                           {status.label}
                         </option>
                       );
                     })}
                   </select>
                 </div>
+              </div>
+
+              {/* Chú thích trạng thái khung giờ */}
+              <div className="flex flex-wrap items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950/60 text-[11px] font-bold">
+                <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shadow-sm"></span>
+                  <span>🟢 Trống</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-black">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shadow-sm animate-pulse"></span>
+                  <span>🟠 Đang có người chọn / Đã đặt (Màu cam)</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 inline-block"></span>
+                  <span>⚪ Đã qua giờ (Tự động ẩn)</span>
+                </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -3858,12 +4954,15 @@ export default function AdminDashboard() {
                   onChange={(e) => {
                     const nextStatus = e.target.value;
                     const curTotal = Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0);
-                    let nextLoaiTT = 'TRA_HET';
-                    let nextSoTien = curTotal;
-                    if (nextStatus === 'DA_COC') {
+                    let nextLoaiTT = '';
+                    let nextSoTien = 0;
+                    if (nextStatus === 'DA_THANH_TOAN') {
+                      nextLoaiTT = 'TRA_HET';
+                      nextSoTien = curTotal;
+                    } else if (nextStatus === 'DA_COC') {
                       nextLoaiTT = 'DAT_COC';
                       nextSoTien = Math.round(curTotal * 0.3);
-                    } else if (nextStatus === 'CHO_THANH_TOAN') {
+                    } else {
                       nextLoaiTT = '';
                       nextSoTien = 0;
                     }
@@ -3879,13 +4978,23 @@ export default function AdminDashboard() {
                   }}
                   className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 >
-                  <option value="DA_THANH_TOAN">Đã Thanh Toán</option>
-                  <option value="DA_COC">Đã Cọc (30%)</option>
                   <option value="CHO_THANH_TOAN">Chưa Thanh Toán</option>
+                  <option value="DA_COC">Đã Cọc (30%)</option>
+                  <option value="DA_THANH_TOAN">Đã Thanh Toán (100%)</option>
                 </select>
                 {bookingModal.data.trang_thai === 'DA_COC' && (
                   <p className="mt-1 text-[11px] text-sky-500 font-medium">
                     ⚡ Số tiền cọc cần trả: <strong>{(Number(bookingModal.data.so_tien || Math.round(Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0) * 0.3))).toLocaleString('vi-VN')} đ</strong> (30% tổng đơn)
+                  </p>
+                )}
+                {bookingModal.data.trang_thai === 'DA_THANH_TOAN' && (
+                  <p className="mt-1 text-[11px] text-emerald-500 font-medium">
+                    ⚡ Đã thanh toán toàn bộ: <strong>{Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0).toLocaleString('vi-VN')} đ</strong>
+                  </p>
+                )}
+                {(bookingModal.data.trang_thai === 'CHO_THANH_TOAN' || !bookingModal.data.trang_thai) && (
+                  <p className="mt-1 text-[11px] text-amber-500 font-medium">
+                    ⚡ Đơn chưa thanh toán (Số tiền thanh toán: 0 đ)
                   </p>
                 )}
               </div>

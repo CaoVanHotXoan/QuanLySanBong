@@ -653,7 +653,12 @@ export const xoaHoanTien = async (req: AuthRequest, res: Response) => {
  */
 export const huyDonTamPayOS = async (req: AuthRequest, res: Response) => {
     try {
-        const { ma_don_dat, orderCode } = req.body;
+        let body = req.body;
+        if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch (_e) {}
+        }
+        const ma_don_dat = body?.ma_don_dat;
+        const orderCode = body?.orderCode;
         const pool = await poolPromise;
 
         const request = pool.request();
