@@ -1068,6 +1068,10 @@ export default function ManagementSystem() {
     // Gộp tất cả đơn đặt từ CSDL SQL Server (rawBookings & historyBookings)
     const playingBookings = [...rawBookings, ...historyBookings].filter((b) => {
       if (!b) return false;
+      // Không đưa đơn bán lẻ dịch vụ (không có sân bóng) vào danh sách sân đang đá
+      if (!b.ma_san || b.ma_san === 0 || String(b.ghi_chu || '').toLowerCase().includes('bán lẻ') || String(b.ghi_chu || '').toLowerCase().includes('ban le') || String(b.ten_san || '').toLowerCase().includes('quầy') || String(b.ten_loai || '').toLowerCase().includes('bán lẻ')) {
+        return false;
+      }
       if (b.trang_thai === 'DA_HUY' || b.trang_thai === 'Đã hủy' || b.trang_thai === 'da_huy') return false;
       const statusNorm = String(b.trang_thai || '').toLowerCase();
       // Loại bỏ các đơn đã kết thúc (tự động dọn sân sau khi hết giờ)
@@ -1207,6 +1211,10 @@ export default function ManagementSystem() {
 
     const list = allSources.filter((b) => {
       if (!b) return false;
+      // Không đưa đơn bán lẻ dịch vụ (không có sân bóng) vào danh sách ca đặt chờ vào sân
+      if (!b.ma_san || b.ma_san === 0 || String(b.ghi_chu || '').toLowerCase().includes('bán lẻ') || String(b.ghi_chu || '').toLowerCase().includes('ban le') || String(b.ten_san || '').toLowerCase().includes('quầy') || String(b.ten_loai || '').toLowerCase().includes('bán lẻ')) {
+        return false;
+      }
       const statusNorm = String(b.trang_thai || '').toLowerCase().replace(/\s+/g, '_');
       if (
         statusNorm === 'da_huy' ||
@@ -5296,7 +5304,7 @@ export default function ManagementSystem() {
                           <span>🥤 ĐƠN BÁN LẺ DỊCH VỤ TẠI QUẦY</span>
                         </div>
                         <p className="text-[10px] text-slate-300 leading-relaxed">
-                          Đơn bán tại quầy không đặt sân. Bấm <strong>LƯU ĐƠN LẺ</strong> để giữ đơn hoặc <strong>THANH TOÁN LẺ</strong> để thu tiền.
+                          Đơn bán tại quầy không đặt sân. Bấm <strong>THANH TOÁN LẺ</strong> để thu tiền.
                         </p>
                       </div>
                     ) : (
@@ -5727,35 +5735,43 @@ export default function ManagementSystem() {
                       </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={handleSaveOrder}
-                        className="w-full py-3 px-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                        title="Lưu đơn hàng: đưa vào sân đang đá hoặc lưu đơn lẻ để khách thanh toán sau"
-                      >
-                        <Save className="w-4 h-4" />
-                        <span>
-                          {selectedPitches.length === 0 && selectedServices.length > 0
-                            ? 'LƯU ĐƠN LẺ'
-                            : (hasAddedExtraServices || editingInvoiceId ? 'LƯU DỊCH VỤ' : 'LƯU')}
-                        </span>
-                      </button>
-
+                    {selectedPitches.length === 0 && selectedServices.length > 0 ? (
                       <button
                         type="button"
                         onClick={() => handlePayOrder()}
-                        className="w-full py-3 px-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                        title="Thanh toán số tiền tương ứng (chọn Tiền mặt hoặc Chuyển khoản QR)"
+                        className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer ring-2 ring-emerald-400/40"
+                        title="Thanh toán đơn bán lẻ dịch vụ tại quầy"
                       >
                         <CreditCard className="w-4 h-4" />
-                        <span>
-                          {selectedPitches.length === 0 && selectedServices.length > 0
-                            ? 'THANH TOÁN LẺ'
-                            : (hasAddedExtraServices || editingInvoiceId ? 'THANH TOÁN' : 'THANH TOÁN')}
-                        </span>
+                        <span>THANH TOÁN LẺ</span>
                       </button>
-                    </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSaveOrder}
+                          className="w-full py-3 px-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          title="Lưu đơn hàng: đưa vào sân đang đá để khách thanh toán sau"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span>
+                            {hasAddedExtraServices || editingInvoiceId ? 'LƯU DỊCH VỤ' : 'LƯU'}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handlePayOrder()}
+                          className="w-full py-3 px-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                          title="Thanh toán số tiền tương ứng (chọn Tiền mặt hoặc Chuyển khoản QR)"
+                        >
+                          <CreditCard className="w-4 h-4" />
+                          <span>
+                            {hasAddedExtraServices || editingInvoiceId ? 'THANH TOÁN' : 'THANH TOÁN'}
+                          </span>
+                        </button>
+                      </div>
+                    )}
 
                     {Number(loadedBookingState?.so_tien_da_tra || 0) > 0 ? (
                       <p className="text-[10px] text-amber-400 text-center font-bold">
