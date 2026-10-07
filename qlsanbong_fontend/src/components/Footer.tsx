@@ -153,7 +153,7 @@ export default function Footer() {
           <p>© 2026 {tenTrungTam}. Đặt Sân Thể Thao Nhanh Chóng & Chuyên Nghiệp.</p>
           <div className="flex items-center gap-6">
             <Link href="/about-us" className="hover:text-emerald-400 transition-colors">Giới thiệu</Link>
-            <Link href="/tin_tuc" className="hover:text-emerald-400 transition-colors">Tin tức & Sự kiện</Link>
+            <Link href="/tin-tuc" className="hover:text-emerald-400 transition-colors">Tin tức & Sự kiện</Link>
             <Link href="/lien-he" className="hover:text-emerald-400 transition-colors">Gửi phản hồi</Link>
           </div>
         </div>

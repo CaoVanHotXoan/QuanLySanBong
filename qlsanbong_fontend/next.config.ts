@@ -18,8 +18,12 @@ const nextConfig: NextConfig = {
         destination: '/management-system',
       },
       {
-        source: '/Management System',
-        destination: '/management-system',
+        source: '/tin_tuc',
+        destination: '/tin-tuc',
+      },
+      {
+        source: '/tin_tuc/:path*',
+        destination: '/tin-tuc/:path*',
       },
     ];
   },

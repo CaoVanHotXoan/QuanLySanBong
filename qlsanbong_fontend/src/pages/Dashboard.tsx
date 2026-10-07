@@ -5244,7 +5244,7 @@ export default function AdminDashboard() {
                             </td>
                             <td className="p-4 text-right space-x-2">
                               <a
-                                href={`/tin_tuc?id=${nw.id}`}
+                                href={`/tin-tuc?id=${nw.id}`}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="p-2 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-200 cursor-pointer font-bold inline-flex items-center gap-1"

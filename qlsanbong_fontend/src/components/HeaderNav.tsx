@@ -117,7 +117,7 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
   const navLinks = [
     { key: 'home', label: '🏠 Trang chủ', href: '/' },
     { key: 'schedule', label: '📅 Lịch sân theo giờ', href: '/#ma-tran-lich-san' },
-    { key: 'news', label: '📰 Tin Tức', href: '/tin_tuc' },
+    { key: 'news', label: '📰 Tin Tức', href: '/tin-tuc' },
     { key: 'about', label: 'ℹ️ About Us', href: '/about-us' },
     { key: 'contact', label: '📞 Liên Hệ', href: '/lien-he' },
   ];
