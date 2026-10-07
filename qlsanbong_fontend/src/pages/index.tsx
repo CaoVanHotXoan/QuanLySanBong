@@ -49,7 +49,8 @@ import {
   VolumeX,
   Play,
   Pause,
-  ImageIcon
+  ImageIcon,
+  Menu
 } from 'lucide-react';
 import Login, { AuthUser } from './Login/login';
 import Profile from '../profile/profile';
@@ -313,6 +314,9 @@ export default function HomePage() {
       (currentUser.vai_tro || '').toLowerCase().includes('nhan vien')
     )
   );
+
+  // State quản lý Mobile Hamburger Menu Drawer
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
   // State Bộ lọc Đặt sân nhanh (Loại sân, Sân cụ thể & Ngày đá)
   const [filterLoaiSan, setFilterLoaiSan] = useState<string>('ALL');
@@ -1343,7 +1347,7 @@ export default function HomePage() {
             </a>
 
             {/* KHUNG TÌM KIẾM TÊN SÂN Ở GIỮA (ĐÃ BỎ CHỮ SQL LIVE THEO YÊU CẦU) */}
-            <div className="flex-1 max-w-lg mx-1 sm:mx-4">
+            <div className="flex-1 max-w-lg mx-1 sm:mx-4 min-w-0">
               <div className="relative flex items-center">
                 <Search className="w-4 h-4 text-emerald-500 absolute left-3.5 pointer-events-none" />
                 <input
@@ -1514,13 +1518,31 @@ export default function HomePage() {
                   </button>
                 </div>
               )}
+
+              {/* NÚT HAMBURGER MENU CHO MOBILE & TABLET (block lg:hidden) */}
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className={`p-2 rounded-2xl border transition-all duration-200 flex items-center justify-center cursor-pointer block lg:hidden shadow-sm ${
+                  isDarkMode
+                    ? 'bg-slate-900 border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800'
+                    : 'bg-slate-100 border-slate-300 text-slate-700 hover:text-slate-900 hover:bg-slate-200'
+                }`}
+                aria-label="Mở Menu Di Động"
+              >
+                {isMobileMenuOpen ? (
+                  <X className="w-5 h-5 text-rose-400" />
+                ) : (
+                  <Menu className="w-5 h-5 text-emerald-500" />
+                )}
+              </button>
             </div>
 
           </div>
         </div>
 
-        {/* TẦNG 2: THANH MENU ĐIỀU HƯỚNG CHÍNH (SUB-NAVBAR - ĐÃ BỎ NÚT TRANG QUẢN TRỊ THEO YÊU CẦU) */}
-        <div className={`transition-colors duration-300 border-t ${isDarkMode ? 'bg-slate-950/70 border-slate-900' : 'bg-slate-100/80 border-slate-200'
+        {/* TẦNG 2: THANH MENU ĐIỀU HƯỚNG CHÍNH (ẨN TRÊN MOBILE & TABLET: hidden lg:block) */}
+        <div className={`hidden lg:block transition-colors duration-300 border-t ${isDarkMode ? 'bg-slate-950/70 border-slate-900' : 'bg-slate-100/80 border-slate-200'
           }`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-11 flex items-center justify-between overflow-x-auto">
 
@@ -1566,7 +1588,7 @@ export default function HomePage() {
             </nav>
 
             {/* Thông tin hỗ trợ nhanh */}
-            <div className="hidden md:flex items-center gap-4 text-[11px] font-semibold text-slate-400 shrink-0">
+            <div className="hidden lg:flex items-center gap-4 text-[11px] font-semibold text-slate-400 shrink-0">
               <span className={`flex items-center gap-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                 <Phone className="w-3.5 h-3.5 text-emerald-500" />
                 Hotline Đặt Sân: <strong className="text-emerald-500 font-mono">0816344504</strong>
@@ -1578,13 +1600,166 @@ export default function HomePage() {
 
       </header>
 
-      <main className="pt-28">
+      {/* ==================== 1.1 MOBILE & TABLET NAVIGATION DRAWER & OVERLAY ==================== */}
+      {/* LỚP PHỦ NỀN MỜ (OVERLAY): Click vào ngoài để tự đóng menu */}
+      <div
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity duration-300 lg:hidden ${
+          isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setIsMobileMenuOpen(false)}
+      />
+
+      {/* NGĂN KÉO DRAWER TRƯỢT TỪ MÉP PHẢI */}
+      <aside
+        className={`fixed top-0 right-0 bottom-0 w-72 max-w-[85vw] z-50 flex flex-col justify-between p-5 transition-transform duration-300 ease-in-out shadow-2xl lg:hidden ${
+          isDarkMode ? 'bg-slate-950 border-l border-slate-800 text-white' : 'bg-white border-l border-slate-200 text-slate-900'
+        } ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+      >
+        {/* Header của Mobile Drawer */}
+        <div className="flex items-center justify-between pb-4 border-b border-slate-800/80">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 flex items-center justify-center font-black shadow-md shadow-emerald-500/20">
+              ⚽
+            </div>
+            <div>
+              <div className="flex items-center gap-1">
+                <span className={`text-base font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>SOCCER</span>
+                <span className="text-base font-black tracking-tight text-emerald-500">247</span>
+              </div>
+              <p className="text-[9px] uppercase font-bold tracking-widest text-emerald-500 -mt-0.5">Menu Điều Hướng</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            aria-label="Đóng menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Danh sách Links điều hướng chính */}
+        <nav className="flex-1 overflow-y-auto py-4 space-y-1.5">
+          <a
+            href="#hero"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all hover:bg-emerald-500/10 hover:text-emerald-400 text-slate-300"
+          >
+            🏠 Trang chủ
+          </a>
+          <a
+            href="#ma-tran-lich-san"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all hover:bg-emerald-500/10 hover:text-emerald-400 text-slate-300"
+          >
+            📅 Lịch sân theo giờ
+          </a>
+          <Link
+            href="/tin-tuc"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all hover:bg-emerald-500/10 hover:text-emerald-400 text-slate-300"
+          >
+            📰 Tin Tức
+          </Link>
+          <Link
+            href="/about-us"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all hover:bg-emerald-500/10 hover:text-emerald-400 text-slate-300"
+          >
+            ℹ️ About Us
+          </Link>
+          <Link
+            href="/lien-he"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all hover:bg-emerald-500/10 hover:text-emerald-400 text-slate-300"
+          >
+            📞 Liên Hệ
+          </Link>
+
+          {isUserStaffOrAdmin && (
+            <a
+              href="/management-system"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-black transition-all bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+            >
+              ⚡ Quản Lý Sân (POS)
+            </a>
+          )}
+
+          {isUserAdmin && (
+            <a
+              href="/Dashboard"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-black transition-all bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20"
+            >
+              🛡️ Trang Quản Trị (Dashboard)
+            </a>
+          )}
+        </nav>
+
+        {/* Footer Mobile Drawer (Người dùng / Đăng nhập) */}
+        <div className="pt-4 border-t border-slate-800/80">
+          {currentUser ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div className="w-8 h-8 rounded-full bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-xs">
+                  {currentUser.ho_ten ? currentUser.ho_ten.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div className="overflow-hidden">
+                  <p className="text-xs font-bold text-white truncate">{currentUser.ho_ten}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{currentUser.email}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  handleLogout();
+                }}
+                className="w-full py-2.5 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold border border-rose-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Đăng xuất</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setLoginInitialRegister(false);
+                  setIsLoginModalOpen(true);
+                }}
+                className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700 cursor-pointer text-center"
+              >
+                Đăng nhập
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setLoginInitialRegister(true);
+                  setIsLoginModalOpen(true);
+                }}
+                className="py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-md cursor-pointer text-center"
+              >
+                Đăng ký
+              </button>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <main className="pt-16 lg:pt-28 w-full max-w-full overflow-hidden">
         {/* =====================================================================
             2. HERO SECTION VỚI BANNER (ẢNH / VIDEO) LÀM NỀN TRỰC TIẾP DƯỚI CHỮ
             - Ảnh: 9 giây thì tự động chuyển
             - Video: Hết thời lượng video thì tự động chuyển
             ===================================================================== */}
-        <section id="hero" className="relative min-h-[520px] sm:min-h-[580px] lg:min-h-[640px] flex items-center justify-center overflow-hidden border-b border-emerald-950/40 group">
+        <section id="hero" className="relative w-full max-w-full min-h-[520px] sm:min-h-[580px] lg:min-h-[640px] flex items-center justify-center overflow-hidden border-b border-emerald-950/40 group">
           {/* LỚP NỀN BANNER SLIDER (ẢNH HOẶC VIDEO NẰM TRỰC TIẾP DƯỚI DÒNG CHỮ) */}
           <div className="absolute inset-0 w-full h-full z-0 overflow-hidden bg-slate-950">
             {banners.length > 0 ? (
@@ -1761,22 +1936,24 @@ export default function HomePage() {
           </div>
 
           {/* THANH ĐIỀU HƯỚNG NGÀY & BỘ LỌC SÂN (DATE NAVIGATION & COURT FILTER) */}
-          <div className={`mb-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 p-4 rounded-2xl border shadow-lg backdrop-blur-md relative z-30 ${isDarkMode ? 'bg-slate-900/80 border-slate-800 shadow-slate-950/40' : 'bg-white border-slate-200 shadow-slate-200/50'
+          <div className={`mb-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border shadow-lg backdrop-blur-md relative z-30 w-full max-w-full overflow-hidden ${isDarkMode ? 'bg-slate-900/80 border-slate-800 shadow-slate-950/40' : 'bg-white border-slate-200 shadow-slate-200/50'
             }`}>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto min-w-0">
               {/* NÚT LỌC LOẠI SÂN (SÂN 5, SÂN 7, PICKLEBALL... - LOẠI BỎ SÂN DỰ BỊ) */}
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${isDarkMode
+              <div className={`flex items-center justify-between sm:justify-start gap-2 px-3 py-2 sm:py-1.5 rounded-xl border transition-all min-w-0 flex-1 sm:flex-initial ${isDarkMode
                 ? 'bg-slate-950/90 border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500'
                 : 'bg-slate-50 border-slate-300 hover:border-emerald-500 focus-within:border-emerald-500 shadow-sm'
                 }`}>
-                <LandPlot className="w-3.5 h-3.5 text-emerald-500" />
-                <span className={`text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                  Lọc Loại Sân:
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <LandPlot className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className={`text-[11px] sm:text-xs font-bold whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                    Lọc Loại Sân:
+                  </span>
+                </div>
                 <select
                   value={filterLoaiSan}
                   onChange={(e) => handleLoaiSanChange(e.target.value)}
-                  className={`bg-transparent text-xs font-black focus:outline-none cursor-pointer ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
+                  className={`bg-transparent text-[11px] sm:text-xs font-black focus:outline-none cursor-pointer truncate max-w-[140px] sm:max-w-none ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
                     }`}
                 >
                   <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
@@ -1791,18 +1968,20 @@ export default function HomePage() {
               </div>
 
               {/* NÚT LỌC SÂN BÓNG (HIỂN THỊ LỊCH SÂN ĐÓ - ĐỒNG BỘ THEO LOẠI SÂN) */}
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${isDarkMode
+              <div className={`flex items-center justify-between sm:justify-start gap-2 px-3 py-2 sm:py-1.5 rounded-xl border transition-all min-w-0 flex-1 sm:flex-initial ${isDarkMode
                 ? 'bg-slate-950/90 border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500'
                 : 'bg-slate-50 border-slate-300 hover:border-emerald-500 focus-within:border-emerald-500 shadow-sm'
                 }`}>
-                <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-500" />
-                <span className={`text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                  Lọc Sân:
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className={`text-[11px] sm:text-xs font-bold whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                    Lọc Sân:
+                  </span>
+                </div>
                 <select
                   value={filterSanId}
                   onChange={(e) => setFilterSanId(e.target.value)}
-                  className={`bg-transparent text-xs font-black focus:outline-none cursor-pointer ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
+                  className={`bg-transparent text-[11px] sm:text-xs font-black focus:outline-none cursor-pointer truncate max-w-[140px] sm:max-w-none ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
                     }`}
                 >
                   <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
@@ -1819,10 +1998,12 @@ export default function HomePage() {
               </div>
             </div>
 
-            <DateNavigationBar
-              value={filterNgayDa}
-              onChange={(_date, formattedDateStr) => setFilterNgayDa(formattedDateStr)}
-            />
+            <div className="w-full lg:w-auto min-w-0">
+              <DateNavigationBar
+                value={filterNgayDa}
+                onChange={(_date, formattedDateStr) => setFilterNgayDa(formattedDateStr)}
+              />
+            </div>
           </div>
 
           {/* KHUNG BẢNG MA TRẬN GRID (CUỘN NGANG) */}
@@ -2035,19 +2216,19 @@ export default function HomePage() {
                 </p>
               </div>
             ) : (
-              <table className="w-full text-left border-collapse min-w-[2000px]">
+              <table className="w-full text-left border-collapse min-w-[1200px] lg:min-w-[2000px]">
                 <thead>
-                  <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950/80' : 'border-slate-200 bg-slate-100/90'
+                  <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-100'
                     }`}>
-                    <th className={`p-4 sm:p-5 text-xs font-black uppercase tracking-wider w-56 sticky left-0 z-20 backdrop-blur-md shadow-lg ${isDarkMode ? 'text-slate-300 bg-slate-950/95 border-r border-slate-800' : 'text-slate-700 bg-slate-100/95 border-r border-slate-200'
+                    <th className={`p-2 lg:p-4 text-[10px] lg:text-xs font-black uppercase tracking-wider w-[110px] min-w-[110px] lg:w-[200px] lg:min-w-[200px] sticky left-0 z-20 shadow-md border-r break-words whitespace-normal ${isDarkMode ? 'text-slate-300 bg-slate-950 border-slate-800' : 'text-slate-700 bg-slate-100 border-slate-200'
                       }`}>
                       Sân Bóng / Giờ Bắt Đầu
                     </th>
                     {filteredTimeSlots.map((slot) => (
-                      <th key={slot.start} className={`p-3 text-center border-l min-w-[95px] ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
+                      <th key={slot.start} className={`p-2 lg:p-3 text-center border-l min-w-[80px] lg:min-w-[140px] ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
                         }`}>
-                        <div className={`text-base font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{slot.label}</div>
-                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">{slot.start}</div>
+                        <div className={`text-xs lg:text-base font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{slot.label}</div>
+                        <div className="text-[9px] lg:text-[11px] text-slate-400 font-mono mt-0.5">{slot.start}</div>
                       </th>
                     ))}
                   </tr>
@@ -2056,9 +2237,9 @@ export default function HomePage() {
                   {filteredSanList.map((san) => (
                     <tr key={san.id} className={isDarkMode ? 'hover:bg-slate-800/20 transition-colors' : 'hover:bg-slate-50 transition-colors'}>
                       {/* Cột Danh sách sân - Cố định bên trái khi cuộn */}
-                      <td className={`p-4 sm:p-5 sticky left-0 z-10 border-r backdrop-blur-md shadow-md ${isDarkMode ? 'bg-slate-900/95 border-slate-800/80' : 'bg-white/95 border-slate-200'
+                      <td className={`p-2 lg:p-4 w-[110px] min-w-[110px] lg:w-[200px] lg:min-w-[200px] sticky left-0 z-20 border-r shadow-md leading-tight break-words whitespace-normal ${isDarkMode ? 'bg-slate-900 border-slate-800/80' : 'bg-white border-slate-200'
                         }`}>
-                        <div className={`font-extrabold text-sm sm:text-base flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-slate-900'
+                        <div className={`font-extrabold text-[11px] lg:text-sm flex items-center gap-1.5 break-words whitespace-normal ${isDarkMode ? 'text-white' : 'text-slate-900'
                           }`}>
                           {san.ten_san}
                         </div>
@@ -2091,16 +2272,16 @@ export default function HomePage() {
                           lockedSlots.includes(slotKeyRealtime) && !myLockedSlotIds.includes(slotKeyRealtime);
 
                         return (
-                          <td key={slot.start} className={`p-2 border-l text-center ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'
+                          <td key={slot.start} className={`p-1 lg:p-2 border-l text-center min-w-[80px] lg:min-w-[140px] ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'
                             }`}>
                             {/* 1. TRƯỜNG HỢP: ĐÃ CÓ ĐƠN ĐẶT TRONG CSDL -> HIỂN THỊ MÀU ĐỎ NỔI BẬT & CHỈ HIỆN ĐÃ ĐẶT */}
                             {isBooked ? (
                               <div
                                 title="Khung giờ này đã được đặt"
-                                className="w-full h-20 p-2 rounded-2xl border border-rose-600/70 bg-gradient-to-br from-rose-950/90 to-red-950/90 text-rose-300 flex flex-col items-center justify-center gap-1.5 shadow-md shadow-rose-950/40 cursor-not-allowed select-none transition-all"
+                                className="w-full h-14 lg:h-20 p-1 lg:p-2 rounded-xl lg:rounded-2xl border border-rose-600/70 bg-gradient-to-br from-rose-950/90 to-red-950/90 text-rose-300 flex flex-col items-center justify-center gap-0.5 lg:gap-1.5 shadow-md shadow-rose-950/40 cursor-not-allowed select-none transition-all"
                               >
-                                <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                                <span className="text-xs font-black text-rose-300 tracking-wider">
+                                <XCircle className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-rose-400 shrink-0" />
+                                <span className="text-[9px] lg:text-xs font-black text-rose-300 tracking-wider">
                                   ĐÃ ĐẶT
                                 </span>
                               </div>
@@ -2108,16 +2289,16 @@ export default function HomePage() {
                               /* 2. TRƯỜNG HỢP: ĐÃ QUA GIỜ SO VỚI THỜI GIAN HIỆN TẠI (MÀU XÁM - KHÓA) */
                               <div
                                 title={`Khung giờ ${slot.label} đã qua`}
-                                className={`w-full h-20 p-2 rounded-2xl border flex flex-col items-center justify-center gap-1 cursor-not-allowed select-none transition-all ${
+                                className={`w-full h-14 lg:h-20 p-1 lg:p-2 rounded-xl lg:rounded-2xl border flex flex-col items-center justify-center gap-0.5 lg:gap-1 cursor-not-allowed select-none transition-all ${
                                   isDarkMode
                                     ? 'border-slate-800 bg-slate-900/40 text-slate-500 opacity-60'
                                     : 'border-slate-300 bg-slate-100 text-slate-400 opacity-70'
                                 }`}
                               >
-                                <span className="text-xs font-black text-slate-400 dark:text-slate-500 tracking-wider">
+                                <span className="text-[9px] lg:text-xs font-black text-slate-400 dark:text-slate-500 tracking-wider">
                                   ĐÃ QUA
                                 </span>
-                                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 font-mono line-through">
+                                <span className="text-[8px] lg:text-[11px] font-bold text-slate-400 dark:text-slate-500 font-mono line-through">
                                   {slot.label}
                                 </span>
                               </div>
@@ -2131,32 +2312,32 @@ export default function HomePage() {
                                     message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang được khách hàng khác chọn giữ chỗ. Vui lòng chọn khung giờ khác!`,
                                   });
                                 }}
-                                className="w-full h-20 p-2 rounded-2xl border border-amber-500/80 bg-gradient-to-br from-amber-950/90 via-orange-950/85 to-amber-900/90 text-amber-300 flex flex-col items-center justify-center gap-1 shadow-md shadow-amber-950/50 cursor-not-allowed select-none transition-all hover:scale-[1.02]"
+                                className="w-full h-14 lg:h-20 p-1 lg:p-2 rounded-xl lg:rounded-2xl border border-amber-500/80 bg-gradient-to-br from-amber-950/90 via-orange-950/85 to-amber-900/90 text-amber-300 flex flex-col items-center justify-center gap-0.5 lg:gap-1 shadow-md shadow-amber-950/50 cursor-not-allowed select-none transition-all hover:scale-[1.02]"
                               >
-                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-300 tracking-wide">
+                                <span className="inline-flex items-center gap-1 text-[8px] lg:text-[10px] font-black text-amber-300 tracking-wide">
                                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-                                  ĐANG GIỮ CHỖ
+                                  GIỮ CHỖ
                                 </span>
-                                <span className="text-[9px] text-amber-300/90 font-bold truncate max-w-[100px]">
-                                  {slot.label} (Khóa)
+                                <span className="text-[8px] lg:text-[9px] text-amber-300/90 font-bold truncate max-w-[70px] lg:max-w-[100px]">
+                                  {slot.label}
                                 </span>
                               </div>
                             ) : (
                               /* 4. TRƯỜNG HỢP: SÂN TRỐNG (MÀU XANH LÁ) -> CLICK ĐỂ CHỌN THỜI LƯỢNG 1H, 1H30, 2H */
                               <button
                                 onClick={() => handleSlotClick(san, slot)}
-                                className={`w-full h-20 p-2 rounded-2xl border transition-all duration-200 flex flex-col items-center justify-center gap-1 group shadow-sm hover:scale-[1.03] cursor-pointer ${isDarkMode
+                                className={`w-full h-14 lg:h-20 p-1 lg:p-2 rounded-xl lg:rounded-2xl border transition-all duration-200 flex flex-col items-center justify-center gap-0.5 lg:gap-1 group shadow-sm hover:scale-[1.03] cursor-pointer ${isDarkMode
                                   ? 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-600/40 hover:border-emerald-400'
                                   : 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-300 hover:border-emerald-500'
                                   }`}
                               >
-                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                                <span className="text-[9px] lg:text-xs font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
                                   TRỐNG
                                 </span>
-                                <span className={`text-[11px] font-black font-mono ${isDarkMode ? 'text-emerald-300' : 'text-slate-900'}`}>
+                                <span className={`text-[9px] lg:text-[11px] font-black font-mono ${isDarkMode ? 'text-emerald-300' : 'text-slate-900'}`}>
                                   {slot.label}
                                 </span>
-                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity font-bold">
+                                <span className="text-[8px] lg:text-[10px] text-emerald-600 dark:text-emerald-400 hidden lg:block opacity-0 group-hover:opacity-100 transition-opacity font-bold">
                                   + Chọn Giờ
                                 </span>
                               </button>

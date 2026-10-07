@@ -3521,7 +3521,33 @@ export default function ManagementSystem() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
 
-      <div className={`w-full h-screen flex flex-col overflow-hidden transition-colors duration-300 ${isDarkMode ? 'dark bg-[#0a0f18] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+      {/* ==================== KHỐI CẢNH BÁO MOBILE (< 768px) ==================== */}
+      <div className="flex md:hidden min-h-screen w-full flex-col items-center justify-center bg-slate-950 px-6 py-12 text-center text-white select-none">
+        <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-6 shadow-2xl shadow-amber-500/10 animate-bounce">
+          <Smartphone className="w-10 h-10" />
+        </div>
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold uppercase tracking-wider mb-3">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          Màn hình không hỗ trợ
+        </div>
+        <h2 className="text-xl font-black tracking-tight text-white mb-2">
+          Màn hình quá nhỏ
+        </h2>
+        <p className="max-w-xs text-xs text-slate-400 leading-relaxed">
+          Vui lòng sử dụng thiết bị <strong>Tablet (iPad)</strong> hoặc <strong>PC / Laptop</strong> để truy cập <strong>Hệ thống Quản lý (POS)</strong> nhằm đảm bảo trải nghiệm tốt nhất.
+        </p>
+        <button
+          type="button"
+          onClick={() => router.push('/')}
+          className="mt-6 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+        >
+          <Home className="w-4 h-4" />
+          <span>Về Trang Chủ</span>
+        </button>
+      </div>
+
+      {/* ==================== KHỐI POS CHÍNH (CHỈ HIỆN TRÊN TABLET & PC: md:flex) ==================== */}
+      <div className={`hidden md:flex w-full h-screen flex-col overflow-hidden transition-colors duration-300 ${isDarkMode ? 'dark bg-[#0a0f18] text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
 
         {/* ==================== 1. HEADER CŨ TOÀN DIỆN ==================== */}
         <header className={`sticky top-0 z-40 w-full border-b backdrop-blur-xl transition-colors shrink-0 ${isDarkMode ? 'bg-[#0f172a]/95 border-slate-800 text-white' : 'bg-white/95 border-slate-200 text-slate-900'}`}>
@@ -3886,8 +3912,8 @@ export default function ManagementSystem() {
         {/* ==================== 2. KHU VỰC NỘI DUNG CHÍNH (SPLIT-SCREEN 75% - 25%) ==================== */}
         <div className="flex-1 flex overflow-hidden">
 
-          {/* ----------------- CỘT TRÁI (ĐỘNG: 75% KHI CÓ GIỎ HÀNG, 100% KHI ẨN GIỎ HÀNG) ----------------- */}
-          <main className={`h-full overflow-y-auto p-4 sm:p-6 pb-6 space-y-6 transition-all duration-300 ${activeTab === 'home' || activeTab === 'services' ? 'w-[75%]' : 'w-full'
+          {/* ----------------- CỘT TRÁI (ĐỘNG: TABLET 65%, PC 75% KHI CÓ GIỎ HÀNG, 100% KHI ẨN GIỎ HÀNG) ----------------- */}
+          <main className={`h-full overflow-y-auto p-3 md:p-4 lg:p-6 pb-6 space-y-4 md:space-y-6 transition-all duration-300 ${activeTab === 'home' || activeTab === 'services' ? 'w-full md:w-[65%] lg:w-[75%]' : 'w-full'
             }`}>
 
             {/* TAB 1: SÂN ĐANG ĐÁ (CURRENTLY PLAYING PITCHES) */}
@@ -5063,22 +5089,22 @@ export default function ManagementSystem() {
                       );
                     })()
                   ) : (
-                    <table className="w-full text-left border-collapse min-w-[2000px]">
+                    <table className="w-full text-left border-collapse min-w-[1200px] lg:min-w-[2000px]">
                       <thead>
                         <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950/80' : 'border-slate-200 bg-slate-100'}`}>
-                          <th className={`p-3.5 text-xs font-black uppercase tracking-wider w-60 sticky left-0 z-20 backdrop-blur-md shadow-lg ${isDarkMode ? 'text-slate-300 bg-slate-950/95 border-r border-slate-800' : 'text-slate-700 bg-slate-100/95 border-r border-slate-200'}`}>
+                          <th className={`p-2 lg:p-3.5 text-[10px] lg:text-xs font-black uppercase tracking-wider w-[110px] min-w-[110px] lg:w-[200px] lg:min-w-[200px] sticky left-0 z-20 backdrop-blur-md shadow-lg break-words whitespace-normal ${isDarkMode ? 'text-slate-300 bg-slate-950/95 border-r border-slate-800' : 'text-slate-700 bg-slate-100/95 border-r border-slate-200'}`}>
                             Sân Bóng / Giờ Đá
                           </th>
 
                           {availableTimeSlots.map((slot) => (
                             <th
                               key={slot.start}
-                              className={`p-2.5 text-center border-l min-w-[90px] ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'}`}
+                              className={`p-1.5 lg:p-2.5 text-center border-l min-w-[80px] lg:min-w-[140px] ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'}`}
                             >
-                              <div className={`text-xs font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                              <div className={`text-[10px] lg:text-xs font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                                 {slot.label}
                               </div>
-                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              <div className="text-[9px] lg:text-[10px] text-slate-400 font-mono mt-0.5">
                                 {slot.start} - {slot.end}
                               </div>
                             </th>
@@ -5092,18 +5118,18 @@ export default function ManagementSystem() {
                             key={san.id}
                             className={isDarkMode ? 'hover:bg-slate-800/30 transition-colors' : 'hover:bg-slate-50 transition-colors'}
                           >
-                            <td className={`p-3.5 sticky left-0 z-10 border-r backdrop-blur-md shadow-md ${isDarkMode ? 'bg-slate-900/95 border-slate-800/80' : 'bg-white/95 border-slate-200'}`}>
-                              <div className="flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
-                                <span className={`font-black text-xs sm:text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                            <td className={`p-2 lg:p-3.5 w-[110px] min-w-[110px] lg:w-[200px] lg:min-w-[200px] sticky left-0 z-10 border-r backdrop-blur-md shadow-md leading-tight break-words whitespace-normal ${isDarkMode ? 'bg-slate-900/95 border-slate-800/80' : 'bg-white/95 border-slate-200'}`}>
+                              <div className="flex items-center gap-1.5 break-words whitespace-normal">
+                                <span className="w-2 h-2 lg:w-2.5 lg:h-2.5 rounded-full bg-emerald-400 shrink-0" />
+                                <span className={`font-black text-[11px] lg:text-sm break-words whitespace-normal ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                                   {san.ten_san}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                              <div className="flex flex-wrap items-center gap-1 mt-1">
+                                <span className="text-[9px] lg:text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                                   {san.ten_loai || 'Sân bóng'}
                                 </span>
-                                <span className="text-[10px] text-slate-400 font-mono">
+                                <span className="text-[9px] lg:text-[10px] text-slate-400 font-mono">
                                   {Number(san.don_gia_phut * 60).toLocaleString('vi-VN')}đ/h
                                 </span>
                               </div>
@@ -5148,7 +5174,7 @@ export default function ManagementSystem() {
                               return (
                                 <td
                                   key={slot.start}
-                                  className={`p-1.5 border-l text-center transition-colors ${isDarkMode ? 'border-slate-800/70' : 'border-slate-200'}`}
+                                  className={`p-1 lg:p-1.5 border-l text-center min-w-[80px] lg:min-w-[140px] transition-colors ${isDarkMode ? 'border-slate-800/70' : 'border-slate-200'}`}
                                 >
                                   {isFullyBooked2 ? (
                                     // TRẠNG THÁI 3: ĐÃ ĐẶT (Đỏ)
@@ -5158,54 +5184,54 @@ export default function ManagementSystem() {
                                         if (slotData) setSelectedSlotDetail({ san, slot, slotData });
                                         else if (matchedOrder2) setSelectedInvoiceDetail(matchedOrder2 as any);
                                       }}
-                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-rose-500/70 bg-gradient-to-b from-[#2a0b12] to-[#1a060b] flex flex-col items-center justify-center gap-1.5 shadow-lg shadow-rose-950/40 hover:scale-[1.03] transition-all cursor-pointer select-none text-center"
+                                      className="w-full h-16 lg:h-24 p-1 lg:p-2 rounded-xl lg:rounded-2xl border border-rose-500/70 bg-gradient-to-b from-[#2a0b12] to-[#1a060b] flex flex-col items-center justify-center gap-0.5 lg:gap-1.5 shadow-lg shadow-rose-950/40 hover:scale-[1.03] transition-all cursor-pointer select-none text-center"
                                       title={`Đã đặt: ${slotData?.ten_khach_hang || matchedOrder2?.ten_khach_hang || 'Có khách'}`}
                                     >
-                                      <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-rose-400 shrink-0" strokeWidth={2.2} />
-                                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-rose-200">ĐÃ ĐẶT</span>
+                                      <XCircle className="w-4 h-4 lg:w-6 lg:h-6 text-rose-400 shrink-0" strokeWidth={2.2} />
+                                      <span className="text-[10px] lg:text-sm font-black uppercase tracking-wider text-rose-200">ĐÃ ĐẶT</span>
                                     </button>
                                   ) : isHolding2 ? (
                                     // TRẠNG THÁI 2: GIỮ CHỔ (Vàng)
                                     <div
                                       onClick={() => matchedOrder2 && setSelectedInvoiceDetail(matchedOrder2 as any)}
-                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-amber-500/60 bg-gradient-to-b from-amber-950/60 to-amber-900/30 flex flex-col items-center justify-center gap-1 select-none cursor-pointer transition-all hover:scale-[1.02]"
+                                      className="w-full h-16 lg:h-24 p-1 lg:p-2 rounded-xl lg:rounded-2xl border border-amber-500/60 bg-gradient-to-b from-amber-950/60 to-amber-900/30 flex flex-col items-center justify-center gap-0.5 lg:gap-1 select-none cursor-pointer transition-all hover:scale-[1.02]"
                                       title={`Đang giữ chỗ: ${matchedOrder2?.ten_khach_hang || ''} | ${slot.label}`}
                                     >
-                                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse mb-0.5" />
-                                      <span className="text-xs font-black text-amber-400 uppercase tracking-wider">GIỮ CHỔ</span>
-                                      <span className="text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mb-0.5" />
+                                      <span className="text-[10px] lg:text-xs font-black text-amber-400 uppercase tracking-wider">GIỮ CHỔ</span>
+                                      <span className="text-[9px] lg:text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
                                     </div>
                                   ) : isSelectedInCart ? (
-                                    // TRONG GIỏ POS
+                                    // TRONG GIỎ POS
                                     <button
                                       type="button"
                                       onClick={() => handleToggleSlotFromMatrix(san, slot, slotData)}
-                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border-2 border-emerald-300 bg-gradient-to-b from-emerald-500 to-teal-500 text-slate-950 flex flex-col items-center justify-center gap-1 shadow-xl shadow-emerald-500/30 ring-2 ring-emerald-400/50 scale-[1.03] transition-all cursor-pointer select-none text-center"
+                                      className="w-full h-16 lg:h-24 p-1 lg:p-2 rounded-xl lg:rounded-2xl border-2 border-emerald-300 bg-gradient-to-b from-emerald-500 to-teal-500 text-slate-950 flex flex-col items-center justify-center gap-0.5 lg:gap-1 shadow-xl shadow-emerald-500/30 ring-2 ring-emerald-400/50 scale-[1.03] transition-all cursor-pointer select-none text-center"
                                       title="Bấm để bỏ chọn khỏi giỏ hàng POS"
                                     >
-                                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider">TRONG GIỏ</span>
-                                      <span className="text-xs sm:text-sm font-black font-mono">{slot.label}</span>
+                                      <span className="text-[10px] lg:text-sm font-black uppercase tracking-wider">TRONG GIỎ</span>
+                                      <span className="text-[9px] lg:text-sm font-black font-mono">{slot.label}</span>
                                     </button>
                                   ) : isLockedByOther ? (
                                      // GIỮ CHỖ REALTIME (Socket.IO) - Không thể chọn
                                      <div
-                                       className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-amber-500/60 bg-gradient-to-b from-amber-950/60 to-amber-900/30 flex flex-col items-center justify-center gap-1 select-none cursor-not-allowed text-center shadow-md opacity-90"
+                                       className="w-full h-16 lg:h-24 p-1 lg:p-2 rounded-xl lg:rounded-2xl border border-amber-500/60 bg-gradient-to-b from-amber-950/60 to-amber-900/30 flex flex-col items-center justify-center gap-0.5 lg:gap-1 select-none cursor-not-allowed text-center shadow-md opacity-90"
                                        title={`Đang có khách giữ chỗ tạm thời (${slot.label}). Không thể chọn!`}
                                      >
-                                       <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse mb-0.5" />
-                                       <span className="text-xs font-black text-amber-400 uppercase tracking-wider">GIỮ CHỖ</span>
-                                       <span className="text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
+                                       <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse mb-0.5" />
+                                       <span className="text-[10px] lg:text-xs font-black text-amber-400 uppercase tracking-wider">GIỮ CHỖ</span>
+                                       <span className="text-[9px] lg:text-[10px] text-amber-300/80 font-mono">{slot.label}</span>
                                      </div>
                                   ) : (
                                     // TRẠNG THÁI 1: TRỐNG (Xanh lá)
                                     <button
                                       type="button"
                                       onClick={() => handleToggleSlotFromMatrix(san, slot, slotData)}
-                                      className="w-full h-20 sm:h-24 p-2 rounded-2xl border border-emerald-500/50 bg-gradient-to-b from-[#0b241c]/90 to-[#061712]/90 hover:from-[#0e2e24] hover:to-[#081e17] hover:border-emerald-400 flex flex-col items-center justify-center gap-1 shadow-md hover:scale-[1.03] transition-all cursor-pointer select-none text-center group"
+                                      className="w-full h-16 lg:h-24 p-1 lg:p-2 rounded-xl lg:rounded-2xl border border-emerald-500/50 bg-gradient-to-b from-[#0b241c]/90 to-[#061712]/90 hover:from-[#0e2e24] hover:to-[#081e17] hover:border-emerald-400 flex flex-col items-center justify-center gap-0.5 lg:gap-1 shadow-md hover:scale-[1.03] transition-all cursor-pointer select-none text-center group"
                                       title={`Trống: Bấm để chọn ${san.ten_san} ca ${slot.start} - ${slot.end}`}
                                     >
-                                      <span className="text-xs sm:text-sm font-black text-emerald-400 group-hover:text-emerald-300 uppercase tracking-wider">TRỐNG</span>
-                                      <span className="text-xs sm:text-sm font-bold text-teal-300 font-mono">{slot.label}</span>
+                                      <span className="text-[10px] lg:text-sm font-black text-emerald-400 group-hover:text-emerald-300 uppercase tracking-wider">TRỐNG</span>
+                                      <span className="text-[9px] lg:text-sm font-bold text-teal-300 font-mono">{slot.label}</span>
                                     </button>
                                   )}
                                 </td>
@@ -5229,7 +5255,7 @@ export default function ManagementSystem() {
               {!isOrderSidebarCollapsed ? (
                 <aside
                   style={{ width: `${orderSidebarWidth}px` }}
-                  className="h-full border-l border-slate-700 bg-slate-800 flex flex-col justify-between p-4 select-none shadow-2xl z-30 shrink-0 relative transition-[width] duration-75 overflow-hidden"
+                  className="h-full border-l border-slate-700 bg-slate-800 flex flex-col justify-between p-3 md:p-4 select-none shadow-2xl z-30 shrink-0 relative transition-[width] duration-75 overflow-hidden"
                 >
                   {/* THANH KÉO CO GIÃN CHIỀU RỘNG (RESIZE HANDLE) */}
                   <div

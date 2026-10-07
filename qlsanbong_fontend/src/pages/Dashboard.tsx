@@ -67,7 +67,8 @@ import {
   MessageSquare,
   MessageSquareReply,
   Send,
-  Save
+  Save,
+  Menu
 } from 'lucide-react';
 import { AuthUser } from './Login/login';
 import { contentService, BannerItem, LienHePayload, LoaiTinTuc, TinTucItem, AboutUsData } from '../services/contentService';
@@ -287,8 +288,8 @@ export interface VaiTro {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 const getAuthHeaders = () => {
-  const token = typeof window !== 'undefined' 
-    ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '') 
+  const token = typeof window !== 'undefined'
+    ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '')
     : '';
   return {
     'Content-Type': 'application/json',
@@ -452,6 +453,7 @@ export default function AdminDashboard() {
   });
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
@@ -624,8 +626,8 @@ export default function AdminDashboard() {
   const verifyAdminRole = async (): Promise<boolean> => {
     setIsAuthChecking(true);
     try {
-      const token = typeof window !== 'undefined' 
-        ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '') 
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '')
         : '';
       const savedUserStr = typeof window !== 'undefined'
         ? (localStorage.getItem('auth_user') || localStorage.getItem('soccer_current_user') || '')
@@ -714,7 +716,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:5000` : 'http://localhost:5000');
     const socket: Socket = io(socketUrl, { transports: ['websocket', 'polling'] });
-    
+
     socket.on('slots_updated', (updatedSlots: string[]) => {
       setLockedSlots(updatedSlots || []);
     });
@@ -821,7 +823,7 @@ export default function AdminDashboard() {
           const data = await resBanners.json();
           if (data.success && Array.isArray(data.data)) setBannerList(data.data);
         }
-      } catch (_e) {}
+      } catch (_e) { }
 
       // 13. Liên Hệ
       try {
@@ -830,7 +832,7 @@ export default function AdminDashboard() {
           const data = await resLienHe.json();
           if (data.success && Array.isArray(data.data)) setLienHeList(data.data);
         }
-      } catch (_e) {}
+      } catch (_e) { }
 
       // 14. Loại Tin Tức
       try {
@@ -839,7 +841,7 @@ export default function AdminDashboard() {
           const data = await resLoaiTin.json();
           if (data.success && Array.isArray(data.data)) setLoaiTinList(data.data);
         }
-      } catch (_e) {}
+      } catch (_e) { }
 
       // 15. Tin Tức
       try {
@@ -848,7 +850,7 @@ export default function AdminDashboard() {
           const data = await resNews.json();
           if (data.success && Array.isArray(data.data)) setNewsList(data.data);
         }
-      } catch (_e) {}
+      } catch (_e) { }
 
       // 16. About Us
       try {
@@ -856,7 +858,7 @@ export default function AdminDashboard() {
         if (resAbout?.success && resAbout.data) {
           setAboutUsData(resAbout.data);
         }
-      } catch (_e) {}
+      } catch (_e) { }
     } catch (err) {
       console.warn('Lỗi tải dữ liệu từ CSDL:', err);
     } finally {
@@ -918,7 +920,7 @@ export default function AdminDashboard() {
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {}
+    onConfirm: () => { }
   });
 
   const openDeleteConfirm = (title: string, message: string, itemDescription: string, onConfirm: () => void | Promise<void>) => {
@@ -995,7 +997,7 @@ export default function AdminDashboard() {
   // KPI Stats
   const kpiStats = useMemo(() => {
     const curDate = selectedDate ? String(selectedDate).split('T')[0] : new Date().toISOString().split('T')[0];
-    
+
     // Doanh thu ngày hôm nay
     const todayOrders = bookingList.filter((b) => {
       const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
@@ -1005,7 +1007,7 @@ export default function AdminDashboard() {
 
     const totalRevenue = todayOrders.reduce((sum, b) => sum + Number(b.tong_tien || b.tien_san || 0), 0);
     const totalOrders = bookingList.length;
-    
+
     // Đếm số sân đang có người đá
     const activeCourtsCount = courtList.filter(c => {
       return bookingList.some(b => {
@@ -1032,7 +1034,7 @@ export default function AdminDashboard() {
         d.setDate(baseDate.getDate() - i);
         const dateStr = d.toISOString().split('T')[0];
         const dayLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-        
+
         const ordersOnDay = bookingList.filter(b => {
           const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
           const st = (b.trang_thai || '').toUpperCase();
@@ -1093,7 +1095,7 @@ export default function AdminDashboard() {
       for (let m = 0; m < 12; m++) {
         const monthNum = m + 1;
         const monthStr = `${year}-${String(monthNum).padStart(2, '0')}`;
-        
+
         const ordersInMonth = bookingList.filter(b => {
           const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
           const st = (b.trang_thai || '').toUpperCase();
@@ -1188,7 +1190,7 @@ export default function AdminDashboard() {
   // 4. Trạng Thái Sân Trực Quan (Live Pitch Status Matrix)
   const livePitchStatusAnalytics = useMemo(() => {
     const curDateStr = selectedDate ? String(selectedDate).split('T')[0] : new Date().toISOString().split('T')[0];
-    
+
     return courtList.map(court => {
       const courtBookings = bookingList.filter(b => {
         const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
@@ -1280,7 +1282,7 @@ export default function AdminDashboard() {
           return;
         }
       }
-    } catch (err) {}
+    } catch (err) { }
 
     const court = courtList.find((c) => c.id === Number(ma_san));
     const newB: DonDatSan = {
@@ -1465,7 +1467,7 @@ export default function AdminDashboard() {
             loadAllDataFromBackend();
             return;
           }
-        } catch (err) {}
+        } catch (err) { }
         setCourtList((prev) => prev.filter((c) => c.id !== courtId));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa sân bóng!' });
       }
@@ -1509,7 +1511,7 @@ export default function AdminDashboard() {
           return;
         }
       }
-    } catch (err) {}
+    } catch (err) { }
 
     if (loaiSanModal.mode === 'ADD') {
       const newId = Math.max(...categoryList.map(l => l.id), 0) + 1;
@@ -1542,7 +1544,7 @@ export default function AdminDashboard() {
             setToastMessage({ type: 'error', message: data.message || 'Không thể xóa loại sân này!' });
             return;
           }
-        } catch (err) {}
+        } catch (err) { }
 
         setCategoryList((prev) => prev.filter(l => l.id !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa loại sân!' });
@@ -1622,7 +1624,7 @@ export default function AdminDashboard() {
           return;
         }
       }
-    } catch (err) {}
+    } catch (err) { }
 
     // Fallback local update nếu chưa kết nối API
     if (serviceModal.mode === 'ADD') {
@@ -1668,7 +1670,7 @@ export default function AdminDashboard() {
             loadAllDataFromBackend();
             return;
           }
-        } catch (err) {}
+        } catch (err) { }
 
         setServiceList((prev) => prev.filter(s => s.id !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa dịch vụ!' });
@@ -1697,7 +1699,7 @@ export default function AdminDashboard() {
           setImportStockModal({ isOpen: false, mode: 'ADD', data: {} });
           return;
         }
-      } catch (err) {}
+      } catch (err) { }
 
       const newPhieu: PhieuNhapKho = {
         id: Math.max(...inventoryList.map((p) => p.id), 0) + 1,
@@ -1736,7 +1738,7 @@ export default function AdminDashboard() {
             loadAllDataFromBackend();
             return;
           }
-        } catch (err) {}
+        } catch (err) { }
 
         setInventoryList((prev) => prev.filter(p => p.id !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa phiếu nhập kho!' });
@@ -1795,7 +1797,7 @@ export default function AdminDashboard() {
           return;
         }
       }
-    } catch (err) {}
+    } catch (err) { }
 
     if (userModal.mode === 'ADD') {
       const newId = Math.max(...userList.map((u) => u.id), 0) + 1;
@@ -1837,7 +1839,7 @@ export default function AdminDashboard() {
             loadAllDataFromBackend();
             return;
           }
-        } catch (err) {}
+        } catch (err) { }
         setUserList((prev) => prev.filter(u => u.id !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa tài khoản!' });
       }
@@ -1881,7 +1883,7 @@ export default function AdminDashboard() {
           return;
         }
       }
-    } catch (err) {}
+    } catch (err) { }
 
     if (roleModal.mode === 'ADD') {
       const newId = Math.max(...roleList.map((r) => r.MaVaiTro), 0) + 1;
@@ -1914,7 +1916,7 @@ export default function AdminDashboard() {
             setToastMessage({ type: 'error', message: data.message || 'Không thể xóa vai trò này!' });
             return;
           }
-        } catch (err) {}
+        } catch (err) { }
 
         setRoleList((prev) => prev.filter(r => r.MaVaiTro !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa vai trò!' });
@@ -2217,10 +2219,10 @@ export default function AdminDashboard() {
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    const selectedDateStr = bookingModal.data.ngay_da 
-      ? String(bookingModal.data.ngay_da).substring(0, 10) 
+    const selectedDateStr = bookingModal.data.ngay_da
+      ? String(bookingModal.data.ngay_da).substring(0, 10)
       : (selectedDate ? String(selectedDate).substring(0, 10) : todayStr);
-    
+
     const curStartMin = timeToMinutes(bookingModal.data.gio_bat_dau || '17:00');
     const tMin = timeToMinutes(timeStr);
 
@@ -2244,7 +2246,7 @@ export default function AdminDashboard() {
 
     // 2. Kiểm tra trong danh sách đơn đã đặt trong CSDL (bookingList)
     const currentBookingId = bookingModal.mode === 'EDIT' ? Number(bookingModal.data.id) : null;
-    
+
     let bookedCustomerName = '';
     const isBooked = bookingList.some((b) => {
       if (currentBookingId && Number(b.id) === currentBookingId) return false;
@@ -2277,7 +2279,7 @@ export default function AdminDashboard() {
     const isOccupied = isBooked || isHolding;
 
     // Kiểm tra xem đây có phải là giờ cũ của chính đơn đặt này đang được sửa không
-    const savedTime = isEndTime 
+    const savedTime = isEndTime
       ? (bookingModal.data.gio_ket_thuc || '').substring(0, 5)
       : (bookingModal.data.gio_bat_dau || '').substring(0, 5);
     const isCurrentBookingSavedSlot = (bookingModal.mode === 'EDIT' && savedTime === timeStr);
@@ -2301,8 +2303,8 @@ export default function AdminDashboard() {
         disabled: true,
         isHidden: false,
         isPast: false,
-        label: isHolding 
-          ? `${timeStr} (🟠 Đang có người chọn)` 
+        label: isHolding
+          ? `${timeStr} (🟠 Đang có người chọn)`
           : `${timeStr} (🟠 Đã có người đặt${bookedCustomerName ? ` - ${bookedCustomerName}` : ''})`,
         isBooked: isBooked,
         isHolding: isHolding,
@@ -2456,7 +2458,7 @@ export default function AdminDashboard() {
             loadAllDataFromBackend();
             return;
           }
-        } catch (err) {}
+        } catch (err) { }
 
         setBookingList((prev) => prev.filter(b => b.id !== id));
         setPaymentList((prev) => prev.filter(p => p.ma_don_dat !== id));
@@ -2498,7 +2500,7 @@ export default function AdminDashboard() {
           return;
         }
       }
-    } catch (err) {}
+    } catch (err) { }
 
     if (refundModal.mode === 'ADD') {
       const newRef: LichSuHoanTien = {
@@ -2536,7 +2538,7 @@ export default function AdminDashboard() {
             loadAllDataFromBackend();
             return;
           }
-        } catch (err) {}
+        } catch (err) { }
 
         setRefundList((prev) => prev.filter(r => r.id !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa phiếu hoàn tiền!' });
@@ -2577,7 +2579,7 @@ export default function AdminDashboard() {
           return;
         }
       }
-    } catch (err) {}
+    } catch (err) { }
 
     if (khungGioModal.mode === 'ADD') {
       const newId = Math.max(...khungGioList.map(k => k.id), 0) + 1;
@@ -2622,7 +2624,7 @@ export default function AdminDashboard() {
             loadAllDataFromBackend();
             return;
           }
-        } catch (err) {}
+        } catch (err) { }
 
         setKhungGioList((prev) => prev.filter(k => k.id !== id));
         setToastMessage({ type: 'success', message: '🗑️ Đã xóa khung giờ!' });
@@ -2680,7 +2682,7 @@ export default function AdminDashboard() {
         setMiniPosModal({ isOpen: false, booking: null, maDichVuChon: 1, soLuong: 1 });
         return;
       }
-    } catch (err) {}
+    } catch (err) { }
 
     const itemThanhTien = miniPosModal.soLuong * dv.don_gia;
     const newDetail: ChiTietDichVu = {
@@ -2756,7 +2758,7 @@ export default function AdminDashboard() {
         setCheckoutModal({ isOpen: false, booking: null, paymentMethod: 'TIEN_MAT', discount: 0 });
         return;
       }
-    } catch (err) {}
+    } catch (err) { }
 
     const newPay: ThanhToan = {
       id: Math.max(...paymentList.map((p) => p.id), 0) + 1,
@@ -2793,19 +2795,18 @@ export default function AdminDashboard() {
       {/* TOAST THÔNG BÁO NỔI */}
       {toastMessage && (
         <div
-          className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border backdrop-blur-xl transition-all duration-300 animate-slide-in ${
-            toastMessage.type === 'success'
-              ? isDarkMode
-                ? 'bg-[#0f2416] border-emerald-500 text-emerald-200'
-                : 'bg-emerald-50 border-emerald-500 text-[#064e3b] font-black shadow-xl'
-              : toastMessage.type === 'error'
+          className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border backdrop-blur-xl transition-all duration-300 animate-slide-in ${toastMessage.type === 'success'
+            ? isDarkMode
+              ? 'bg-[#0f2416] border-emerald-500 text-emerald-200'
+              : 'bg-emerald-50 border-emerald-500 text-[#064e3b] font-black shadow-xl'
+            : toastMessage.type === 'error'
               ? isDarkMode
                 ? 'bg-rose-950 border-rose-500 text-rose-200'
                 : 'bg-rose-50 border-rose-500 text-[#881337] font-black shadow-xl'
               : isDarkMode
-              ? 'bg-[#0a1b24] border-cyan-500 text-cyan-200'
-              : 'bg-blue-50 border-blue-500 text-[#1e3a8a] font-black shadow-xl'
-          }`}
+                ? 'bg-[#0a1b24] border-cyan-500 text-cyan-200'
+                : 'bg-blue-50 border-blue-500 text-[#1e3a8a] font-black shadow-xl'
+            }`}
         >
           {toastMessage.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />}
           {toastMessage.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />}
@@ -2822,29 +2823,48 @@ export default function AdminDashboard() {
 
       <div className="flex h-screen overflow-hidden">
         {/* =====================================================================
-            1. SIDEBAR PHÂN CẤP THEO 11 BẢNG CSDL (CHUẨN THEO ẢNH USER)
+            1. MOBILE & TABLET OVERLAY & SIDEBAR DRAWER (< 1024px)
             ===================================================================== */}
+        {/* Lớp phủ nền mờ cho Mobile & Tablet: Bấm ra ngoài sẽ đóng menu */}
+        <div
+          className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300 lg:hidden ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+
         <aside
-          className={`w-[72px] hover:w-64 xl:hover:w-72 shrink-0 border-r flex flex-col justify-between transition-all duration-300 ease-in-out z-30 group/sidebar overflow-hidden shadow-lg ${
-            isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
-          }`}
+          className={`fixed top-0 left-0 bottom-0 z-50 w-72 lg:w-[72px] lg:hover:w-64 xl:hover:w-72 shrink-0 border-r flex flex-col justify-between transition-all duration-300 ease-in-out group/sidebar overflow-hidden shadow-2xl lg:shadow-lg lg:relative lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+            } ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+            }`}
         >
           <div className="flex flex-col h-full overflow-hidden">
-            {/* Logo Thương Hiệu: SOCCER 247 ADMIN */}
-            <div className={`p-3.5 flex items-center gap-3 border-b shrink-0 overflow-hidden ${isDarkMode ? 'border-emerald-900/40' : 'border-slate-200'}`}>
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-green-400 flex items-center justify-center shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/40 shrink-0 mx-auto group-hover/sidebar:mx-0 transition-all">
-                <span className="text-xl">⚽</span>
+            {/* Logo Thương Hiệu: SOCCER 247 ADMIN & Nút đóng Mobile */}
+            <div className={`p-3.5 flex items-center justify-between border-b shrink-0 overflow-hidden ${isDarkMode ? 'border-emerald-900/40' : 'border-slate-200'}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-green-400 flex items-center justify-center shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/40 shrink-0 mx-auto lg:group-hover/sidebar:mx-0 transition-all">
+                  <span className="text-xl">⚽</span>
+                </div>
+                <div className="block lg:hidden lg:group-hover/sidebar:block whitespace-nowrap overflow-hidden transition-all duration-300">
+                  <h1 className="text-base font-black tracking-tight flex items-center gap-1 leading-none">
+                    <span className={isDarkMode ? 'text-white' : 'text-[#0f172a]'}>SOCCER247</span>
+                    <span className="text-emerald-600">ADMIN</span>
+                  </h1>
+                  <p className={`text-[9px] uppercase font-black tracking-widest mt-1 flex items-center gap-1 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Hệ Thống 11 Bảng CSDL
+                  </p>
+                </div>
               </div>
-              <div className="hidden group-hover/sidebar:block whitespace-nowrap overflow-hidden transition-all duration-300">
-                <h1 className="text-base font-black tracking-tight flex items-center gap-1 leading-none">
-                  <span className={isDarkMode ? 'text-white' : 'text-[#0f172a]'}>SOCCER247</span>
-                  <span className="text-emerald-600">ADMIN</span>
-                </h1>
-                <p className={`text-[9px] uppercase font-black tracking-widest mt-1 flex items-center gap-1 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Hệ Thống 11 Bảng CSDL
-                </p>
-              </div>
+
+              {/* Nút đóng Sidebar trên Mobile & Tablet */}
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block lg:hidden p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Đóng sidebar"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             {/* Menu Phân Cấp Dạng Cây Theo 5 Nhóm & 11 Bảng */}
@@ -2854,9 +2874,9 @@ export default function AdminDashboard() {
                 return (
                   <div key={gIdx} className="space-y-1">
                     {/* Tiêu đề nhóm */}
-                    <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400 border-b border-slate-100 dark:border-emerald-950/60 pb-1 mb-1 justify-center group-hover/sidebar:justify-start">
+                    <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400 border-b border-slate-100 dark:border-emerald-950/60 pb-1 mb-1 justify-start lg:justify-center lg:group-hover/sidebar:justify-start">
                       <GroupIcon className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <span className="hidden group-hover/sidebar:inline whitespace-nowrap truncate">{group.groupTitle}</span>
+                      <span className="inline lg:hidden lg:group-hover/sidebar:inline whitespace-nowrap truncate">{group.groupTitle}</span>
                     </div>
 
                     {/* Danh sách mục con trong nhóm */}
@@ -2867,33 +2887,34 @@ export default function AdminDashboard() {
                         return (
                           <button
                             key={item.id}
-                            onClick={() => setActiveTab(item.id as TabType)}
+                            onClick={() => {
+                              setActiveTab(item.id as TabType);
+                              setIsMobileMenuOpen(false);
+                            }}
                             title={item.label}
-                            className={`w-full flex items-center justify-center group-hover/sidebar:justify-between px-2.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer group ${
-                              isActive
-                                ? isDarkMode
-                                  ? 'bg-gradient-to-r from-emerald-500 via-emerald-400 to-green-400 text-slate-950 shadow-md shadow-emerald-500/25 scale-[1.02]'
-                                  : 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                                : isDarkMode
+                            className={`w-full flex items-center justify-between lg:justify-center lg:group-hover/sidebar:justify-between px-2.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer group ${isActive
+                              ? isDarkMode
+                                ? 'bg-gradient-to-r from-emerald-500 via-emerald-400 to-green-400 text-slate-950 shadow-md shadow-emerald-500/25 scale-[1.02]'
+                                : 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                              : isDarkMode
                                 ? 'text-slate-200 hover:text-white hover:bg-emerald-950/40'
                                 : 'text-[#0f172a] hover:text-emerald-800 hover:bg-emerald-50'
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center gap-2 truncate">
-                              <span className="hidden group-hover/sidebar:inline text-slate-400 group-hover:text-emerald-500 font-mono text-[10px]">├─</span>
-                              <ItemIcon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white md:text-slate-950 stroke-[3]' : isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`} />
-                              <span className="hidden group-hover/sidebar:inline truncate whitespace-nowrap">{item.label}</span>
+                              <span className="inline lg:hidden lg:group-hover/sidebar:inline text-slate-400 group-hover:text-emerald-500 font-mono text-[10px]">├─</span>
+                              <ItemIcon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white lg:text-slate-950 stroke-[3]' : isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`} />
+                              <span className="inline lg:hidden lg:group-hover/sidebar:inline truncate whitespace-nowrap">{item.label}</span>
                             </div>
 
                             {item.badge && (
                               <span
-                                className={`hidden group-hover/sidebar:inline text-[9px] px-1.5 py-0.5 rounded-md font-bold shrink-0 ${
-                                  isActive
-                                    ? 'bg-slate-950 text-white dark:bg-slate-900 dark:text-emerald-300'
-                                    : item.badge === 'HOT'
+                                className={`inline lg:hidden lg:group-hover/sidebar:inline text-[9px] px-1.5 py-0.5 rounded-md font-bold shrink-0 ${isActive
+                                  ? 'bg-slate-950 text-white dark:bg-slate-900 dark:text-emerald-300'
+                                  : item.badge === 'HOT'
                                     ? 'bg-rose-500 text-white'
                                     : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                                }`}
+                                  }`}
                               >
                                 {item.badge}
                               </span>
@@ -2914,23 +2935,22 @@ export default function AdminDashboard() {
                 type="button"
                 onClick={() => router.push('/')}
                 title="Quay về Trang Chủ"
-                className={`w-full flex items-center justify-center group-hover/sidebar:justify-start gap-2.5 px-2.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm ${
-                  isDarkMode
-                    ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800/40'
-                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300'
-                }`}
+                className={`w-full flex items-center justify-start lg:justify-center lg:group-hover/sidebar:justify-start gap-2.5 px-2.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm ${isDarkMode
+                  ? 'bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-800/40'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  }`}
               >
                 <ArrowLeft className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="hidden group-hover/sidebar:inline whitespace-nowrap">Quay Về Trang Chủ</span>
+                <span className="inline lg:hidden lg:group-hover/sidebar:inline whitespace-nowrap">Quay Về Trang Chủ</span>
               </button>
 
               {/* Thông tin Admin User */}
               <div className="flex items-center justify-between gap-2 overflow-hidden">
-                <div className="flex items-center gap-2 truncate justify-center group-hover/sidebar:justify-start w-full group-hover/sidebar:w-auto">
+                <div className="flex items-center gap-2 truncate justify-start lg:justify-center lg:group-hover/sidebar:justify-start w-full lg:w-auto">
                   <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-sm" title={currentAdminUser?.ho_ten || 'Admin'}>
                     {currentAdminUser?.ho_ten ? currentAdminUser.ho_ten.charAt(0).toUpperCase() : 'AD'}
                   </div>
-                  <div className="hidden group-hover/sidebar:block truncate">
+                  <div className="block lg:hidden lg:group-hover/sidebar:block truncate">
                     <div className={`text-xs font-black truncate ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
                       {currentAdminUser?.ho_ten || 'Admin Quản Trị'}
                     </div>
@@ -2941,7 +2961,7 @@ export default function AdminDashboard() {
                 </div>
                 <button
                   onClick={handleAdminLogout}
-                  className={`hidden group-hover/sidebar:flex p-1.5 rounded-lg transition-all cursor-pointer shrink-0 ${isDarkMode ? 'text-rose-400 hover:bg-rose-500/20' : 'text-rose-600 hover:bg-rose-100'}`}
+                  className={`flex lg:hidden lg:group-hover/sidebar:flex p-1.5 rounded-lg transition-all cursor-pointer shrink-0 ${isDarkMode ? 'text-rose-400 hover:bg-rose-500/20' : 'text-rose-600 hover:bg-rose-100'}`}
                   title="Đăng xuất khỏi Dashboard"
                 >
                   <LogOut className="w-4 h-4" />
@@ -2954,16 +2974,29 @@ export default function AdminDashboard() {
         {/* =====================================================================
             2. KHU VỰC NỘI DUNG CHÍNH (MAIN CONTENT AREA)
             ===================================================================== */}
-        <div className="flex-1 flex flex-col h-full overflow-hidden">
-          {/* TOP NAVBAR HEADER (ĐÃ BỎ 2 NÚT THỪA THEO YÊU CẦU CỦA USER) */}
-          <header className={`h-16 px-6 border-b flex items-center justify-between shrink-0 transition-colors duration-300 z-10 ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40' : 'bg-white border-slate-300 shadow-sm'}`}>
-            <div className="flex items-center gap-2.5">
-              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-black uppercase tracking-wider ${isDarkMode ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300' : 'bg-emerald-50 border-emerald-300 text-[#064e3b]'}`}>
+        <div className="flex-1 flex flex-col h-full overflow-hidden w-full max-w-full min-w-0">
+          {/* TOP NAVBAR HEADER VỚI NÚT HAMBURGER MOBILE & TABLET */}
+          <header className={`h-16 px-3 sm:px-4 md:px-6 border-b flex items-center justify-between shrink-0 transition-colors duration-300 z-10 w-full max-w-full min-w-0 ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40' : 'bg-white border-slate-300 shadow-sm'}`}>
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+              {/* Nút Hamburger Menu: HIỆN TRÊN MOBILE & TABLET (block lg:hidden) */}
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className={`p-2 rounded-xl border transition-colors cursor-pointer block lg:hidden shrink-0 ${isDarkMode
+                  ? 'border-emerald-800/80 bg-emerald-950/40 text-emerald-400 hover:bg-emerald-900/60'
+                  : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                aria-label="Toggle Mobile Sidebar Menu"
+              >
+                {isMobileMenuOpen ? <X className="w-5 h-5 text-rose-500" /> : <Menu className="w-5 h-5 text-emerald-500" />}
+              </button>
+
+              <div className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg border text-xs font-black uppercase tracking-wider shrink-0 ${isDarkMode ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300' : 'bg-emerald-50 border-emerald-300 text-[#064e3b]'}`}>
                 <span>⚽</span>
-                <span>SOCCER 247</span>
+                <span className="hidden sm:inline">SOCCER 247</span>
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-500" />
-              <h2 className={`text-sm sm:text-base font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
+              <ChevronRight className="w-4 h-4 text-slate-500 hidden md:block shrink-0" />
+              <h2 className={`text-xs sm:text-sm md:text-base font-black tracking-tight truncate min-w-0 ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
                 {activeTab === 'OVERVIEW' && 'Dashboard'}
                 {activeTab === 'BANNER' && 'Quản Lý Banner Quảng Cáo'}
                 {activeTab === 'LIEN_HE' && 'Quản Lý Phản Hồi & Liên Hệ'}
@@ -2981,13 +3014,12 @@ export default function AdminDashboard() {
               </h2>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
               {/* Ô chọn & hiển thị ngày theo định dạng DD/MM/YYYY chuẩn Việt Nam */}
-              <div className={`relative flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-black shadow-sm transition-all hover:border-emerald-500 cursor-pointer ${
-                isDarkMode ? 'bg-[#0e2116] border-emerald-800/60 text-emerald-200' : 'bg-white border-slate-300 text-[#0f172a]'
-              }`}>
+              <div className={`relative flex items-center gap-2 px-3 py-1.5 sm:px-3.5 rounded-xl border text-xs font-black shadow-sm transition-all hover:border-emerald-500 cursor-pointer ${isDarkMode ? 'bg-[#0e2116] border-emerald-800/60 text-emerald-200' : 'bg-white border-slate-300 text-[#0f172a]'
+                }`}>
                 <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span className="font-black tracking-wide font-mono text-xs">
+                <span className="font-black tracking-wide font-mono text-xs whitespace-nowrap">
                   {(() => {
                     if (!selectedDate) return 'Chọn ngày';
                     const parts = selectedDate.split('-');
@@ -3020,7 +3052,7 @@ export default function AdminDashboard() {
           </header>
 
           {/* BODY HIỂN THỊ NỘI DUNG TỪNG TAB */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6 w-full max-w-full min-w-0">
 
             {/* =================================================================
                 TAB 1: TỔNG QUAN & DASHBOARD
@@ -3097,9 +3129,8 @@ export default function AdminDashboard() {
                   {/* -------------------------------------------------------------
                       WIDGET 1 (HÀNG 1 - TRÁI): BIỂU ĐỒ DOANH THU (LINE / BAR CHART)
                       ------------------------------------------------------------- */}
-                  <div className={`lg:col-span-7 xl:col-span-8 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${
-                    isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
-                  }`}>
+                  <div className={`lg:col-span-7 xl:col-span-8 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                    }`}>
                     {/* Header Widget 1 */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-emerald-900/30">
                       <div>
@@ -3124,11 +3155,10 @@ export default function AdminDashboard() {
                             <button
                               key={p}
                               onClick={() => setRevenuePeriod(p)}
-                              className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                                revenuePeriod === p
-                                  ? 'bg-emerald-600 text-white shadow-sm font-black'
-                                  : 'text-slate-600 dark:text-slate-400 hover:text-emerald-500'
-                              }`}
+                              className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${revenuePeriod === p
+                                ? 'bg-emerald-600 text-white shadow-sm font-black'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-emerald-500'
+                                }`}
                             >
                               {p === 'NGAY' ? 'Ngày' : p === 'TUAN' ? 'Tuần' : 'Tháng'}
                             </button>
@@ -3140,18 +3170,16 @@ export default function AdminDashboard() {
                           <button
                             onClick={() => setRevenueChartType('BAR')}
                             title="Biểu đồ cột"
-                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                              revenueChartType === 'BAR' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-emerald-500'
-                            }`}
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${revenueChartType === 'BAR' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-emerald-500'
+                              }`}
                           >
                             <BarChart className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => setRevenueChartType('LINE')}
                             title="Biểu đồ đường"
-                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                              revenueChartType === 'LINE' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-emerald-500'
-                            }`}
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer ${revenueChartType === 'LINE' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-emerald-500'
+                              }`}
                           >
                             <TrendingUp className="w-3.5 h-3.5" />
                           </button>
@@ -3393,9 +3421,8 @@ export default function AdminDashboard() {
                   {/* -------------------------------------------------------------
                       WIDGET 2 (HÀNG 1 - PHẢI): TOP DỊCH VỤ BÁN CHẠY (PIE / LIST)
                       ------------------------------------------------------------- */}
-                  <div className={`lg:col-span-5 xl:col-span-4 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${
-                    isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
-                  }`}>
+                  <div className={`lg:col-span-5 xl:col-span-4 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                    }`}>
                     {/* Header Widget 2 */}
                     <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
                       <div>
@@ -3417,18 +3444,16 @@ export default function AdminDashboard() {
                         <button
                           onClick={() => setServiceViewMode('LIST')}
                           title="Dạng danh sách"
-                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                            serviceViewMode === 'LIST' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-amber-500'
-                          }`}
+                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${serviceViewMode === 'LIST' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-amber-500'
+                            }`}
                         >
                           <SlidersHorizontal className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setServiceViewMode('DONUT')}
                           title="Dạng biểu đồ tròn"
-                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                            serviceViewMode === 'DONUT' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-amber-500'
-                          }`}
+                          className={`p-1.5 rounded-lg transition-all cursor-pointer ${serviceViewMode === 'DONUT' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-amber-500'
+                            }`}
                         >
                           <PieChart className="w-3.5 h-3.5" />
                         </button>
@@ -3442,9 +3467,8 @@ export default function AdminDashboard() {
                           <div key={item.id} className="space-y-1.5">
                             <div className="flex items-center justify-between text-xs">
                               <div className="flex items-center gap-2 font-black truncate max-w-[180px]">
-                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0 font-mono ${
-                                  idx === 0 ? 'bg-amber-500 text-white shadow-sm' : idx === 1 ? 'bg-slate-300 text-slate-800' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-100 dark:bg-emerald-950 text-slate-600 dark:text-slate-400'
-                                }`}>
+                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0 font-mono ${idx === 0 ? 'bg-amber-500 text-white shadow-sm' : idx === 1 ? 'bg-slate-300 text-slate-800' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-100 dark:bg-emerald-950 text-slate-600 dark:text-slate-400'
+                                  }`}>
                                   #{idx + 1}
                                 </span>
                                 <span className="truncate">{item.name}</span>
@@ -3528,9 +3552,8 @@ export default function AdminDashboard() {
                   {/* -------------------------------------------------------------
                       WIDGET 3 (HÀNG 2 - TRÁI): BẢNG ĐƠN ĐẶT SÂN MỚI NHẤT (5 DÒNG)
                       ------------------------------------------------------------- */}
-                  <div className={`lg:col-span-7 xl:col-span-8 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${
-                    isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
-                  }`}>
+                  <div className={`lg:col-span-7 xl:col-span-8 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                    }`}>
                     {/* Header Widget 3 */}
                     <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
                       <div>
@@ -3557,19 +3580,19 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Table Widget 3 */}
-                    <div className="overflow-x-auto my-2">
-                      <table className="w-full text-left text-xs min-w-[550px]">
+                    <div className="overflow-x-auto custom-scrollbar my-2">
+                      <table className="w-full text-left text-[10px] md:text-xs lg:text-sm min-w-[550px] border-collapse">
                         <thead>
-                          <tr className={`border-b font-black uppercase text-[10px] ${isDarkMode ? 'text-emerald-300/80 border-emerald-900/30' : 'text-slate-500 border-slate-200'}`}>
-                            <th className="pb-2">Khách Hàng</th>
-                            <th className="pb-2">Sân Bóng</th>
-                            <th className="pb-2">Ngày & Giờ</th>
-                            <th className="pb-2">Tổng Tiền</th>
-                            <th className="pb-2">Trạng Thái</th>
-                            <th className="pb-2 text-right">Thao Tác</th>
+                          <tr className={`border-b font-black uppercase text-[10px] md:text-xs tracking-wider ${isDarkMode ? 'text-emerald-300/80 border-emerald-900/30' : 'text-slate-500 border-slate-200'}`}>
+                            <th className="pb-2 whitespace-nowrap">Khách Hàng</th>
+                            <th className="pb-2 whitespace-nowrap">Sân Bóng</th>
+                            <th className="pb-2 whitespace-nowrap">Ngày & Giờ</th>
+                            <th className="pb-2 whitespace-nowrap">Tổng Tiền</th>
+                            <th className="pb-2 whitespace-nowrap">Trạng Thái</th>
+                            <th className="pb-2 text-right whitespace-nowrap">Thao Tác</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-emerald-900/20">
+                        <tbody className="divide-y divide-slate-100 dark:divide-emerald-900/20 text-[10px] md:text-xs lg:text-sm">
                           {recentBookingsAnalytics.map((b) => (
                             <tr key={b.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
                               <td className="py-2.5 whitespace-nowrap">
@@ -3680,9 +3703,8 @@ export default function AdminDashboard() {
                   {/* -------------------------------------------------------------
                       WIDGET 4 (HÀNG 2 - PHẢI): TRẠNG THÁI SÂN TRỰC QUAN
                       ------------------------------------------------------------- */}
-                  <div className={`lg:col-span-5 xl:col-span-4 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${
-                    isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
-                  }`}>
+                  <div className={`lg:col-span-5 xl:col-span-4 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                    }`}>
                     {/* Header Widget 4 */}
                     <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
                       <div>
@@ -3723,15 +3745,14 @@ export default function AdminDashboard() {
                         return (
                           <div
                             key={item.court.id}
-                            className={`p-3 rounded-2xl border relative overflow-hidden transition-all flex flex-col justify-between h-28 ${
-                              isPlaying
-                                ? 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300 shadow-sm'
-                                : isBooked
+                            className={`p-3 rounded-2xl border relative overflow-hidden transition-all flex flex-col justify-between h-28 ${isPlaying
+                              ? 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300 shadow-sm'
+                              : isBooked
                                 ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 shadow-sm'
                                 : isMaintenance
-                                ? 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-slate-400 opacity-60'
-                                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300 hover:shadow-md'
-                            }`}
+                                  ? 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-slate-400 opacity-60'
+                                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300 hover:shadow-md'
+                              }`}
                           >
                             {/* Card Pitch Top Bar */}
                             <div className="flex items-center justify-between">
@@ -3739,9 +3760,8 @@ export default function AdminDashboard() {
                                 <span>⚽</span>
                                 <span>{item.court.ten_san}</span>
                               </div>
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
-                                isPlaying ? 'bg-rose-500 text-white' : isBooked ? 'bg-amber-500 text-white' : isMaintenance ? 'bg-slate-500 text-white' : 'bg-emerald-600 text-white'
-                              }`}>
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${isPlaying ? 'bg-rose-500 text-white' : isBooked ? 'bg-amber-500 text-white' : isMaintenance ? 'bg-slate-500 text-white' : 'bg-emerald-600 text-white'
+                                }`}>
                                 {item.label}
                               </span>
                             </div>
@@ -4114,22 +4134,22 @@ export default function AdminDashboard() {
                     <Plus className="w-4 h-4 stroke-[3]" /> Thêm Đơn & Thanh Toán
                   </button>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[1050px]">
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left text-[10px] md:text-xs lg:text-sm min-w-[1050px] border-collapse">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4 whitespace-nowrap">KHÁCH HÀNG / SĐT</th>
-                        <th className="p-4 whitespace-nowrap">SÂN BÓNG</th>
-                        <th className="p-4 whitespace-nowrap">NGÀY & GIỜ ĐÁ</th>
-                        <th className="p-4 whitespace-nowrap">DỊCH VỤ ĐÃ DÙNG</th>
-                        <th className="p-4 whitespace-nowrap">TỔNG TIỀN</th>
-                        <th className="p-4 whitespace-nowrap">PHƯƠNG THỨC</th>
-                        <th className="p-4 whitespace-nowrap">TRẠNG THÁI</th>
-                        <th className="p-4">GHI CHÚ</th>
-                        <th className="p-4 text-right whitespace-nowrap">THAO TÁC</th>
+                      <tr className={`border-b font-black uppercase text-[10px] md:text-xs tracking-wider ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                        <th className="p-3 md:p-4 whitespace-nowrap">KHÁCH HÀNG / SĐT</th>
+                        <th className="p-3 md:p-4 whitespace-nowrap">SÂN BÓNG</th>
+                        <th className="p-3 md:p-4 whitespace-nowrap">NGÀY & GIỜ ĐÁ</th>
+                        <th className="p-3 md:p-4 whitespace-nowrap">DỊCH VỤ ĐÃ DÙNG</th>
+                        <th className="p-3 md:p-4 whitespace-nowrap">TỔNG TIỀN</th>
+                        <th className="p-3 md:p-4 whitespace-nowrap">PHƯƠNG THỨC</th>
+                        <th className="p-3 md:p-4 whitespace-nowrap">TRẠNG THÁI</th>
+                        <th className="p-3 md:p-4 whitespace-nowrap">GHI CHÚ</th>
+                        <th className="p-3 md:p-4 text-right whitespace-nowrap">THAO TÁC</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
+                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30 text-[10px] md:text-xs lg:text-sm">
                       {bookingList.map((b) => {
                         const servicesUsed = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
                           ? b.dich_vu_da_dung
@@ -4188,9 +4208,8 @@ export default function AdminDashboard() {
                               )}
                             </td>
                             <td className="p-4 whitespace-nowrap">
-                              <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase ${
-                                b.phuong_thuc === 'CHUYEN_KHOAN' ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                              }`}>
+                              <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase ${b.phuong_thuc === 'CHUYEN_KHOAN' ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                }`}>
                                 {b.phuong_thuc === 'CHUYEN_KHOAN' ? 'Chuyển Khoản' : 'Tiền Mặt'}
                               </span>
                             </td>
@@ -4244,7 +4263,7 @@ export default function AdminDashboard() {
                                   const currentServices = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
                                     ? b.dich_vu_da_dung
                                     : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
-                                  
+
                                   const rawSt = (b.trang_thai || '').toUpperCase();
                                   const isUnpaid = rawSt === 'CHO_THANH_TOAN' || rawSt === 'CHUA_THANH_TOAN' || rawSt === 'CHO_XAC_NHAN' || rawSt.includes('CHO_THANH_TOAN') || rawSt.includes('CHUA_THANH_TOAN') || rawSt.includes('CHƯA') || rawSt.includes('CHỜ');
                                   const isPaid = !isUnpaid && (rawSt === 'DA_THANH_TOAN' || rawSt === 'HOAN_THANH' || rawSt === 'DA_CHOT');
@@ -4436,9 +4455,8 @@ export default function AdminDashboard() {
                           <td className="p-4 font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">{k.gio_bat_dau}</td>
                           <td className="p-4 font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">{k.gio_ket_thuc}</td>
                           <td className="p-4">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                              k.trang_thai !== false ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-gray-500/20 text-gray-400'
-                            }`}>
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${k.trang_thai !== false ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-gray-500/20 text-gray-400'
+                              }`}>
                               {k.trang_thai !== false ? '● Đang Sử Dụng' : '○ Tạm Khóa'}
                             </span>
                           </td>
@@ -4491,11 +4509,10 @@ export default function AdminDashboard() {
                         <button
                           key={tab.key}
                           onClick={() => setUserRoleFilter(tab.key)}
-                          className={`px-3 py-1.5 rounded-lg font-black transition-all cursor-pointer ${
-                            userRoleFilter === tab.key
-                              ? 'bg-emerald-600 text-white shadow-md'
-                              : 'text-slate-600 dark:text-slate-300 hover:bg-white/50 dark:hover:bg-emerald-900/40'
-                          }`}
+                          className={`px-3 py-1.5 rounded-lg font-black transition-all cursor-pointer ${userRoleFilter === tab.key
+                            ? 'bg-emerald-600 text-white shadow-md'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-white/50 dark:hover:bg-emerald-900/40'
+                            }`}
                         >
                           {tab.label}
                         </button>
@@ -4559,13 +4576,12 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="p-4 whitespace-nowrap">
-                              <span className={`whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-xs shadow-sm tracking-wide border ${
-                                u.vai_tro === 'ADMIN'
-                                  ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-400/40'
-                                  : u.vai_tro === 'NHAN_VIEN'
+                              <span className={`whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-black text-xs shadow-sm tracking-wide border ${u.vai_tro === 'ADMIN'
+                                ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-400/40'
+                                : u.vai_tro === 'NHAN_VIEN'
                                   ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-400/40'
                                   : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-400/40'
-                              }`}>
+                                }`}>
                                 <span>{u.vai_tro === 'ADMIN' ? '🛡️' : u.vai_tro === 'NHAN_VIEN' ? '💼' : '⚽'}</span>
                                 <span>{u.vai_tro === 'ADMIN' ? 'ADMIN' : u.vai_tro === 'NHAN_VIEN' ? 'NHÂN VIÊN' : 'KHÁCH HÀNG'}</span>
                               </span>
@@ -4675,7 +4691,7 @@ export default function AdminDashboard() {
 
                 <form id="form-about-us-manage" onSubmit={handleSaveAboutUs} className="p-6 space-y-6 text-xs">
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    
+
                     {/* CỘT TRÁI: THÔNG TIN CƠ BẢN & LIÊN HỆ */}
                     <div className="lg:col-span-6 space-y-4">
                       <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b pb-2 border-slate-200 dark:border-emerald-900/40">
@@ -4914,9 +4930,8 @@ export default function AdminDashboard() {
                               )}
                             </td>
                             <td className="p-4 text-center">
-                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
-                                b.loai_banner === 'VIDEO' ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300' : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
-                              }`}>
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${b.loai_banner === 'VIDEO' ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300' : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+                                }`}>
                                 {b.loai_banner === 'VIDEO' ? '🎥 Video' : '🖼️ Hình Ảnh'}
                               </span>
                             </td>
@@ -4929,11 +4944,10 @@ export default function AdminDashboard() {
                                 return (
                                   <button
                                     onClick={() => handleToggleBannerStatus(b)}
-                                    className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${
-                                      isBannerActive 
-                                        ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' 
-                                        : 'bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                                    }`}
+                                    className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${isBannerActive
+                                      ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                      : 'bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                                      }`}
                                     title="Bấm để bật/tắt hiển thị trên trang chủ"
                                   >
                                     {isBannerActive ? '● Đang hiển thị' : '○ Tạm ẩn'}
@@ -4989,19 +5003,19 @@ export default function AdminDashboard() {
                     </span>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-left text-[10px] md:text-xs lg:text-sm min-w-[700px] border-collapse">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4">NGƯỜI GỬI</th>
-                        <th className="p-4">THÔNG TIN LIÊN HỆ</th>
-                        <th className="p-4">TIÊU ĐỀ & NỘI DUNG</th>
-                        <th className="p-4 text-center">NGÀY GỬI</th>
-                        <th className="p-4 text-center">TRẠNG THÁI</th>
-                        <th className="p-4 text-right">THAO TÁC</th>
+                      <tr className={`border-b font-black uppercase text-[10px] md:text-xs tracking-wider ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                        <th className="p-3 md:p-4 whitespace-nowrap">NGƯỜI GỬI</th>
+                        <th className="p-3 md:p-4 whitespace-nowrap">THÔNG TIN LIÊN HỆ</th>
+                        <th className="p-3 md:p-4 whitespace-nowrap">TIÊU ĐỀ & NỘI DUNG</th>
+                        <th className="p-3 md:p-4 text-center whitespace-nowrap">NGÀY GỬI</th>
+                        <th className="p-3 md:p-4 text-center whitespace-nowrap">TRẠNG THÁI</th>
+                        <th className="p-3 md:p-4 text-right whitespace-nowrap">THAO TÁC</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
+                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30 text-[10px] md:text-xs lg:text-sm">
                       {lienHeList.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">Chưa có phản hồi liên hệ nào từ khách hàng.</td>
@@ -5009,38 +5023,49 @@ export default function AdminDashboard() {
                       ) : (
                         lienHeList.map((lh) => (
                           <tr key={lh.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
-                            <td className="p-4">
-                              <div className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-                                <User className="w-3.5 h-3.5 text-emerald-600" />
-                                {lh.ho_ten}
+                            <td className="p-3 md:p-4 whitespace-nowrap">
+                              <div className="font-black text-xs md:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                                <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span className="truncate max-w-[120px] md:max-w-[160px]">{lh.ho_ten}</span>
                               </div>
                             </td>
-                            <td className="p-4 space-y-0.5">
-                              {lh.email && <div className="text-slate-600 dark:text-slate-300">✉️ {lh.email}</div>}
-                              {lh.so_dien_thoai && <div className="font-mono text-emerald-700 dark:text-emerald-400 font-bold">📞 {lh.so_dien_thoai}</div>}
+                            <td className="p-3 md:p-4 whitespace-nowrap space-y-0.5">
+                              {lh.email && (
+                                <div className="text-slate-600 dark:text-slate-300 font-mono text-[10px] md:text-xs max-w-[140px] md:max-w-[180px] lg:max-w-[220px] truncate" title={lh.email}>
+                                  ✉️ {lh.email}
+                                </div>
+                              )}
+                              {lh.so_dien_thoai && (
+                                <div className="font-mono text-emerald-700 dark:text-emerald-400 font-bold text-[10px] md:text-xs">
+                                  📞 {lh.so_dien_thoai}
+                                </div>
+                              )}
                             </td>
-                            <td className="p-4 max-w-xs">
-                              <div className="font-black text-slate-900 dark:text-white">{lh.tieu_de || '(Không có tiêu đề)'}</div>
-                              <div className="text-slate-500 dark:text-slate-400 line-clamp-2 text-[11px] mt-0.5">{lh.noi_dung}</div>
+                            <td className="p-3 md:p-4 whitespace-nowrap max-w-[160px] md:max-w-[240px] lg:max-w-xs">
+                              <div className="font-black text-slate-900 dark:text-white truncate" title={lh.tieu_de || ''}>
+                                {lh.tieu_de || '(Không có tiêu đề)'}
+                              </div>
+                              <div className="text-slate-500 dark:text-slate-400 truncate text-[10px] md:text-[11px] mt-0.5" title={lh.noi_dung}>
+                                {lh.noi_dung}
+                              </div>
                             </td>
-                            <td className="p-4 text-center font-mono text-slate-500">
+                            <td className="p-3 md:p-4 text-center font-mono text-slate-500 whitespace-nowrap text-[10px] md:text-xs">
                               {lh.ngay_gui ? formatVNDate(lh.ngay_gui) : '---'}
                             </td>
-                            <td className="p-4 text-center">
+                            <td className="p-3 md:p-4 text-center whitespace-nowrap">
                               <button
                                 onClick={() => handleUpdateLienHeStatus(lh.id, (lh.trang_thai_xu_ly || lh.trang_thai))}
-                                className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${
-                                  (lh.trang_thai_xu_ly === 'DA_XU_LY' || lh.trang_thai === 'DA_XU_LY')
-                                    ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                    : 'bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse'
-                                }`}
+                                className={`px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-black cursor-pointer transition-all ${(lh.trang_thai_xu_ly === 'DA_XU_LY' || lh.trang_thai === 'DA_XU_LY')
+                                  ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                  : 'bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse'
+                                  }`}
                                 title="Bấm để đổi trạng thái Xử lý"
                               >
                                 {(lh.trang_thai_xu_ly === 'DA_XU_LY' || lh.trang_thai === 'DA_XU_LY') ? '✓ Đã xử lý' : '⏳ Chưa xử lý'}
                               </button>
                             </td>
-                            <td className="p-4 text-right space-x-2">
-                              <button 
+                            <td className="p-3 md:p-4 text-right space-x-1.5 whitespace-nowrap">
+                              <button
                                 onClick={() => setReplyLienHeModal({
                                   isOpen: true,
                                   data: lh,
@@ -5048,15 +5073,15 @@ export default function AdminDashboard() {
                                   noi_dung_tra_loi: '',
                                   isSubmitting: false,
                                 })}
-                                className="p-2 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/70 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-200 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
+                                className="p-1.5 md:p-2 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/70 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-200 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm text-[10px] md:text-xs"
                                 title="Soạn thư trả lời khách hàng"
                               >
                                 <MessageSquareReply className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Trả lời
                               </button>
-                              <button onClick={() => setLienHeDetailModal({ isOpen: true, data: lh })} className="p-2 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-200 cursor-pointer font-bold inline-flex items-center gap-1">
+                              <button onClick={() => setLienHeDetailModal({ isOpen: true, data: lh })} className="p-1.5 md:p-2 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-200 cursor-pointer font-bold inline-flex items-center gap-1 text-[10px] md:text-xs">
                                 <Eye className="w-3.5 h-3.5" /> Xem
                               </button>
-                              <button onClick={() => handleDeleteLienHe(lh.id, lh.ho_ten)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1">
+                              <button onClick={() => handleDeleteLienHe(lh.id, lh.ho_ten)} className="p-1.5 md:p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1 text-[10px] md:text-xs">
                                 <Trash2 className="w-3.5 h-3.5" /> Xóa
                               </button>
                             </td>
@@ -5116,11 +5141,10 @@ export default function AdminDashboard() {
                                 return (
                                   <button
                                     onClick={() => handleToggleLoaiTinStatus(lt)}
-                                    className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${
-                                      isLoaiActive 
-                                        ? 'bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300' 
-                                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                    }`}
+                                    className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${isLoaiActive
+                                      ? 'bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                      }`}
                                     title="Bấm để kích hoạt hoặc tạm ẩn"
                                   >
                                     {isLoaiActive ? '● Hoạt động' : '○ Tạm ẩn'}
@@ -5230,11 +5254,10 @@ export default function AdminDashboard() {
                                 return (
                                   <button
                                     onClick={() => handleToggleTinTucStatus(nw)}
-                                    className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${
-                                      isNewsActive 
-                                        ? 'bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300' 
-                                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                                    }`}
+                                    className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${isNewsActive
+                                      ? 'bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                                      : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                      }`}
                                     title="Bấm để xuất bản hoặc chuyển về bản nháp"
                                   >
                                     {isNewsActive ? '● Đã xuất bản' : '○ Bản nháp'}
@@ -5290,7 +5313,7 @@ export default function AdminDashboard() {
               <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
                 <span>{courtModal.mode === 'ADD' ? '⚽ Thêm Sân Bóng Mới' : '✏️ Cập Nhật Sân Bóng'}</span>
               </h3>
-              <button 
+              <button
                 onClick={() => setCourtModal({ isOpen: false, mode: 'ADD', data: {} })}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
               >
@@ -5300,7 +5323,7 @@ export default function AdminDashboard() {
 
             <form onSubmit={handleSaveCourt} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
+
                 {/* Cột trái: Thông tin cơ bản của sân */}
                 <div className="space-y-3">
                   <div>
@@ -5361,7 +5384,7 @@ export default function AdminDashboard() {
                 <div className="space-y-2.5 flex flex-col justify-between">
                   <div>
                     <label className="block font-black uppercase mb-1 text-slate-400">Hình Ảnh Sân Bóng (Cloudinary)</label>
-                    
+
                     {/* Xem trước ảnh */}
                     {courtModal.data.hinh_anh ? (
                       <div className="relative w-full h-32 sm:h-36 rounded-xl overflow-hidden border border-emerald-500/40 bg-slate-900 group shadow-sm mb-2">
@@ -5442,16 +5465,16 @@ export default function AdminDashboard() {
 
               {/* Footer Modal: Nút Hủy & Lưu Sân Bóng */}
               <div className="flex justify-end items-center gap-2.5 pt-3 border-t border-slate-800/60 dark:border-emerald-900/40">
-                <button 
-                  type="button" 
-                  onClick={() => setCourtModal({ isOpen: false, mode: 'ADD', data: {} })} 
+                <button
+                  type="button"
+                  onClick={() => setCourtModal({ isOpen: false, mode: 'ADD', data: {} })}
                   className="px-4 py-2 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer text-xs transition-colors"
                 >
                   Hủy
                 </button>
-                <button 
-                  type="submit" 
-                  disabled={isUploadingImage} 
+                <button
+                  type="submit"
+                  disabled={isUploadingImage}
                   className="px-5 py-2 rounded-xl font-black bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer disabled:opacity-50 text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-1.5"
                 >
                   {isUploadingImage ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
@@ -5778,8 +5801,8 @@ export default function AdminDashboard() {
                       const customTime = (bookingModal.data.gio_bat_dau || '').substring(0, 5);
                       const status = getBookingModalSlotStatus(customTime, false);
                       return (
-                        <option 
-                          value={customTime} 
+                        <option
+                          value={customTime}
                           disabled={status.disabled}
                           className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
                           style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
@@ -5792,9 +5815,9 @@ export default function AdminDashboard() {
                       const status = getBookingModalSlotStatus(t, false);
                       if (status.isHidden) return null; // Ẩn giờ đã qua
                       return (
-                        <option 
-                          key={`start_${t}`} 
-                          value={t} 
+                        <option
+                          key={`start_${t}`}
+                          value={t}
                           disabled={status.disabled}
                           className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
                           style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
@@ -5837,8 +5860,8 @@ export default function AdminDashboard() {
                       const customTime = (bookingModal.data.gio_ket_thuc || '').substring(0, 5);
                       const status = getBookingModalSlotStatus(customTime, true);
                       return (
-                        <option 
-                          value={customTime} 
+                        <option
+                          value={customTime}
                           disabled={status.disabled}
                           className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
                           style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
@@ -5851,9 +5874,9 @@ export default function AdminDashboard() {
                       const status = getBookingModalSlotStatus(t, true);
                       if (status.isHidden) return null; // Ẩn giờ đã qua và giờ <= giờ bắt đầu
                       return (
-                        <option 
-                          key={`end_${t}`} 
-                          value={t} 
+                        <option
+                          key={`end_${t}`}
+                          value={t}
                           disabled={status.disabled}
                           className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
                           style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
@@ -6491,9 +6514,8 @@ export default function AdminDashboard() {
                       key={m}
                       type="button"
                       onClick={() => setCheckoutModal({ ...checkoutModal, paymentMethod: m })}
-                      className={`p-2.5 rounded-xl border font-black text-xs cursor-pointer ${
-                        checkoutModal.paymentMethod === m ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 text-slate-800'
-                      }`}
+                      className={`p-2.5 rounded-xl border font-black text-xs cursor-pointer ${checkoutModal.paymentMethod === m ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-slate-100 text-slate-800'
+                        }`}
                     >
                       {m === 'TIEN_MAT' ? '💵 Tiền Mặt' : '🏦 Chuyển Khoản'}
                     </button>
@@ -6572,7 +6594,7 @@ export default function AdminDashboard() {
                 <ImageIcon className="w-5 h-5 text-emerald-600" />
                 <span>{bannerModal.mode === 'ADD' ? '🖼️ Thêm Banner Quảng Cáo' : '✏️ Cập Nhật Banner'}</span>
               </h3>
-              <button 
+              <button
                 onClick={() => setBannerModal({ isOpen: false, mode: 'ADD', data: { loai_banner: 'IMAGE', thu_tu: 1, trang_thai: 1 } })}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
@@ -6755,7 +6777,7 @@ export default function AdminDashboard() {
                 <Mail className="w-5 h-5 text-emerald-600" />
                 <span>Chi Tiết Phản Hồi Từ #{lienHeDetailModal.data.ho_ten}</span>
               </h3>
-              <button 
+              <button
                 onClick={() => setLienHeDetailModal({ isOpen: false, data: null })}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
@@ -6783,11 +6805,10 @@ export default function AdminDashboard() {
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-emerald-900/30">
                   <span className="text-slate-400">Trạng thái:</span>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
-                    lienHeDetailModal.data.trang_thai === 'DA_XU_LY' || (lienHeDetailModal.data as any).trang_thai_xu_ly === 'DA_XU_LY'
-                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                      : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                  }`}>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${lienHeDetailModal.data.trang_thai === 'DA_XU_LY' || (lienHeDetailModal.data as any).trang_thai_xu_ly === 'DA_XU_LY'
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                    }`}>
                     {(lienHeDetailModal.data.trang_thai === 'DA_XU_LY' || (lienHeDetailModal.data as any).trang_thai_xu_ly === 'DA_XU_LY') ? '✓ Đã xử lý' : '⏳ Chưa xử lý'}
                   </span>
                 </div>
@@ -6844,7 +6865,7 @@ export default function AdminDashboard() {
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Gửi thư trả lời trực tiếp đến Gmail của khách hàng</p>
               </div>
-              <button 
+              <button
                 onClick={() => setReplyLienHeModal({ isOpen: false, data: null, tieu_de_tra_loi: '', noi_dung_tra_loi: '', isSubmitting: false })}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
@@ -7012,7 +7033,7 @@ export default function AdminDashboard() {
                 <FolderTree className="w-5 h-5 text-emerald-600" />
                 <span>{loaiTinModal.mode === 'ADD' ? '📁 Thêm Loại Tin Tức Mới' : '✏️ Cập Nhật Loại Tin Tức'}</span>
               </h3>
-              <button 
+              <button
                 onClick={() => setLoaiTinModal({ isOpen: false, mode: 'ADD', data: { trang_thai: 1 } })}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
@@ -7086,7 +7107,7 @@ export default function AdminDashboard() {
                 <FileText className="w-5 h-5 text-emerald-600" />
                 <span>{newsModal.mode === 'ADD' ? '📝 Soạn Thảo Bài Viết Tin Tức Mới' : '✏️ Cập Nhật Bài Viết Tin Tức'}</span>
               </h3>
-              <button 
+              <button
                 onClick={() => setNewsModal({ isOpen: false, mode: 'ADD', data: { ma_loai_tin: 1, trang_thai: 1 } })}
                 className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >

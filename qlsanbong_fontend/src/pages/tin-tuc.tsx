@@ -212,7 +212,7 @@ export default function TinTucPage() {
           VIEW 1: CHI TIẾT BÀI VIẾT (KHI CÓ QUERY ?id=...)
           ===================================================================== */}
       {id ? (
-        <main className="pt-28 pb-20 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <main className="pt-20 md:pt-28 pb-20 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           
           {/* Nút quay lại & Breadcrumb */}
           <div className="flex items-center justify-between gap-4 mb-8">
@@ -295,11 +295,11 @@ export default function TinTucPage() {
 
               {/* Ảnh đại diện bài viết */}
               {article.hinh_anh && (
-                <div className="w-full h-80 sm:h-[450px] rounded-2xl overflow-hidden mb-8 shadow-xl">
+                <div className="w-full aspect-video max-h-[480px] rounded-2xl overflow-hidden mb-8 shadow-xl bg-slate-950 flex items-center justify-center border border-slate-800/80">
                   <img
                     src={article.hinh_anh}
                     alt={article.tieu_de}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 </div>
               )}
@@ -340,11 +340,11 @@ export default function TinTucPage() {
                         : 'bg-white border-slate-200 hover:border-emerald-400'
                     }`}
                   >
-                    <div className="h-36 rounded-xl overflow-hidden mb-3">
+                    <div className="h-40 rounded-xl overflow-hidden mb-3 bg-slate-950 flex items-center justify-center">
                       <img
                         src={item.hinh_anh || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=600&q=80'}
                         alt={item.tieu_de}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform"
+                        className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
                       />
                     </div>
                     <div className="text-[11px] text-emerald-400 font-bold mb-1">{item.ten_loai || 'Tin tức'}</div>
@@ -362,7 +362,7 @@ export default function TinTucPage() {
         /* =====================================================================
            VIEW 2: DANH SÁCH TẤT CẢ BÀI VIẾT (KHI KHÔNG CÓ QUERY ?id=...)
            ===================================================================== */
-        <main className="pt-28 pb-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <main className="pt-20 md:pt-28 pb-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           {/* BỘ LỌC DANH MỤC & THANH TÌM KIẾM */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 mb-10">
@@ -442,11 +442,11 @@ export default function TinTucPage() {
                   isDarkMode ? 'bg-slate-900/80 border-slate-800 hover:border-emerald-500/40' : 'bg-white border-slate-200 hover:border-emerald-400'
                 }`}>
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
-                    <div className="lg:col-span-7 relative h-72 sm:h-96 overflow-hidden">
+                    <div className="lg:col-span-7 relative h-64 sm:h-80 md:h-96 overflow-hidden bg-slate-950 flex items-center justify-center">
                       <img
                         src={featuredArticle.hinh_anh || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80'}
                         alt={featuredArticle.tieu_de}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                        className="w-full h-full object-contain hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute top-4 left-4">
                         <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500 text-slate-950 shadow-md">
@@ -505,11 +505,11 @@ export default function TinTucPage() {
                             : 'bg-white border-slate-200 hover:border-emerald-400'
                         }`}
                       >
-                        <div className="relative h-48 overflow-hidden">
+                        <div className="relative h-48 sm:h-52 overflow-hidden bg-slate-950 flex items-center justify-center">
                           <img
                             src={item.hinh_anh || 'https://images.unsplash.com/photo-1511886929837-354d827aae26?auto=format&fit=crop&w=800&q=80'}
                             alt={item.tieu_de}
-                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                            className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
                           />
                           <span className="absolute top-3 left-3 px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-slate-950/80 text-emerald-400 backdrop-blur-md border border-slate-700">
                             {item.ten_loai || 'Tin tức'}

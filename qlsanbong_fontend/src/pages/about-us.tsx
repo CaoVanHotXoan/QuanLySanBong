@@ -95,7 +95,7 @@ export default function AboutUsPage() {
 
       <HeaderNav activeTab="about" />
 
-      <main className="pt-28 pb-20">
+      <main className="pt-20 md:pt-28 pb-20">
 
         {/* GIỚI THIỆU CHI TIẾT & HÌNH ẢNH */}
         <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

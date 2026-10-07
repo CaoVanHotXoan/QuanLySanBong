@@ -114,7 +114,7 @@ export default function LienHePage() {
 
       <HeaderNav activeTab="contact" />
 
-      <main className="pt-28 pb-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <main className="pt-20 md:pt-28 pb-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* HERO TITLE */}
         <div className="text-center max-w-3xl mx-auto mb-12">
