@@ -23,6 +23,7 @@ const dichVuRoutes_1 = __importDefault(require("./src/routes/dichVuRoutes"));
 const thanhToanRoutes_1 = __importDefault(require("./src/routes/thanhToanRoutes"));
 const baoCaoRoutes_1 = __importDefault(require("./src/routes/baoCaoRoutes"));
 const uploadRoutes_1 = __importDefault(require("./src/routes/uploadRoutes"));
+const contentRoutes_1 = __importDefault(require("./src/routes/contentRoutes"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // Cấu hình Middleware
@@ -41,7 +42,8 @@ app.get('/', (req, res) => {
             dich_vu: '/api/dich-vu',
             thanh_toan: '/api/thanh-toan',
             bao_cao: '/api/bao-cao',
-            upload: '/api/upload'
+            upload: '/api/upload',
+            content: '/api (tin-tuc, about-us, lien-he, banner)'
         }
     });
 });
@@ -52,6 +54,7 @@ app.use('/api/dich-vu', dichVuRoutes_1.default);
 app.use('/api/thanh-toan', thanhToanRoutes_1.default);
 app.use('/api/bao-cao', baoCaoRoutes_1.default);
 app.use('/api/upload', uploadRoutes_1.default);
+app.use('/api', contentRoutes_1.default);
 // Middleware xử lý 404 - Không tìm thấy Endpoint
 app.use((req, res, next) => {
     res.status(404).json({

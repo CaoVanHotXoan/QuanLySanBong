@@ -63,9 +63,14 @@ import {
   PieChart,
   ExternalLink,
   Zap,
-  BarChart
+  BarChart,
+  MessageSquare,
+  MessageSquareReply,
+  Send,
+  Save
 } from 'lucide-react';
 import { AuthUser } from './Login/login';
+import { contentService, BannerItem, LienHePayload, LoaiTinTuc, TinTucItem, AboutUsData } from '../services/contentService';
 
 // Icon quả bóng đá màu đen trắng chuẩn
 function SoccerBallIcon({ className = "w-6 h-6" }: { className?: string }) {
@@ -91,19 +96,25 @@ function SoccerBallIcon({ className = "w-6 h-6" }: { className?: string }) {
 // =====================================================================
 
 export type TabType =
-  // 1. Tổng Quan
+  // 1. Nhóm Thống Kê & Tổng Quan
   | 'OVERVIEW'
-  // 2. Quản Lý Sân Bóng (San_Bong, Loai_San, Khung_Gio_Gia)
+  | 'ABOUT_US'
+  | 'BANNER'
+  | 'LIEN_HE'
+  // 2. Nhóm Quản Lý Tin Tức
+  | 'LOAI_TIN_TUC'
+  | 'TIN_TUC'
+  // 3. Quản Lý Sân Bóng (San_Bong, Loai_San, Khung_Gio_Gia)
   | 'SAN_BONG'
   | 'LOAI_SAN_GIA'
-  // 3. Dịch Vụ & Kho (Dich_Vu, Phieu_Nhap_Kho)
+  // 4. Dịch Vụ & Kho (Dich_Vu, Phieu_Nhap_Kho)
   | 'DICH_VU'
   | 'PHIEU_NHAP_KHO'
-  // 4. Tài Chính & Giao Dịch (Don_Dat_San & Thanh_Toan, Lich_Su_Hoan_Tien, Khung_Gio)
+  // 5. Tài Chính & Giao Dịch (Don_Dat_San & Thanh_Toan, Lich_Su_Hoan_Tien, Khung_Gio)
   | 'DON_DAT_THANH_TOAN'
   | 'HOAN_TIEN'
   | 'KHUNG_GIO'
-  // 5. Hệ Thống & Phân Quyền (Nguoi_Dung, Vai_Tro)
+  // 6. Hệ Thống & Phân Quyền (Nguoi_Dung, Vai_Tro)
   | 'NGUOI_DUNG'
   | 'VAI_TRO';
 
@@ -313,10 +324,21 @@ interface SidebarGroup {
 // Cấu trúc cây Menu Sidebar chuẩn
 const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
-    groupTitle: 'TỔNG QUAN',
-    groupIcon: LayoutDashboard,
+    groupTitle: 'THỐNG KÊ & TỔNG QUAN',
+    groupIcon: BarChart3,
     items: [
-      { id: 'OVERVIEW', label: 'Dashboard (Thống kê & KPI)', icon: BarChart3, badge: 'KPI' }
+      { id: 'OVERVIEW', label: 'Dashboard (Thống kê & KPI)', icon: LayoutDashboard, badge: 'KPI' },
+      { id: 'ABOUT_US', label: 'Quản Lý About Us', icon: Sparkles, tableHint: 'About_Us' },
+      { id: 'BANNER', label: 'Quản Lý Banner', icon: ImageIcon, tableHint: 'Banner' },
+      { id: 'LIEN_HE', label: 'Quản Lý Liên Hệ', icon: Mail, tableHint: 'Lien_He' }
+    ]
+  },
+  {
+    groupTitle: 'QUẢN LÝ TIN TỨC',
+    groupIcon: FileText,
+    items: [
+      { id: 'LOAI_TIN_TUC', label: 'Loại Tin Tức', icon: FolderTree, tableHint: 'Loai_Tin_Tuc' },
+      { id: 'TIN_TUC', label: 'Tin Tức & Bài Viết', icon: FileText, tableHint: 'Tin_Tuc' }
     ]
   },
   {
@@ -377,6 +399,57 @@ export default function AdminDashboard() {
   const [userList, setUserList] = useState<NguoiDung[]>([]);
   const [roleList, setRoleList] = useState<VaiTro[]>([]);
   const [lockedSlots, setLockedSlots] = useState<string[]>([]);
+
+  // Dữ liệu mở rộng: Banner, Liên Hệ, Loại Tin Tức, Tin Tức, About Us
+  const [bannerList, setBannerList] = useState<BannerItem[]>([]);
+  const [lienHeList, setLienHeList] = useState<LienHePayload[]>([]);
+  const [loaiTinList, setLoaiTinList] = useState<LoaiTinTuc[]>([]);
+  const [newsList, setNewsList] = useState<TinTucItem[]>([]);
+  const [aboutUsData, setAboutUsData] = useState<AboutUsData>({
+    ten_trung_tam: 'Trung Tâm Thể Thao Soccer247',
+    hotline: '0816344504',
+    email: 'sinhvienxoan@gmail.com',
+    dia_chi: 'Biên Hòa - Đồng Nai',
+    link_map: '',
+    gioi_thieu_ngan: '',
+    bai_viet_about_us: '',
+    link_facebook: '',
+    link_zalo: ''
+  });
+  const [isSavingAboutUs, setIsSavingAboutUs] = useState<boolean>(false);
+
+  const [bannerModal, setBannerModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<BannerItem> }>({
+    isOpen: false,
+    mode: 'ADD',
+    data: { loai_banner: 'IMAGE', thu_tu: 1, trang_thai: 1 }
+  });
+  const [loaiTinModal, setLoaiTinModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<LoaiTinTuc> }>({
+    isOpen: false,
+    mode: 'ADD',
+    data: { trang_thai: 1 }
+  });
+  const [newsModal, setNewsModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<TinTucItem> }>({
+    isOpen: false,
+    mode: 'ADD',
+    data: { ma_loai_tin: 1, trang_thai: 1 }
+  });
+  const [lienHeDetailModal, setLienHeDetailModal] = useState<{ isOpen: boolean; data: LienHePayload | null }>({
+    isOpen: false,
+    data: null
+  });
+  const [replyLienHeModal, setReplyLienHeModal] = useState<{
+    isOpen: boolean;
+    data: LienHePayload | null;
+    tieu_de_tra_loi: string;
+    noi_dung_tra_loi: string;
+    isSubmitting: boolean;
+  }>({
+    isOpen: false,
+    data: null,
+    tieu_de_tra_loi: '',
+    noi_dung_tra_loi: '',
+    isSubmitting: false,
+  });
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -451,6 +524,80 @@ export default function AdminDashboard() {
     } catch (err: any) {
       console.error('Lỗi upload url:', err);
       setToastMessage({ type: 'error', message: err.message || 'Không thể kết nối máy chủ để upload ảnh từ link' });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Xử lý tải file trực tiếp từ máy tính (ảnh hoặc video) cho Banner Modal
+  const handleUploadBannerFile = async (file: File, type: 'IMAGE' | 'VIDEO') => {
+    setIsUploadingImage(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
+      const res = await fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        if (type === 'VIDEO') {
+          setBannerModal((prev) => ({
+            ...prev,
+            data: { ...prev.data, video_url: data.url, loai_banner: 'VIDEO' }
+          }));
+          setToastMessage({ type: 'success', message: '🎥 Đã tải file video lên Cloudinary thành công!' });
+        } else {
+          setBannerModal((prev) => ({
+            ...prev,
+            data: { ...prev.data, hinh_anh: data.url }
+          }));
+          setToastMessage({ type: 'success', message: '🖼️ Đã tải file ảnh lên Cloudinary thành công!' });
+        }
+      } else {
+        setToastMessage({ type: 'error', message: data.message || 'Lỗi khi tải file lên máy chủ' });
+      }
+    } catch (err: any) {
+      console.error('Lỗi upload banner file:', err);
+      setToastMessage({ type: 'error', message: err.message || 'Không thể kết nối máy chủ để upload file' });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Xử lý tải file ảnh trực tiếp từ máy tính cho Tin Tức Modal
+  const handleUploadNewsImageFile = async (file: File) => {
+    setIsUploadingImage(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
+      const res = await fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        setNewsModal((prev) => ({
+          ...prev,
+          data: { ...prev.data, hinh_anh: data.url }
+        }));
+        setToastMessage({ type: 'success', message: '🖼️ Đã tải ảnh bài viết lên Cloudinary thành công!' });
+      } else {
+        setToastMessage({ type: 'error', message: data.message || 'Lỗi khi tải ảnh bài viết' });
+      }
+    } catch (err: any) {
+      console.error('Lỗi upload news image:', err);
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối máy chủ upload' });
     } finally {
       setIsUploadingImage(false);
     }
@@ -666,6 +813,50 @@ export default function AdminDashboard() {
         const data = await resRoles.json();
         if (data.success && Array.isArray(data.data)) setRoleList(data.data);
       }
+
+      // 12. Banners
+      try {
+        const resBanners = await fetch(`${API_BASE}/banner/admin`);
+        if (resBanners.ok) {
+          const data = await resBanners.json();
+          if (data.success && Array.isArray(data.data)) setBannerList(data.data);
+        }
+      } catch (_e) {}
+
+      // 13. Liên Hệ
+      try {
+        const resLienHe = await fetch(`${API_BASE}/lien-he`);
+        if (resLienHe.ok) {
+          const data = await resLienHe.json();
+          if (data.success && Array.isArray(data.data)) setLienHeList(data.data);
+        }
+      } catch (_e) {}
+
+      // 14. Loại Tin Tức
+      try {
+        const resLoaiTin = await fetch(`${API_BASE}/tin-tuc/loai-tin/admin`);
+        if (resLoaiTin.ok) {
+          const data = await resLoaiTin.json();
+          if (data.success && Array.isArray(data.data)) setLoaiTinList(data.data);
+        }
+      } catch (_e) {}
+
+      // 15. Tin Tức
+      try {
+        const resNews = await fetch(`${API_BASE}/tin-tuc/admin`);
+        if (resNews.ok) {
+          const data = await resNews.json();
+          if (data.success && Array.isArray(data.data)) setNewsList(data.data);
+        }
+      } catch (_e) {}
+
+      // 16. About Us
+      try {
+        const resAbout = await contentService.getAboutUs();
+        if (resAbout?.success && resAbout.data) {
+          setAboutUsData(resAbout.data);
+        }
+      } catch (_e) {}
     } catch (err) {
       console.warn('Lỗi tải dữ liệu từ CSDL:', err);
     } finally {
@@ -1731,6 +1922,286 @@ export default function AdminDashboard() {
     );
   };
 
+  // 9. Quản lý Banner Quảng Cáo (Banner)
+  const handleSaveBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const isStatusActive = (bannerModal.data.trang_thai as any) == 1 || (bannerModal.data.trang_thai as any) === true;
+      const data = {
+        ...bannerModal.data,
+        trang_thai: isStatusActive ? 1 : 0
+      };
+      if (bannerModal.mode === 'ADD') {
+        const res = await contentService.createBanner(data);
+        if (res.success) {
+          setToastMessage({ type: 'success', message: '🎉 Thêm Banner mới thành công!' });
+        }
+      } else if (data.id) {
+        const res = await contentService.updateBanner(data.id, data);
+        if (res.success) {
+          setToastMessage({ type: 'success', message: '✅ Cập nhật Banner thành công!' });
+        }
+      }
+      loadAllDataFromBackend();
+      setBannerModal({ isOpen: false, mode: 'ADD', data: { loai_banner: 'IMAGE', thu_tu: 1, trang_thai: 1 } });
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi lưu banner' });
+    }
+  };
+
+  const handleDeleteBanner = (id: number, title?: string) => {
+    openDeleteConfirm(
+      'Xóa Banner Quảng Cáo',
+      'Bạn có chắc chắn muốn xóa banner này khỏi hệ thống?',
+      title || `#${id}`,
+      async () => {
+        try {
+          await contentService.deleteBanner(id);
+          setToastMessage({ type: 'success', message: '🗑️ Đã xóa Banner thành công!' });
+          loadAllDataFromBackend();
+        } catch (err: any) {
+          setToastMessage({ type: 'error', message: err.message || 'Lỗi xóa banner' });
+        }
+      }
+    );
+  };
+
+  const handleToggleBannerStatus = async (item: BannerItem) => {
+    try {
+      const isCurrentlyActive = (item.trang_thai as any) == 1 || (item.trang_thai as any) === true;
+      const newStatus = isCurrentlyActive ? 0 : 1;
+      await contentService.updateBanner(item.id, { ...item, trang_thai: newStatus });
+      setToastMessage({ type: 'success', message: `Đã ${newStatus === 1 ? 'hiển thị trên trang chủ' : 'tạm ẩn'} banner!` });
+      loadAllDataFromBackend();
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi cập nhật trạng thái banner' });
+    }
+  };
+
+  // 10. Quản lý Phản hồi & Liên hệ (Lien_He)
+  const handleUpdateLienHeStatus = async (id?: number, currentStatus?: string) => {
+    if (!id) return;
+    try {
+      const nextStatus = (currentStatus === 'DA_XU_LY') ? 'CHUA_XU_LY' : 'DA_XU_LY';
+      await contentService.updateLienHeStatus(id, nextStatus as any);
+      setLienHeList(prev => prev.map(item => item.id === id ? {
+        ...item,
+        trang_thai_xu_ly: nextStatus,
+        trang_thai: nextStatus
+      } : item));
+      setToastMessage({ type: 'success', message: `✅ Đã chuyển trạng thái liên hệ sang ${nextStatus === 'DA_XU_LY' ? 'Đã xử lý' : 'Chưa xử lý'}!` });
+      loadAllDataFromBackend();
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi cập nhật liên hệ' });
+    }
+  };
+
+  const handleDeleteLienHe = (id?: number, sender?: string) => {
+    if (!id) return;
+    openDeleteConfirm(
+      'Xóa Bản Ghi Liên Hệ',
+      'Bạn có chắc chắn muốn xóa phản hồi liên hệ này?',
+      sender || `#${id}`,
+      async () => {
+        try {
+          await contentService.deleteLienHe(id);
+          setToastMessage({ type: 'success', message: '🗑️ Đã xóa liên hệ thành công!' });
+          loadAllDataFromBackend();
+        } catch (err: any) {
+          setToastMessage({ type: 'error', message: err.message || 'Lỗi xóa liên hệ' });
+        }
+      }
+    );
+  };
+
+  const handleReplyLienHeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const replyId = replyLienHeModal.data?.id;
+    if (!replyId || !replyLienHeModal.noi_dung_tra_loi.trim()) {
+      setToastMessage({ type: 'error', message: 'Vui lòng nhập nội dung phản hồi!' });
+      return;
+    }
+    setReplyLienHeModal(prev => ({ ...prev, isSubmitting: true }));
+    try {
+      const res = await contentService.replyLienHe(replyId, {
+        tieu_de_tra_loi: replyLienHeModal.tieu_de_tra_loi.trim(),
+        noi_dung_tra_loi: replyLienHeModal.noi_dung_tra_loi.trim(),
+      });
+      if (res?.success) {
+        setToastMessage({ type: 'success', message: res.message || '✅ Đã gửi phản hồi thành công!' });
+        // Cập nhật trạng thái ngay lập tức trên UI sang Đã xử lý (DA_XU_LY)
+        setLienHeList(prev => prev.map(item => item.id === replyId ? {
+          ...item,
+          trang_thai_xu_ly: 'DA_XU_LY',
+          trang_thai: 'DA_XU_LY',
+          noi_dung_tra_loi: replyLienHeModal.noi_dung_tra_loi.trim(),
+          ngay_tra_loi: new Date().toISOString()
+        } : item));
+        setReplyLienHeModal({ isOpen: false, data: null, tieu_de_tra_loi: '', noi_dung_tra_loi: '', isSubmitting: false });
+        loadAllDataFromBackend();
+      } else {
+        setToastMessage({ type: 'error', message: res?.message || 'Lỗi khi gửi phản hồi' });
+      }
+    } catch (err: any) {
+      console.error('Lỗi trả lời liên hệ:', err);
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối khi gửi phản hồi' });
+    } finally {
+      setReplyLienHeModal(prev => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
+  // 11. Quản lý Loại Tin Tức (Loai_Tin_Tuc)
+  const handleSaveLoaiTin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const data = loaiTinModal.data;
+      if (!data.ten_loai?.trim()) return;
+      const isStatusActive = (data.trang_thai as any) == 1 || (data.trang_thai as any) === true;
+      const payload = {
+        ten_loai: data.ten_loai.trim(),
+        trang_thai: isStatusActive ? 1 : 0
+      };
+      if (loaiTinModal.mode === 'ADD') {
+        const res = await contentService.createLoaiTin(payload);
+        if (res.success) {
+          setToastMessage({ type: 'success', message: '🎉 Thêm loại tin tức mới thành công!' });
+        }
+      } else if (data.id) {
+        const res = await contentService.updateLoaiTin(data.id, payload);
+        if (res.success) {
+          setToastMessage({ type: 'success', message: '✅ Cập nhật loại tin tức thành công!' });
+        }
+      }
+      loadAllDataFromBackend();
+      setLoaiTinModal({ isOpen: false, mode: 'ADD', data: { trang_thai: 1 } });
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi lưu loại tin tức' });
+    }
+  };
+
+  const handleToggleLoaiTinStatus = async (item: LoaiTinTuc) => {
+    try {
+      const isCurrentlyActive = (item.trang_thai as any) == 1 || (item.trang_thai as any) === true;
+      const newStatus = isCurrentlyActive ? 0 : 1;
+      await contentService.updateLoaiTin(item.id, { ten_loai: item.ten_loai, trang_thai: newStatus });
+      setToastMessage({ type: 'success', message: `Đã ${newStatus === 1 ? 'kích hoạt' : 'tạm ẩn'} danh mục [${item.ten_loai}]!` });
+      loadAllDataFromBackend();
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi cập nhật trạng thái loại tin' });
+    }
+  };
+
+  const handleDeleteLoaiTin = (id: number, name?: string) => {
+    openDeleteConfirm(
+      'Xóa Loại Tin Tức',
+      'Bạn có chắc chắn muốn xóa loại tin này?',
+      name || `#${id}`,
+      async () => {
+        try {
+          await contentService.deleteLoaiTin(id);
+          setToastMessage({ type: 'success', message: '🗑️ Đã xóa loại tin tức thành công!' });
+          loadAllDataFromBackend();
+        } catch (err: any) {
+          setToastMessage({ type: 'error', message: err.message || 'Lỗi xóa loại tin tức' });
+        }
+      }
+    );
+  };
+
+  // 12. Quản lý Bài Viết Tin Tức (Tin_Tuc)
+  const handleSaveTinTuc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const data = newsModal.data;
+      if (!data.tieu_de?.trim() || !data.noi_dung?.trim()) return;
+      const isStatusActive = (data.trang_thai as any) == 1 || (data.trang_thai as any) === true;
+      const payload = {
+        ...data,
+        trang_thai: isStatusActive ? 1 : 0
+      };
+      if (newsModal.mode === 'ADD') {
+        const res = await contentService.createTinTuc(payload);
+        if (res.success) {
+          setToastMessage({ type: 'success', message: '🎉 Thêm bài viết tin tức mới thành công!' });
+        }
+      } else if (data.id) {
+        const res = await contentService.updateTinTuc(data.id, payload);
+        if (res.success) {
+          setToastMessage({ type: 'success', message: '✅ Cập nhật bài viết tin tức thành công!' });
+        }
+      }
+      loadAllDataFromBackend();
+      setNewsModal({ isOpen: false, mode: 'ADD', data: { ma_loai_tin: 1, trang_thai: 1 } });
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi lưu tin tức' });
+    }
+  };
+
+  const handleToggleTinTucStatus = async (item: TinTucItem) => {
+    try {
+      const isCurrentlyActive = (item.trang_thai as any) == 1 || (item.trang_thai as any) === true;
+      const newStatus = isCurrentlyActive ? 0 : 1;
+      await contentService.updateTinTuc(item.id, { ...item, trang_thai: newStatus });
+      setToastMessage({ type: 'success', message: `Đã ${newStatus === 1 ? 'xuất bản bài viết' : 'chuyển bài viết về bản nháp'}!` });
+      loadAllDataFromBackend();
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi cập nhật trạng thái bài viết' });
+    }
+  };
+
+  const handleDeleteTinTuc = (id: number, title?: string) => {
+    openDeleteConfirm(
+      'Xóa Bài Viết Tin Tức',
+      'Bạn có chắc chắn muốn xóa bài viết này?',
+      title || `#${id}`,
+      async () => {
+        try {
+          await contentService.deleteTinTuc(id);
+          setToastMessage({ type: 'success', message: '🗑️ Đã xóa bài viết tin tức thành công!' });
+          loadAllDataFromBackend();
+        } catch (err: any) {
+          setToastMessage({ type: 'error', message: err.message || 'Lỗi xóa tin tức' });
+        }
+      }
+    );
+  };
+
+  // 13. Quản lý Thông Tin Về Chúng Tôi (About_Us)
+  const handleSaveAboutUs = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingAboutUs(true);
+    try {
+      // Tự động bóc tách link src chuẩn nếu dán cả thẻ <iframe ...>
+      let cleanMap = aboutUsData.link_map ? aboutUsData.link_map.trim() : '';
+      const iframeMatch = cleanMap.match(/src=["']([^"']+)["']/i);
+      if (iframeMatch && iframeMatch[1]) {
+        cleanMap = iframeMatch[1];
+      }
+
+      const payload = {
+        ...aboutUsData,
+        link_map: cleanMap
+      };
+
+      const res = await contentService.updateAboutUs(payload);
+      if (res?.success) {
+        setToastMessage({ type: 'success', message: '💾 Đã lưu thông tin About Us thành công!' });
+        // Tải lại dữ liệu mới nhất
+        const fresh = await contentService.getAboutUs();
+        if (fresh?.success && fresh.data) {
+          setAboutUsData(fresh.data);
+        }
+      } else {
+        setToastMessage({ type: 'error', message: res?.message || 'Lỗi khi lưu thông tin About Us' });
+      }
+    } catch (err: any) {
+      console.error('Lỗi cập nhật About Us:', err);
+      setToastMessage({ type: 'error', message: err.message || 'Không thể kết nối máy chủ để lưu About Us' });
+    } finally {
+      setIsSavingAboutUs(false);
+    }
+  };
+
   // Helper chuyển đổi giờ "HH:MM" thành số phút trong ngày
   const timeToMinutes = (t?: string): number => {
     if (!t) return 0;
@@ -2494,6 +2965,10 @@ export default function AdminDashboard() {
               <ChevronRight className="w-4 h-4 text-slate-500" />
               <h2 className={`text-sm sm:text-base font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
                 {activeTab === 'OVERVIEW' && 'Dashboard'}
+                {activeTab === 'BANNER' && 'Quản Lý Banner Quảng Cáo'}
+                {activeTab === 'LIEN_HE' && 'Quản Lý Phản Hồi & Liên Hệ'}
+                {activeTab === 'LOAI_TIN_TUC' && 'Quản Lý Loại Tin Tức'}
+                {activeTab === 'TIN_TUC' && 'Quản Lý Tin Tức & Bài Viết'}
                 {activeTab === 'SAN_BONG' && 'Danh Sách Sân Bóng'}
                 {activeTab === 'LOAI_SAN_GIA' && 'Danh Sách Loại Sân'}
                 {activeTab === 'DICH_VU' && 'Danh Mục Dịch Vụ'}
@@ -4163,6 +4638,642 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* =================================================================
+                TAB: ABOUT_US - QUẢN LÝ THÔNG TIN VỀ CHÚNG TÔI
+                ================================================================= */}
+            {activeTab === 'ABOUT_US' && (
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                  <div>
+                    <h3 className="text-base font-black flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-emerald-500" /> Quản Lý Thông Tin Về Chúng Tôi (About Us)
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Cập nhật nội dung giới thiệu trung tâm, số hotline, email, địa chỉ và bản đồ hiển thị trên trang About Us và chân trang.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href="/about-us"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-700 hover:bg-slate-600 text-slate-200 shadow-sm flex items-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Xem Trang Thực Tế
+                    </a>
+                    <button
+                      type="submit"
+                      form="form-about-us-manage"
+                      disabled={isSavingAboutUs}
+                      className="px-5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer transition-all hover:scale-[1.02] disabled:opacity-60"
+                    >
+                      {isSavingAboutUs ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      <span>{isSavingAboutUs ? 'Đang lưu...' : 'Lưu Thay Đổi'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <form id="form-about-us-manage" onSubmit={handleSaveAboutUs} className="p-6 space-y-6 text-xs">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    {/* CỘT TRÁI: THÔNG TIN CƠ BẢN & LIÊN HỆ */}
+                    <div className="lg:col-span-6 space-y-4">
+                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b pb-2 border-slate-200 dark:border-emerald-900/40">
+                        <MapPin className="w-4 h-4" /> Thông Tin Cơ Bản & Kênh Liên Hệ
+                      </div>
+
+                      <div>
+                        <label className="block font-black uppercase mb-1 text-slate-600 dark:text-slate-300">
+                          Tên Trung Tâm Thể Thao <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={aboutUsData.ten_trung_tam || ''}
+                          onChange={(e) => setAboutUsData({ ...aboutUsData, ten_trung_tam: e.target.value })}
+                          placeholder="Ví dụ: Trung Tâm Thể Thao Soccer247"
+                          className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-black uppercase mb-1 text-slate-600 dark:text-slate-300">
+                            Hotline Đặt Sân <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={aboutUsData.hotline || ''}
+                            onChange={(e) => setAboutUsData({ ...aboutUsData, hotline: e.target.value })}
+                            placeholder="0816344504"
+                            className={`w-full p-2.5 rounded-xl border font-bold font-mono ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-black uppercase mb-1 text-slate-600 dark:text-slate-300">
+                            Email Hỗ Trợ
+                          </label>
+                          <input
+                            type="email"
+                            value={aboutUsData.email || ''}
+                            onChange={(e) => setAboutUsData({ ...aboutUsData, email: e.target.value })}
+                            placeholder="sinhvienxoan@gmail.com"
+                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-black uppercase mb-1 text-slate-600 dark:text-slate-300">
+                          Địa Chỉ Cụm Sân <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={aboutUsData.dia_chi || ''}
+                          onChange={(e) => setAboutUsData({ ...aboutUsData, dia_chi: e.target.value })}
+                          placeholder="Biên Hòa - Đồng Nai"
+                          className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-black uppercase mb-1 text-slate-600 dark:text-slate-300">
+                            Link Facebook Fanpage
+                          </label>
+                          <input
+                            type="text"
+                            value={aboutUsData.link_facebook || ''}
+                            onChange={(e) => setAboutUsData({ ...aboutUsData, link_facebook: e.target.value })}
+                            placeholder="https://facebook.com/soccer247"
+                            className={`w-full p-2.5 rounded-xl border font-medium ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-black uppercase mb-1 text-slate-600 dark:text-slate-300">
+                            Link Zalo Tư Vấn
+                          </label>
+                          <input
+                            type="text"
+                            value={aboutUsData.link_zalo || ''}
+                            onChange={(e) => setAboutUsData({ ...aboutUsData, link_zalo: e.target.value })}
+                            placeholder="https://zalo.me/0816344504"
+                            className={`w-full p-2.5 rounded-xl border font-medium ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-black uppercase mb-1 text-slate-600 dark:text-slate-300 flex items-center justify-between">
+                          <span>Đường Dẫn / Mã Nhúng Google Maps (iframe hoặc URL)</span>
+                          <span className="text-[10px] lowercase text-emerald-500 font-normal">Tự động nhận diện thẻ &lt;iframe&gt;</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={aboutUsData.link_map || ''}
+                          onChange={(e) => {
+                            let val = e.target.value;
+                            const match = val.match(/src=["']([^"']+)["']/i);
+                            if (match && match[1]) {
+                              val = match[1];
+                            }
+                            setAboutUsData({ ...aboutUsData, link_map: val });
+                          }}
+                          placeholder="Dán mã <iframe src=...> hoặc link embed Google Maps..."
+                          className={`w-full p-2.5 rounded-xl border font-mono text-[11px] ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        />
+                        {aboutUsData.link_map && (
+                          <div className="mt-2 rounded-xl overflow-hidden border border-slate-700 h-32 bg-slate-900">
+                            <iframe
+                              title="Xem trước bản đồ"
+                              src={aboutUsData.link_map}
+                              width="100%"
+                              height="100%"
+                              style={{ border: 0 }}
+                              allowFullScreen={false}
+                              loading="lazy"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* CỘT PHẢI: NỘI DUNG GIỚI THIỆU CHI TIẾT */}
+                    <div className="lg:col-span-6 space-y-4">
+                      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b pb-2 border-slate-200 dark:border-emerald-900/40">
+                        <FileText className="w-4 h-4" /> Nội Dung Giới Thiệu & Bài Viết
+                      </div>
+
+                      <div>
+                        <label className="block font-black uppercase mb-1 text-slate-600 dark:text-slate-300">
+                          Lời Giới Thiệu Ngắn (Summary)
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={aboutUsData.gioi_thieu_ngan || ''}
+                          onChange={(e) => setAboutUsData({ ...aboutUsData, gioi_thieu_ngan: e.target.value })}
+                          placeholder="Mô tả tóm tắt ngắn gọn về trung tâm thể thao..."
+                          className={`w-full p-2.5 rounded-xl border font-medium resize-none ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-black uppercase mb-1 text-slate-600 dark:text-slate-300">
+                          Bài Viết Giới Thiệu Chi Tiết (About Us Main Content)
+                        </label>
+                        <textarea
+                          rows={7}
+                          value={aboutUsData.bai_viet_about_us || ''}
+                          onChange={(e) => setAboutUsData({ ...aboutUsData, bai_viet_about_us: e.target.value })}
+                          placeholder="Nhập toàn bộ nội dung giới thiệu cơ sở vật chất, mặt sân cỏ, giàn đèn, dịch vụ tiện ích của Soccer247..."
+                          className={`w-full p-2.5 rounded-xl border font-medium resize-none ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        />
+                      </div>
+
+                      <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-[#060e09]/60 border-emerald-800/40' : 'bg-slate-50 border-slate-200'} space-y-2`}>
+                        <div className="font-bold text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4" /> Đồng bộ thời gian thực
+                        </div>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                          Khi bạn bấm <strong className="text-emerald-600 dark:text-emerald-400">&quot;Lưu Thay Đổi&quot;</strong>, toàn bộ thông tin này sẽ được cập nhật tức thì vào CSDL qua Stored Procedure và tự động hiển thị ra trang <strong>About Us</strong> và <strong>Chân trang (Footer)</strong> của website.
+                        </p>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* NÚT LƯU CUỐI TRANG */}
+                  <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-emerald-900/40">
+                    <button
+                      type="submit"
+                      disabled={isSavingAboutUs}
+                      className="px-6 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-lg shadow-emerald-500/20 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] disabled:opacity-60"
+                    >
+                      {isSavingAboutUs ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      <span>{isSavingAboutUs ? 'Đang lưu...' : 'Lưu Thông Tin About Us'}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* =================================================================
+                TAB 13: BANNER QUẢNG CÁO (BANNER)
+                ================================================================= */}
+            {activeTab === 'BANNER' && (
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                  <div>
+                    <h3 className="text-base font-black flex items-center gap-2">
+                      <ImageIcon className="w-5 h-5 text-emerald-600" /> Quản Lý Banner Quảng Cáo Trang Chủ
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Hiển thị slider hình ảnh và video quảng cáo ngoài trang chủ website</p>
+                  </div>
+                  <button
+                    onClick={() => setBannerModal({ isOpen: true, mode: 'ADD', data: { loai_banner: 'IMAGE', thu_tu: bannerList.length + 1, trang_thai: 1 } })}
+                    className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer transition-all hover:scale-[1.02]"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" /> Thêm Banner Mới
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                        <th className="p-4 w-28">HÌNH ẢNH / VIDEO</th>
+                        <th className="p-4">TIÊU ĐỀ & LIÊN KẾT</th>
+                        <th className="p-4 text-center">LOẠI</th>
+                        <th className="p-4 text-center">THỨ TỰ</th>
+                        <th className="p-4 text-center">TRẠNG THÁI</th>
+                        <th className="p-4 text-right">THAO TÁC</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
+                      {bannerList.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">Chưa có banner nào. Hãy bấm &quot;Thêm Banner Mới&quot; để tạo.</td>
+                        </tr>
+                      ) : (
+                        bannerList.map((b) => (
+                          <tr key={b.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
+                            <td className="p-4">
+                              {b.hinh_anh ? (
+                                <img src={b.hinh_anh} alt={b.tieu_de || 'Banner'} className="w-24 h-14 object-cover rounded-lg border border-slate-200 dark:border-emerald-800 shadow-sm" />
+                              ) : (
+                                <div className="w-24 h-14 rounded-lg bg-slate-200 dark:bg-emerald-950 flex items-center justify-center text-slate-400 font-bold text-[10px]">No Media</div>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <div className="font-black text-sm text-slate-900 dark:text-white">{b.tieu_de || '(Không có tiêu đề)'}</div>
+                              {b.link_dieu_huong && (
+                                <a href={b.link_dieu_huong} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 mt-0.5">
+                                  🔗 {b.link_dieu_huong}
+                                </a>
+                              )}
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${
+                                b.loai_banner === 'VIDEO' ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300' : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+                              }`}>
+                                {b.loai_banner === 'VIDEO' ? '🎥 Video' : '🖼️ Hình Ảnh'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center font-bold text-slate-700 dark:text-slate-200">
+                              #{b.thu_tu ?? 1}
+                            </td>
+                            <td className="p-4 text-center">
+                              {(() => {
+                                const isBannerActive = (b.trang_thai as any) == 1 || (b.trang_thai as any) === true;
+                                return (
+                                  <button
+                                    onClick={() => handleToggleBannerStatus(b)}
+                                    className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${
+                                      isBannerActive 
+                                        ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' 
+                                        : 'bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                                    }`}
+                                    title="Bấm để bật/tắt hiển thị trên trang chủ"
+                                  >
+                                    {isBannerActive ? '● Đang hiển thị' : '○ Tạm ẩn'}
+                                  </button>
+                                );
+                              })()}
+                            </td>
+                            <td className="p-4 text-right space-x-2">
+                              <button
+                                onClick={() => setBannerModal({
+                                  isOpen: true,
+                                  mode: 'EDIT',
+                                  data: {
+                                    ...b,
+                                    trang_thai: ((b.trang_thai as any) == 1 || (b.trang_thai as any) === true) ? 1 : 0
+                                  }
+                                })}
+                                className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" /> Sửa
+                              </button>
+                              <button onClick={() => handleDeleteBanner(b.id, b.tieu_de)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1">
+                                <Trash2 className="w-3.5 h-3.5" /> Xóa
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* =================================================================
+                TAB 14: LIÊN HỆ & PHẢN HỒI (LIEN_HE)
+                ================================================================= */}
+            {activeTab === 'LIEN_HE' && (
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                  <div>
+                    <h3 className="text-base font-black flex items-center gap-2">
+                      <Mail className="w-5 h-5 text-emerald-600" /> Quản Lý Phản Hồi & Thắc Mắc Từ Khách Hàng
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Danh sách các thư liên hệ gửi từ form liên hệ ngoài website</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs font-bold">
+                    <span className="px-3 py-1.5 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                      Chưa xử lý: {lienHeList.filter(l => (l.trang_thai_xu_ly || l.trang_thai) !== 'DA_XU_LY').length}
+                    </span>
+                    <span className="px-3 py-1.5 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+                      Tổng: {lienHeList.length}
+                    </span>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                        <th className="p-4">NGƯỜI GỬI</th>
+                        <th className="p-4">THÔNG TIN LIÊN HỆ</th>
+                        <th className="p-4">TIÊU ĐỀ & NỘI DUNG</th>
+                        <th className="p-4 text-center">NGÀY GỬI</th>
+                        <th className="p-4 text-center">TRẠNG THÁI</th>
+                        <th className="p-4 text-right">THAO TÁC</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
+                      {lienHeList.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">Chưa có phản hồi liên hệ nào từ khách hàng.</td>
+                        </tr>
+                      ) : (
+                        lienHeList.map((lh) => (
+                          <tr key={lh.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
+                            <td className="p-4">
+                              <div className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                                <User className="w-3.5 h-3.5 text-emerald-600" />
+                                {lh.ho_ten}
+                              </div>
+                            </td>
+                            <td className="p-4 space-y-0.5">
+                              {lh.email && <div className="text-slate-600 dark:text-slate-300">✉️ {lh.email}</div>}
+                              {lh.so_dien_thoai && <div className="font-mono text-emerald-700 dark:text-emerald-400 font-bold">📞 {lh.so_dien_thoai}</div>}
+                            </td>
+                            <td className="p-4 max-w-xs">
+                              <div className="font-black text-slate-900 dark:text-white">{lh.tieu_de || '(Không có tiêu đề)'}</div>
+                              <div className="text-slate-500 dark:text-slate-400 line-clamp-2 text-[11px] mt-0.5">{lh.noi_dung}</div>
+                            </td>
+                            <td className="p-4 text-center font-mono text-slate-500">
+                              {lh.ngay_gui ? formatVNDate(lh.ngay_gui) : '---'}
+                            </td>
+                            <td className="p-4 text-center">
+                              <button
+                                onClick={() => handleUpdateLienHeStatus(lh.id, (lh.trang_thai_xu_ly || lh.trang_thai))}
+                                className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${
+                                  (lh.trang_thai_xu_ly === 'DA_XU_LY' || lh.trang_thai === 'DA_XU_LY')
+                                    ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                    : 'bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse'
+                                }`}
+                                title="Bấm để đổi trạng thái Xử lý"
+                              >
+                                {(lh.trang_thai_xu_ly === 'DA_XU_LY' || lh.trang_thai === 'DA_XU_LY') ? '✓ Đã xử lý' : '⏳ Chưa xử lý'}
+                              </button>
+                            </td>
+                            <td className="p-4 text-right space-x-2">
+                              <button 
+                                onClick={() => setReplyLienHeModal({
+                                  isOpen: true,
+                                  data: lh,
+                                  tieu_de_tra_loi: `Phản hồi yêu cầu: ${lh.tieu_de || 'Đặt sân / Dịch vụ Soccer247'}`,
+                                  noi_dung_tra_loi: '',
+                                  isSubmitting: false,
+                                })}
+                                className="p-2 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/70 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-200 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
+                                title="Soạn thư trả lời khách hàng"
+                              >
+                                <MessageSquareReply className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Trả lời
+                              </button>
+                              <button onClick={() => setLienHeDetailModal({ isOpen: true, data: lh })} className="p-2 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-200 cursor-pointer font-bold inline-flex items-center gap-1">
+                                <Eye className="w-3.5 h-3.5" /> Xem
+                              </button>
+                              <button onClick={() => handleDeleteLienHe(lh.id, lh.ho_ten)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1">
+                                <Trash2 className="w-3.5 h-3.5" /> Xóa
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* =================================================================
+                TAB 15: LOẠI TIN TỨC (LOAI_TIN_TUC)
+                ================================================================= */}
+            {activeTab === 'LOAI_TIN_TUC' && (
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                  <div>
+                    <h3 className="text-base font-black flex items-center gap-2">
+                      <FolderTree className="w-5 h-5 text-emerald-600" /> Quản Lý Loại / Danh Mục Tin Tức
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Phân loại các bài viết tin tức: Giải đấu, Khuyến mãi, Hướng dẫn, Cẩm nang sân bóng...</p>
+                  </div>
+                  <button
+                    onClick={() => setLoaiTinModal({ isOpen: true, mode: 'ADD', data: { ten_loai: '', trang_thai: 1 } })}
+                    className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer transition-all hover:scale-[1.02]"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" /> Thêm Loại Tin
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                        <th className="p-4 w-24">MÃ LOẠI</th>
+                        <th className="p-4">TÊN LOẠI TIN TỨC</th>
+                        <th className="p-4 text-center">TRẠNG THÁI</th>
+                        <th className="p-4 text-right">THAO TÁC</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
+                      {loaiTinList.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-slate-400 font-bold">Chưa có loại tin tức nào.</td>
+                        </tr>
+                      ) : (
+                        loaiTinList.map((lt) => (
+                          <tr key={lt.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
+                            <td className="p-4 font-mono font-black text-slate-500">#{lt.id}</td>
+                            <td className="p-4 font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                              📁 {lt.ten_loai}
+                            </td>
+                            <td className="p-4 text-center">
+                              {(() => {
+                                const isLoaiActive = (lt.trang_thai as any) == 1 || (lt.trang_thai as any) === true;
+                                return (
+                                  <button
+                                    onClick={() => handleToggleLoaiTinStatus(lt)}
+                                    className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${
+                                      isLoaiActive 
+                                        ? 'bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300' 
+                                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                    }`}
+                                    title="Bấm để kích hoạt hoặc tạm ẩn"
+                                  >
+                                    {isLoaiActive ? '● Hoạt động' : '○ Tạm ẩn'}
+                                  </button>
+                                );
+                              })()}
+                            </td>
+                            <td className="p-4 text-right space-x-2">
+                              <button onClick={() => setLoaiTinModal({
+                                isOpen: true,
+                                mode: 'EDIT',
+                                data: {
+                                  ...lt,
+                                  trang_thai: ((lt.trang_thai as any) == 1 || (lt.trang_thai as any) === true) ? 1 : 0
+                                }
+                              })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1">
+                                <Edit2 className="w-3.5 h-3.5" /> Sửa
+                              </button>
+                              <button onClick={() => handleDeleteLoaiTin(lt.id, lt.ten_loai)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1">
+                                <Trash2 className="w-3.5 h-3.5" /> Xóa
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* =================================================================
+                TAB 16: TIN TỨC & BÀI VIẾT (TIN_TUC)
+                ================================================================= */}
+            {activeTab === 'TIN_TUC' && (
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                  <div>
+                    <h3 className="text-base font-black flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-emerald-600" /> Quản Lý Tin Tức & Bài Viết
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Soạn thảo, đăng tải các bài viết thể thao, tin giải đấu và sự kiện sân bóng</p>
+                  </div>
+                  <button
+                    onClick={() => setNewsModal({
+                      isOpen: true,
+                      mode: 'ADD',
+                      data: {
+                        ma_loai_tin: loaiTinList[0]?.id || 1,
+                        tieu_de: '',
+                        tom_tat: '',
+                        noi_dung: '',
+                        trang_thai: 1
+                      }
+                    })}
+                    className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer transition-all hover:scale-[1.02]"
+                  >
+                    <Plus className="w-4 h-4 stroke-[3]" /> Viết Tin Tức Mới
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                        <th className="p-4 w-28">HÌNH ẢNH</th>
+                        <th className="p-4">TIÊU ĐỀ & TÓM TẮT</th>
+                        <th className="p-4">DANH MỤC</th>
+                        <th className="p-4 text-center">LƯỢT XEM</th>
+                        <th className="p-4 text-center">NGÀY ĐĂNG</th>
+                        <th className="p-4 text-center">TRẠNG THÁI</th>
+                        <th className="p-4 text-right">THAO TÁC</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
+                      {newsList.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-8 text-center text-slate-400 font-bold">Chưa có bài viết tin tức nào. Hãy bấm &quot;Viết Tin Tức Mới&quot; để tạo bài viết đầu tiên.</td>
+                        </tr>
+                      ) : (
+                        newsList.map((nw) => (
+                          <tr key={nw.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
+                            <td className="p-4">
+                              {nw.hinh_anh ? (
+                                <img src={nw.hinh_anh} alt={nw.tieu_de} className="w-24 h-16 object-cover rounded-xl border border-slate-200 dark:border-emerald-800 shadow-sm" />
+                              ) : (
+                                <div className="w-24 h-16 rounded-xl bg-slate-200 dark:bg-emerald-950 flex items-center justify-center text-slate-400 font-bold text-[10px]">No Image</div>
+                              )}
+                            </td>
+                            <td className="p-4 max-w-sm">
+                              <div className="font-black text-sm text-slate-900 dark:text-white line-clamp-1">{nw.tieu_de}</div>
+                              <div className="text-slate-500 dark:text-slate-400 line-clamp-2 text-[11px] mt-0.5">{nw.tom_tat}</div>
+                            </td>
+                            <td className="p-4 font-bold text-emerald-700 dark:text-emerald-400">
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900/40 text-[11px]">
+                                {nw.ten_loai || 'Chung'}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center font-mono font-bold text-slate-600 dark:text-slate-300">
+                              👁️ {nw.luot_xem ?? 0}
+                            </td>
+                            <td className="p-4 text-center font-mono text-slate-500">
+                              {nw.ngay_dang ? formatVNDate(nw.ngay_dang) : '---'}
+                            </td>
+                            <td className="p-4 text-center">
+                              {(() => {
+                                const isNewsActive = (nw.trang_thai as any) == 1 || (nw.trang_thai as any) === true;
+                                return (
+                                  <button
+                                    onClick={() => handleToggleTinTucStatus(nw)}
+                                    className={`px-3 py-1 rounded-full text-[10px] font-black cursor-pointer transition-all ${
+                                      isNewsActive 
+                                        ? 'bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300' 
+                                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                                    }`}
+                                    title="Bấm để xuất bản hoặc chuyển về bản nháp"
+                                  >
+                                    {isNewsActive ? '● Đã xuất bản' : '○ Bản nháp'}
+                                  </button>
+                                );
+                              })()}
+                            </td>
+                            <td className="p-4 text-right space-x-2">
+                              <a
+                                href={`/tin_tuc?id=${nw.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-2 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-950 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-200 cursor-pointer font-bold inline-flex items-center gap-1"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> Xem
+                              </a>
+                              <button onClick={() => setNewsModal({
+                                isOpen: true,
+                                mode: 'EDIT',
+                                data: {
+                                  ...nw,
+                                  trang_thai: ((nw.trang_thai as any) == 1 || (nw.trang_thai as any) === true) ? 1 : 0
+                                }
+                              })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1">
+                                <Edit2 className="w-3.5 h-3.5" /> Sửa
+                              </button>
+                              <button onClick={() => handleDeleteTinTuc(nw.id, nw.tieu_de)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/60 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1">
+                                <Trash2 className="w-3.5 h-3.5" /> Xóa
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>
@@ -5448,6 +6559,666 @@ export default function AdminDashboard() {
                 <Trash2 className="w-4 h-4 stroke-[2.5]" /> Xác Nhận Xóa
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 13. Modal Banner Quảng Cáo (Banner) */}
+      {bannerModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
+              <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
+                <ImageIcon className="w-5 h-5 text-emerald-600" />
+                <span>{bannerModal.mode === 'ADD' ? '🖼️ Thêm Banner Quảng Cáo' : '✏️ Cập Nhật Banner'}</span>
+              </h3>
+              <button 
+                onClick={() => setBannerModal({ isOpen: false, mode: 'ADD', data: { loai_banner: 'IMAGE', thu_tu: 1, trang_thai: 1 } })}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBanner} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-black uppercase mb-1 text-slate-400">Tiêu Đề Banner</label>
+                <input
+                  type="text"
+                  value={bannerModal.data.tieu_de || ''}
+                  onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, tieu_de: e.target.value } })}
+                  placeholder="Ví dụ: Siêu Khuyến Mãi Giờ Vàng Mùa Hè"
+                  className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-black uppercase mb-1 text-slate-400">Loại Banner *</label>
+                  <select
+                    value={bannerModal.data.loai_banner || 'IMAGE'}
+                    onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, loai_banner: e.target.value as any } })}
+                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  >
+                    <option value="IMAGE">🖼️ Hình Ảnh (Image)</option>
+                    <option value="VIDEO">🎥 Video MP4 / WebM</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-black uppercase mb-1 text-slate-400">Thứ Tự Hiển Thị</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={bannerModal.data.thu_tu ?? 1}
+                    onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, thu_tu: parseInt(e.target.value) || 1 } })}
+                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+              </div>
+
+              {/* 1. TẢI FILE ẢNH BANNER HOẶC DÁN LINK URL (CHỈ HIỂN THỊ KHI CHỌN LOẠI HÌNH ẢNH) */}
+              {bannerModal.data.loai_banner !== 'VIDEO' && (
+                <div>
+                  <label className="block font-black uppercase mb-1 text-slate-400">Hình Ảnh Banner (Tải File từ máy hoặc Nhập URL) *</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={bannerModal.data.hinh_anh || ''}
+                      onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, hinh_anh: e.target.value } })}
+                      placeholder="https://... hoặc bấm nút Tải File Ảnh"
+                      className={`flex-1 px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    />
+                    <label className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer flex items-center gap-1.5 shrink-0 shadow-md transition-all hover:scale-105">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isUploadingImage ? 'Đang tải...' : 'Tải File Ảnh'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={isUploadingImage}
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadBannerFile(file, 'IMAGE');
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {bannerModal.data.hinh_anh && (
+                    <div className="mt-2 p-2 rounded-xl border border-slate-200 dark:border-emerald-900 bg-slate-50 dark:bg-[#060e09] flex items-center gap-3">
+                      <img src={bannerModal.data.hinh_anh} alt="Preview" className="w-24 h-14 object-cover rounded-lg border border-slate-200 shadow-sm" />
+                      <span className="text-[11px] text-slate-400 font-bold">✓ Ảnh xem trước hợp lệ</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 2. TẢI FILE VIDEO BANNER HOẶC DÁN LINK URL (CHỈ HIỂN THỊ KHI CHỌN LOẠI VIDEO) */}
+              {bannerModal.data.loai_banner === 'VIDEO' && (
+                <div>
+                  <label className="block font-black uppercase mb-1 text-slate-400">File Video Banner (Tải File Video hoặc Nhập URL) *</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={bannerModal.data.video_url || ''}
+                      onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, video_url: e.target.value } })}
+                      placeholder="https://... hoặc bấm nút Tải File Video (.mp4, .webm)"
+                      className={`flex-1 px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    />
+                    <label className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer flex items-center gap-1.5 shrink-0 shadow-md transition-all hover:scale-105">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{isUploadingImage ? 'Đang tải...' : 'Tải File Video'}</span>
+                      <input
+                        type="file"
+                        accept="video/mp4,video/webm,video/ogg,video/*"
+                        disabled={isUploadingImage}
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadBannerFile(file, 'VIDEO');
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {bannerModal.data.video_url && (
+                    <div className="mt-2 p-2 rounded-xl border border-slate-200 dark:border-emerald-900 bg-slate-50 dark:bg-[#060e09] flex items-center gap-3">
+                      <video src={bannerModal.data.video_url} className="w-24 h-14 object-cover rounded-lg bg-black" muted autoPlay loop />
+                      <span className="text-[11px] text-purple-400 font-bold">✓ Video xem trước hợp lệ</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="block font-black uppercase mb-1 text-slate-400">Link Điều Hướng (Khi khách bấm vào)</label>
+                <input
+                  type="text"
+                  value={bannerModal.data.link_dieu_huong || ''}
+                  onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, link_dieu_huong: e.target.value } })}
+                  placeholder="/dat-san hoặc /tin-tuc hoặc https://..."
+                  className={`w-full px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block font-black uppercase mb-1 text-slate-400">Trạng Thái</label>
+                <div className="flex gap-4 items-center">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold">
+                    <input
+                      type="radio"
+                      name="banner_status"
+                      checked={(bannerModal.data.trang_thai as any) == 1 || (bannerModal.data.trang_thai as any) === true}
+                      onChange={() => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, trang_thai: 1 } })}
+                    />
+                    <span className="text-emerald-500">Hiển Thị Trên Trang Chủ</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer font-bold">
+                    <input
+                      type="radio"
+                      name="banner_status"
+                      checked={(bannerModal.data.trang_thai as any) == 0 || (bannerModal.data.trang_thai as any) === false}
+                      onChange={() => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, trang_thai: 0 } })}
+                    />
+                    <span className="text-slate-400">Tạm Ẩn</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 dark:border-emerald-900/40">
+                <button
+                  type="button"
+                  onClick={() => setBannerModal({ isOpen: false, mode: 'ADD', data: { loai_banner: 'IMAGE', thu_tu: 1, trang_thai: 1 } })}
+                  className="px-4 py-2.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploadingImage}
+                  className="px-5 py-2.5 rounded-xl font-black bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-lg shadow-emerald-600/30 flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" /> Lưu Banner
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 14. Modal Chi Tiết Liên Hệ (Lien_He) */}
+      {lienHeDetailModal.isOpen && lienHeDetailModal.data && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className={`w-full max-w-lg p-5 sm:p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
+              <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
+                <Mail className="w-5 h-5 text-emerald-600" />
+                <span>Chi Tiết Phản Hồi Từ #{lienHeDetailModal.data.ho_ten}</span>
+              </h3>
+              <button 
+                onClick={() => setLienHeDetailModal({ isOpen: false, data: null })}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-900/40 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Họ & tên:</span>
+                  <span className="font-black text-sm text-slate-900 dark:text-white">{lienHeDetailModal.data.ho_ten}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Email:</span>
+                  <span className="font-bold text-blue-600 dark:text-blue-400">{lienHeDetailModal.data.email || '(Không có)'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Số điện thoại:</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{lienHeDetailModal.data.so_dien_thoai || '(Không có)'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Ngày gửi:</span>
+                  <span className="font-mono">{lienHeDetailModal.data.ngay_gui ? formatVNDate(lienHeDetailModal.data.ngay_gui) : '---'}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-emerald-900/30">
+                  <span className="text-slate-400">Trạng thái:</span>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                    lienHeDetailModal.data.trang_thai === 'DA_XU_LY' || (lienHeDetailModal.data as any).trang_thai_xu_ly === 'DA_XU_LY'
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                      : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                  }`}>
+                    {(lienHeDetailModal.data.trang_thai === 'DA_XU_LY' || (lienHeDetailModal.data as any).trang_thai_xu_ly === 'DA_XU_LY') ? '✓ Đã xử lý' : '⏳ Chưa xử lý'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-black uppercase text-[11px] text-slate-400 mb-1">Tiêu Đề Thư</label>
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#060e09] font-black text-slate-900 dark:text-white">
+                  {lienHeDetailModal.data.tieu_de || '(Không có tiêu đề)'}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-black uppercase text-[11px] text-slate-400 mb-1">Nội Dung Tin Nhắn</label>
+                <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-[#060e09] text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+                  {lienHeDetailModal.data.noi_dung}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-emerald-900/40">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!lienHeDetailModal.data) return;
+                    await handleUpdateLienHeStatus(lienHeDetailModal.data.id, (lienHeDetailModal.data.trang_thai || (lienHeDetailModal.data as any).trang_thai_xu_ly));
+                    setLienHeDetailModal({ isOpen: false, data: null });
+                  }}
+                  className="px-4 py-2.5 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 text-white cursor-pointer flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Chuyển Trạng Thái Xử Lý
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLienHeDetailModal({ isOpen: false, data: null })}
+                  className="px-4 py-2.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 14.1. Modal Soạn Thư Trả Lời Liên Hệ (Gửi Gmail cho Khách hoặc Fallback về Admin) */}
+      {replyLienHeModal.isOpen && replyLienHeModal.data && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-2xl p-5 sm:p-7 rounded-3xl border shadow-2xl my-4 ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
+              <div>
+                <h3 className="font-black text-base sm:text-lg flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <MessageSquareReply className="w-5 h-5" />
+                  <span>Soạn Thư Phản Hồi Khách Hàng</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Gửi thư trả lời trực tiếp đến Gmail của khách hàng</p>
+              </div>
+              <button 
+                onClick={() => setReplyLienHeModal({ isOpen: false, data: null, tieu_de_tra_loi: '', noi_dung_tra_loi: '', isSubmitting: false })}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleReplyLienHeSubmit} className="space-y-4 text-xs">
+              {/* Thông tin người nhận */}
+              <div className="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-[#060e09] border border-blue-200/80 dark:border-blue-900/40 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <span className="text-[11px] text-slate-400 block font-bold">Người nhận:</span>
+                  <span className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1 mt-0.5">
+                    <User className="w-3.5 h-3.5 text-blue-500" />
+                    {replyLienHeModal.data.ho_ten}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-400 block font-bold">Địa chỉ Email:</span>
+                  <span className="font-bold text-blue-600 dark:text-blue-400 truncate block mt-0.5">
+                    {replyLienHeModal.data.email ? `✉️ ${replyLienHeModal.data.email}` : '⚠️ (Khách không có email)'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[11px] text-slate-400 block font-bold">Số điện thoại:</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 block mt-0.5">
+                    📞 {replyLienHeModal.data.so_dien_thoai || '---'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Tóm tắt nội dung câu hỏi ban đầu */}
+              <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-1">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="font-bold text-slate-500 dark:text-slate-400">📌 Yêu cầu ban đầu:</span>
+                  <span className="font-black text-slate-700 dark:text-slate-300">{replyLienHeModal.data.tieu_de || 'Đặt sân / Dịch vụ'}</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 italic line-clamp-2">
+                  "{replyLienHeModal.data.noi_dung}"
+                </p>
+              </div>
+
+              {/* Mẫu trả lời nhanh */}
+              <div>
+                <label className="block font-black uppercase text-[11px] text-slate-500 dark:text-slate-400 mb-1.5">
+                  💡 Chọn Mẫu Trả Lời Nhanh (Gợi ý)
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyLienHeModal(prev => ({
+                        ...prev,
+                        noi_dung_tra_loi: `Chào bạn ${prev.data?.ho_ten},\n\nSoccer247 đã tiếp nhận yêu cầu đặt sân sự kiện của bạn. Chúng tôi hiện còn các khung giờ thi đấu phù hợp. Bạn vui lòng chuẩn bị số lượng đội tham gia và liên hệ Hotline 0816344504 để ban quản lý giữ sân nhé!\n\nTrân trọng,\nBan Quản Lý Soccer247.`
+                      }));
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-emerald-100 dark:bg-slate-800 dark:hover:bg-emerald-950/60 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                  >
+                    ⚽ Đặt sân sự kiện / Giải đấu
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyLienHeModal(prev => ({
+                        ...prev,
+                        noi_dung_tra_loi: `Chào bạn ${prev.data?.ho_ten},\n\nCảm ơn bạn đã quan tâm. Về bảng giá thuê sân theo tháng và các ưu đãi giờ vàng, Soccer247 đang có chính sách giảm 20% cho hợp đồng định kỳ. Bạn có thể kiểm tra lịch trống trực tiếp trên trang chủ hoặc liên hệ Hotline để làm hợp đồng giữ sân nhé!\n\nTrân trọng,\nBan Quản Lý Soccer247.`
+                      }));
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-blue-100 dark:bg-slate-800 dark:hover:bg-blue-950/60 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                  >
+                    💰 Bảng giá thuê sân tháng
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyLienHeModal(prev => ({
+                        ...prev,
+                        noi_dung_tra_loi: `Chào bạn ${prev.data?.ho_ten},\n\nSoccer247 chân thành cảm ơn ý kiến đóng góp quý báu của bạn để nâng cao chất lượng dịch vụ cụm sân. Ban quản lý đã ghi nhận và sẽ kiểm tra, cải thiện ngay trong tuần này.\n\nChúc bạn có những phút giây thi đấu tuyệt vời cùng Soccer247!`
+                      }));
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-purple-100 dark:bg-slate-800 dark:hover:bg-purple-950/60 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                  >
+                    🤝 Tiếp thu góp ý dịch vụ
+                  </button>
+                </div>
+              </div>
+
+              {/* Tiêu đề phản hồi */}
+              <div>
+                <label className="block font-black uppercase text-[11px] text-slate-600 dark:text-slate-300 mb-1">
+                  Tiêu Đề Email Phản Hồi <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={replyLienHeModal.tieu_de_tra_loi}
+                  onChange={(e) => setReplyLienHeModal({ ...replyLienHeModal, tieu_de_tra_loi: e.target.value })}
+                  placeholder="Nhập tiêu đề thư..."
+                  className={`w-full p-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                />
+              </div>
+
+              {/* Nội dung phản hồi */}
+              <div>
+                <label className="block font-black uppercase text-[11px] text-slate-600 dark:text-slate-300 mb-1">
+                  Nội Dung Thư Trả Lời <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={6}
+                  value={replyLienHeModal.noi_dung_tra_loi}
+                  onChange={(e) => setReplyLienHeModal({ ...replyLienHeModal, noi_dung_tra_loi: e.target.value })}
+                  placeholder="Kính gửi quý khách... (Nhập chi tiết thông tin phản hồi, hướng dẫn hoặc giải đáp yêu cầu của khách hàng)"
+                  className={`w-full p-3 rounded-xl border font-medium text-xs leading-relaxed resize-none ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                />
+              </div>
+
+              {/* Chú thích thông minh */}
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 flex items-start gap-2 text-[11px] text-amber-800 dark:text-amber-300">
+                <Sparkles className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <span>
+                  <strong>Cơ chế tự động:</strong> Thư sẽ được gửi đến hòm thư của khách hàng. Nếu Gmail khách hàng không tồn tại hoặc lỗi, hệ thống sẽ tự động chuyển tiếp bản sao về Gmail của bạn (<strong>xoancao2.0@gmail.com</strong>) kèm số điện thoại để bạn gọi điện trực tiếp cho khách!
+                </span>
+              </div>
+
+              {/* Nút hành động */}
+              <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-emerald-900/40">
+                <button
+                  type="button"
+                  disabled={replyLienHeModal.isSubmitting}
+                  onClick={() => setReplyLienHeModal({ isOpen: false, data: null, tieu_de_tra_loi: '', noi_dung_tra_loi: '', isSubmitting: false })}
+                  className="px-4 py-2.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer disabled:opacity-50"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={replyLienHeModal.isSubmitting}
+                  className="px-6 py-2.5 rounded-xl font-black bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white cursor-pointer shadow-lg shadow-blue-600/20 flex items-center gap-2 disabled:opacity-60"
+                >
+                  {replyLienHeModal.isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Đang Gửi Email...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Gửi Phản Hồi Ngay</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 15. Modal Loại Tin Tức (Loai_Tin_Tuc) */}
+      {loaiTinModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+          <div className={`w-full max-w-md p-5 sm:p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
+              <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
+                <FolderTree className="w-5 h-5 text-emerald-600" />
+                <span>{loaiTinModal.mode === 'ADD' ? '📁 Thêm Loại Tin Tức Mới' : '✏️ Cập Nhật Loại Tin Tức'}</span>
+              </h3>
+              <button 
+                onClick={() => setLoaiTinModal({ isOpen: false, mode: 'ADD', data: { trang_thai: 1 } })}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveLoaiTin} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-black uppercase mb-1 text-slate-400">Tên Loại Tin Tức *</label>
+                <input
+                  type="text"
+                  required
+                  value={loaiTinModal.data.ten_loai || ''}
+                  onChange={(e) => setLoaiTinModal({ ...loaiTinModal, data: { ...loaiTinModal.data, ten_loai: e.target.value } })}
+                  placeholder="Ví dụ: Tin Giải Đấu, Khuyến Mãi Sân, Cẩm Nang..."
+                  className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block font-black uppercase mb-1 text-slate-400">Trạng Thái</label>
+                <div className="flex gap-4 items-center">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold">
+                    <input
+                      type="radio"
+                      name="loaitin_status"
+                      checked={(loaiTinModal.data.trang_thai as any) == 1 || (loaiTinModal.data.trang_thai as any) === true}
+                      onChange={() => setLoaiTinModal({ ...loaiTinModal, data: { ...loaiTinModal.data, trang_thai: 1 } })}
+                    />
+                    <span className="text-emerald-500">Hoạt Động</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer font-bold">
+                    <input
+                      type="radio"
+                      name="loaitin_status"
+                      checked={(loaiTinModal.data.trang_thai as any) == 0 || (loaiTinModal.data.trang_thai as any) === false}
+                      onChange={() => setLoaiTinModal({ ...loaiTinModal, data: { ...loaiTinModal.data, trang_thai: 0 } })}
+                    />
+                    <span className="text-slate-400">Tạm Ẩn</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 dark:border-emerald-900/40">
+                <button
+                  type="button"
+                  onClick={() => setLoaiTinModal({ isOpen: false, mode: 'ADD', data: { trang_thai: 1 } })}
+                  className="px-4 py-2.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl font-black bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-lg shadow-emerald-600/30 flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" /> Lưu Loại Tin
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 16. Modal Soạn Thảo Tin Tức & Bài Viết (Tin_Tuc) */}
+      {newsModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-3xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
+              <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-600" />
+                <span>{newsModal.mode === 'ADD' ? '📝 Soạn Thảo Bài Viết Tin Tức Mới' : '✏️ Cập Nhật Bài Viết Tin Tức'}</span>
+              </h3>
+              <button 
+                onClick={() => setNewsModal({ isOpen: false, mode: 'ADD', data: { ma_loai_tin: 1, trang_thai: 1 } })}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTinTuc} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <label className="block font-black uppercase mb-1 text-slate-400">Tiêu Đề Bài Viết *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newsModal.data.tieu_de || ''}
+                    onChange={(e) => setNewsModal({ ...newsModal, data: { ...newsModal.data, tieu_de: e.target.value } })}
+                    placeholder="Nhập tiêu đề hấp dẫn cho bài viết..."
+                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-black uppercase mb-1 text-slate-400">Danh Mục Loại Tin *</label>
+                  <select
+                    value={newsModal.data.ma_loai_tin || (loaiTinList[0]?.id ?? 1)}
+                    onChange={(e) => setNewsModal({ ...newsModal, data: { ...newsModal.data, ma_loai_tin: parseInt(e.target.value) } })}
+                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  >
+                    {loaiTinList.map((lt) => (
+                      <option key={lt.id} value={lt.id}>📁 {lt.ten_loai}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* TẢI ẢNH ĐẠI DIỆN TIN TỨC HOẶC DÁN LINK */}
+              <div>
+                <label className="block font-black uppercase mb-1 text-slate-400">Ảnh Đại Diện (Tải File từ máy hoặc Nhập URL)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newsModal.data.hinh_anh || ''}
+                    onChange={(e) => setNewsModal({ ...newsModal, data: { ...newsModal.data, hinh_anh: e.target.value } })}
+                    placeholder="https://... hoặc bấm nút Tải File Ảnh"
+                    className={`flex-1 px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                  <label className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer flex items-center gap-1.5 shrink-0 shadow-md transition-all hover:scale-105">
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>{isUploadingImage ? 'Đang tải...' : 'Tải File Ảnh'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingImage}
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUploadNewsImageFile(file);
+                      }}
+                    />
+                  </label>
+                </div>
+                {newsModal.data.hinh_anh && (
+                  <div className="mt-2 p-2 rounded-xl border border-slate-200 dark:border-emerald-900 bg-slate-50 dark:bg-[#060e09] flex items-center gap-3">
+                    <img src={newsModal.data.hinh_anh} alt="Preview" className="w-24 h-14 object-cover rounded-lg border border-slate-200 shadow-sm" />
+                    <span className="text-[11px] text-slate-400 font-bold">✓ Ảnh đại diện hợp lệ</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-black uppercase mb-1 text-slate-400">Tóm Tắt Ngắn Gọn</label>
+                <textarea
+                  rows={2}
+                  value={newsModal.data.tom_tat || ''}
+                  onChange={(e) => setNewsModal({ ...newsModal, data: { ...newsModal.data, tom_tat: e.target.value } })}
+                  placeholder="Đoạn mô tả ngắn gọn nội dung hiển thị ở danh sách bài viết..."
+                  className={`w-full px-3 py-2 rounded-xl border text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block font-black uppercase mb-1 text-slate-400">Nội Dung Chi Tiết Bài Viết *</label>
+                <textarea
+                  rows={8}
+                  required
+                  value={newsModal.data.noi_dung || ''}
+                  onChange={(e) => setNewsModal({ ...newsModal, data: { ...newsModal.data, noi_dung: e.target.value } })}
+                  placeholder="Nhập toàn bộ nội dung bài viết tin tức tại đây..."
+                  className={`w-full p-3 rounded-xl border text-xs font-normal leading-relaxed ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                />
+              </div>
+
+              <div>
+                <label className="block font-black uppercase mb-1 text-slate-400">Trạng Thái Bài Viết</label>
+                <div className="flex gap-4 items-center">
+                  <label className="flex items-center gap-2 cursor-pointer font-bold">
+                    <input
+                      type="radio"
+                      name="news_status"
+                      checked={(newsModal.data.trang_thai as any) == 1 || (newsModal.data.trang_thai as any) === true}
+                      onChange={() => setNewsModal({ ...newsModal, data: { ...newsModal.data, trang_thai: 1 } })}
+                    />
+                    <span className="text-emerald-500">Đăng Xuất Bản Ngay</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer font-bold">
+                    <input
+                      type="radio"
+                      name="news_status"
+                      checked={(newsModal.data.trang_thai as any) == 0 || (newsModal.data.trang_thai as any) === false}
+                      onChange={() => setNewsModal({ ...newsModal, data: { ...newsModal.data, trang_thai: 0 } })}
+                    />
+                    <span className="text-slate-400">Lưu Bản Nháp</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 dark:border-emerald-900/40">
+                <button
+                  type="button"
+                  onClick={() => setNewsModal({ isOpen: false, mode: 'ADD', data: { ma_loai_tin: 1, trang_thai: 1 } })}
+                  className="px-4 py-2.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploadingImage}
+                  className="px-5 py-2.5 rounded-xl font-black bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-lg shadow-emerald-600/30 flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" /> Lưu Bài Viết
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

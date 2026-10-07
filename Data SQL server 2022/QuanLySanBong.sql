@@ -24,6 +24,11 @@ IF OBJECT_ID('Khung_Gio_Gia', 'U') IS NOT NULL DROP TABLE Khung_Gio_Gia;
 IF OBJECT_ID('Loai_San', 'U') IS NOT NULL DROP TABLE Loai_San;
 IF OBJECT_ID('Nguoi_Dung', 'U') IS NOT NULL DROP TABLE Nguoi_Dung;
 IF OBJECT_ID('Vai_Tro', 'U') IS NOT NULL DROP TABLE Vai_Tro;
+IF OBJECT_ID('Tin_Tuc', 'U') IS NOT NULL DROP TABLE Tin_Tuc;
+IF OBJECT_ID('Loai_Tin_Tuc', 'U') IS NOT NULL DROP TABLE Loai_Tin_Tuc;
+IF OBJECT_ID('Banner', 'U') IS NOT NULL DROP TABLE Banner;
+IF OBJECT_ID('Lien_He', 'U') IS NOT NULL DROP TABLE Lien_He;
+IF OBJECT_ID('About_Us', 'U') IS NOT NULL DROP TABLE About_Us;
 GO
 
 -- =====================================================================
@@ -159,6 +164,72 @@ CREATE TABLE Chi_Tiet_Dich_Vu (
     PRIMARY KEY (ma_don_dat, ma_dich_vu),
     FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id) ON DELETE CASCADE,
     FOREIGN KEY (ma_dich_vu) REFERENCES Dich_Vu(id) ON DELETE NO ACTION
+);
+GO
+
+-- 4.11. Bảng Banner (Quản lý Banner quảng cáo / Slider trang chủ)
+CREATE TABLE Banner (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    tieu_de NVARCHAR(150) NULL,
+    loai_banner VARCHAR(10) CHECK (loai_banner IN ('IMAGE', 'VIDEO')) DEFAULT 'IMAGE', -- 'IMAGE' hoặc 'VIDEO'
+    hinh_anh VARCHAR(255) NULL, -- Ảnh banner HOẶC Ảnh đại diện (Thumbnail) nếu là video
+    video_url VARCHAR(500) NULL, -- Đường dẫn file .mp4 hoặc link Youtube/TikTok embed
+    lien_ket VARCHAR(255) NULL, -- Đường dẫn chuyển hướng khi click vào banner (Vd: /dat-san)
+    thu_tu INT DEFAULT 1,
+    trang_thai BIT DEFAULT 1 -- 1: Hiện, 0: Ẩn
+);
+GO
+
+-- 4.12. Bảng Loai_Tin_Tuc (Danh mục tin tức)
+CREATE TABLE Loai_Tin_Tuc (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ten_loai NVARCHAR(100) NOT NULL,
+    trang_thai BIT DEFAULT 1
+);
+GO
+
+-- 4.12. Bảng Tin_Tuc (Có liên kết ma_loai_tin)
+CREATE TABLE Tin_Tuc (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ma_loai_tin INT NOT NULL,
+    tieu_de NVARCHAR(255) NOT NULL,
+    tom_tat NVARCHAR(500) NULL,
+    noi_dung NVARCHAR(MAX) NOT NULL,
+    hinh_anh VARCHAR(255) NULL,
+    luot_xem INT DEFAULT 0,
+    ngay_dang DATETIME DEFAULT GETDATE(),
+    trang_thai BIT DEFAULT 1,
+    FOREIGN KEY (ma_loai_tin) REFERENCES Loai_Tin_Tuc(id) ON DELETE NO ACTION
+);
+GO
+
+-- 4.13. Bảng Lien_He (Lưu phản hồi / Góp ý từ khách hàng gửi qua Web)
+CREATE TABLE Lien_He (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ho_ten NVARCHAR(100) NOT NULL,
+    email VARCHAR(255) NULL,
+    so_dien_thoai VARCHAR(20) NOT NULL,
+    tieu_de NVARCHAR(150) NULL,
+    noi_dung NVARCHAR(MAX) NOT NULL,
+    trang_thai_xu_ly NVARCHAR(30) CHECK (trang_thai_xu_ly IN (N'CHUA_XU_LY', N'DA_XU_LY')) DEFAULT N'CHUA_XU_LY',
+    ngay_gui DATETIME DEFAULT GETDATE(),
+    noi_dung_tra_loi NVARCHAR(MAX) NULL,
+    ngay_tra_loi DATETIME NULL
+);
+GO
+
+-- 4.14. Bảng Thong_Tin_He_Thong (Cấu hình trang About Us, địa chỉ, hotline, mạng xã hội)
+CREATE TABLE About_Us (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ten_trung_tam NVARCHAR(150) NOT NULL,
+    hotline VARCHAR(20) NOT NULL,
+    email VARCHAR(255) NULL,
+    dia_chi NVARCHAR(255) NOT NULL,
+    link_map VARCHAR(500) NULL,
+    gioi_thieu_ngan NVARCHAR(MAX) NULL, -- Nội dung hiển thị ở chân trang (Footer)
+    bai_viet_about_us NVARCHAR(MAX) NULL, -- Nội dung chi tiết trang About Us
+    link_facebook VARCHAR(255) NULL,
+    link_zalo VARCHAR(255) NULL
 );
 GO
 

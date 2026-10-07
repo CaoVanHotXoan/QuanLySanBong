@@ -20,10 +20,14 @@ Chức năng nhân viên:
 ======================================
 fix lỗi không ảnh đến tất cả các chức năng của toàn bộ trang web
 Có thể tùy chỉnh CSDL nhưng phải dùng procedure và cập nhật vào 
-2 file QuanLySanBong.sql và Thủ tục.sql
+2 file QuanLySanBong.sql và ThuTuc.sql
 File QuanLySanBong.sql thì chứa dữ liệu table không chứa procedure
-File Thủ tục.sql thì chứa toàn bộ procedure 
+File ThuTuc.sql thì chứa toàn bộ procedure 
 
+
+Chỉnh lại upload file ảnh và video và dán link ảnh và video đều lưu trên Cloudinary 
+Khi chỉnh sửa thì trên Cloudinary file cũ sẽ mất đi thay thế bằng file mới
+Nếu xóa thì trên Cloudinary cũng xóa theo
 
 xóa cột mã đơn
 Bạn có thể tùy chỉnh csdl nhưng cập nhật 2 file QuanLySanBong.sql và ThuTuc.sql

@@ -1,7 +1,7 @@
 "use strict";
 /**
  * =====================================================================
- * ROUTES: BÁO CÁO & THỐNG KÊ (/api/bao-cao)
+ * ROUTES: NỘI DUNG & QUẢN TRỊ (TIN TỨC, ABOUT US, LIÊN HỆ, BANNER)
  * =====================================================================
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -42,16 +42,34 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
-const baoCaoController = __importStar(require("../controllers/baoCaoController"));
+const contentController = __importStar(require("../controllers/contentController"));
 const router = express_1.default.Router();
-// 1. Thống kê doanh thu theo khoảng thời gian
-router.get('/doanh-thu', baoCaoController.baoCaoDoanhThu);
-// 2. Biểu đồ doanh thu theo Ngày / Tuần / Tháng
-router.get('/doanh-thu-bieu-do', baoCaoController.baoCaoDoanhThuBieuDo);
-// 3. Top dịch vụ bán chạy nhất
-router.get('/top-dich-vu', baoCaoController.topDichVuBanChay);
-// 4. Lấy đơn đặt sân mới nhất (5 dòng)
-router.get('/don-moi-nhat', baoCaoController.layDonDatMoiNhat);
-// 5. Trạng thái sân trực quan
-router.get('/trang-thai-san', baoCaoController.layTrangThaiSanTrucQuan);
+// --- LOẠI TIN TỨC ---
+router.get('/tin-tuc/loai-tin', contentController.layDanhSachLoaiTinTuc);
+router.get('/tin-tuc/loai-tin/admin', contentController.layDanhSachLoaiTinTucAdmin);
+router.post('/tin-tuc/loai-tin', contentController.themLoaiTinTuc);
+router.put('/tin-tuc/loai-tin/:id', contentController.suaLoaiTinTuc);
+router.delete('/tin-tuc/loai-tin/:id', contentController.xoaLoaiTinTuc);
+// --- TIN TỨC ---
+router.get('/tin-tuc', contentController.layDanhSachTinTuc);
+router.get('/tin-tuc/admin', contentController.layDanhSachTinTucAdmin);
+router.get('/tin-tuc/:id', contentController.layChiTietTinTuc);
+router.post('/tin-tuc', contentController.themTinTuc);
+router.put('/tin-tuc/:id', contentController.suaTinTuc);
+router.delete('/tin-tuc/:id', contentController.xoaTinTuc);
+// --- ABOUT US ---
+router.get('/about-us', contentController.layThongTinAboutUs);
+router.put('/about-us', contentController.capNhatAboutUs);
+// --- LIÊN HỆ ---
+router.post('/lien-he', contentController.guiLienHe);
+router.get('/lien-he', contentController.layDanhSachLienHe);
+router.put('/lien-he/:id/trang-thai', contentController.capNhatTrangThaiLienHe);
+router.post('/lien-he/:id/tra-loi', contentController.traLoiLienHe);
+router.delete('/lien-he/:id', contentController.xoaLienHe);
+// --- BANNER ---
+router.get('/banner', contentController.layDanhSachBanner);
+router.get('/banner/admin', contentController.layDanhSachBannerAdmin);
+router.post('/banner', contentController.themBanner);
+router.put('/banner/:id', contentController.suaBanner);
+router.delete('/banner/:id', contentController.xoaBanner);
 exports.default = router;

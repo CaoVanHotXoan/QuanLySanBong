@@ -1,10 +1,25 @@
 const fs = require('fs');
 const path = require('path');
-const { poolPromise } = require('../config/db');
+const sql = require('mssql');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+
+const config = {
+    user: process.env.DB_USER || 'sa',
+    password: process.env.DB_PASSWORD || '123456',
+    server: process.env.DB_SERVER || 'localhost',
+    database: process.env.DB_DATABASE || 'QuanLySanBong',
+    port: parseInt(process.env.DB_PORT || '1433', 10),
+    options: {
+        encrypt: false,
+        trustServerCertificate: true,
+        enableArithAbort: true
+    }
+};
 
 async function deployThuTuc() {
     try {
-        const pool = await poolPromise;
+        console.log('Đang kết nối SQL Server...');
+        const pool = await sql.connect(config);
         console.log('✅ Đã kết nối SQL Server thành công!');
 
         const sqlFilePath = path.resolve(__dirname, '../../../Data SQL server 2022/ThuTuc.sql');
@@ -35,6 +50,7 @@ async function deployThuTuc() {
         }
 
         console.log(`\n🎉 KẾT QUẢ: Nạp thành công ${successCount}/${batches.length} khối lệnh. Lỗi: ${errorCount}`);
+        await pool.close();
         process.exit(0);
     } catch (err) {
         console.error('🔥 Lỗi nghiêm trọng:', err);

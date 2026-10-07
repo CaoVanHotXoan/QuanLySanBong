@@ -17,6 +17,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.huyDonTamPayOS = exports.xoaHoanTien = exports.suaHoanTien = exports.themHoanTien = exports.layDanhSachHoanTien = exports.layDanhSachThanhToan = exports.xacNhanWebhookUrl = exports.xuLyWebhookPayOS = exports.kiemTraTrangThaiPayOS = exports.taoThanhToanPayOS = exports.thanhToanDon = void 0;
 const db_1 = require("../config/db");
 const payos_1 = __importDefault(require("../config/payos"));
+const datSanController_1 = require("./datSanController");
 /**
  * 1. Xử lý thanh toán đơn đặt sân (Stored Procedure: sp_ThanhToanDon)
  * Method: POST /api/thanh-toan
@@ -127,8 +128,8 @@ const taoThanhToanPayOS = async (req, res) => {
             }
             if (!ma_nd)
                 ma_nd = 1;
-            const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '06:00:00');
-            const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '07:30:00');
+            const gio_bd_clean = (0, datSanController_1.cleanTimeForSql)(gio_bat_dau, '06:00:00');
+            const gio_kt_clean = (0, datSanController_1.cleanTimeForSql)(gio_ket_thuc, '07:30:00');
             const isTraHet = (loai_thanh_toan === 'TRA_HET');
             const initialStatus = 'CHO_THANH_TOAN';
             // Thực thi Stored Procedure sp_DatSan
@@ -596,7 +597,15 @@ exports.xoaHoanTien = xoaHoanTien;
  */
 const huyDonTamPayOS = async (req, res) => {
     try {
-        const { ma_don_dat, orderCode } = req.body;
+        let body = req.body;
+        if (typeof body === 'string') {
+            try {
+                body = JSON.parse(body);
+            }
+            catch (_e) { }
+        }
+        const ma_don_dat = body?.ma_don_dat;
+        const orderCode = body?.orderCode;
         const pool = await db_1.poolPromise;
         const request = pool.request();
         if (ma_don_dat) {

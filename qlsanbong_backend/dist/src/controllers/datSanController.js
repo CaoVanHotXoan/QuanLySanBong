@@ -19,8 +19,33 @@
  * =====================================================================
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = void 0;
+exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanTimeForSql = void 0;
 const db_1 = require("../config/db");
+const cleanTimeForSql = (val, fallback = '00:00:00') => {
+    if (!val)
+        return fallback;
+    let s = String(val).trim();
+    if (s.startsWith('24:00'))
+        return '23:59:59';
+    if (s.length === 5)
+        return `${s}:00`;
+    if (s.length === 8)
+        return s;
+    const match = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (match) {
+        let h = parseInt(match[1], 10);
+        let m = parseInt(match[2], 10);
+        let sec = match[3] ? parseInt(match[3], 10) : 0;
+        if (h >= 24) {
+            h = 23;
+            m = 59;
+            sec = 59;
+        }
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    }
+    return fallback;
+};
+exports.cleanTimeForSql = cleanTimeForSql;
 /**
  * 1. Lấy danh sách tất cả các sân bóng
  * Method: GET /api/dat-san/danh-sach-san
@@ -28,9 +53,13 @@ const db_1 = require("../config/db");
  */
 const layDanhSachSan = async (req, res) => {
     try {
+        const { ma_loai_san } = req.query;
         const pool = await db_1.poolPromise;
-        const result = await pool.request()
-            .execute('sp_LayDanhSachSan');
+        const request = pool.request();
+        if (ma_loai_san && ma_loai_san !== 'ALL') {
+            request.input('ma_loai_san', db_1.sql.Int, Number(ma_loai_san));
+        }
+        const result = await request.execute('sp_LayDanhSachSan');
         return res.status(200).json({
             success: true,
             data: result.recordset
@@ -394,13 +423,16 @@ const layTatCaDonDat = async (req, res) => {
             console.warn('Lỗi sp_LayDanhSachThanhToan:', payErr.message);
         }
         const merged = bookings.map((b) => {
-            const services = allDetails.filter((d) => d.ma_don_dat === b.id);
-            const payments = allPayments.filter((p) => p.ma_don_dat === b.id);
+            const bId = Number(b.id || b.ma_don_dat || 0);
+            const services = allDetails.filter((d) => Number(d.ma_don_dat) === bId);
+            const payments = allPayments.filter((p) => Number(p.ma_don_dat) === bId);
             const so_tien_da_tra = payments.reduce((sum, p) => sum + (Number(p.so_tien) || 0), 0);
             return {
                 ...b,
+                id: bId,
                 chi_tiet_dich_vu: services,
                 dich_vu_da_dung: services,
+                dich_vu: services,
                 so_tien_da_tra
             };
         });
@@ -455,14 +487,16 @@ const layLichSan = async (req, res) => {
             console.warn('Lỗi sp_LayDanhSachThanhToan:', payErr.message);
         }
         const merged = rawList.map((b) => {
-            const bId = b.ma_don_dat || b.id;
-            const services = allDetails.filter((d) => d.ma_don_dat === bId);
-            const payments = allPayments.filter((p) => p.ma_don_dat === bId);
+            const bId = Number(b.ma_don_dat || b.id || 0);
+            const services = allDetails.filter((d) => Number(d.ma_don_dat) === bId);
+            const payments = allPayments.filter((p) => Number(p.ma_don_dat) === bId);
             const so_tien_da_tra = payments.reduce((sum, p) => sum + (Number(p.so_tien) || 0), 0);
             return {
                 ...b,
+                id: bId,
                 chi_tiet_dich_vu: services,
                 dich_vu_da_dung: services,
+                dich_vu: services,
                 so_tien_da_tra
             };
         });
@@ -993,6 +1027,44 @@ const ketThucDaLinhHoat = async (req, res) => {
 };
 exports.ketThucDaLinhHoat = ketThucDaLinhHoat;
 /**
+ * 17b. Kết thúc trận đấu, giải phóng sân và mở lại các khung giờ
+ * Method: POST /api/dat-san/ket-thuc-tran-dau
+ * Procedure: sp_KetThucTranDau
+ */
+const ketThucTranDau = async (req, res) => {
+    try {
+        const { ma_don_dat } = req.body;
+        if (!ma_don_dat) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp mã đơn đặt sân (ma_don_dat)!'
+            });
+        }
+        const pool = await db_1.poolPromise;
+        const result = await pool.request()
+            .input('ma_don_dat', db_1.sql.Int, parseInt(ma_don_dat, 10))
+            .execute('sp_KetThucTranDau');
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated', { ma_don_dat });
+            io.emit('slots_updated');
+        }
+        return res.status(200).json({
+            success: true,
+            message: '⚽ Đã kết thúc trận đấu và giải phóng sân thành công!',
+            data: result.recordset && result.recordset[0]
+        });
+    }
+    catch (error) {
+        console.error('Lỗi sp_KetThucTranDau:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi kết thúc trận đấu'
+        });
+    }
+};
+exports.ketThucTranDau = ketThucTranDau;
+/**
  * 18. Lấy danh sách khung giờ từ CSDL (Bảng Khung_Gio)
  * Method: GET /api/dat-san/khung-gio
  * Procedure: sp_LayDanhSachKhungGio
@@ -1214,14 +1286,29 @@ const themDonDatVaThanhToan = async (req, res) => {
     try {
         const { ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai } = req.body;
         const pool = await db_1.poolPromise;
-        const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan' || loai_thanh_toan === 'TRA_HET') ? 'DA_THANH_TOAN' : (trang_thai || 'DA_COC');
+        const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan')
+            ? 'DA_THANH_TOAN'
+            : (trang_thai === 'DA_COC' ? 'DA_COC' : (trang_thai === 'CHO_THANH_TOAN' ? 'CHO_THANH_TOAN' : (trang_thai || 'DA_COC')));
         const phuong_thuc_chuan = (phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT';
         const tien_san_val = parseFloat(tien_san) || parseFloat(tong_tien) || 0;
         const tong_tien_val = parseFloat(tong_tien) || tien_san_val;
-        const so_tien_val = so_tien ? parseFloat(so_tien) : tien_san_val;
+        let so_tien_val = 0;
+        let loai_tt_val = null;
+        if (trang_thai_chuan === 'DA_THANH_TOAN') {
+            loai_tt_val = 'TRA_HET';
+            so_tien_val = (so_tien !== undefined && so_tien !== null && parseFloat(so_tien) > 0) ? parseFloat(so_tien) : tong_tien_val;
+        }
+        else if (trang_thai_chuan === 'DA_COC') {
+            loai_tt_val = 'DAT_COC';
+            so_tien_val = (so_tien !== undefined && so_tien !== null && parseFloat(so_tien) > 0) ? parseFloat(so_tien) : Math.round(tong_tien_val * 0.3);
+        }
+        else {
+            loai_tt_val = null;
+            so_tien_val = 0;
+        }
         const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
-        const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
-        const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '18:30:00');
+        const gio_bd_clean = (0, exports.cleanTimeForSql)(gio_bat_dau, '17:00:00');
+        const gio_kt_clean = (0, exports.cleanTimeForSql)(gio_ket_thuc, '18:30:00');
         // Phân giải mã người dùng: Nếu có điền tên/SĐT khách -> Lưu theo khách đó. Nếu không điền -> Lưu theo tài khoản đang đăng nhập
         const tenKhach = ten_khach_hang || (ghi_chu?.includes('Khách:') ? ghi_chu.replace('Khách:', '').split('-')[0].trim() : '');
         const sdtKhach = so_dien_thoai || (ghi_chu?.includes('-') ? ghi_chu.split('-')[1].trim() : '');
@@ -1237,9 +1324,9 @@ const themDonDatVaThanhToan = async (req, res) => {
             .input('phuong_thuc', db_1.sql.VarChar(20), phuong_thuc_chuan)
             .input('trang_thai', db_1.sql.VarChar(30), trang_thai_chuan)
             .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || null)
-            .input('loai_thanh_toan', db_1.sql.VarChar(20), loai_thanh_toan || 'DAT_COC')
+            .input('loai_thanh_toan', db_1.sql.VarChar(20), loai_tt_val)
             .input('so_tien', db_1.sql.Decimal(10, 2), so_tien_val)
-            .input('trang_thai_gd', db_1.sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
+            .input('trang_thai_gd', db_1.sql.VarChar(20), trang_thai_gd || (trang_thai_chuan === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'))
             .input('ten_khach_hang', db_1.sql.NVarChar(100), tenKhach || null)
             .input('so_dien_thoai', db_1.sql.VarChar(20), sdtKhach || null)
             .execute('sp_ThemDonDatVaThanhToan');
@@ -1299,13 +1386,30 @@ const suaDonDatVaThanhToan = async (req, res) => {
         const { ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai } = req.body;
         const pool = await db_1.poolPromise;
         const phuong_thuc_chuan = phuong_thuc ? ((phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT') : 'TIEN_MAT';
-        const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan') ? 'DA_THANH_TOAN' : (trang_thai || 'DA_COC');
+        const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan')
+            ? 'DA_THANH_TOAN'
+            : (trang_thai === 'DA_COC' ? 'DA_COC' : (trang_thai === 'CHO_THANH_TOAN' ? 'CHO_THANH_TOAN' : (trang_thai || 'DA_COC')));
         const tien_san_val = tien_san !== undefined ? parseFloat(tien_san) : null;
         const tong_tien_val = tong_tien !== undefined ? parseFloat(tong_tien) : null;
-        const so_tien_val = so_tien !== undefined ? parseFloat(so_tien) : null;
+        let loai_tt_val = loai_thanh_toan;
+        let so_tien_val = so_tien !== undefined ? parseFloat(so_tien) : null;
+        if (trang_thai_chuan === 'DA_THANH_TOAN') {
+            loai_tt_val = 'TRA_HET';
+            if (so_tien_val === null || isNaN(so_tien_val))
+                so_tien_val = tong_tien_val;
+        }
+        else if (trang_thai_chuan === 'DA_COC') {
+            loai_tt_val = 'DAT_COC';
+            if (so_tien_val === null || isNaN(so_tien_val))
+                so_tien_val = tong_tien_val ? Math.round(tong_tien_val * 0.3) : null;
+        }
+        else if (trang_thai_chuan === 'CHO_THANH_TOAN') {
+            loai_tt_val = null;
+            so_tien_val = 0;
+        }
         const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
-        const gio_bd_clean = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
-        const gio_kt_clean = (gio_ket_thuc && gio_ket_thuc.length === 5) ? `${gio_ket_thuc}:00` : (gio_ket_thuc || '18:30:00');
+        const gio_bd_clean = (0, exports.cleanTimeForSql)(gio_bat_dau, '17:00:00');
+        const gio_kt_clean = (0, exports.cleanTimeForSql)(gio_ket_thuc, '18:30:00');
         const tenKhach = ten_khach_hang || (ghi_chu?.includes('Khách:') ? ghi_chu.replace('Khách:', '').split('-')[0].trim() : '');
         const sdtKhach = so_dien_thoai || (ghi_chu?.includes('-') ? ghi_chu.split('-')[1].trim() : '');
         const result = await pool.request()
@@ -1320,9 +1424,9 @@ const suaDonDatVaThanhToan = async (req, res) => {
             .input('phuong_thuc', db_1.sql.VarChar(20), phuong_thuc_chuan)
             .input('trang_thai', db_1.sql.VarChar(30), trang_thai_chuan)
             .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || null)
-            .input('loai_thanh_toan', db_1.sql.VarChar(20), loai_thanh_toan || 'TRA_HET')
+            .input('loai_thanh_toan', db_1.sql.VarChar(20), loai_tt_val)
             .input('so_tien', db_1.sql.Decimal(10, 2), so_tien_val)
-            .input('trang_thai_gd', db_1.sql.VarChar(20), trang_thai_gd || 'THANH_CONG')
+            .input('trang_thai_gd', db_1.sql.VarChar(20), trang_thai_gd || (trang_thai_chuan === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'))
             .input('ten_khach_hang', db_1.sql.NVarChar(100), tenKhach || null)
             .input('so_dien_thoai', db_1.sql.VarChar(20), sdtKhach || null)
             .execute('sp_SuaDonDatVaThanhToan');

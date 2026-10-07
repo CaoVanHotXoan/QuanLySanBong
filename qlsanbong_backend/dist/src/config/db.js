@@ -34,8 +34,23 @@ const dbConfig = {
 // Khởi tạo Connection Pool (Tự động kết nối và không làm sập máy chủ Render nếu tạm thời mất mạng)
 const poolPromise = new mssql_1.default.ConnectionPool(dbConfig)
     .connect()
-    .then(pool => {
+    .then(async (pool) => {
     console.log('✅ [SQL Server] Kết nối cơ sở dữ liệu thành công!');
+    // Tự động kiểm tra và đảm bảo các Stored Procedure của module Liên Hệ luôn sẵn sàng
+    try {
+        await pool.request().query(`
+                IF OBJECT_ID('Lien_He', 'U') IS NOT NULL
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Lien_He') AND name = 'noi_dung_tra_loi')
+                        ALTER TABLE Lien_He ADD noi_dung_tra_loi NVARCHAR(MAX) NULL;
+                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Lien_He') AND name = 'ngay_tra_loi')
+                        ALTER TABLE Lien_He ADD ngay_tra_loi DATETIME NULL;
+                END;
+            `);
+    }
+    catch (e) {
+        console.warn('⚠️ Kiểm tra cấu trúc bảng Lien_He:', e.message);
+    }
     return pool;
 })
     .catch(err => {

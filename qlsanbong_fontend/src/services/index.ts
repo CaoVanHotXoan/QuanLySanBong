@@ -24,3 +24,7 @@ export { default as baoCaoService } from './baoCaoService';
 
 export * from './uploadService';
 export { default as uploadService } from './uploadService';
+
+export * from './contentService';
+export { default as contentService } from './contentService';
+

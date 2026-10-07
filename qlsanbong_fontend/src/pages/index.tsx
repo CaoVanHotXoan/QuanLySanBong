@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { io, Socket } from 'socket.io-client';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -43,13 +44,20 @@ import {
   Loader2,
   Building2,
   Sparkles,
-  LandPlot
+  LandPlot,
+  Volume2,
+  VolumeX,
+  Play,
+  Pause,
+  ImageIcon
 } from 'lucide-react';
 import Login, { AuthUser } from './Login/login';
 import Profile from '../profile/profile';
 import SoccerLoader from '../components/SoccerLoader';
 import DateNavigationBar from '../components/DateNavigationBar';
+import Footer from '../components/Footer';
 import { useBookingSync } from '../hooks/useBookingSync';
+import { contentService, BannerItem } from '@/services/contentService';
 
 /**
  * Interface Dữ liệu trả về từ Cổng thanh toán PayOS (MB Bank VietQR)
@@ -266,6 +274,13 @@ export default function HomePage() {
 
   // Trạng thái tải dữ liệu từ SQL Server
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
+
+  // State Banner Slider (Nếu là hình ảnh thì 9s chuyển, video thì hết video chuyển)
+  const [banners, setBanners] = useState<BannerItem[]>([]);
+  const [currentBannerIndex, setCurrentBannerIndex] = useState<number>(0);
+  const [isBannerMuted, setIsBannerMuted] = useState<boolean>(true);
+  const [bannerProgress, setBannerProgress] = useState<number>(0);
+  const bannerVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // State xác thực người dùng đã đăng nhập (Lưu từ SQL Server)
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -555,6 +570,77 @@ export default function HomePage() {
     }
   }, [timeSlotsList]);
 
+  // 6. Tải danh sách Banner quảng cáo (sp_LayDanhSachBanner)
+  const fetchBanners = async () => {
+    try {
+      const res = await contentService.getBanners();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setBanners(res.data);
+      }
+    } catch (err) {
+      console.error('Lỗi fetch banners:', err);
+    }
+  };
+
+  const handleNextBanner = useCallback(() => {
+    setBanners((currentList) => {
+      if (!currentList || currentList.length <= 1) return currentList;
+      setCurrentBannerIndex((prev) => (prev + 1) % currentList.length);
+      return currentList;
+    });
+  }, []);
+
+  const handlePrevBanner = useCallback(() => {
+    setBanners((currentList) => {
+      if (!currentList || currentList.length <= 1) return currentList;
+      setCurrentBannerIndex((prev) => (prev - 1 + currentList.length) % currentList.length);
+      return currentList;
+    });
+  }, []);
+
+  // Tự động chuyển Banner: Hình ảnh = 9 giây, Video = Hết video (onEnded)
+  useEffect(() => {
+    if (!banners || banners.length <= 1) return;
+
+    const current = banners[currentBannerIndex];
+    if (!current) return;
+
+    setBannerProgress(0);
+
+    if (current.loai_banner === 'VIDEO') {
+      // Đối với Video: Tự động phát video
+      if (bannerVideoRef.current) {
+        bannerVideoRef.current.currentTime = 0;
+        bannerVideoRef.current.play().catch(() => {});
+      }
+      // Fallback an toàn phòng khi video quá dài hoặc không bắt được onEnded
+      const fallbackTimer = setTimeout(() => {
+        handleNextBanner();
+      }, 90000);
+
+      return () => clearTimeout(fallbackTimer);
+    } else {
+      // Đối với Hình ảnh: 9 giây thì chuyển (9000ms)
+      const duration = 9000;
+      const step = 100;
+      let elapsed = 0;
+
+      const progressInterval = setInterval(() => {
+        elapsed += step;
+        setBannerProgress(Math.min(100, (elapsed / duration) * 100));
+      }, step);
+
+      const slideTimer = setTimeout(() => {
+        handleNextBanner();
+      }, duration);
+
+      return () => {
+        clearInterval(progressInterval);
+        clearTimeout(slideTimer);
+      };
+    }
+  }, [banners, currentBannerIndex, handleNextBanner]);
+
   // Tải toàn bộ dữ liệu ban đầu từ Backend SQL Server khi Component khởi tạo
   useEffect(() => {
     const loadAllInitialData = async () => {
@@ -563,7 +649,8 @@ export default function HomePage() {
         fetchLoaiSan(),
         fetchSanBong(),
         fetchKhungGio(),
-        fetchDichVu()
+        fetchDichVu(),
+        fetchBanners()
       ]);
       setIsLoadingData(false);
     };
@@ -1190,7 +1277,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 font-sans selection:bg-emerald-500 selection:text-white ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+    <div suppressHydrationWarning className={`min-h-screen transition-colors duration-300 font-sans selection:bg-emerald-500 selection:text-white ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
       }`}>
       <Head>
         <title>Soccer247 - Hệ Thống Đặt Sân Thể Thao Trực Tuyến 24/7</title>
@@ -1286,7 +1373,8 @@ export default function HomePage() {
               {/* Nút Chuyển đổi Theme Sáng / Tối */}
               <button
                 type="button"
-                onClick={() => setIsDarkMode(!isDarkMode)}
+                onClick={toggleTheme}
+                suppressHydrationWarning
                 title={isDarkMode ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối'}
                 className={`p-2 sm:p-2.5 rounded-2xl border transition-all duration-300 flex items-center justify-center group shadow-sm hover:scale-105 active:scale-95 cursor-pointer ${isDarkMode
                   ? 'bg-slate-900 border-slate-700 text-amber-400 hover:bg-slate-800 hover:border-amber-400/50'
@@ -1454,6 +1542,27 @@ export default function HomePage() {
               >
                 📅 Lịch sân theo giờ
               </a>
+              <Link
+                href="/tin-tuc"
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-900/80' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-200'
+                  }`}
+              >
+                📰 Tin Tức
+              </Link>
+              <Link
+                href="/about-us"
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-900/80' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-200'
+                  }`}
+              >
+                ℹ️ About Us
+              </Link>
+              <Link
+                href="/lien-he"
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-900/80' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-200'
+                  }`}
+              >
+                📞 Liên Hệ
+              </Link>
             </nav>
 
             {/* Thông tin hỗ trợ nhanh */}
@@ -1471,26 +1580,152 @@ export default function HomePage() {
 
       <main className="pt-28">
         {/* =====================================================================
-            2. HERO SECTION (THANH ĐẶT SÂN NHANH TƯƠNG TÁC)
+            2. HERO SECTION VỚI BANNER (ẢNH / VIDEO) LÀM NỀN TRỰC TIẾP DƯỚI CHỮ
+            - Ảnh: 9 giây thì tự động chuyển
+            - Video: Hết thời lượng video thì tự động chuyển
             ===================================================================== */}
-        <section id="hero" className={`relative py-20 lg:py-28 overflow-hidden border-b transition-colors duration-300 ${isDarkMode
-          ? 'bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/40 via-slate-950 to-slate-950 border-emerald-950/40'
-          : 'bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-100/60 via-slate-50 to-white border-slate-200'
-          }`}>
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            {/* Headline chính */}
-            <h1 className={`text-4xl sm:text-6xl font-black tracking-tight max-w-4xl mx-auto leading-tight ${isDarkMode ? 'text-white' : 'text-slate-900'
-              }`}>
-              <div>Đặt Sân Thể Thao</div>
-              <div className="bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 bg-clip-text text-transparent my-1 sm:my-2">
+        <section id="hero" className="relative min-h-[520px] sm:min-h-[580px] lg:min-h-[640px] flex items-center justify-center overflow-hidden border-b border-emerald-950/40 group">
+          {/* LỚP NỀN BANNER SLIDER (ẢNH HOẶC VIDEO NẰM TRỰC TIẾP DƯỚI DÒNG CHỮ) */}
+          <div className="absolute inset-0 w-full h-full z-0 overflow-hidden bg-slate-950">
+            {banners.length > 0 ? (
+              banners.map((item, idx) => {
+                const isActive = idx === currentBannerIndex;
+                if (!isActive) return null;
+
+                return (
+                  <div key={item.id || idx} className="absolute inset-0 w-full h-full animate-fade-in">
+                    {item.loai_banner === 'VIDEO' && item.video_url ? (
+                      <video
+                        ref={bannerVideoRef}
+                        src={item.video_url}
+                        poster={item.hinh_anh}
+                        autoPlay
+                        muted={isBannerMuted}
+                        playsInline
+                        onEnded={handleNextBanner}
+                        className="w-full h-full object-cover scale-105"
+                      />
+                    ) : (
+                      <img
+                        src={item.hinh_anh || 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=1600&q=80'}
+                        alt={item.tieu_de || 'Banner Background'}
+                        className="w-full h-full object-cover transform scale-105 transition-transform duration-1000"
+                      />
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-emerald-950 via-slate-950 to-slate-900" />
+            )}
+
+            {/* LỚP PHỦ GRADIENT ĐỂ CHỮ NỔI RÕ VÀ SANG TRỌNG */}
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/65 to-slate-950/95 backdrop-blur-[2px]" />
+          </div>
+
+          {/* NỘI DUNG CHÍNH NẰM NỔI TRÊN LỚP NỀN BANNER (CHỮ NGƯỜI DÙNG KHOANH) */}
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center py-16 sm:py-24">
+            
+            {/* DÒNG CHỮ CHÍNH NẰM TRÊN NỀN BANNER */}
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight max-w-5xl mx-auto leading-tight text-white drop-shadow-2xl">
+              <div className="drop-shadow-lg">Đặt Sân Thể Thao</div>
+              <div className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent my-1.5 sm:my-3 drop-shadow-md">
                 Nhanh Dễ Dàng
               </div>
-              <span className={`text-3xl sm:text-5xl font-extrabold mt-1 block ${isDarkMode ? 'text-slate-300' : 'text-slate-700'
-                }`}>
+              <span className="text-3xl sm:text-5xl lg:text-6xl font-extrabold mt-1 block text-slate-100 drop-shadow-lg">
                 Chọn Giờ Vào Đá Ngay
               </span>
             </h1>
+
+            {/* NÚT HÀNH ĐỘNG DẪN XUỐNG ĐẶT SÂN */}
+            <div className="mt-8 sm:mt-10 flex flex-wrap items-center justify-center gap-4">
+              <a
+                href="#ma-tran-lich-san"
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm sm:text-base shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 cursor-pointer"
+              >
+                <span>⚽ Đặt Sân Ngay Hôm Nay</span>
+                <ChevronRight className="w-5 h-5 stroke-[3]" />
+              </a>
+            </div>
           </div>
+
+          {/* THANH TIẾN TRÌNH 9 GIÂY CHO ẢNH */}
+          {banners[currentBannerIndex]?.loai_banner === 'IMAGE' && banners.length > 1 && (
+            <div className="absolute top-0 left-0 right-0 h-1 bg-white/15 z-20 overflow-hidden">
+              <div
+                className="h-full bg-emerald-400 transition-all duration-100 ease-linear shadow-sm shadow-emerald-400"
+                style={{ width: `${bannerProgress}%` }}
+              />
+            </div>
+          )}
+
+          {/* NÚT BẬT / TẮT ÂM THANH KHI ĐANG PHÁT VIDEO NỀN */}
+          {banners[currentBannerIndex]?.loai_banner === 'VIDEO' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsBannerMuted(!isBannerMuted);
+                if (bannerVideoRef.current) {
+                  bannerVideoRef.current.muted = !isBannerMuted;
+                }
+              }}
+              className="absolute top-6 right-6 z-20 p-3 rounded-full bg-black/60 hover:bg-black/85 text-white backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl flex items-center gap-2 text-xs font-bold"
+              title={isBannerMuted ? 'Bật âm thanh video' : 'Tắt âm thanh'}
+            >
+              {isBannerMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />}
+              <span className="hidden sm:inline">{isBannerMuted ? 'Bật âm thanh' : 'Đang phát âm thanh'}</span>
+            </button>
+          )}
+
+          {/* NÚT MŨI TÊN CHUYỂN BANNER TRÁI / PHẢI */}
+          {banners.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePrevBanner();
+                }}
+                className="absolute left-4 sm:left-8 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md border border-white/20 opacity-70 group-hover:opacity-100 transition-all cursor-pointer shadow-2xl hover:scale-110"
+                title="Banner trước"
+              >
+                <ArrowLeft className="w-6 h-6 stroke-[2.5]" />
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNextBanner();
+                }}
+                className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md border border-white/20 opacity-70 group-hover:opacity-100 transition-all cursor-pointer shadow-2xl hover:scale-110"
+                title="Banner tiếp theo"
+              >
+                <ArrowRight className="w-6 h-6 stroke-[2.5]" />
+              </button>
+
+              {/* CÁC CHẤM CHUYỂN SLIDE Ở DƯỚI CÙNG HERO SECTION */}
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 bg-black/50 px-4 py-2 rounded-full backdrop-blur-md border border-white/15 shadow-xl">
+                {banners.map((b, i) => (
+                  <button
+                    key={b.id || i}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentBannerIndex(i);
+                    }}
+                    className={`transition-all rounded-full cursor-pointer ${
+                      i === currentBannerIndex
+                        ? 'w-8 h-2.5 bg-emerald-400 shadow-md shadow-emerald-400/60'
+                        : 'w-2.5 h-2.5 bg-white/40 hover:bg-white/80'
+                    }`}
+                    title={`Chuyển đến banner ${i + 1}`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </section>
 
         {/* =====================================================================
@@ -1940,92 +2175,9 @@ export default function HomePage() {
 
 
         {/* =====================================================================
-            5. FOOTER & THÔNG TIN LIÊN HỆ
+            5. FOOTER & THÔNG TIN LIÊN HỆ DYNAMIC TỪ DATABASE
             ===================================================================== */}
-        <footer id="chinh-sach-lien-he" className={`border-t pt-20 pb-12 transition-colors duration-300 ${isDarkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-900 text-slate-100 border-slate-800'
-          }`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 pb-16 border-b border-slate-800/80">
-
-              {/* Cột 1: Thông tin thương hiệu & Liên hệ */}
-              <div className="lg:col-span-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white border border-slate-700 flex items-center justify-center overflow-hidden">
-                    <SoccerBallIcon className="w-6 h-6" />
-                  </div>
-                  <span className="text-2xl font-black text-white">
-                    SOCCER<span className="text-emerald-400">247</span>
-                  </span>
-                </div>
-                <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
-                  Trung tâm thể thao đa năng hiện đại. Toàn bộ quy trình đặt sân, tính giá và thanh toán được quản lý bởi Soccer 247.
-                </p>
-
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-center gap-3 text-sm text-slate-300">
-                    <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
-                      <Phone className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-400">Hotline đặt sân:</div>
-                      <div className="font-bold text-white text-base font-mono">0816344504</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-sm text-slate-300">
-                    <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
-                      <Mail className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-400">Email:</div>
-                      <div className="font-bold text-white">sinhvienxoan@gmail.com</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-sm text-slate-300">
-                    <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
-                      <MapPin className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-400">Địa chỉ cụm sân:</div>
-                      <div className="font-bold text-white">Biên Hòa - Đồng Nai</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cột 2: Bản đồ Google Maps */}
-              <div className="lg:col-span-6 space-y-4">
-                <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-emerald-400" />
-                  Bản Đồ Vị Trí Cụm Sân
-                </h3>
-                <div className="w-full h-56 rounded-2xl overflow-hidden border border-slate-800 shadow-xl relative bg-slate-900">
-                  <iframe
-                    title="Bản đồ Soccer247"
-                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d125397.66986427306!2d106.74558239014159!3d10.950005799999998!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95267b2d5cb%3A0xbcf4a755a9b736b0!2zVHAuIEJpw6puIEjDsmEsIMSQ4buTbmcgTmFp!5e0!3m2!1svi!2s!4v1700000000000!5m2!1svi!2s"
-                    width="100%"
-                    height="100%"
-                    style={{ border: 0 }}
-                    allowFullScreen={false}
-                    loading="lazy"
-                    className="w-full h-full grayscale contrast-125 opacity-80 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
-                  />
-                </div>
-              </div>
-
-            </div>
-
-            {/* Bản quyền */}
-            <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-              <p>© 2026 Soccer 247.</p>
-              <div className="flex items-center gap-6">
-                <a href="#" className="hover:text-emerald-400 transition-colors">Điều khoản dịch vụ</a>
-                <a href="#" className="hover:text-emerald-400 transition-colors">Bảo mật thông tin</a>
-              </div>
-            </div>
-          </div>
-        </footer>
+        <Footer />
       </main>
 
       {/* =====================================================================

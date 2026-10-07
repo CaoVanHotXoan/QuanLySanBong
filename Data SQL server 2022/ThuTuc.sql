@@ -3685,3 +3685,636 @@ GO
 PRINT N'✅ ĐÃ NẠP TOÀN BỘ STORED PROCEDURES CHO CSDL QuanLySanBong THÀNH CÔNG!';
 GO
 
+
+
+-- =====================================================================
+-- 10. NHÓM THỦ TỤC CHO TIN TỨC, ABOUT US, LIÊN HỆ, BANNER QUẢNG CÁO
+-- =====================================================================
+
+-- 10.1. TIN TỨC: Lấy danh mục tin tức
+CREATE OR ALTER PROCEDURE sp_LayDanhSachLoaiTinTuc
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT id, ten_loai, trang_thai
+    FROM Loai_Tin_Tuc
+    WHERE trang_thai = 1
+    ORDER BY id ASC;
+END;
+GO
+
+-- 10.2. TIN TỨC: Lấy danh sách tin tức (kèm tìm kiếm, lọc danh mục)
+CREATE OR ALTER PROCEDURE sp_LayDanhSachTinTuc
+    @ma_loai_tin INT = NULL,
+    @tu_khoa NVARCHAR(100) = NULL,
+    @limit INT = 50
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT TOP (@limit)
+        t.id,
+        t.ma_loai_tin,
+        l.ten_loai,
+        t.tieu_de,
+        t.tom_tat,
+        t.noi_dung,
+        t.hinh_anh,
+        t.luot_xem,
+        t.ngay_dang,
+        t.trang_thai
+    FROM Tin_Tuc t
+    LEFT JOIN Loai_Tin_Tuc l ON t.ma_loai_tin = l.id
+    WHERE t.trang_thai = 1
+      AND (@ma_loai_tin IS NULL OR @ma_loai_tin = 0 OR t.ma_loai_tin = @ma_loai_tin)
+      AND (@tu_khoa IS NULL OR @tu_khoa = '' OR t.tieu_de LIKE N'%' + @tu_khoa + '%' OR t.tom_tat LIKE N'%' + @tu_khoa + '%')
+    ORDER BY t.ngay_dang DESC;
+END;
+GO
+
+-- 10.3. TIN TỨC: Lấy chi tiết 1 bài viết (tự động tăng view)
+CREATE OR ALTER PROCEDURE sp_LayChiTietTinTuc
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Tăng lượt xem
+    UPDATE Tin_Tuc 
+    SET luot_xem = ISNULL(luot_xem, 0) + 1 
+    WHERE id = @id;
+
+    -- Trả về dữ liệu bài viết
+    SELECT 
+        t.id,
+        t.ma_loai_tin,
+        l.ten_loai,
+        t.tieu_de,
+        t.tom_tat,
+        t.noi_dung,
+        t.hinh_anh,
+        t.luot_xem,
+        t.ngay_dang,
+        t.trang_thai
+    FROM Tin_Tuc t
+    LEFT JOIN Loai_Tin_Tuc l ON t.ma_loai_tin = l.id
+    WHERE t.id = @id;
+END;
+GO
+
+-- 10.3b. TIN TỨC: Lấy chi tiết bài viết cho Quản trị (không tăng view)
+CREATE OR ALTER PROCEDURE sp_LayChiTietTinTucAdmin
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        t.id,
+        t.ma_loai_tin,
+        l.ten_loai,
+        t.tieu_de,
+        t.tom_tat,
+        t.noi_dung,
+        t.hinh_anh,
+        t.luot_xem,
+        t.ngay_dang,
+        t.trang_thai
+    FROM Tin_Tuc t
+    LEFT JOIN Loai_Tin_Tuc l ON t.ma_loai_tin = l.id
+    WHERE t.id = @id;
+END;
+GO
+
+-- 10.4. TIN TỨC: Thêm mới bài viết
+CREATE OR ALTER PROCEDURE sp_ThemTinTuc
+    @ma_loai_tin INT,
+    @tieu_de NVARCHAR(255),
+    @tom_tat NVARCHAR(500) = NULL,
+    @noi_dung NVARCHAR(MAX),
+    @hinh_anh VARCHAR(255) = NULL,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO Tin_Tuc (ma_loai_tin, tieu_de, tom_tat, noi_dung, hinh_anh, luot_xem, ngay_dang, trang_thai)
+    VALUES (@ma_loai_tin, @tieu_de, @tom_tat, @noi_dung, @hinh_anh, 0, GETDATE(), @trang_thai);
+
+    SELECT SCOPE_IDENTITY() AS id, N'Thêm tin tức thành công' AS thong_bao;
+END;
+GO
+
+-- 10.5. ABOUT US: Lấy thông tin giới thiệu trung tâm
+CREATE OR ALTER PROCEDURE sp_LayThongTinAboutUs
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Nếu chưa có bản ghi nào thì tạo mặc định
+    IF NOT EXISTS (SELECT 1 FROM About_Us)
+    BEGIN
+        INSERT INTO About_Us (ten_trung_tam, hotline, email, dia_chi, link_map, gioi_thieu_ngan, bai_viet_about_us, link_facebook, link_zalo)
+        VALUES (
+            N'Trung Tâm Thể Thao Soccer247', '0816344504', 'sinhvienxoan@gmail.com', N'Biên Hòa - Đồng Nai', 
+            'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d125397.66986427306!2d106.74558239014159!3d10.950005799999998!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95267b2d5cb%3A0xbcf4a755a9b736b0!2zVHAuIEJpw6puIEjDsmEsIMSQ4buTbmcgTmFp!5e0!3m2!1svi!2s!5m2!1svi!2s',
+            N'Trung tâm thể thao đa năng hiện đại hàng đầu khu vực với hệ thống sân bóng cỏ nhân tạo đạt chuẩn FIFA, hệ thống chiếu sáng LED chống lóa và dịch vụ tiện ích khép kín.',
+            N'Soccer247 ra đời với sứ mệnh mang đến không gian thể thao chuyên nghiệp, hiện đại và tiện lợi nhất cho cộng đồng yêu bóng đá. Chúng tôi trang bị mặt cỏ sợi kim cương cao cấp nhập khẩu, hệ thống thoát nước ngầm tiêu chuẩn, giàn đèn LED công suất cao cùng khu vực căn tin phục vụ giải khát tiện nghi. Hệ thống đặt sân trực tuyến 24/7 giúp khách hàng chủ động chọn sân, giờ đá và thanh toán tự động qua mã QR chỉ trong vài giây.',
+            'https://facebook.com/soccer247', 'https://zalo.me/0816344504'
+        );
+    END;
+
+    SELECT TOP 1 * FROM About_Us ORDER BY id ASC;
+END;
+GO
+
+-- 10.6. ABOUT US: Cập nhật thông tin giới thiệu
+CREATE OR ALTER PROCEDURE sp_CapNhatAboutUs
+    @ten_trung_tam NVARCHAR(150),
+    @hotline VARCHAR(20),
+    @email VARCHAR(255),
+    @dia_chi NVARCHAR(255),
+    @link_map VARCHAR(500) = NULL,
+    @gioi_thieu_ngan NVARCHAR(MAX) = NULL,
+    @bai_viet_about_us NVARCHAR(MAX) = NULL,
+    @link_facebook VARCHAR(255) = NULL,
+    @link_zalo VARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (SELECT 1 FROM About_Us)
+    BEGIN
+        UPDATE TOP (1) About_Us
+        SET ten_trung_tam = @ten_trung_tam,
+            hotline = @hotline,
+            email = @email,
+            dia_chi = @dia_chi,
+            link_map = @link_map,
+            gioi_thieu_ngan = @gioi_thieu_ngan,
+            bai_viet_about_us = @bai_viet_about_us,
+            link_facebook = @link_facebook,
+            link_zalo = @link_zalo;
+    END
+    ELSE
+    BEGIN
+        INSERT INTO About_Us (ten_trung_tam, hotline, email, dia_chi, link_map, gioi_thieu_ngan, bai_viet_about_us, link_facebook, link_zalo)
+        VALUES (@ten_trung_tam, @hotline, @email, @dia_chi, @link_map, @gioi_thieu_ngan, @bai_viet_about_us, @link_facebook, @link_zalo);
+    END;
+
+    SELECT N'Cập nhật thông tin About Us thành công' AS thong_bao;
+END;
+GO
+
+-- 10.7. LIÊN HỆ: Gửi liên hệ / phản hồi từ khách hàng
+CREATE OR ALTER PROCEDURE sp_GuiLienHe
+    @ho_ten NVARCHAR(100),
+    @email VARCHAR(255) = NULL,
+    @so_dien_thoai VARCHAR(20),
+    @tieu_de NVARCHAR(150) = NULL,
+    @noi_dung NVARCHAR(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF @ho_ten IS NULL OR LTRIM(RTRIM(@ho_ten)) = '' OR @so_dien_thoai IS NULL OR LTRIM(RTRIM(@so_dien_thoai)) = '' OR @noi_dung IS NULL OR LTRIM(RTRIM(@noi_dung)) = ''
+    BEGIN
+        ;THROW 50090, N'Vui lòng nhập đầy đủ Họ tên, Số điện thoại và Nội dung liên hệ!', 1;
+    END;
+
+    IF LEN(@so_dien_thoai) <> 10 OR @so_dien_thoai NOT LIKE '0[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+    BEGIN
+        ;THROW 50091, N'Số điện thoại không hợp lệ! Vui lòng nhập đúng 10 chữ số (bắt đầu bằng số 0).', 1;
+    END;
+
+    INSERT INTO Lien_He (ho_ten, email, so_dien_thoai, tieu_de, noi_dung, trang_thai_xu_ly, ngay_gui)
+    VALUES (@ho_ten, @email, @so_dien_thoai, @tieu_de, @noi_dung, N'CHUA_XU_LY', GETDATE());
+
+    SELECT SCOPE_IDENTITY() AS id, N'Gửi liên hệ thành công. Chúng tôi sẽ phản hồi sớm nhất!' AS thong_bao;
+END;
+GO
+
+-- 10.8. LIÊN HỆ: Lấy danh sách liên hệ (dành cho Quản trị viên)
+CREATE OR ALTER PROCEDURE sp_LayDanhSachLienHe
+    @trang_thai_xu_ly NVARCHAR(30) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        id,
+        ho_ten,
+        email,
+        so_dien_thoai,
+        tieu_de,
+        noi_dung,
+        trang_thai_xu_ly,
+        ngay_gui,
+        noi_dung_tra_loi,
+        ngay_tra_loi
+    FROM Lien_He
+    WHERE (@trang_thai_xu_ly IS NULL OR @trang_thai_xu_ly = '' OR trang_thai_xu_ly = @trang_thai_xu_ly)
+    ORDER BY ngay_gui DESC;
+END;
+GO
+
+-- 10.9. LIÊN HỆ: Cập nhật trạng thái liên hệ
+CREATE OR ALTER PROCEDURE sp_CapNhatTrangThaiLienHe
+    @id INT,
+    @trang_thai_xu_ly NVARCHAR(30)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE Lien_He
+    SET trang_thai_xu_ly = @trang_thai_xu_ly
+    WHERE id = @id;
+
+    SELECT N'Cập nhật trạng thái liên hệ thành công' AS thong_bao;
+END;
+GO
+
+-- 10.9.1. LIÊN HỆ: Trả lời liên hệ khách hàng
+CREATE OR ALTER PROCEDURE sp_TraLoiLienHe
+    @id INT,
+    @noi_dung_tra_loi NVARCHAR(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE Lien_He
+    SET noi_dung_tra_loi = @noi_dung_tra_loi,
+        ngay_tra_loi = GETDATE(),
+        trang_thai_xu_ly = N'DA_XU_LY'
+    WHERE id = @id;
+
+    SELECT N'Lưu phản hồi liên hệ thành công' AS thong_bao;
+END;
+GO
+
+-- 10.9.2. LIÊN HỆ: Lấy chi tiết một liên hệ
+CREATE OR ALTER PROCEDURE sp_LayChiTietLienHe
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        id,
+        ho_ten,
+        email,
+        so_dien_thoai,
+        tieu_de,
+        noi_dung,
+        trang_thai_xu_ly,
+        ngay_gui,
+        noi_dung_tra_loi,
+        ngay_tra_loi
+    FROM Lien_He
+    WHERE id = @id;
+END;
+GO
+
+-- 10.10. BANNER: Lấy danh sách Banner quảng cáo
+CREATE OR ALTER PROCEDURE sp_LayDanhSachBanner
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        id,
+        tieu_de,
+        loai_banner,
+        hinh_anh,
+        video_url,
+        lien_ket,
+        thu_tu,
+        trang_thai
+    FROM Banner
+    WHERE trang_thai = 1
+    ORDER BY thu_tu ASC, id ASC;
+END;
+GO
+
+
+-- 10.11. BANNER: Lấy danh sách Banner cho Admin
+CREATE OR ALTER PROCEDURE sp_LayDanhSachBannerAdmin
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT id, tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai
+    FROM Banner
+    ORDER BY thu_tu ASC, id DESC;
+END;
+GO
+
+-- 10.11b. BANNER: Lấy chi tiết Banner theo ID
+CREATE OR ALTER PROCEDURE sp_LayChiTietBanner
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT id, tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai
+    FROM Banner
+    WHERE id = @id;
+END;
+GO
+
+-- 10.12. BANNER: Thêm mới Banner
+CREATE OR ALTER PROCEDURE sp_ThemBanner
+    @tieu_de NVARCHAR(150),
+    @loai_banner VARCHAR(10) = 'IMAGE',
+    @hinh_anh VARCHAR(255) = NULL,
+    @video_url VARCHAR(500) = NULL,
+    @lien_ket VARCHAR(255) = NULL,
+    @thu_tu INT = 1,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO Banner (tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai)
+    VALUES (@tieu_de, @loai_banner, @hinh_anh, @video_url, @lien_ket, @thu_tu, @trang_thai);
+
+    SELECT SCOPE_IDENTITY() AS id, N'Thêm banner thành công' AS thong_bao;
+END;
+GO
+
+-- 10.13. BANNER: Sửa Banner
+CREATE OR ALTER PROCEDURE sp_SuaBanner
+    @id INT,
+    @tieu_de NVARCHAR(150),
+    @loai_banner VARCHAR(10) = 'IMAGE',
+    @hinh_anh VARCHAR(255) = NULL,
+    @video_url VARCHAR(500) = NULL,
+    @lien_ket VARCHAR(255) = NULL,
+    @thu_tu INT = 1,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE Banner
+    SET tieu_de = @tieu_de,
+        loai_banner = @loai_banner,
+        hinh_anh = @hinh_anh,
+        video_url = @video_url,
+        lien_ket = @lien_ket,
+        thu_tu = @thu_tu,
+        trang_thai = @trang_thai
+    WHERE id = @id;
+
+    SELECT N'Cập nhật banner thành công' AS thong_bao;
+END;
+GO
+
+-- 10.14. BANNER: Xóa Banner
+CREATE OR ALTER PROCEDURE sp_XoaBanner
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM Banner WHERE id = @id;
+    SELECT N'Xóa banner thành công' AS thong_bao;
+END;
+GO
+
+-- 10.15. LIÊN HỆ: Xóa Liên Hệ
+CREATE OR ALTER PROCEDURE sp_XoaLienHe
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM Lien_He WHERE id = @id;
+    SELECT N'Xóa liên hệ thành công' AS thong_bao;
+END;
+GO
+
+-- 10.16. LOẠI TIN TỨC: Lấy danh sách Loại tin cho Admin
+CREATE OR ALTER PROCEDURE sp_LayDanhSachLoaiTinTucAdmin
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        l.id, 
+        l.ten_loai, 
+        l.trang_thai,
+        COUNT(t.id) AS so_luong_tin
+    FROM Loai_Tin_Tuc l
+    LEFT JOIN Tin_Tuc t ON l.id = t.ma_loai_tin
+    GROUP BY l.id, l.ten_loai, l.trang_thai
+    ORDER BY l.id ASC;
+END;
+GO
+
+-- 10.17. LOẠI TIN TỨC: Thêm mới
+CREATE OR ALTER PROCEDURE sp_ThemLoaiTinTuc
+    @ten_loai NVARCHAR(100),
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO Loai_Tin_Tuc (ten_loai, trang_thai)
+    VALUES (@ten_loai, @trang_thai);
+
+    SELECT SCOPE_IDENTITY() AS id, N'Thêm loại tin tức thành công' AS thong_bao;
+END;
+GO
+
+-- 10.18. LOẠI TIN TỨC: Sửa
+CREATE OR ALTER PROCEDURE sp_SuaLoaiTinTuc
+    @id INT,
+    @ten_loai NVARCHAR(100),
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE Loai_Tin_Tuc
+    SET ten_loai = @ten_loai,
+        trang_thai = @trang_thai
+    WHERE id = @id;
+
+    SELECT N'Cập nhật loại tin tức thành công' AS thong_bao;
+END;
+GO
+
+-- 10.19. LOẠI TIN TỨC: Xóa
+CREATE OR ALTER PROCEDURE sp_XoaLoaiTinTuc
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (SELECT 1 FROM Tin_Tuc WHERE ma_loai_tin = @id)
+    BEGIN
+        ;THROW 50091, N'Không thể xóa loại tin tức đang có bài viết liên kết! Vui lòng chuyển hoặc xóa bài viết trước.', 1;
+    END;
+
+    DELETE FROM Loai_Tin_Tuc WHERE id = @id;
+    SELECT N'Xóa loại tin tức thành công' AS thong_bao;
+END;
+GO
+
+-- 10.20. TIN TỨC: Lấy danh sách Tin Tức cho Admin
+CREATE OR ALTER PROCEDURE sp_LayDanhSachTinTucAdmin
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        t.id,
+        t.ma_loai_tin,
+        l.ten_loai,
+        t.tieu_de,
+        t.tom_tat,
+        t.noi_dung,
+        t.hinh_anh,
+        t.luot_xem,
+        t.ngay_dang,
+        t.trang_thai
+    FROM Tin_Tuc t
+    LEFT JOIN Loai_Tin_Tuc l ON t.ma_loai_tin = l.id
+    ORDER BY t.ngay_dang DESC, t.id DESC;
+END;
+GO
+
+-- 10.21. TIN TỨC: Sửa bài viết
+CREATE OR ALTER PROCEDURE sp_SuaTinTuc
+    @id INT,
+    @ma_loai_tin INT,
+    @tieu_de NVARCHAR(255),
+    @tom_tat NVARCHAR(500) = NULL,
+    @noi_dung NVARCHAR(MAX),
+    @hinh_anh VARCHAR(255) = NULL,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE Tin_Tuc
+    SET ma_loai_tin = @ma_loai_tin,
+        tieu_de = @tieu_de,
+        tom_tat = @tom_tat,
+        noi_dung = @noi_dung,
+        hinh_anh = @hinh_anh,
+        trang_thai = @trang_thai
+    WHERE id = @id;
+
+    SELECT N'Cập nhật tin tức thành công' AS thong_bao;
+END;
+GO
+
+-- 10.22. TIN TỨC: Xóa bài viết
+CREATE OR ALTER PROCEDURE sp_XoaTinTuc
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM Tin_Tuc WHERE id = @id;
+    SELECT N'Xóa bài viết tin tức thành công' AS thong_bao;
+END;
+GO
+
+-- 10.23. BANNER: Lấy danh sách Banner hoạt động (Public)
+CREATE OR ALTER PROCEDURE sp_LayDanhSachBanner
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        id,
+        tieu_de,
+        loai_banner,
+        hinh_anh,
+        video_url,
+        lien_ket,
+        thu_tu,
+        trang_thai,
+        ngay_tao
+    FROM Banner
+    WHERE trang_thai = 1
+    ORDER BY thu_tu ASC, id DESC;
+END;
+GO
+
+-- 10.24. BANNER: Lấy danh sách Banner cho Admin
+CREATE OR ALTER PROCEDURE sp_LayDanhSachBannerAdmin
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        id,
+        tieu_de,
+        loai_banner,
+        hinh_anh,
+        video_url,
+        lien_ket,
+        thu_tu,
+        trang_thai,
+        ngay_tao
+    FROM Banner
+    ORDER BY thu_tu ASC, id DESC;
+END;
+GO
+
+-- 10.25. BANNER: Lấy chi tiết một Banner
+CREATE OR ALTER PROCEDURE sp_LayChiTietBanner
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        id,
+        tieu_de,
+        loai_banner,
+        hinh_anh,
+        video_url,
+        lien_ket,
+        thu_tu,
+        trang_thai,
+        ngay_tao
+    FROM Banner
+    WHERE id = @id;
+END;
+GO
+
+-- 10.26. BANNER: Thêm mới Banner
+CREATE OR ALTER PROCEDURE sp_ThemBanner
+    @tieu_de NVARCHAR(150) = NULL,
+    @loai_banner VARCHAR(10) = 'IMAGE',
+    @hinh_anh VARCHAR(255) = NULL,
+    @video_url VARCHAR(500) = NULL,
+    @lien_ket VARCHAR(255) = NULL,
+    @thu_tu INT = 1,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO Banner (tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai, ngay_tao)
+    VALUES (@tieu_de, @loai_banner, @hinh_anh, @video_url, @lien_ket, @thu_tu, @trang_thai, GETDATE());
+
+    SELECT SCOPE_IDENTITY() AS id, N'Thêm banner thành công' AS thong_bao;
+END;
+GO
+
+-- 10.27. BANNER: Cập nhật Banner
+CREATE OR ALTER PROCEDURE sp_SuaBanner
+    @id INT,
+    @tieu_de NVARCHAR(150) = NULL,
+    @loai_banner VARCHAR(10) = 'IMAGE',
+    @hinh_anh VARCHAR(255) = NULL,
+    @video_url VARCHAR(500) = NULL,
+    @lien_ket VARCHAR(255) = NULL,
+    @thu_tu INT = 1,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE Banner
+    SET tieu_de = @tieu_de,
+        loai_banner = @loai_banner,
+        hinh_anh = @hinh_anh,
+        video_url = @video_url,
+        lien_ket = @lien_ket,
+        thu_tu = @thu_tu,
+        trang_thai = @trang_thai
+    WHERE id = @id;
+
+    SELECT N'Cập nhật banner thành công' AS thong_bao;
+END;
+GO
+
+-- 10.28. BANNER: Xóa Banner
+CREATE OR ALTER PROCEDURE sp_XoaBanner
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM Banner WHERE id = @id;
+    SELECT N'Xóa banner thành công' AS thong_bao;
+END;
+GO
+

@@ -1,7 +1,7 @@
 "use strict";
 /**
  * =====================================================================
- * ROUTES: BÁO CÁO & THỐNG KÊ (/api/bao-cao)
+ * TỔNG HỢP CÁC SERVICES BACKEND (BACKEND SERVICE LAYER)
  * =====================================================================
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
@@ -37,21 +37,11 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = __importDefault(require("express"));
-const baoCaoController = __importStar(require("../controllers/baoCaoController"));
-const router = express_1.default.Router();
-// 1. Thống kê doanh thu theo khoảng thời gian
-router.get('/doanh-thu', baoCaoController.baoCaoDoanhThu);
-// 2. Biểu đồ doanh thu theo Ngày / Tuần / Tháng
-router.get('/doanh-thu-bieu-do', baoCaoController.baoCaoDoanhThuBieuDo);
-// 3. Top dịch vụ bán chạy nhất
-router.get('/top-dich-vu', baoCaoController.topDichVuBanChay);
-// 4. Lấy đơn đặt sân mới nhất (5 dòng)
-router.get('/don-moi-nhat', baoCaoController.layDonDatMoiNhat);
-// 5. Trạng thái sân trực quan
-router.get('/trang-thai-san', baoCaoController.layTrangThaiSanTrucQuan);
-exports.default = router;
+exports.uploadService = exports.baoCaoService = exports.thanhToanService = exports.dichVuService = exports.datSanService = exports.authService = void 0;
+exports.authService = __importStar(require("./authService"));
+exports.datSanService = __importStar(require("./datSanService"));
+exports.dichVuService = __importStar(require("./dichVuService"));
+exports.thanhToanService = __importStar(require("./thanhToanService"));
+exports.baoCaoService = __importStar(require("./baoCaoService"));
+exports.uploadService = __importStar(require("./uploadService"));

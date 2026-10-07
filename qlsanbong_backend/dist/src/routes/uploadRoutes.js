@@ -12,26 +12,35 @@ const storage = multer_1.default.memoryStorage();
 const upload = (0, multer_1.default)({
     storage,
     limits: {
-        fileSize: 10 * 1024 * 1024 // Giới hạn 10MB
+        fileSize: 50 * 1024 * 1024 // Giới hạn 50MB cho cả ảnh và video
     },
     fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image/')) {
+        if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
             cb(null, true);
         }
         else {
-            cb(new Error('Chỉ chấp nhận các định dạng file ảnh (jpg, png, jpeg, webp)!'));
+            cb(new Error('Chỉ chấp nhận các định dạng file ảnh (jpg, png, webp...) hoặc video (mp4, webm, mov...)!'));
         }
     }
 });
 // Endpoint: POST /api/upload
-// Hỗ trợ cả multipart/form-data (trường 'image' hoặc 'file') lẫn JSON { url: "..." }
+// Hỗ trợ multipart/form-data (trường 'image', 'video' hoặc 'file') lẫn JSON { url: "..." }
 router.post('/', (req, res, next) => {
-    upload.single('image')(req, res, (err) => {
+    upload.fields([
+        { name: 'image', maxCount: 1 },
+        { name: 'video', maxCount: 1 },
+        { name: 'file', maxCount: 1 }
+    ])(req, res, (err) => {
         if (err) {
             return res.status(400).json({
                 success: false,
                 message: err.message || 'Lỗi khi nhận file tải lên'
             });
+        }
+        // Chuẩn hóa req.file nếu người dùng gửi vào bất kỳ field nào
+        if (req.files) {
+            const files = req.files;
+            req.file = files['image']?.[0] || files['video']?.[0] || files['file']?.[0];
         }
         next();
     });

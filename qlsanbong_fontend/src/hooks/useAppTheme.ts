@@ -4,64 +4,53 @@ const STORAGE_KEY = 'APP_THEME_DARK';
 const THEME_CHANGE_EVENT = 'app-theme-changed';
 
 /**
- * Hook đồng bộ chế độ Sáng / Tối (Dark / Light Mode) thời gian thực trên tất cả các trang
- * Tự động lưu vào localStorage và đồng bộ ngay lập tức giữa Trang Chủ, Dashboard, POS, Lịch Sử...
+ * Hook đồng bộ chế độ Sáng / Tối (Dark / Light Mode) thời gian thực trên tất cả các trang:
+ * Trang Chủ, Tin Tức, About Us, Liên Hệ, Dashboard, POS...
  */
 export function useAppTheme(defaultDark: boolean = true) {
+  // Luôn khởi tạo cùng một giá trị mặc định trên cả Server (SSR) và Client để tránh Hydration Mismatch
   const [isDarkMode, setIsDarkModeState] = useState<boolean>(defaultDark);
+  const [mounted, setMounted] = useState<boolean>(false);
 
-  // Đọc theme đã lưu từ localStorage ngay khi component mount
+  // Đồng bộ class trên thẻ <html> và localStorage sau khi mount (chỉ chạy ở Client)
   useEffect(() => {
+    setMounted(true);
     try {
-      const savedTheme = localStorage.getItem(STORAGE_KEY);
-      if (savedTheme !== null) {
-        const isDark = savedTheme === 'true';
-        setIsDarkModeState(isDark);
-        if (isDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+      const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('theme');
+      let currentDark = defaultDark;
+      if (saved !== null) {
+        currentDark = saved === 'true' || saved === 'dark';
       } else {
-        // Nếu chưa từng cài đặt, đặt mặc định là Tối (dark mode)
-        localStorage.setItem(STORAGE_KEY, defaultDark ? 'true' : 'false');
-        localStorage.setItem('theme', defaultDark ? 'dark' : 'light');
-        if (defaultDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+        currentDark = document.documentElement.classList.contains('dark') || defaultDark;
+        localStorage.setItem(STORAGE_KEY, currentDark ? 'true' : 'false');
+        localStorage.setItem('theme', currentDark ? 'dark' : 'light');
       }
-    } catch (_err) {
-      // Bỏ qua nếu môi trường không có localStorage
-    }
 
-    // Lắng nghe sự kiện đổi theme từ các trang / component khác trong cùng tab
+      setIsDarkModeState(currentDark);
+      if (currentDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (_err) {}
+
+    // Lắng nghe sự kiện đổi theme từ HeaderNav hoặc bất kỳ component nào trong cùng tab
     const handleCustomThemeEvent = (event: any) => {
-      if (typeof event.detail === 'boolean') {
-        setIsDarkModeState(event.detail);
-        if (event.detail) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
+      const dark = typeof event.detail === 'boolean' ? event.detail : (event.detail === 'dark' || event.detail === 'true');
+      setIsDarkModeState(dark);
+      if (dark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
       }
     };
 
-    // Lắng nghe sự kiện storage từ các tab trình duyệt khác
+    // Lắng nghe sự kiện storage từ các tab khác
     const handleStorageEvent = (event: StorageEvent) => {
-      if (event.key === STORAGE_KEY && event.newValue !== null) {
-        const isDark = event.newValue === 'true';
-        setIsDarkModeState(isDark);
-        if (isDark) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-      } else if (event.key === 'theme' && event.newValue !== null) {
-        const isDark = event.newValue === 'dark';
-        setIsDarkModeState(isDark);
-        if (isDark) {
+      if (event.key === STORAGE_KEY || event.key === 'theme') {
+        const dark = event.newValue === 'true' || event.newValue === 'dark';
+        setIsDarkModeState(dark);
+        if (dark) {
           document.documentElement.classList.add('dark');
         } else {
           document.documentElement.classList.remove('dark');
@@ -78,10 +67,10 @@ export function useAppTheme(defaultDark: boolean = true) {
     };
   }, [defaultDark]);
 
-  // Hàm cập nhật theme và thông báo cho toàn bộ các trang khác
-  const setIsDarkMode = useCallback((value: boolean | ((prev: boolean) => boolean)) => {
-    setIsDarkModeState((prev) => {
-      const nextVal = typeof value === 'function' ? value(prev) : value;
+  // Hàm chuyển đổi bật / tắt theme
+  const toggleTheme = useCallback(() => {
+    setIsDarkModeState((current) => {
+      const nextVal = !current;
       try {
         localStorage.setItem(STORAGE_KEY, nextVal ? 'true' : 'false');
         localStorage.setItem('theme', nextVal ? 'dark' : 'light');
@@ -90,15 +79,33 @@ export function useAppTheme(defaultDark: boolean = true) {
         } else {
           document.documentElement.classList.remove('dark');
         }
-        window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: nextVal }));
+        // Phát sự kiện ra window để tất cả các component (HeaderNav, Page...) đồng loạt cập nhật
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: nextVal }));
+        }, 0);
       } catch (_err) {}
       return nextVal;
     });
   }, []);
 
-  const toggleTheme = useCallback(() => {
-    setIsDarkMode((prev) => !prev);
-  }, [setIsDarkMode]);
+  const setIsDarkMode = useCallback((value: boolean | ((prev: boolean) => boolean)) => {
+    setIsDarkModeState((current) => {
+      const nextVal = typeof value === 'function' ? value(current) : value;
+      try {
+        localStorage.setItem(STORAGE_KEY, nextVal ? 'true' : 'false');
+        localStorage.setItem('theme', nextVal ? 'dark' : 'light');
+        if (nextVal) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: nextVal }));
+        }, 0);
+      } catch (_err) {}
+      return nextVal;
+    });
+  }, []);
 
-  return { isDarkMode, setIsDarkMode, toggleTheme };
+  return { isDarkMode, setIsDarkMode, toggleTheme, mounted };
 }
