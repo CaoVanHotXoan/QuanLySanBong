@@ -36,3 +36,5 @@ Tôi muốn nhấn vào sân đang thì điền những thông tin của sân đ
 Lúc này tôi sẽ thêm dịch vụ 
 nhấn lưu nhảy sang lại sân đang đá, lúc này sẽ hiện lên mục chua thanh toán với số tiền đó.
 rồi tự nhiên tôi muốn xóa bớt dịch chưa trả đi thì nhấn vào lại sân đó cũng điền lại những thông tin sân cùng những cái tôi đã thêm mà chưa thanh toán,
+
+Chức năng và thư viện và công nghệ

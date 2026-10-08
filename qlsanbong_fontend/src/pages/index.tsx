@@ -205,7 +205,7 @@ function formatDateDMY(dateStr: string): string {
   return dateStr;
 }
 
-// Helper kiểm tra sân hoặc loại sân có phải là "Dự bị" hay không
+// Helper kiểm tra sân hoặc loại sân có phải là "Dự bị" hay không để ẩn trên trang chủ Khách hàng
 function isDuBiPitch(item?: { ten_loai?: string; ten_san?: string; mo_ta?: string } | null): boolean {
   if (!item) return false;
   const str = `${item.ten_loai || ''} ${item.ten_san || ''} ${item.mo_ta || ''}`

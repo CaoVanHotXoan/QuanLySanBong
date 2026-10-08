@@ -516,7 +516,7 @@ GO
 -- 4.2. THỦ TỤC QUẢN LÝ SÂN BÓNG & LOẠI SÂN (COURTS & COURT TYPES)
 -- ---------------------------------------------------------------------
 
--- Lấy danh sách sân bóng kèm loại sân và đơn giá theo phút (Hỗ trợ lọc theo loại sân, loại bỏ sân dự bị)
+-- Lấy danh sách sân bóng kèm loại sân và đơn giá theo phút (Hỗ trợ lọc theo loại sân)
 CREATE OR ALTER PROCEDURE sp_LayDanhSachSan
     @ma_loai_san INT = NULL
 AS
@@ -535,14 +535,6 @@ BEGIN
         FROM San_Bong sb
         INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
         WHERE (@ma_loai_san IS NULL OR sb.ma_loai_san = @ma_loai_san)
-          AND LOWER(ls.ten_loai) NOT LIKE N'%dự bị%'
-          AND LOWER(ls.ten_loai) NOT LIKE N'%du bi%'
-          AND LOWER(ls.ten_loai) NOT LIKE N'%dự phòng%'
-          AND LOWER(ls.ten_loai) NOT LIKE N'%du phong%'
-          AND LOWER(sb.ten_san) NOT LIKE N'%dự bị%'
-          AND LOWER(sb.ten_san) NOT LIKE N'%du bi%'
-          AND LOWER(sb.ten_san) NOT LIKE N'%dự phòng%'
-          AND LOWER(sb.ten_san) NOT LIKE N'%du phong%'
         ORDER BY sb.id ASC;
     END TRY
     BEGIN CATCH
@@ -551,7 +543,7 @@ BEGIN
 END;
 GO
 
--- Lấy danh sách loại sân (Loại bỏ loại sân dự bị)
+-- Lấy danh sách loại sân
 CREATE OR ALTER PROCEDURE sp_LayDanhSachLoaiSan
 AS
 BEGIN
@@ -560,10 +552,6 @@ BEGIN
         SELECT id, ten_loai, mo_ta, trang_thai
         FROM Loai_San
         WHERE (trang_thai = 1 OR trang_thai IS NULL)
-          AND LOWER(ten_loai) NOT LIKE N'%dự bị%'
-          AND LOWER(ten_loai) NOT LIKE N'%du bi%'
-          AND LOWER(ten_loai) NOT LIKE N'%dự phòng%'
-          AND LOWER(ten_loai) NOT LIKE N'%du phong%'
         ORDER BY id ASC;
     END TRY
     BEGIN CATCH
