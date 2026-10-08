@@ -285,7 +285,11 @@ export interface VaiTro {
   MoTa: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import { getApiBaseUrl } from '../utils/apiConfig';
+
+const API_BASE = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && (!process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL.includes('localhost')))
+  ? 'https://qlsbbackend.vercel.app/api'
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api');
 
 const getAuthHeaders = () => {
   const token = typeof window !== 'undefined'
@@ -3980,11 +3984,10 @@ export default function AdminDashboard() {
                       <select
                         value={filterPaymentMethod}
                         onChange={(e) => setFilterPaymentMethod(e.target.value as any)}
-                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
-                          isDarkMode
+                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${isDarkMode
                             ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
                             : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
-                        }`}
+                          }`}
                         title="Lọc theo phương thức thanh toán"
                       >
                         <option value="ALL">💳 Phương thức: Tất cả</option>
@@ -3999,11 +4002,10 @@ export default function AdminDashboard() {
                       <select
                         value={filterBookingStatus}
                         onChange={(e) => setFilterBookingStatus(e.target.value as any)}
-                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
-                          isDarkMode
+                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${isDarkMode
                             ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
                             : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
-                        }`}
+                          }`}
                         title="Lọc theo trạng thái đơn"
                       >
                         <option value="ALL">⚡ Trạng thái: Tất cả</option>
@@ -4020,11 +4022,10 @@ export default function AdminDashboard() {
                       <select
                         value={filterCustomerType}
                         onChange={(e) => setFilterCustomerType(e.target.value as any)}
-                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
-                          isDarkMode
+                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${isDarkMode
                             ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
                             : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
-                        }`}
+                          }`}
                         title="Lọc theo loại khách hàng"
                       >
                         <option value="ALL">👥 Khách: Tất cả</option>
@@ -4092,181 +4093,181 @@ export default function AdminDashboard() {
                         </tr>
                       ) : (
                         filteredBookingList.map((b) => {
-                        const servicesUsed = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
-                          ? b.dich_vu_da_dung
-                          : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
-                        const totalDvPrice = servicesUsed.reduce((sum: number, item: any) => sum + (Number(item.so_luong || 0) * Number(item.gia_luc_ban || item.don_gia || 0)), 0);
+                          const servicesUsed = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
+                            ? b.dich_vu_da_dung
+                            : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
+                          const totalDvPrice = servicesUsed.reduce((sum: number, item: any) => sum + (Number(item.so_luong || 0) * Number(item.gia_luc_ban || item.don_gia || 0)), 0);
 
-                        return (
-                          <tr key={b.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
-                            <td className="p-4 whitespace-nowrap">
-                              <div className="font-black text-sm text-[#0f172a] dark:text-white">{b.ten_khach_hang || 'Khách Hàng'}</div>
-                              <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">{b.so_dien_thoai}</div>
-                            </td>
-                            <td className="p-4 whitespace-nowrap font-bold text-[#0f172a] dark:text-white">
-                              {b.ten_san}
-                            </td>
-                            <td className="p-4 whitespace-nowrap">
-                              <div className="font-bold text-[#0f172a] dark:text-slate-100 flex items-center gap-1.5 text-xs">
-                                <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                <span>{formatVNDate(b.ngay_da)}</span>
-                              </div>
-                              <div className="font-mono text-xs text-emerald-700 dark:text-emerald-400 font-black flex items-center gap-1.5 mt-1 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md w-fit border border-emerald-300 dark:border-emerald-500/20">
-                                <Clock className="w-3 h-3 shrink-0" />
-                                <span>{b.gio_bat_dau} - {b.gio_ket_thuc}</span>
-                              </div>
-                            </td>
-                            <td className="p-4 min-w-[200px]">
-                              {servicesUsed.length > 0 ? (
-                                <div className="space-y-1">
-                                  <div className="flex flex-wrap gap-1">
-                                    {servicesUsed.map((dv: any, sIdx: number) => (
-                                      <span
-                                        key={sIdx}
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50"
-                                      >
-                                        <span>🥤 {dv.ten_dich_vu}</span>
-                                        <span className="font-black text-emerald-600 dark:text-emerald-400">x{dv.so_luong}</span>
+                          return (
+                            <tr key={b.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
+                              <td className="p-4 whitespace-nowrap">
+                                <div className="font-black text-sm text-[#0f172a] dark:text-white">{b.ten_khach_hang || 'Khách Hàng'}</div>
+                                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">{b.so_dien_thoai}</div>
+                              </td>
+                              <td className="p-4 whitespace-nowrap font-bold text-[#0f172a] dark:text-white">
+                                {b.ten_san}
+                              </td>
+                              <td className="p-4 whitespace-nowrap">
+                                <div className="font-bold text-[#0f172a] dark:text-slate-100 flex items-center gap-1.5 text-xs">
+                                  <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                  <span>{formatVNDate(b.ngay_da)}</span>
+                                </div>
+                                <div className="font-mono text-xs text-emerald-700 dark:text-emerald-400 font-black flex items-center gap-1.5 mt-1 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-md w-fit border border-emerald-300 dark:border-emerald-500/20">
+                                  <Clock className="w-3 h-3 shrink-0" />
+                                  <span>{b.gio_bat_dau} - {b.gio_ket_thuc}</span>
+                                </div>
+                              </td>
+                              <td className="p-4 min-w-[200px]">
+                                {servicesUsed.length > 0 ? (
+                                  <div className="space-y-1">
+                                    <div className="flex flex-wrap gap-1">
+                                      {servicesUsed.map((dv: any, sIdx: number) => (
+                                        <span
+                                          key={sIdx}
+                                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/50"
+                                        >
+                                          <span>🥤 {dv.ten_dich_vu}</span>
+                                          <span className="font-black text-emerald-600 dark:text-emerald-400">x{dv.so_luong}</span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                      Tiền DV: <span className="text-emerald-600 dark:text-emerald-400 font-black">{totalDvPrice.toLocaleString('vi-VN')} đ</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400 italic text-[11px]">— Chưa dùng —</span>
+                                )}
+                              </td>
+                              <td className="p-4 whitespace-nowrap">
+                                <div className="font-black text-sm text-emerald-600 dark:text-emerald-400">
+                                  {Number(b.tong_tien || b.tien_san || 0).toLocaleString('vi-VN')} đ
+                                </div>
+                                {totalDvPrice > 0 && (
+                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                                    <span>Sân: {Number(b.tien_san || 0).toLocaleString('vi-VN')} đ</span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-4 whitespace-nowrap">
+                                <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase ${b.phuong_thuc === 'CHUYEN_KHOAN' ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                  }`}>
+                                  {b.phuong_thuc === 'CHUYEN_KHOAN' ? 'Chuyển Khoản' : 'Tiền Mặt'}
+                                </span>
+                              </td>
+                              <td className="p-4 whitespace-nowrap">
+                                {(() => {
+                                  const soTienDaTra = Number(b.so_tien_da_tra || b.tien_coc_da_tra || 0);
+                                  const tongTien = Number(b.tong_tien || b.tien_san || 0);
+                                  const raw = String(b.trang_thai || '').toUpperCase();
+
+                                  const isCancelled = raw === 'DA_HUY' || raw.includes('HUY') || raw.includes('HỦY');
+                                  if (isCancelled) {
+                                    return (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                                        Đã hủy
                                       </span>
-                                    ))}
-                                  </div>
-                                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                                    Tiền DV: <span className="text-emerald-600 dark:text-emerald-400 font-black">{totalDvPrice.toLocaleString('vi-VN')} đ</span>
-                                  </div>
-                                </div>
-                              ) : (
-                                <span className="text-slate-400 italic text-[11px]">— Chưa dùng —</span>
-                              )}
-                            </td>
-                            <td className="p-4 whitespace-nowrap">
-                              <div className="font-black text-sm text-emerald-600 dark:text-emerald-400">
-                                {Number(b.tong_tien || b.tien_san || 0).toLocaleString('vi-VN')} đ
-                              </div>
-                              {totalDvPrice > 0 && (
-                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                                  <span>Sân: {Number(b.tien_san || 0).toLocaleString('vi-VN')} đ</span>
-                                </div>
-                              )}
-                            </td>
-                            <td className="p-4 whitespace-nowrap">
-                              <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase ${b.phuong_thuc === 'CHUYEN_KHOAN' ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                                }`}>
-                                {b.phuong_thuc === 'CHUYEN_KHOAN' ? 'Chuyển Khoản' : 'Tiền Mặt'}
-                              </span>
-                            </td>
-                            <td className="p-4 whitespace-nowrap">
-                              {(() => {
-                                const soTienDaTra = Number(b.so_tien_da_tra || b.tien_coc_da_tra || 0);
-                                const tongTien = Number(b.tong_tien || b.tien_san || 0);
-                                const raw = String(b.trang_thai || '').toUpperCase();
+                                    );
+                                  }
 
-                                const isCancelled = raw === 'DA_HUY' || raw.includes('HUY') || raw.includes('HỦY');
-                                if (isCancelled) {
+                                  const isFullyPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
+                                    raw === 'DA_THANH_TOAN' ||
+                                    raw === 'HOAN_THANH' ||
+                                    raw.includes('DA_THANH_TOAN') ||
+                                    raw.includes('ĐÃ THANH TOÁN') ||
+                                    raw.includes('ĐÃ_THANH_TOÁN');
+
+                                  const isDeposit = !isFullyPaid && (
+                                    (soTienDaTra > 0 && soTienDaTra < tongTien) ||
+                                    raw === 'DA_COC' ||
+                                    raw.includes('COC') ||
+                                    raw.includes('CỌC')
+                                  );
+
+                                  if (isFullyPaid) {
+                                    return (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                        Đã thanh toán
+                                      </span>
+                                    );
+                                  }
+                                  if (isDeposit) {
+                                    return (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+                                        Đã cọc
+                                      </span>
+                                    );
+                                  }
                                   return (
-                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
-                                      Đã hủy
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                      Chưa thanh toán
                                     </span>
                                   );
-                                }
+                                })()}
+                              </td>
+                              <td className="p-4 text-slate-500 dark:text-slate-400 text-[11px] max-w-[150px] truncate">
+                                {b.ghi_chu || '—'}
+                              </td>
+                              <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                                <button
+                                  onClick={() => {
+                                    const currentServices = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
+                                      ? b.dich_vu_da_dung
+                                      : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
 
-                                const isFullyPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
-                                  raw === 'DA_THANH_TOAN' ||
-                                  raw === 'HOAN_THANH' ||
-                                  raw.includes('DA_THANH_TOAN') ||
-                                  raw.includes('ĐÃ THANH TOÁN') ||
-                                  raw.includes('ĐÃ_THANH_TOÁN');
+                                    const rawSt = (b.trang_thai || '').toUpperCase();
+                                    const isUnpaid = rawSt === 'CHO_THANH_TOAN' || rawSt === 'CHUA_THANH_TOAN' || rawSt === 'CHO_XAC_NHAN' || rawSt.includes('CHO_THANH_TOAN') || rawSt.includes('CHUA_THANH_TOAN') || rawSt.includes('CHƯA') || rawSt.includes('CHỜ');
+                                    const isPaid = !isUnpaid && (rawSt === 'DA_THANH_TOAN' || rawSt === 'HOAN_THANH' || rawSt === 'DA_CHOT');
+                                    const isDeposit = !isUnpaid && !isPaid && (rawSt === 'DA_COC' || rawSt.includes('COC'));
 
-                                const isDeposit = !isFullyPaid && (
-                                  (soTienDaTra > 0 && soTienDaTra < tongTien) ||
-                                  raw === 'DA_COC' ||
-                                  raw.includes('COC') ||
-                                  raw.includes('CỌC')
-                                );
+                                    const stChuan = isPaid ? 'DA_THANH_TOAN' : (isDeposit ? 'DA_COC' : 'CHO_THANH_TOAN');
+                                    const loaiTT = isPaid ? 'TRA_HET' : (isDeposit ? 'DAT_COC' : '');
+                                    const soTien = isPaid ? (b.tong_tien || b.tien_san || 0) : (isDeposit ? (b.so_tien_da_tra || Math.round(Number(b.tong_tien || b.tien_san || 0) * 0.3)) : 0);
 
-                                if (isFullyPaid) {
-                                  return (
-                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                                      Đã thanh toán
-                                    </span>
-                                  );
-                                }
-                                if (isDeposit) {
-                                  return (
-                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30">
-                                      Đã cọc
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                                    Chưa thanh toán
-                                  </span>
-                                );
-                              })()}
-                            </td>
-                            <td className="p-4 text-slate-500 dark:text-slate-400 text-[11px] max-w-[150px] truncate">
-                              {b.ghi_chu || '—'}
-                            </td>
-                            <td className="p-4 text-right space-x-2 whitespace-nowrap">
-                              <button
-                                onClick={() => {
-                                  const currentServices = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
-                                    ? b.dich_vu_da_dung
-                                    : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
-
-                                  const rawSt = (b.trang_thai || '').toUpperCase();
-                                  const isUnpaid = rawSt === 'CHO_THANH_TOAN' || rawSt === 'CHUA_THANH_TOAN' || rawSt === 'CHO_XAC_NHAN' || rawSt.includes('CHO_THANH_TOAN') || rawSt.includes('CHUA_THANH_TOAN') || rawSt.includes('CHƯA') || rawSt.includes('CHỜ');
-                                  const isPaid = !isUnpaid && (rawSt === 'DA_THANH_TOAN' || rawSt === 'HOAN_THANH' || rawSt === 'DA_CHOT');
-                                  const isDeposit = !isUnpaid && !isPaid && (rawSt === 'DA_COC' || rawSt.includes('COC'));
-
-                                  const stChuan = isPaid ? 'DA_THANH_TOAN' : (isDeposit ? 'DA_COC' : 'CHO_THANH_TOAN');
-                                  const loaiTT = isPaid ? 'TRA_HET' : (isDeposit ? 'DAT_COC' : '');
-                                  const soTien = isPaid ? (b.tong_tien || b.tien_san || 0) : (isDeposit ? (b.so_tien_da_tra || Math.round(Number(b.tong_tien || b.tien_san || 0) * 0.3)) : 0);
-
-                                  setBookingModal({
-                                    isOpen: true,
-                                    mode: 'EDIT',
-                                    data: {
-                                      id: b.id,
-                                      ma_san: b.ma_san,
-                                      ma_nguoi_dung: b.ma_nguoi_dung,
-                                      ngay_da: b.ngay_da,
-                                      gio_bat_dau: b.gio_bat_dau,
-                                      gio_ket_thuc: b.gio_ket_thuc,
-                                      tien_san: b.tien_san,
-                                      tong_tien: b.tong_tien,
-                                      trang_thai: stChuan,
-                                      ghi_chu: b.ghi_chu,
-                                      phuong_thuc: b.phuong_thuc || 'TIEN_MAT',
-                                      loai_thanh_toan: loaiTT,
-                                      so_tien: soTien,
-                                      dich_vu_list: currentServices.map((s: any) => ({
-                                        ma_dich_vu: s.ma_dich_vu,
-                                        ten_dich_vu: s.ten_dich_vu,
-                                        so_luong: s.so_luong,
-                                        don_gia: s.gia_luc_ban || s.don_gia || 0,
-                                        don_vi_tinh: s.don_vi_tinh || 'Chai'
-                                      }))
-                                    }
-                                  });
-                                }}
-                                className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" /> Sửa
-                              </button>
-                              <button
-                                onClick={() => handleDeleteDonDatThanhToan(b.id)}
-                                className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" /> Xóa
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      }))}
+                                    setBookingModal({
+                                      isOpen: true,
+                                      mode: 'EDIT',
+                                      data: {
+                                        id: b.id,
+                                        ma_san: b.ma_san,
+                                        ma_nguoi_dung: b.ma_nguoi_dung,
+                                        ngay_da: b.ngay_da,
+                                        gio_bat_dau: b.gio_bat_dau,
+                                        gio_ket_thuc: b.gio_ket_thuc,
+                                        tien_san: b.tien_san,
+                                        tong_tien: b.tong_tien,
+                                        trang_thai: stChuan,
+                                        ghi_chu: b.ghi_chu,
+                                        phuong_thuc: b.phuong_thuc || 'TIEN_MAT',
+                                        loai_thanh_toan: loaiTT,
+                                        so_tien: soTien,
+                                        dich_vu_list: currentServices.map((s: any) => ({
+                                          ma_dich_vu: s.ma_dich_vu,
+                                          ten_dich_vu: s.ten_dich_vu,
+                                          so_luong: s.so_luong,
+                                          don_gia: s.gia_luc_ban || s.don_gia || 0,
+                                          don_vi_tinh: s.don_vi_tinh || 'Chai'
+                                        }))
+                                      }
+                                    });
+                                  }}
+                                  className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" /> Sửa
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteDonDatThanhToan(b.id)}
+                                  className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" /> Xóa
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        }))}
                     </tbody>
-                    </table>
-                  </div>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -6746,7 +6747,7 @@ export default function AdminDashboard() {
 
             <div className="overflow-y-auto custom-scrollbar flex-1 pr-1 text-xs">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
+
                 {/* CỘT 1: THÔNG TIN VÀ NỘI DUNG YÊU CẦU CỦA KHÁCH */}
                 <div className="space-y-3">
                   <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-900/40 space-y-2">
