@@ -4011,18 +4011,18 @@ GO
 
 -- 10.12. BANNER: Thêm mới Banner
 CREATE OR ALTER PROCEDURE sp_ThemBanner
-    @tieu_de NVARCHAR(150),
+    @tieu_de NVARCHAR(150) = NULL,
     @loai_banner VARCHAR(10) = 'IMAGE',
-    @hinh_anh VARCHAR(255) = NULL,
-    @video_url VARCHAR(500) = NULL,
-    @lien_ket VARCHAR(255) = NULL,
+    @hinh_anh VARCHAR(MAX) = NULL,
+    @video_url VARCHAR(MAX) = NULL,
+    @lien_ket VARCHAR(500) = NULL,
     @thu_tu INT = 1,
     @trang_thai BIT = 1
 AS
 BEGIN
     SET NOCOUNT ON;
-    INSERT INTO Banner (tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai)
-    VALUES (@tieu_de, @loai_banner, @hinh_anh, @video_url, @lien_ket, @thu_tu, @trang_thai);
+    INSERT INTO Banner (tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai, ngay_tao)
+    VALUES (@tieu_de, @loai_banner, @hinh_anh, @video_url, @lien_ket, @thu_tu, @trang_thai, GETDATE());
 
     SELECT SCOPE_IDENTITY() AS id, N'Thêm banner thành công' AS thong_bao;
 END;
@@ -4031,11 +4031,11 @@ GO
 -- 10.13. BANNER: Sửa Banner
 CREATE OR ALTER PROCEDURE sp_SuaBanner
     @id INT,
-    @tieu_de NVARCHAR(150),
+    @tieu_de NVARCHAR(150) = NULL,
     @loai_banner VARCHAR(10) = 'IMAGE',
-    @hinh_anh VARCHAR(255) = NULL,
-    @video_url VARCHAR(500) = NULL,
-    @lien_ket VARCHAR(255) = NULL,
+    @hinh_anh VARCHAR(MAX) = NULL,
+    @video_url VARCHAR(MAX) = NULL,
+    @lien_ket VARCHAR(500) = NULL,
     @thu_tu INT = 1,
     @trang_thai BIT = 1
 AS
@@ -4265,9 +4265,9 @@ GO
 CREATE OR ALTER PROCEDURE sp_ThemBanner
     @tieu_de NVARCHAR(150) = NULL,
     @loai_banner VARCHAR(10) = 'IMAGE',
-    @hinh_anh VARCHAR(255) = NULL,
-    @video_url VARCHAR(500) = NULL,
-    @lien_ket VARCHAR(255) = NULL,
+    @hinh_anh VARCHAR(MAX) = NULL,
+    @video_url VARCHAR(MAX) = NULL,
+    @lien_ket VARCHAR(500) = NULL,
     @thu_tu INT = 1,
     @trang_thai BIT = 1
 AS
@@ -4285,9 +4285,9 @@ CREATE OR ALTER PROCEDURE sp_SuaBanner
     @id INT,
     @tieu_de NVARCHAR(150) = NULL,
     @loai_banner VARCHAR(10) = 'IMAGE',
-    @hinh_anh VARCHAR(255) = NULL,
-    @video_url VARCHAR(500) = NULL,
-    @lien_ket VARCHAR(255) = NULL,
+    @hinh_anh VARCHAR(MAX) = NULL,
+    @video_url VARCHAR(MAX) = NULL,
+    @lien_ket VARCHAR(500) = NULL,
     @thu_tu INT = 1,
     @trang_thai BIT = 1
 AS
@@ -4317,4 +4317,178 @@ BEGIN
     SELECT N'Xóa banner thành công' AS thong_bao;
 END;
 GO
+
+-- =====================================================================
+-- 11. NHÓM THỦ TỤC LIÊN HỆ & PHẢN HỒI (LIEN_HE)
+-- =====================================================================
+
+-- 11.1. Gửi liên hệ từ khách hàng
+CREATE OR ALTER PROCEDURE sp_GuiLienHe
+    @ho_ten NVARCHAR(100),
+    @email VARCHAR(255) = NULL,
+    @so_dien_thoai VARCHAR(20),
+    @tieu_de NVARCHAR(150) = NULL,
+    @noi_dung NVARCHAR(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO Lien_He (ho_ten, email, so_dien_thoai, tieu_de, noi_dung, trang_thai_xu_ly, ngay_gui)
+    VALUES (@ho_ten, @email, @so_dien_thoai, @tieu_de, @noi_dung, N'CHUA_XU_LY', GETDATE());
+
+    SELECT SCOPE_IDENTITY() AS id, N'Gửi liên hệ thành công' AS thong_bao;
+END;
+GO
+
+-- 11.2. Lấy danh sách liên hệ (kèm lọc trạng thái nếu có)
+CREATE OR ALTER PROCEDURE sp_LayDanhSachLienHe
+    @trang_thai_xu_ly NVARCHAR(30) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        id,
+        ho_ten,
+        email,
+        so_dien_thoai,
+        tieu_de,
+        noi_dung,
+        trang_thai_xu_ly,
+        trang_thai_xu_ly AS trang_thai,
+        ngay_gui,
+        noi_dung_tra_loi,
+        ngay_tra_loi
+    FROM Lien_He
+    WHERE (@trang_thai_xu_ly IS NULL OR @trang_thai_xu_ly = '' OR trang_thai_xu_ly = @trang_thai_xu_ly)
+    ORDER BY id DESC;
+END;
+GO
+
+-- 11.3. Lấy chi tiết 1 liên hệ
+CREATE OR ALTER PROCEDURE sp_LayChiTietLienHe
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 
+        id,
+        ho_ten,
+        email,
+        so_dien_thoai,
+        tieu_de,
+        noi_dung,
+        trang_thai_xu_ly,
+        trang_thai_xu_ly AS trang_thai,
+        ngay_gui,
+        noi_dung_tra_loi,
+        ngay_tra_loi
+    FROM Lien_He
+    WHERE id = @id;
+END;
+GO
+
+-- 11.4. Trả lời liên hệ (tự động cập nhật trạng thái sang DA_XU_LY)
+CREATE OR ALTER PROCEDURE sp_TraLoiLienHe
+    @id INT,
+    @noi_dung_tra_loi NVARCHAR(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE Lien_He
+    SET noi_dung_tra_loi = @noi_dung_tra_loi,
+        ngay_tra_loi = GETDATE(),
+        trang_thai_xu_ly = N'DA_XU_LY'
+    WHERE id = @id;
+
+    SELECT N'Lưu phản hồi và chuyển trạng thái xử lý thành công' AS thong_bao;
+END;
+GO
+
+-- 11.5. Cập nhật trạng thái xử lý liên hệ
+CREATE OR ALTER PROCEDURE sp_CapNhatTrangThaiLienHe
+    @id INT,
+    @trang_thai_xu_ly NVARCHAR(30)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE Lien_He
+    SET trang_thai_xu_ly = @trang_thai_xu_ly
+    WHERE id = @id;
+
+    SELECT N'Cập nhật trạng thái liên hệ thành công' AS thong_bao;
+END;
+GO
+
+-- 11.6. Xóa liên hệ
+CREATE OR ALTER PROCEDURE sp_XoaLienHe
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM Lien_He WHERE id = @id;
+    SELECT N'Xóa liên hệ thành công' AS thong_bao;
+END;
+GO
+
+-- =====================================================================
+-- 12. NHÓM THỦ TỤC ABOUT US (THÔNG TIN HỆ THỐNG)
+-- =====================================================================
+
+-- 12.1. Lấy thông tin About Us
+CREATE OR ALTER PROCEDURE sp_LayThongTinAboutUs
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT TOP 1
+        id,
+        ten_trung_tam,
+        hotline,
+        email,
+        dia_chi,
+        link_map,
+        gioi_thieu_ngan,
+        bai_viet_about_us,
+        link_facebook,
+        link_zalo
+    FROM About_Us
+    ORDER BY id ASC;
+END;
+GO
+
+-- 12.2. Cập nhật thông tin About Us
+CREATE OR ALTER PROCEDURE sp_CapNhatAboutUs
+    @ten_trung_tam NVARCHAR(150),
+    @hotline VARCHAR(20),
+    @email VARCHAR(255) = NULL,
+    @dia_chi NVARCHAR(255),
+    @link_map VARCHAR(500) = NULL,
+    @gioi_thieu_ngan NVARCHAR(MAX) = NULL,
+    @bai_viet_about_us NVARCHAR(MAX) = NULL,
+    @link_facebook VARCHAR(255) = NULL,
+    @link_zalo VARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (SELECT 1 FROM About_Us)
+    BEGIN
+        UPDATE About_Us
+        SET ten_trung_tam = @ten_trung_tam,
+            hotline = @hotline,
+            email = @email,
+            dia_chi = @dia_chi,
+            link_map = @link_map,
+            gioi_thieu_ngan = @gioi_thieu_ngan,
+            bai_viet_about_us = @bai_viet_about_us,
+            link_facebook = @link_facebook,
+            link_zalo = @link_zalo;
+    END
+    ELSE
+    BEGIN
+        INSERT INTO About_Us (ten_trung_tam, hotline, email, dia_chi, link_map, gioi_thieu_ngan, bai_viet_about_us, link_facebook, link_zalo)
+        VALUES (@ten_trung_tam, @hotline, @email, @dia_chi, @link_map, @gioi_thieu_ngan, @bai_viet_about_us, @link_facebook, @link_zalo);
+    END;
+
+    SELECT N'Cập nhật thông tin About Us thành công' AS thong_bao;
+END;
+GO
+
 

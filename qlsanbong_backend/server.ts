@@ -9,6 +9,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import compression from 'compression';
 
 dotenv.config();
 
@@ -29,6 +30,7 @@ const PORT = process.env.PORT || 5000;
 
 // Cấu hình Middleware
 app.use(cors());
+app.use(compression()); // Nén toàn bộ dữ liệu phản hồi API (Gzip/Brotli) giúp giảm 60-80% băng thông
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -18,9 +18,13 @@
  * 13. sp_HuyDonVaHoanCoc
  * =====================================================================
  */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanTimeForSql = void 0;
 const db_1 = require("../config/db");
+const cacheService_1 = __importDefault(require("../services/cacheService"));
 const cleanTimeForSql = (val, fallback = '00:00:00') => {
     if (!val)
         return fallback;
@@ -54,15 +58,25 @@ exports.cleanTimeForSql = cleanTimeForSql;
 const layDanhSachSan = async (req, res) => {
     try {
         const { ma_loai_san } = req.query;
+        const cacheKey = `danh_sach_san_${ma_loai_san || 'ALL'}`;
+        const cached = cacheService_1.default.get(cacheKey);
+        if (cached) {
+            return res.status(200).json({
+                success: true,
+                data: cached
+            });
+        }
         const pool = await db_1.poolPromise;
         const request = pool.request();
         if (ma_loai_san && ma_loai_san !== 'ALL') {
             request.input('ma_loai_san', db_1.sql.Int, Number(ma_loai_san));
         }
         const result = await request.execute('sp_LayDanhSachSan');
+        const data = result.recordset || [];
+        cacheService_1.default.set(cacheKey, data, 180); // Cache 3 phút
         return res.status(200).json({
             success: true,
-            data: result.recordset
+            data
         });
     }
     catch (error) {
@@ -81,12 +95,21 @@ exports.layDanhSachSan = layDanhSachSan;
  */
 const layDanhSachLoaiSan = async (req, res) => {
     try {
+        const cached = cacheService_1.default.get('danh_sach_loai_san');
+        if (cached) {
+            return res.status(200).json({
+                success: true,
+                data: cached
+            });
+        }
         const pool = await db_1.poolPromise;
         const result = await pool.request()
             .execute('sp_LayDanhSachLoaiSan');
+        const data = result.recordset || [];
+        cacheService_1.default.set('danh_sach_loai_san', data, 300); // Cache 5 phút
         return res.status(200).json({
             success: true,
-            data: result.recordset
+            data
         });
     }
     catch (error) {
@@ -118,6 +141,8 @@ const themLoaiSan = async (req, res) => {
             .input('mo_ta', db_1.sql.NVarChar(db_1.sql.MAX), mo_ta || null)
             .input('trang_thai', db_1.sql.Bit, trang_thai !== false ? 1 : 0)
             .execute('sp_ThemLoaiSan');
+        cacheService_1.default.del('danh_sach_loai_san');
+        cacheService_1.default.delPrefix('danh_sach_san_');
         return res.status(201).json({
             success: true,
             message: 'Thêm loại sân mới thành công!',
@@ -149,6 +174,8 @@ const suaLoaiSan = async (req, res) => {
             .input('mo_ta', db_1.sql.NVarChar(db_1.sql.MAX), mo_ta || null)
             .input('trang_thai', db_1.sql.Bit, trang_thai !== false ? 1 : 0)
             .execute('sp_SuaLoaiSan');
+        cacheService_1.default.del('danh_sach_loai_san');
+        cacheService_1.default.delPrefix('danh_sach_san_');
         return res.status(200).json({
             success: true,
             message: 'Cập nhật loại sân thành công!',
@@ -176,6 +203,8 @@ const xoaLoaiSan = async (req, res) => {
         await pool.request()
             .input('id', db_1.sql.Int, parseInt(id, 10))
             .execute('sp_XoaLoaiSan');
+        cacheService_1.default.del('danh_sach_loai_san');
+        cacheService_1.default.delPrefix('danh_sach_san_');
         return res.status(200).json({
             success: true,
             message: 'Xóa loại sân thành công!'
@@ -212,6 +241,7 @@ const themSanBong = async (req, res) => {
             .input('don_gia_phut', db_1.sql.Decimal(10, 2), don_gia_phut ? parseFloat(don_gia_phut) : 5000.00)
             .input('trang_thai', db_1.sql.VarChar(20), trang_thai || 'SAN_SANG')
             .execute('sp_ThemSanBong');
+        cacheService_1.default.delPrefix('danh_sach_san_');
         return res.status(201).json({
             success: true,
             message: 'Thêm sân bóng mới thành công!',
@@ -245,6 +275,7 @@ const suaSanBong = async (req, res) => {
             .input('don_gia_phut', db_1.sql.Decimal(10, 2), don_gia_phut ? parseFloat(don_gia_phut) : null)
             .input('trang_thai', db_1.sql.VarChar(20), trang_thai || 'SAN_SANG')
             .execute('sp_SuaSanBong');
+        cacheService_1.default.delPrefix('danh_sach_san_');
         return res.status(200).json({
             success: true,
             message: 'Cập nhật sân bóng thành công!',
@@ -272,6 +303,7 @@ const xoaSanBong = async (req, res) => {
         await pool.request()
             .input('id', db_1.sql.Int, parseInt(id, 10))
             .execute('sp_XoaSanBong');
+        cacheService_1.default.delPrefix('danh_sach_san_');
         return res.status(200).json({
             success: true,
             message: 'Xóa sân bóng thành công!'

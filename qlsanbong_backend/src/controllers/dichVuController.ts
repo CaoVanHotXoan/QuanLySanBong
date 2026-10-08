@@ -14,6 +14,7 @@
 import { Response } from 'express';
 import { sql, poolPromise } from '../config/db';
 import { AuthRequest } from '../types';
+import memoryCache from '../services/cacheService';
 
 /**
  * 1. Lấy danh sách tất cả dịch vụ (Nước uống, phụ kiện, thuê đồ...)
@@ -22,13 +23,23 @@ import { AuthRequest } from '../types';
  */
 export const layDanhSachDichVu = async (req: AuthRequest, res: Response) => {
     try {
+        const cached = memoryCache.get('danh_sach_dich_vu');
+        if (cached) {
+            return res.status(200).json({
+                success: true,
+                data: cached
+            });
+        }
         const pool = await poolPromise;
         const result = await pool.request()
             .execute('sp_LayDanhSachDichVu');
 
+        const data = result.recordset || [];
+        memoryCache.set('danh_sach_dich_vu', data, 300); // Cache 5 phút
+
         return res.status(200).json({
             success: true,
-            data: result.recordset
+            data
         });
     } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachDichVu:', error.message);
@@ -63,6 +74,7 @@ export const themDichVu = async (req: AuthRequest, res: Response) => {
             .input('ton_kho', sql.Int, ton_kho ? parseInt(ton_kho, 10) : 0)
             .execute('sp_ThemDichVuMoi');
 
+        memoryCache.del('danh_sach_dich_vu');
         return res.status(201).json({
             success: true,
             message: 'Thêm dịch vụ mới thành công!',
@@ -96,6 +108,7 @@ export const suaDichVu = async (req: AuthRequest, res: Response) => {
             .input('ton_kho', sql.Int, parseInt(ton_kho, 10))
             .execute('sp_SuaDichVu');
 
+        memoryCache.del('danh_sach_dich_vu');
         return res.status(200).json({
             success: true,
             message: 'Cập nhật dịch vụ thành công!',
@@ -123,6 +136,7 @@ export const xoaDichVu = async (req: AuthRequest, res: Response) => {
             .input('id', sql.Int, parseInt(id, 10))
             .execute('sp_XoaDichVu');
 
+        memoryCache.del('danh_sach_dich_vu');
         return res.status(200).json({
             success: true,
             message: 'Xóa dịch vụ thành công!'
@@ -177,6 +191,7 @@ export const themDichVuVaoDon = async (req: AuthRequest, res: Response) => {
             lastResult = result.recordset[0];
         }
 
+        memoryCache.del('danh_sach_dich_vu');
         return res.status(200).json({
             success: true,
             message: 'Thêm dịch vụ vào đơn đặt sân thành công!',
@@ -215,6 +230,7 @@ export const nhapKhoDichVu = async (req: AuthRequest, res: Response) => {
             .execute('sp_NhapKhoDichVu');
 
         const inventoryResult = result.recordset[0];
+        memoryCache.del('danh_sach_dich_vu');
 
         return res.status(200).json({
             success: true,

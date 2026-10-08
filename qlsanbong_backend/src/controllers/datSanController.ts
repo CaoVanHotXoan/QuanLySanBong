@@ -21,6 +21,7 @@
 import { Response } from 'express';
 import { sql, poolPromise } from '../config/db';
 import { AuthRequest } from '../types';
+import memoryCache from '../services/cacheService';
 
 export const cleanTimeForSql = (val: any, fallback: string = '00:00:00'): string => {
     if (!val) return fallback;
@@ -51,16 +52,27 @@ export const cleanTimeForSql = (val: any, fallback: string = '00:00:00'): string
 export const layDanhSachSan = async (req: AuthRequest, res: Response) => {
     try {
         const { ma_loai_san } = req.query;
+        const cacheKey = `danh_sach_san_${ma_loai_san || 'ALL'}`;
+        const cached = memoryCache.get(cacheKey);
+        if (cached) {
+            return res.status(200).json({
+                success: true,
+                data: cached
+            });
+        }
+
         const pool = await poolPromise;
         const request = pool.request();
         if (ma_loai_san && ma_loai_san !== 'ALL') {
             request.input('ma_loai_san', sql.Int, Number(ma_loai_san));
         }
         const result = await request.execute('sp_LayDanhSachSan');
+        const data = result.recordset || [];
+        memoryCache.set(cacheKey, data, 180); // Cache 3 phút
 
         return res.status(200).json({
             success: true,
-            data: result.recordset
+            data
         });
     } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachSan:', error.message);
@@ -78,13 +90,24 @@ export const layDanhSachSan = async (req: AuthRequest, res: Response) => {
  */
 export const layDanhSachLoaiSan = async (req: AuthRequest, res: Response) => {
     try {
+        const cached = memoryCache.get('danh_sach_loai_san');
+        if (cached) {
+            return res.status(200).json({
+                success: true,
+                data: cached
+            });
+        }
+
         const pool = await poolPromise;
         const result = await pool.request()
             .execute('sp_LayDanhSachLoaiSan');
 
+        const data = result.recordset || [];
+        memoryCache.set('danh_sach_loai_san', data, 300); // Cache 5 phút
+
         return res.status(200).json({
             success: true,
-            data: result.recordset
+            data
         });
     } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachLoaiSan:', error.message);
@@ -117,6 +140,8 @@ export const themLoaiSan = async (req: AuthRequest, res: Response) => {
             .input('trang_thai', sql.Bit, trang_thai !== false ? 1 : 0)
             .execute('sp_ThemLoaiSan');
 
+        memoryCache.del('danh_sach_loai_san');
+        memoryCache.delPrefix('danh_sach_san_');
         return res.status(201).json({
             success: true,
             message: 'Thêm loại sân mới thành công!',
@@ -149,6 +174,8 @@ export const suaLoaiSan = async (req: AuthRequest, res: Response) => {
             .input('trang_thai', sql.Bit, trang_thai !== false ? 1 : 0)
             .execute('sp_SuaLoaiSan');
 
+        memoryCache.del('danh_sach_loai_san');
+        memoryCache.delPrefix('danh_sach_san_');
         return res.status(200).json({
             success: true,
             message: 'Cập nhật loại sân thành công!',
@@ -176,6 +203,8 @@ export const xoaLoaiSan = async (req: AuthRequest, res: Response) => {
             .input('id', sql.Int, parseInt(id, 10))
             .execute('sp_XoaLoaiSan');
 
+        memoryCache.del('danh_sach_loai_san');
+        memoryCache.delPrefix('danh_sach_san_');
         return res.status(200).json({
             success: true,
             message: 'Xóa loại sân thành công!'
@@ -214,6 +243,7 @@ export const themSanBong = async (req: AuthRequest, res: Response) => {
             .input('trang_thai', sql.VarChar(20), trang_thai || 'SAN_SANG')
             .execute('sp_ThemSanBong');
 
+        memoryCache.delPrefix('danh_sach_san_');
         return res.status(201).json({
             success: true,
             message: 'Thêm sân bóng mới thành công!',
@@ -248,6 +278,7 @@ export const suaSanBong = async (req: AuthRequest, res: Response) => {
             .input('trang_thai', sql.VarChar(20), trang_thai || 'SAN_SANG')
             .execute('sp_SuaSanBong');
 
+        memoryCache.delPrefix('danh_sach_san_');
         return res.status(200).json({
             success: true,
             message: 'Cập nhật sân bóng thành công!',
@@ -275,6 +306,7 @@ export const xoaSanBong = async (req: AuthRequest, res: Response) => {
             .input('id', sql.Int, parseInt(id, 10))
             .execute('sp_XoaSanBong');
 
+        memoryCache.delPrefix('danh_sach_san_');
         return res.status(200).json({
             success: true,
             message: 'Xóa sân bóng thành công!'

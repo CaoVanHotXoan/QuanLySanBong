@@ -452,6 +452,11 @@ export default function AdminDashboard() {
     isSubmitting: false,
   });
 
+  // 3 Bộ lọc cho Bảng Đơn Đặt Sân & Thanh Toán
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState<'ALL' | 'TIEN_MAT' | 'CHUYEN_KHOAN'>('ALL');
+  const [filterBookingStatus, setFilterBookingStatus] = useState<'ALL' | 'DA_THANH_TOAN' | 'DA_COC' | 'CHUA_THANH_TOAN' | 'DA_HUY'>('ALL');
+  const [filterCustomerType, setFilterCustomerType] = useState<'ALL' | 'KHACH_LE' | 'KHACH_DAT'>('ALL');
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -536,6 +541,7 @@ export default function AdminDashboard() {
     setIsUploadingImage(true);
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('type', type);
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
@@ -557,7 +563,7 @@ export default function AdminDashboard() {
         } else {
           setBannerModal((prev) => ({
             ...prev,
-            data: { ...prev.data, hinh_anh: data.url }
+            data: { ...prev.data, hinh_anh: data.url, loai_banner: 'IMAGE' }
           }));
           setToastMessage({ type: 'success', message: '🖼️ Đã tải file ảnh lên Cloudinary thành công!' });
         }
@@ -1246,6 +1252,60 @@ export default function AdminDashboard() {
       };
     });
   }, [courtList, bookingList, selectedDate]);
+
+  // Danh sách Đơn Đặt Sân & Thanh Toán theo 3 Bộ Lọc: Phương Thức, Trạng Thái, Khách Lẻ Quầy
+  const filteredBookingList = useMemo(() => {
+    return bookingList.filter((b) => {
+      // 1. Lọc Phương Thức
+      if (filterPaymentMethod !== 'ALL') {
+        const pm = (b.phuong_thuc || 'TIEN_MAT').toUpperCase();
+        if (filterPaymentMethod === 'CHUYEN_KHOAN' && pm !== 'CHUYEN_KHOAN') return false;
+        if (filterPaymentMethod === 'TIEN_MAT' && pm === 'CHUYEN_KHOAN') return false;
+      }
+
+      // 2. Lọc Trạng Thái
+      if (filterBookingStatus !== 'ALL') {
+        const soTienDaTra = Number(b.so_tien_da_tra || b.tien_coc_da_tra || 0);
+        const tongTien = Number(b.tong_tien || b.tien_san || 0);
+        const raw = String(b.trang_thai || '').toUpperCase();
+
+        const isCancelled = raw === 'DA_HUY' || raw.includes('HUY') || raw.includes('HỦY');
+
+        const isFullyPaid = !isCancelled && ((tongTien > 0 && soTienDaTra >= tongTien) ||
+          raw === 'DA_THANH_TOAN' ||
+          raw === 'HOAN_THANH' ||
+          raw.includes('DA_THANH_TOAN') ||
+          raw.includes('ĐÃ THANH TOÁN') ||
+          raw.includes('ĐÃ_THANH_TOÁN'));
+
+        const isDeposit = !isCancelled && !isFullyPaid && (
+          (soTienDaTra > 0 && soTienDaTra < tongTien) ||
+          raw === 'DA_COC' ||
+          raw.includes('COC') ||
+          raw.includes('CỌC')
+        );
+
+        const isUnpaid = !isCancelled && !isFullyPaid && !isDeposit;
+
+        if (filterBookingStatus === 'DA_THANH_TOAN' && !isFullyPaid) return false;
+        if (filterBookingStatus === 'DA_COC' && !isDeposit) return false;
+        if (filterBookingStatus === 'CHUA_THANH_TOAN' && !isUnpaid) return false;
+        if (filterBookingStatus === 'DA_HUY' && !isCancelled) return false;
+      }
+
+      // 3. Lọc Khách Lẻ Quầy
+      if (filterCustomerType !== 'ALL') {
+        const name = (b.ten_khach_hang || '').toLowerCase();
+        const san = (b.ten_san || '').toLowerCase();
+        const isKhachLe = name.includes('khách lẻ') || san.includes('quầy nước') || san.includes('dịch vụ lẻ') || !b.ma_san || b.ma_san === 0;
+
+        if (filterCustomerType === 'KHACH_LE' && !isKhachLe) return false;
+        if (filterCustomerType === 'KHACH_DAT' && isKhachLe) return false;
+      }
+
+      return true;
+    });
+  }, [bookingList, filterPaymentMethod, filterBookingStatus, filterCustomerType]);
 
   // =====================================================================
   // HANDLERS CRUD CHO TẤT CẢ CÁC BẢNG (GỌI STORED PROCEDURES)
@@ -3550,9 +3610,9 @@ export default function AdminDashboard() {
 
 
                   {/* -------------------------------------------------------------
-                      WIDGET 3 (HÀNG 2 - TRÁI): BẢNG ĐƠN ĐẶT SÂN MỚI NHẤT (5 DÒNG)
+                      WIDGET 3: BẢNG ĐƠN ĐẶT SÂN MỚI NHẤT (FULL WIDTH)
                       ------------------------------------------------------------- */}
-                  <div className={`lg:col-span-7 xl:col-span-8 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  <div className={`col-span-12 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
                     }`}>
                     {/* Header Widget 3 */}
                     <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
@@ -3589,7 +3649,6 @@ export default function AdminDashboard() {
                             <th className="pb-2 whitespace-nowrap">Ngày & Giờ</th>
                             <th className="pb-2 whitespace-nowrap">Tổng Tiền</th>
                             <th className="pb-2 whitespace-nowrap">Trạng Thái</th>
-                            <th className="pb-2 text-right whitespace-nowrap">Thao Tác</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-emerald-900/20 text-[10px] md:text-xs lg:text-sm">
@@ -3620,6 +3679,11 @@ export default function AdminDashboard() {
                                   const tongTien = Number(b.tong_tien || b.tien_san || 0);
                                   const raw = String(b.trang_thai || '').toUpperCase();
 
+                                  const isCancelled = raw === 'DA_HUY' || raw.includes('HUY') || raw.includes('HỦY');
+                                  if (isCancelled) {
+                                    return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">Đã hủy</span>;
+                                  }
+
                                   const isFullyPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
                                     raw === 'DA_THANH_TOAN' ||
                                     raw === 'HOAN_THANH' ||
@@ -3643,49 +3707,6 @@ export default function AdminDashboard() {
                                   return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">Chưa thanh toán</span>;
                                 })()}
                               </td>
-                              <td className="py-2.5 text-right whitespace-nowrap">
-                                <button
-                                  onClick={() => {
-                                    const currentServices = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
-                                      ? b.dich_vu_da_dung
-                                      : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
-                                    const rawSt = (b.trang_thai || '').toUpperCase();
-                                    const isUnpaid = rawSt === 'CHO_THANH_TOAN' || rawSt === 'CHUA_THANH_TOAN' || rawSt.includes('CHUA') || rawSt.includes('CHO');
-                                    const isPaid = !isUnpaid && (rawSt === 'DA_THANH_TOAN' || rawSt === 'HOAN_THANH');
-                                    const stChuan = isPaid ? 'DA_THANH_TOAN' : (isUnpaid ? 'CHO_THANH_TOAN' : 'DA_COC');
-
-                                    setBookingModal({
-                                      isOpen: true,
-                                      mode: 'EDIT',
-                                      data: {
-                                        id: b.id,
-                                        ma_san: b.ma_san,
-                                        ma_nguoi_dung: b.ma_nguoi_dung,
-                                        ngay_da: b.ngay_da,
-                                        gio_bat_dau: b.gio_bat_dau,
-                                        gio_ket_thuc: b.gio_ket_thuc,
-                                        tien_san: b.tien_san,
-                                        tong_tien: b.tong_tien,
-                                        trang_thai: stChuan,
-                                        ghi_chu: b.ghi_chu,
-                                        phuong_thuc: b.phuong_thuc || 'TIEN_MAT',
-                                        loai_thanh_toan: isPaid ? 'TRA_HET' : (stChuan === 'DA_COC' ? 'DAT_COC' : ''),
-                                        so_tien: isPaid ? (b.tong_tien || 0) : (stChuan === 'DA_COC' ? (b.so_tien_da_tra || Math.round(Number(b.tong_tien || 0) * 0.3)) : 0),
-                                        dich_vu_list: currentServices.map((s: any) => ({
-                                          ma_dich_vu: s.ma_dich_vu,
-                                          ten_dich_vu: s.ten_dich_vu,
-                                          so_luong: s.so_luong,
-                                          don_gia: s.gia_luc_ban || s.don_gia || 0,
-                                          don_vi_tinh: s.don_vi_tinh || 'Chai'
-                                        }))
-                                      }
-                                    });
-                                  }}
-                                  className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold inline-flex items-center gap-1 cursor-pointer"
-                                >
-                                  <Edit2 className="w-3 h-3" /> Sửa
-                                </button>
-                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -3696,156 +3717,6 @@ export default function AdminDashboard() {
                     <div className="pt-2 text-[11px] text-slate-400 flex items-center justify-between">
                       <span>Hiển thị 5 đơn mới nhất</span>
                       <span className="font-bold">Tổng đơn hệ thống: <strong className="text-emerald-500 font-mono">{bookingList.length}</strong></span>
-                    </div>
-                  </div>
-
-
-                  {/* -------------------------------------------------------------
-                      WIDGET 4 (HÀNG 2 - PHẢI): TRẠNG THÁI SÂN TRỰC QUAN
-                      ------------------------------------------------------------- */}
-                  <div className={`lg:col-span-5 xl:col-span-4 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
-                    }`}>
-                    {/* Header Widget 4 */}
-                    <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                            <Layers className="w-4 h-4 stroke-[2.5]" />
-                          </div>
-                          <h3 className="font-black text-base text-[#0f172a] dark:text-white">
-                            Trạng Thái Sân Trực Quan
-                          </h3>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          Theo dõi trạng thái các sân bóng hôm nay
-                        </p>
-                      </div>
-
-                      {/* Legend badges */}
-                      <div className="flex items-center gap-2 text-[10px] font-black">
-                        <span className="flex items-center gap-1 text-emerald-500">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                          <span>Trống</span>
-                        </span>
-                        <span className="flex items-center gap-1 text-rose-500">
-                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                          <span>Đang đá</span>
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Live Courts Grid Widget 4 */}
-                    <div className="grid grid-cols-2 gap-3 my-3">
-                      {livePitchStatusAnalytics.map((item) => {
-                        const isPlaying = item.statusType === 'DANG_DA';
-                        const isBooked = item.statusType === 'DA_DAT';
-                        const isAvailable = item.statusType === 'SAN_SANG';
-                        const isMaintenance = item.statusType === 'BAO_TRI';
-
-                        return (
-                          <div
-                            key={item.court.id}
-                            className={`p-3 rounded-2xl border relative overflow-hidden transition-all flex flex-col justify-between h-28 ${isPlaying
-                              ? 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300 shadow-sm'
-                              : isBooked
-                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 shadow-sm'
-                                : isMaintenance
-                                  ? 'bg-slate-100 dark:bg-slate-900 border-slate-300 dark:border-slate-800 text-slate-400 opacity-60'
-                                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300 hover:shadow-md'
-                              }`}
-                          >
-                            {/* Card Pitch Top Bar */}
-                            <div className="flex items-center justify-between">
-                              <div className="font-black text-xs text-[#0f172a] dark:text-white flex items-center gap-1">
-                                <span>⚽</span>
-                                <span>{item.court.ten_san}</span>
-                              </div>
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${isPlaying ? 'bg-rose-500 text-white' : isBooked ? 'bg-amber-500 text-white' : isMaintenance ? 'bg-slate-500 text-white' : 'bg-emerald-600 text-white'
-                                }`}>
-                                {item.label}
-                              </span>
-                            </div>
-
-                            {/* Card Pitch Center Info */}
-                            <div className="my-1">
-                              {isPlaying && item.activeBooking ? (
-                                <div className="text-[10px] space-y-0.5">
-                                  <div className="font-black truncate text-[#0f172a] dark:text-white">👤 {item.activeBooking.ten_khach_hang}</div>
-                                  <div className="font-mono text-rose-600 dark:text-rose-400 font-bold">⏰ {item.activeBooking.gio_bat_dau} - {item.activeBooking.gio_ket_thuc}</div>
-                                </div>
-                              ) : isBooked && item.activeBooking ? (
-                                <div className="text-[10px] space-y-0.5">
-                                  <div className="font-bold truncate text-[#0f172a] dark:text-slate-200">👤 {item.activeBooking.ten_khach_hang}</div>
-                                  <div className="font-mono text-amber-600 dark:text-amber-400 font-bold">⏰ {item.activeBooking.gio_bat_dau} ({item.todayBookingsCount} lịch)</div>
-                                </div>
-                              ) : isMaintenance ? (
-                                <div className="text-[10px] italic text-slate-400">Đang bảo trì mặt cỏ</div>
-                              ) : (
-                                <div className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">
-                                  <div>🟢 Đang trống lịch</div>
-                                  <div className="font-mono text-[9px] text-slate-400">{Number(item.court.don_gia_phut).toLocaleString('vi-VN')} đ/phút</div>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Card Pitch Action Button */}
-                            <div className="pt-1 border-t border-slate-200/50 dark:border-emerald-900/30 flex justify-end">
-                              {isAvailable ? (
-                                <button
-                                  onClick={() => {
-                                    setBookingModal({
-                                      isOpen: true,
-                                      mode: 'ADD',
-                                      data: {
-                                        ma_san: item.court.id,
-                                        ma_nguoi_dung: userList[0]?.id || 1,
-                                        ngay_da: selectedDate,
-                                        gio_bat_dau: '17:00',
-                                        gio_ket_thuc: '18:30',
-                                        tien_san: 350000,
-                                        tong_tien: 350000,
-                                        trang_thai: 'CHO_THANH_TOAN',
-                                        phuong_thuc: 'TIEN_MAT',
-                                        loai_thanh_toan: '',
-                                        so_tien: 0,
-                                        trang_thai_gd: 'CHO_XU_LY',
-                                        dich_vu_list: []
-                                      }
-                                    });
-                                  }}
-                                  className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                >
-                                  <Plus className="w-3 h-3 stroke-[3]" /> Đặt sân
-                                </button>
-                              ) : isPlaying && item.activeBooking ? (
-                                <button
-                                  onClick={() => {
-                                    setCheckoutModal({
-                                      isOpen: true,
-                                      booking: item.activeBooking,
-                                      paymentMethod: 'TIEN_MAT',
-                                      discount: 0
-                                    });
-                                  }}
-                                  className="text-[10px] font-black text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-0.5 cursor-pointer"
-                                >
-                                  <Zap className="w-3 h-3" /> Trả sân
-                                </button>
-                              ) : (
-                                <span className="text-[10px] font-mono text-slate-400">{item.todayBookingsCount} đơn hôm nay</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Footer Widget 4 */}
-                    <div className="pt-3 border-t border-slate-200 dark:border-emerald-900/30 flex items-center justify-between text-xs">
-                      <span className="text-slate-500 font-bold">Tổng số sân bóng:</span>
-                      <span className="font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                        {courtList.length} Sân ({courtList.filter(c => c.trang_thai === 'SAN_SANG').length} Sẵn sàng)
-                      </span>
                     </div>
                   </div>
 
@@ -4024,7 +3895,7 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {serviceList.map((s) => (
                         <tr key={s.id}>
-                          <td className="p-4 font-black text-sm">🥤 {s.ten_dich_vu}</td>
+                          <td className="p-4 font-black text-sm text-slate-900 dark:text-white">{s.ten_dich_vu}</td>
                           <td className="p-4 font-bold">{s.don_vi_tinh}</td>
                           <td className="p-4 font-black text-emerald-700">{Number(s.don_gia).toLocaleString('vi-VN')} đ</td>
                           <td className="p-4"><span className={`px-2.5 py-1 rounded-full font-black ${s.ton_kho > 20 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>{s.ton_kho} {s.don_vi_tinh}</span></td>
@@ -4092,7 +3963,7 @@ export default function AdminDashboard() {
                 ================================================================= */}
             {activeTab === 'DON_DAT_THANH_TOAN' && (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                <div className={`p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Receipt className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -4102,37 +3973,100 @@ export default function AdminDashboard() {
                       Quản lý toàn bộ thông tin lịch đặt sân, khách hàng và giao dịch thanh toán / cọc sân.
                     </p>
                   </div>
-                  <button
-                    onClick={() => {
-                      const initSan = courtList[0]?.id || 1;
-                      const initStart = '17:00';
-                      const initEnd = '18:30';
-                      const initPrice = calculateBookingPitchPrice(initSan, initStart, initEnd) || 350000;
-                      setBookingModal({
-                        isOpen: true,
-                        mode: 'ADD',
-                        data: {
-                          ma_san: initSan,
-                          ma_nguoi_dung: userList[0]?.id || 1,
-                          ngay_da: selectedDate,
-                          gio_bat_dau: initStart,
-                          gio_ket_thuc: initEnd,
-                          tien_san: initPrice,
-                          tong_tien: initPrice,
-                          trang_thai: 'CHO_THANH_TOAN',
-                          phuong_thuc: 'TIEN_MAT',
-                          loai_thanh_toan: '',
-                          so_tien: 0,
-                          trang_thai_gd: 'CHO_XU_LY',
-                          ghi_chu: 'Đặt trực tiếp tại quầy',
-                          dich_vu_list: []
-                        }
-                      });
-                    }}
-                    className="px-4 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-4 h-4 stroke-[3]" /> Thêm Đơn & Thanh Toán
-                  </button>
+
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* NÚT LỌC 1: PHƯƠNG THỨC */}
+                    <div className="relative">
+                      <select
+                        value={filterPaymentMethod}
+                        onChange={(e) => setFilterPaymentMethod(e.target.value as any)}
+                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
+                          isDarkMode
+                            ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
+                        }`}
+                        title="Lọc theo phương thức thanh toán"
+                      >
+                        <option value="ALL">💳 Phương thức: Tất cả</option>
+                        <option value="TIEN_MAT">💵 Tiền Mặt</option>
+                        <option value="CHUYEN_KHOAN">📱 Chuyển Khoản</option>
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                    </div>
+
+                    {/* NÚT LỌC 2: TRẠNG THÁI */}
+                    <div className="relative">
+                      <select
+                        value={filterBookingStatus}
+                        onChange={(e) => setFilterBookingStatus(e.target.value as any)}
+                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
+                          isDarkMode
+                            ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
+                        }`}
+                        title="Lọc theo trạng thái đơn"
+                      >
+                        <option value="ALL">⚡ Trạng thái: Tất cả</option>
+                        <option value="DA_THANH_TOAN">✅ Đã thanh toán</option>
+                        <option value="DA_COC">🔵 Đã cọc</option>
+                        <option value="CHUA_THANH_TOAN">⏳ Chưa thanh toán</option>
+                        <option value="DA_HUY">❌ Đã hủy</option>
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                    </div>
+
+                    {/* NÚT LỌC 3: KHÁCH LẺ QUẦY */}
+                    <div className="relative">
+                      <select
+                        value={filterCustomerType}
+                        onChange={(e) => setFilterCustomerType(e.target.value as any)}
+                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
+                          isDarkMode
+                            ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
+                        }`}
+                        title="Lọc theo loại khách hàng"
+                      >
+                        <option value="ALL">👥 Khách: Tất cả</option>
+                        <option value="KHACH_LE">🏪 Khách lẻ quầy</option>
+                        <option value="KHACH_DAT">⚽ Khách đặt sân</option>
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                    </div>
+
+                    {/* Nút Thêm Đơn & Thanh Toán */}
+                    <button
+                      onClick={() => {
+                        const initSan = courtList[0]?.id || 1;
+                        const initStart = '17:00';
+                        const initEnd = '18:30';
+                        const initPrice = calculateBookingPitchPrice(initSan, initStart, initEnd) || 350000;
+                        setBookingModal({
+                          isOpen: true,
+                          mode: 'ADD',
+                          data: {
+                            ma_san: initSan,
+                            ma_nguoi_dung: userList[0]?.id || 1,
+                            ngay_da: selectedDate,
+                            gio_bat_dau: initStart,
+                            gio_ket_thuc: initEnd,
+                            tien_san: initPrice,
+                            tong_tien: initPrice,
+                            trang_thai: 'CHO_THANH_TOAN',
+                            phuong_thuc: 'TIEN_MAT',
+                            loai_thanh_toan: '',
+                            so_tien: 0,
+                            trang_thai_gd: 'CHO_XU_LY',
+                            ghi_chu: 'Đặt trực tiếp tại quầy',
+                            dich_vu_list: []
+                          }
+                        });
+                      }}
+                      className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                      <Plus className="w-4 h-4 stroke-[3]" /> Thêm Đơn & Thanh Toán
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left text-[10px] md:text-xs lg:text-sm min-w-[1050px] border-collapse">
@@ -4150,7 +4084,14 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30 text-[10px] md:text-xs lg:text-sm">
-                      {bookingList.map((b) => {
+                      {filteredBookingList.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="p-8 text-center text-slate-400 italic font-medium">
+                            🔍 Không tìm thấy đơn đặt sân hoặc giao dịch nào phù hợp với bộ lọc đã chọn.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredBookingList.map((b) => {
                         const servicesUsed = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
                           ? b.dich_vu_da_dung
                           : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
@@ -4218,6 +4159,15 @@ export default function AdminDashboard() {
                                 const soTienDaTra = Number(b.so_tien_da_tra || b.tien_coc_da_tra || 0);
                                 const tongTien = Number(b.tong_tien || b.tien_san || 0);
                                 const raw = String(b.trang_thai || '').toUpperCase();
+
+                                const isCancelled = raw === 'DA_HUY' || raw.includes('HUY') || raw.includes('HỦY');
+                                if (isCancelled) {
+                                  return (
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                                      Đã hủy
+                                    </span>
+                                  );
+                                }
 
                                 const isFullyPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
                                   raw === 'DA_THANH_TOAN' ||
@@ -4313,10 +4263,10 @@ export default function AdminDashboard() {
                             </td>
                           </tr>
                         );
-                      })}
+                      }))}
                     </tbody>
-                  </table>
-                </div>
+                    </table>
+                  </div>
               </div>
             )}
 
@@ -4917,15 +4867,17 @@ export default function AdminDashboard() {
                             <td className="p-4">
                               {b.hinh_anh ? (
                                 <img src={b.hinh_anh} alt={b.tieu_de || 'Banner'} className="w-24 h-14 object-cover rounded-lg border border-slate-200 dark:border-emerald-800 shadow-sm" />
+                              ) : b.video_url ? (
+                                <video src={b.video_url} className="w-24 h-14 object-cover rounded-lg border border-purple-500/40 bg-black" muted />
                               ) : (
                                 <div className="w-24 h-14 rounded-lg bg-slate-200 dark:bg-emerald-950 flex items-center justify-center text-slate-400 font-bold text-[10px]">No Media</div>
                               )}
                             </td>
                             <td className="p-4">
                               <div className="font-black text-sm text-slate-900 dark:text-white">{b.tieu_de || '(Không có tiêu đề)'}</div>
-                              {b.link_dieu_huong && (
-                                <a href={b.link_dieu_huong} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 mt-0.5">
-                                  🔗 {b.link_dieu_huong}
+                              {(b.link_dieu_huong || b.lien_ket) && (
+                                <a href={b.link_dieu_huong || b.lien_ket} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 mt-0.5">
+                                  🔗 {b.link_dieu_huong || b.lien_ket}
                                 </a>
                               )}
                             </td>
@@ -4962,6 +4914,7 @@ export default function AdminDashboard() {
                                   mode: 'EDIT',
                                   data: {
                                     ...b,
+                                    link_dieu_huong: b.link_dieu_huong || b.lien_ket || '',
                                     trang_thai: ((b.trang_thai as any) == 1 || (b.trang_thai as any) === true) ? 1 : 0
                                   }
                                 })}
@@ -5053,31 +5006,31 @@ export default function AdminDashboard() {
                               {lh.ngay_gui ? formatVNDate(lh.ngay_gui) : '---'}
                             </td>
                             <td className="p-3 md:p-4 text-center whitespace-nowrap">
-                              <button
-                                onClick={() => handleUpdateLienHeStatus(lh.id, (lh.trang_thai_xu_ly || lh.trang_thai))}
-                                className={`px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-black cursor-pointer transition-all ${(lh.trang_thai_xu_ly === 'DA_XU_LY' || lh.trang_thai === 'DA_XU_LY')
-                                  ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                  : 'bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse'
+                              <span
+                                className={`inline-block px-2.5 py-1 rounded-full text-[9px] md:text-[10px] font-black select-none ${(lh.trang_thai_xu_ly === 'DA_XU_LY' || lh.trang_thai === 'DA_XU_LY')
+                                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse'
                                   }`}
-                                title="Bấm để đổi trạng thái Xử lý"
                               >
                                 {(lh.trang_thai_xu_ly === 'DA_XU_LY' || lh.trang_thai === 'DA_XU_LY') ? '✓ Đã xử lý' : '⏳ Chưa xử lý'}
-                              </button>
+                              </span>
                             </td>
                             <td className="p-3 md:p-4 text-right space-x-1.5 whitespace-nowrap">
-                              <button
-                                onClick={() => setReplyLienHeModal({
-                                  isOpen: true,
-                                  data: lh,
-                                  tieu_de_tra_loi: `Phản hồi yêu cầu: ${lh.tieu_de || 'Đặt sân / Dịch vụ Soccer247'}`,
-                                  noi_dung_tra_loi: '',
-                                  isSubmitting: false,
-                                })}
-                                className="p-1.5 md:p-2 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/70 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-200 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm text-[10px] md:text-xs"
-                                title="Soạn thư trả lời khách hàng"
-                              >
-                                <MessageSquareReply className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Trả lời
-                              </button>
+                              {!(lh.trang_thai_xu_ly === 'DA_XU_LY' || lh.trang_thai === 'DA_XU_LY' || lh.noi_dung_tra_loi) && (
+                                <button
+                                  onClick={() => setReplyLienHeModal({
+                                    isOpen: true,
+                                    data: lh,
+                                    tieu_de_tra_loi: `Phản hồi yêu cầu: ${lh.tieu_de || 'Đặt sân / Dịch vụ Soccer247'}`,
+                                    noi_dung_tra_loi: '',
+                                    isSubmitting: false,
+                                  })}
+                                  className="p-1.5 md:p-2 rounded-lg bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/70 dark:hover:bg-blue-900 text-blue-800 dark:text-blue-200 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm text-[10px] md:text-xs"
+                                  title="Soạn thư trả lời khách hàng"
+                                >
+                                  <MessageSquareReply className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Trả lời
+                                </button>
+                              )}
                               <button onClick={() => setLienHeDetailModal({ isOpen: true, data: lh })} className="p-1.5 md:p-2 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-200 cursor-pointer font-bold inline-flex items-center gap-1 text-[10px] md:text-xs">
                                 <Eye className="w-3.5 h-3.5" /> Xem
                               </button>
@@ -6661,7 +6614,10 @@ export default function AdminDashboard() {
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file) handleUploadBannerFile(file, 'IMAGE');
+                          if (file) {
+                            handleUploadBannerFile(file, 'IMAGE');
+                            e.target.value = '';
+                          }
                         }}
                       />
                     </label>
@@ -6685,7 +6641,7 @@ export default function AdminDashboard() {
                       required
                       value={bannerModal.data.video_url || ''}
                       onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, video_url: e.target.value } })}
-                      placeholder="https://... hoặc bấm nút Tải File Video (.mp4, .webm)"
+                      placeholder="https://... hoặc bấm nút Tải File Video (.mp4, .webm, .mov)"
                       className={`flex-1 px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                     />
                     <label className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer flex items-center gap-1.5 shrink-0 shadow-md transition-all hover:scale-105">
@@ -6693,12 +6649,15 @@ export default function AdminDashboard() {
                       <span>{isUploadingImage ? 'Đang tải...' : 'Tải File Video'}</span>
                       <input
                         type="file"
-                        accept="video/mp4,video/webm,video/ogg,video/*"
+                        accept="video/mp4,video/webm,video/ogg,video/quicktime,video/x-msvideo,video/*"
                         disabled={isUploadingImage}
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file) handleUploadBannerFile(file, 'VIDEO');
+                          if (file) {
+                            handleUploadBannerFile(file, 'VIDEO');
+                            e.target.value = '';
+                          }
                         }}
                       />
                     </label>
@@ -6768,86 +6727,109 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* 14. Modal Chi Tiết Liên Hệ (Lien_He) */}
+      {/* 14. Modal Chi Tiết Liên Hệ (Lien_He - Bố cục Ngang Gọn Gàng) */}
       {lienHeDetailModal.isOpen && lienHeDetailModal.data && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-lg p-5 sm:p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-4xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto max-h-[90vh] flex flex-col ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4 shrink-0">
               <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
                 <Mail className="w-5 h-5 text-emerald-600" />
                 <span>Chi Tiết Phản Hồi Từ #{lienHeDetailModal.data.ho_ten}</span>
               </h3>
               <button
                 onClick={() => setLienHeDetailModal({ isOpen: false, data: null })}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-3.5 text-xs">
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-900/40 space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Họ & tên:</span>
-                  <span className="font-black text-sm text-slate-900 dark:text-white">{lienHeDetailModal.data.ho_ten}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Email:</span>
-                  <span className="font-bold text-blue-600 dark:text-blue-400">{lienHeDetailModal.data.email || '(Không có)'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Số điện thoại:</span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{lienHeDetailModal.data.so_dien_thoai || '(Không có)'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-400">Ngày gửi:</span>
-                  <span className="font-mono">{lienHeDetailModal.data.ngay_gui ? formatVNDate(lienHeDetailModal.data.ngay_gui) : '---'}</span>
-                </div>
-                <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-emerald-900/30">
-                  <span className="text-slate-400">Trạng thái:</span>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${lienHeDetailModal.data.trang_thai === 'DA_XU_LY' || (lienHeDetailModal.data as any).trang_thai_xu_ly === 'DA_XU_LY'
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                    }`}>
-                    {(lienHeDetailModal.data.trang_thai === 'DA_XU_LY' || (lienHeDetailModal.data as any).trang_thai_xu_ly === 'DA_XU_LY') ? '✓ Đã xử lý' : '⏳ Chưa xử lý'}
-                  </span>
-                </div>
-              </div>
+            <div className="overflow-y-auto custom-scrollbar flex-1 pr-1 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                
+                {/* CỘT 1: THÔNG TIN VÀ NỘI DUNG YÊU CẦU CỦA KHÁCH */}
+                <div className="space-y-3">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-900/40 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 font-bold">Họ & tên:</span>
+                      <span className="font-black text-sm text-slate-900 dark:text-white">{lienHeDetailModal.data.ho_ten}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 font-bold">Email:</span>
+                      <span className="font-bold text-blue-600 dark:text-blue-400 truncate max-w-[200px]">{lienHeDetailModal.data.email || '(Không có)'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 font-bold">Số điện thoại:</span>
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{lienHeDetailModal.data.so_dien_thoai || '(Không có)'}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 font-bold">Ngày gửi:</span>
+                      <span className="font-mono">{lienHeDetailModal.data.ngay_gui ? formatVNDate(lienHeDetailModal.data.ngay_gui) : '---'}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-emerald-900/30">
+                      <span className="text-slate-400 font-bold">Trạng thái:</span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black ${(lienHeDetailModal.data.trang_thai === 'DA_XU_LY' || (lienHeDetailModal.data as any).trang_thai_xu_ly === 'DA_XU_LY')
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        }`}>
+                        {(lienHeDetailModal.data.trang_thai === 'DA_XU_LY' || (lienHeDetailModal.data as any).trang_thai_xu_ly === 'DA_XU_LY') ? '✓ Đã xử lý' : '⏳ Chưa xử lý'}
+                      </span>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block font-black uppercase text-[11px] text-slate-400 mb-1">Tiêu Đề Thư</label>
-                <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#060e09] font-black text-slate-900 dark:text-white">
-                  {lienHeDetailModal.data.tieu_de || '(Không có tiêu đề)'}
-                </div>
-              </div>
+                  <div>
+                    <label className="block font-black uppercase text-[11px] text-slate-400 mb-1">Tiêu Đề Thư</label>
+                    <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-[#060e09] font-black text-slate-900 dark:text-white text-xs">
+                      {lienHeDetailModal.data.tieu_de || '(Không có tiêu đề)'}
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block font-black uppercase text-[11px] text-slate-400 mb-1">Nội Dung Tin Nhắn</label>
-                <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-[#060e09] text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
-                  {lienHeDetailModal.data.noi_dung}
+                  <div>
+                    <label className="block font-black uppercase text-[11px] text-slate-400 mb-1">Nội Dung Tin Nhắn</label>
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#060e09] text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">
+                      {lienHeDetailModal.data.noi_dung}
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-emerald-900/40">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!lienHeDetailModal.data) return;
-                    await handleUpdateLienHeStatus(lienHeDetailModal.data.id, (lienHeDetailModal.data.trang_thai || (lienHeDetailModal.data as any).trang_thai_xu_ly));
-                    setLienHeDetailModal({ isOpen: false, data: null });
-                  }}
-                  className="px-4 py-2.5 rounded-xl font-bold bg-amber-500 hover:bg-amber-600 text-white cursor-pointer flex items-center gap-1.5"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" /> Chuyển Trạng Thái Xử Lý
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLienHeDetailModal({ isOpen: false, data: null })}
-                  className="px-4 py-2.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
-                >
-                  Đóng
-                </button>
+                {/* CỘT 2: NỘI DUNG ĐÃ PHẢN HỒI (NẾU CÓ) */}
+                <div className="flex flex-col">
+                  {lienHeDetailModal.data.noi_dung_tra_loi ? (
+                    <div className="h-full flex flex-col">
+                      <label className="block font-black uppercase text-[11px] text-emerald-600 dark:text-emerald-400 mb-1 flex items-center justify-between">
+                        <span>✉️ Nội Dung Đã Phản Hồi Khách Hàng</span>
+                        <span className="font-mono text-[10px] text-slate-500 font-normal">
+                          {lienHeDetailModal.data.ngay_tra_loi ? formatVNDate(lienHeDetailModal.data.ngay_tra_loi) : ''}
+                        </span>
+                      </label>
+                      <div className="p-3.5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200 whitespace-pre-wrap leading-relaxed flex-1 overflow-y-auto max-h-[300px]">
+                        {lienHeDetailModal.data.noi_dung_tra_loi}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center p-6 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 text-center">
+                      <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2">
+                        <Clock className="w-5 h-5" />
+                      </div>
+                      <div className="font-bold text-slate-700 dark:text-slate-300 text-xs">Yêu cầu này chưa được phản hồi</div>
+                      <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+                        Bạn có thể đóng cửa sổ này và bấm nút <strong>[Trả lời]</strong> ở danh sách ngoài để gửi email phản hồi trực tiếp tới khách hàng.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
               </div>
+            </div>
+
+            <div className="flex justify-end items-center pt-3 border-t border-slate-200 dark:border-emerald-900/40 mt-4 shrink-0">
+              <button
+                type="button"
+                onClick={() => setLienHeDetailModal({ isOpen: false, data: null })}
+                className="px-6 py-2 rounded-xl font-black bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors cursor-pointer text-xs"
+              >
+                Đóng
+              </button>
             </div>
           </div>
         </div>

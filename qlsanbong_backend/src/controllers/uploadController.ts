@@ -25,13 +25,18 @@ export const uploadImage = async (req: AuthRequest, res: Response) => {
     try {
         // 1. Trường hợp người dùng tải file từ máy tính (ảnh hoặc video)
         if (req.file) {
-            const result = await uploadStreamToCloudinary(req.file.buffer, 'auto');
+            const isVideo = (req.file.mimetype && req.file.mimetype.startsWith('video/')) ||
+                            /\.(mp4|webm|mov|avi|mkv|ogg|wmv|flv|m4v)$/i.test(req.file.originalname || '') ||
+                            req.body?.type === 'VIDEO';
+            const resourceType = isVideo ? 'video' : (req.file.mimetype?.startsWith('image/') ? 'image' : 'auto');
+
+            const result = await uploadStreamToCloudinary(req.file.buffer, resourceType);
             return res.status(200).json({
                 success: true,
-                message: 'Tải file lên Cloudinary thành công!',
-                url: result.secure_url,
+                message: isVideo ? 'Tải file video lên Cloudinary thành công!' : 'Tải file ảnh lên Cloudinary thành công!',
+                url: result.secure_url || result.url,
                 public_id: result.public_id,
-                resource_type: result.resource_type
+                resource_type: result.resource_type || resourceType
             });
         }
 

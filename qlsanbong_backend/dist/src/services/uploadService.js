@@ -50,10 +50,16 @@ exports.getPublicIdFromUrl = getPublicIdFromUrl;
  */
 const uploadStreamToCloudinary = (fileBuffer, resourceType = 'auto') => {
     return new Promise((resolve, reject) => {
-        const stream = cloudinary_1.default.uploader.upload_stream({
+        const uploadOptions = {
             folder: 'quanlysanbong',
             resource_type: resourceType
-        }, (error, result) => {
+        };
+        // Bổ sung chunk_size và timeout cho video hoặc file lớn
+        if (resourceType === 'video' || resourceType === 'auto') {
+            uploadOptions.chunk_size = 6000000;
+            uploadOptions.timeout = 180000;
+        }
+        const stream = cloudinary_1.default.uploader.upload_stream(uploadOptions, (error, result) => {
             if (error)
                 return reject(error);
             resolve(result);

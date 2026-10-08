@@ -587,20 +587,18 @@ export default function HomePage() {
   };
 
   const handleNextBanner = useCallback(() => {
-    setBanners((currentList) => {
-      if (!currentList || currentList.length <= 1) return currentList;
-      setCurrentBannerIndex((prev) => (prev + 1) % currentList.length);
-      return currentList;
+    setCurrentBannerIndex((prev) => {
+      if (!banners || banners.length <= 1) return 0;
+      return (prev + 1) % banners.length;
     });
-  }, []);
+  }, [banners]);
 
   const handlePrevBanner = useCallback(() => {
-    setBanners((currentList) => {
-      if (!currentList || currentList.length <= 1) return currentList;
-      setCurrentBannerIndex((prev) => (prev - 1 + currentList.length) % currentList.length);
-      return currentList;
+    setCurrentBannerIndex((prev) => {
+      if (!banners || banners.length <= 1) return 0;
+      return (prev - 1 + banners.length) % banners.length;
     });
-  }, []);
+  }, [banners]);
 
   // Tự động chuyển Banner: Hình ảnh = 9 giây, Video = Hết video (onEnded)
   useEffect(() => {

@@ -172,11 +172,12 @@ CREATE TABLE Banner (
     id INT IDENTITY(1,1) PRIMARY KEY,
     tieu_de NVARCHAR(150) NULL,
     loai_banner VARCHAR(10) CHECK (loai_banner IN ('IMAGE', 'VIDEO')) DEFAULT 'IMAGE', -- 'IMAGE' hoặc 'VIDEO'
-    hinh_anh VARCHAR(255) NULL, -- Ảnh banner HOẶC Ảnh đại diện (Thumbnail) nếu là video
-    video_url VARCHAR(500) NULL, -- Đường dẫn file .mp4 hoặc link Youtube/TikTok embed
-    lien_ket VARCHAR(255) NULL, -- Đường dẫn chuyển hướng khi click vào banner (Vd: /dat-san)
+    hinh_anh VARCHAR(MAX) NULL, -- Ảnh banner HOẶC Ảnh đại diện (Thumbnail) nếu là video
+    video_url VARCHAR(MAX) NULL, -- Đường dẫn file .mp4, .webm hoặc link video Cloudinary
+    lien_ket VARCHAR(500) NULL, -- Đường dẫn chuyển hướng khi click vào banner (Vd: /dat-san)
     thu_tu INT DEFAULT 1,
-    trang_thai BIT DEFAULT 1 -- 1: Hiện, 0: Ẩn
+    trang_thai BIT DEFAULT 1, -- 1: Hiện, 0: Ẩn
+    ngay_tao DATETIME DEFAULT GETDATE()
 );
 GO
 
@@ -233,7 +234,19 @@ CREATE TABLE About_Us (
 );
 GO
 
+-- =====================================================================
+-- 5. CHỈ MỤC TỐI ƯU HIỆU NĂNG TRUY VẤN (PERFORMANCE INDEXES)
+-- =====================================================================
+CREATE NONCLUSTERED INDEX IX_DonDatSan_NgayDa_TrangThai ON Don_Dat_San(ngay_da, trang_thai) INCLUDE (ma_san, ma_nguoi_dung, tong_tien);
+CREATE NONCLUSTERED INDEX IX_DonDatSan_MaNguoiDung ON Don_Dat_San(ma_nguoi_dung);
+CREATE NONCLUSTERED INDEX IX_DonDatSan_MaSan ON Don_Dat_San(ma_san);
+CREATE NONCLUSTERED INDEX IX_ThanhToan_MaDonDat ON Thanh_Toan(ma_don_dat);
+CREATE NONCLUSTERED INDEX IX_TinTuc_MaLoaiTin_TrangThai ON Tin_Tuc(ma_loai_tin, trang_thai) INCLUDE (tieu_de, ngay_dang, luot_xem);
+CREATE NONCLUSTERED INDEX IX_LienHe_TrangThai ON Lien_He(trang_thai_xu_ly);
+GO
+
 PRINT N'✅ ĐÃ KHỞI TẠO XONG CƠ SỞ DỮ LIỆU VÀ TOÀN BỘ BẢNG CHO QuanLySanBong!';
 GO
+
 
 

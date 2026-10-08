@@ -48,13 +48,21 @@ export const getPublicIdFromUrl = (url?: string): string | null => {
 /**
  * Upload buffer lên Cloudinary (hỗ trợ cả ảnh và video)
  */
-export const uploadStreamToCloudinary = (fileBuffer: Buffer, resourceType: 'auto' | 'image' | 'video' = 'auto'): Promise<any> => {
+export const uploadStreamToCloudinary = (fileBuffer: Buffer, resourceType: 'auto' | 'image' | 'video' | 'raw' = 'auto'): Promise<any> => {
     return new Promise((resolve, reject) => {
+        const uploadOptions: any = {
+            folder: 'quanlysanbong',
+            resource_type: resourceType
+        };
+
+        // Bổ sung chunk_size và timeout cho video hoặc file lớn
+        if (resourceType === 'video' || resourceType === 'auto') {
+            uploadOptions.chunk_size = 6000000;
+            uploadOptions.timeout = 180000;
+        }
+
         const stream = cloudinary.uploader.upload_stream(
-            {
-                folder: 'quanlysanbong',
-                resource_type: resourceType
-            },
+            uploadOptions,
             (error, result) => {
                 if (error) return reject(error);
                 resolve(result);

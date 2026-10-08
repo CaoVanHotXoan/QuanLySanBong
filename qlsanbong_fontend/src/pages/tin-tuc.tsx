@@ -24,6 +24,7 @@ import Footer from '@/components/Footer';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { contentService, TinTucItem, LoaiTinTuc } from '@/services/contentService';
 import SoccerLoader from '@/components/SoccerLoader';
+import { getOptimizedImageUrl } from '@/utils/imageHelper';
 
 export default function TinTucPage() {
   const router = useRouter();
@@ -297,8 +298,10 @@ export default function TinTucPage() {
               {article.hinh_anh && (
                 <div className="w-full aspect-video max-h-[480px] rounded-2xl overflow-hidden mb-8 shadow-xl bg-slate-950 flex items-center justify-center border border-slate-800/80">
                   <img
-                    src={article.hinh_anh}
+                    src={getOptimizedImageUrl(article.hinh_anh, 1000)}
                     alt={article.tieu_de}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-contain"
                   />
                 </div>
@@ -342,8 +345,10 @@ export default function TinTucPage() {
                   >
                     <div className="h-40 rounded-xl overflow-hidden mb-3 bg-slate-950 flex items-center justify-center">
                       <img
-                        src={item.hinh_anh || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=600&q=80'}
+                        src={getOptimizedImageUrl(item.hinh_anh || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=600&q=80', 500)}
                         alt={item.tieu_de}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
                       />
                     </div>
@@ -444,8 +449,10 @@ export default function TinTucPage() {
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
                     <div className="lg:col-span-7 relative h-64 sm:h-80 md:h-96 overflow-hidden bg-slate-950 flex items-center justify-center">
                       <img
-                        src={featuredArticle.hinh_anh || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80'}
+                        src={getOptimizedImageUrl(featuredArticle.hinh_anh || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80', 1000)}
                         alt={featuredArticle.tieu_de}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-contain hover:scale-105 transition-transform duration-500"
                       />
                       <div className="absolute top-4 left-4">
@@ -507,8 +514,10 @@ export default function TinTucPage() {
                       >
                         <div className="relative h-48 sm:h-52 overflow-hidden bg-slate-950 flex items-center justify-center">
                           <img
-                            src={item.hinh_anh || 'https://images.unsplash.com/photo-1511886929837-354d827aae26?auto=format&fit=crop&w=800&q=80'}
+                            src={getOptimizedImageUrl(item.hinh_anh || 'https://images.unsplash.com/photo-1511886929837-354d827aae26?auto=format&fit=crop&w=800&q=80', 600)}
                             alt={item.tieu_de}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-contain hover:scale-105 transition-transform duration-300"
                           />
                           <span className="absolute top-3 left-3 px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-slate-950/80 text-emerald-400 backdrop-blur-md border border-slate-700">

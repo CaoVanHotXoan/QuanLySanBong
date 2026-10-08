@@ -11,9 +11,13 @@
  * 6. sp_NhapKhoDichVu
  * =====================================================================
  */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.capNhatDichVuDon = exports.xoaPhieuNhapKho = exports.suaPhieuNhapKho = exports.layDanhSachChiTietDichVu = exports.layDanhSachPhieuNhapKho = exports.nhapKhoDichVu = exports.themDichVuVaoDon = exports.xoaDichVu = exports.suaDichVu = exports.themDichVu = exports.layDanhSachDichVu = void 0;
 const db_1 = require("../config/db");
+const cacheService_1 = __importDefault(require("../services/cacheService"));
 /**
  * 1. Lấy danh sách tất cả dịch vụ (Nước uống, phụ kiện, thuê đồ...)
  * Method: GET /api/dich-vu
@@ -21,12 +25,21 @@ const db_1 = require("../config/db");
  */
 const layDanhSachDichVu = async (req, res) => {
     try {
+        const cached = cacheService_1.default.get('danh_sach_dich_vu');
+        if (cached) {
+            return res.status(200).json({
+                success: true,
+                data: cached
+            });
+        }
         const pool = await db_1.poolPromise;
         const result = await pool.request()
             .execute('sp_LayDanhSachDichVu');
+        const data = result.recordset || [];
+        cacheService_1.default.set('danh_sach_dich_vu', data, 300); // Cache 5 phút
         return res.status(200).json({
             success: true,
-            data: result.recordset
+            data
         });
     }
     catch (error) {
@@ -59,6 +72,7 @@ const themDichVu = async (req, res) => {
             .input('don_vi_tinh', db_1.sql.NVarChar(20), don_vi_tinh)
             .input('ton_kho', db_1.sql.Int, ton_kho ? parseInt(ton_kho, 10) : 0)
             .execute('sp_ThemDichVuMoi');
+        cacheService_1.default.del('danh_sach_dich_vu');
         return res.status(201).json({
             success: true,
             message: 'Thêm dịch vụ mới thành công!',
@@ -91,6 +105,7 @@ const suaDichVu = async (req, res) => {
             .input('don_vi_tinh', db_1.sql.NVarChar(20), don_vi_tinh)
             .input('ton_kho', db_1.sql.Int, parseInt(ton_kho, 10))
             .execute('sp_SuaDichVu');
+        cacheService_1.default.del('danh_sach_dich_vu');
         return res.status(200).json({
             success: true,
             message: 'Cập nhật dịch vụ thành công!',
@@ -118,6 +133,7 @@ const xoaDichVu = async (req, res) => {
         await pool.request()
             .input('id', db_1.sql.Int, parseInt(id, 10))
             .execute('sp_XoaDichVu');
+        cacheService_1.default.del('danh_sach_dich_vu');
         return res.status(200).json({
             success: true,
             message: 'Xóa dịch vụ thành công!'
@@ -169,6 +185,7 @@ const themDichVuVaoDon = async (req, res) => {
                 .execute('sp_ThemDichVu');
             lastResult = result.recordset[0];
         }
+        cacheService_1.default.del('danh_sach_dich_vu');
         return res.status(200).json({
             success: true,
             message: 'Thêm dịch vụ vào đơn đặt sân thành công!',
@@ -205,6 +222,7 @@ const nhapKhoDichVu = async (req, res) => {
             .input('gia_nhap', db_1.sql.Decimal(10, 2), parseFloat(gia_nhap))
             .execute('sp_NhapKhoDichVu');
         const inventoryResult = result.recordset[0];
+        cacheService_1.default.del('danh_sach_dich_vu');
         return res.status(200).json({
             success: true,
             message: 'Nhập kho dịch vụ thành công!',

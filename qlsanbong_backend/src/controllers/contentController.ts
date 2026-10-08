@@ -15,6 +15,7 @@ import { sql, poolPromise } from '../config/db';
 import { AuthRequest } from '../types';
 import { ensureCloudinaryUrl, deleteFromCloudinary } from '../services/uploadService';
 import { sendContactEmailToAdmin, sendContactReplyEmail } from '../services/emailService';
+import memoryCache from '../services/cacheService';
 
 // =====================================================================
 // 1. NHÓM LOẠI TIN TỨC (DANH MỤC)
@@ -22,9 +23,15 @@ import { sendContactEmailToAdmin, sendContactReplyEmail } from '../services/emai
 
 export const layDanhSachLoaiTinTuc = async (req: Request, res: Response) => {
     try {
+        const cached = memoryCache.get('loai_tin_client');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachLoaiTinTuc');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        memoryCache.set('loai_tin_client', data, 300);
+        return res.status(200).json({ success: true, data });
     } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachLoaiTinTuc:', error.message);
         return res.status(500).json({ success: false, message: error.message });
@@ -33,9 +40,15 @@ export const layDanhSachLoaiTinTuc = async (req: Request, res: Response) => {
 
 export const layDanhSachLoaiTinTucAdmin = async (req: Request, res: Response) => {
     try {
+        const cached = memoryCache.get('loai_tin_admin');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachLoaiTinTucAdmin');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        memoryCache.set('loai_tin_admin', data, 300);
+        return res.status(200).json({ success: true, data });
     } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachLoaiTinTucAdmin:', error.message);
         return res.status(500).json({ success: false, message: error.message });
@@ -55,6 +68,7 @@ export const themLoaiTinTuc = async (req: AuthRequest, res: Response) => {
             .input('trang_thai', sql.Bit, isStatusActive ? 1 : 0)
             .execute('sp_ThemLoaiTinTuc');
 
+        memoryCache.delPrefix('loai_tin_');
         return res.status(201).json({ success: true, message: 'Thêm loại tin tức thành công!', data: result.recordset ? result.recordset[0] : null });
     } catch (error: any) {
         console.error('Lỗi sp_ThemLoaiTinTuc:', error.message);
@@ -77,6 +91,7 @@ export const suaLoaiTinTuc = async (req: AuthRequest, res: Response) => {
             .input('trang_thai', sql.Bit, isStatusActive ? 1 : 0)
             .execute('sp_SuaLoaiTinTuc');
 
+        memoryCache.delPrefix('loai_tin_');
         return res.status(200).json({ success: true, message: 'Cập nhật loại tin tức thành công!' });
     } catch (error: any) {
         console.error('Lỗi sp_SuaLoaiTinTuc:', error.message);
@@ -91,6 +106,7 @@ export const xoaLoaiTinTuc = async (req: AuthRequest, res: Response) => {
 
         const pool = await poolPromise;
         await pool.request().input('id', sql.Int, id).execute('sp_XoaLoaiTinTuc');
+        memoryCache.delPrefix('loai_tin_');
         return res.status(200).json({ success: true, message: 'Xóa loại tin tức thành công!' });
     } catch (error: any) {
         console.error('Lỗi sp_XoaLoaiTinTuc:', error.message);
@@ -108,6 +124,12 @@ export const layDanhSachTinTuc = async (req: Request, res: Response) => {
         const tu_khoa = (req.query.tu_khoa as string) || null;
         const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
 
+        const cacheKey = `tin_tuc_client_${ma_loai_tin || 'all'}_${tu_khoa || ''}_${limit}`;
+        const cached = memoryCache.get(cacheKey);
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
+
         const pool = await poolPromise;
         const request = pool.request();
         request.input('ma_loai_tin', sql.Int, ma_loai_tin);
@@ -115,7 +137,9 @@ export const layDanhSachTinTuc = async (req: Request, res: Response) => {
         request.input('limit', sql.Int, limit);
 
         const result = await request.execute('sp_LayDanhSachTinTuc');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        memoryCache.set(cacheKey, data, 180); // Cache 3 phút
+        return res.status(200).json({ success: true, data });
     } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachTinTuc:', error.message);
         return res.status(500).json({ success: false, message: error.message });
@@ -124,9 +148,15 @@ export const layDanhSachTinTuc = async (req: Request, res: Response) => {
 
 export const layDanhSachTinTucAdmin = async (req: Request, res: Response) => {
     try {
+        const cached = memoryCache.get('tin_tuc_admin');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachTinTucAdmin');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        memoryCache.set('tin_tuc_admin', data, 180);
+        return res.status(200).json({ success: true, data });
     } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachTinTucAdmin:', error.message);
         return res.status(500).json({ success: false, message: error.message });
@@ -174,6 +204,7 @@ export const themTinTuc = async (req: AuthRequest, res: Response) => {
             .input('trang_thai', sql.Bit, isStatusActive ? 1 : 0)
             .execute('sp_ThemTinTuc');
 
+        memoryCache.delPrefix('tin_tuc_');
         return res.status(201).json({ success: true, message: 'Thêm bài viết tin tức thành công!', data: result.recordset ? result.recordset[0] : null });
     } catch (error: any) {
         console.error('Lỗi sp_ThemTinTuc:', error.message);
@@ -218,6 +249,7 @@ export const suaTinTuc = async (req: AuthRequest, res: Response) => {
             .input('trang_thai', sql.Bit, isStatusActive ? 1 : 0)
             .execute('sp_SuaTinTuc');
 
+        memoryCache.delPrefix('tin_tuc_');
         return res.status(200).json({ success: true, message: 'Cập nhật tin tức thành công!' });
     } catch (error: any) {
         console.error('Lỗi sp_SuaTinTuc:', error.message);
@@ -243,6 +275,7 @@ export const xoaTinTuc = async (req: AuthRequest, res: Response) => {
 
         // 3. Xóa bài viết trong CSDL qua Stored Procedure
         await pool.request().input('id', sql.Int, id).execute('sp_XoaTinTuc');
+        memoryCache.delPrefix('tin_tuc_');
         return res.status(200).json({ success: true, message: 'Xóa bài viết tin tức thành công!' });
     } catch (error: any) {
         console.error('Lỗi sp_XoaTinTuc:', error.message);
@@ -256,9 +289,16 @@ export const xoaTinTuc = async (req: AuthRequest, res: Response) => {
 
 export const layThongTinAboutUs = async (req: Request, res: Response) => {
     try {
+        const cached = memoryCache.get('about_us');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_LayThongTinAboutUs');
         const aboutData = result.recordset && result.recordset.length > 0 ? result.recordset[0] : null;
+        if (aboutData) {
+            memoryCache.set('about_us', aboutData, 600); // Cache 10 phút
+        }
         return res.status(200).json({ success: true, data: aboutData });
     } catch (error: any) {
         console.error('Lỗi sp_LayThongTinAboutUs:', error.message);
@@ -294,6 +334,7 @@ export const capNhatAboutUs = async (req: AuthRequest, res: Response) => {
             .input('link_zalo', sql.VarChar(255), link_zalo || null)
             .execute('sp_CapNhatAboutUs');
 
+        memoryCache.del('about_us');
         return res.status(200).json({ success: true, message: 'Cập nhật thông tin About Us thành công!', data: { link_map } });
     } catch (error: any) {
         console.error('Lỗi sp_CapNhatAboutUs:', error.message);
@@ -456,9 +497,15 @@ export const xoaLienHe = async (req: AuthRequest, res: Response) => {
 
 export const layDanhSachBanner = async (req: Request, res: Response) => {
     try {
+        const cached = memoryCache.get('banner_client');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachBanner');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        memoryCache.set('banner_client', data, 300);
+        return res.status(200).json({ success: true, data });
     } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachBanner:', error.message);
         return res.status(500).json({ success: false, message: error.message });
@@ -467,9 +514,15 @@ export const layDanhSachBanner = async (req: Request, res: Response) => {
 
 export const layDanhSachBannerAdmin = async (req: Request, res: Response) => {
     try {
+        const cached = memoryCache.get('banner_admin');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachBannerAdmin');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        memoryCache.set('banner_admin', data, 300);
+        return res.status(200).json({ success: true, data });
     } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachBannerAdmin:', error.message);
         return res.status(500).json({ success: false, message: error.message });
@@ -478,7 +531,8 @@ export const layDanhSachBannerAdmin = async (req: Request, res: Response) => {
 
 export const themBanner = async (req: AuthRequest, res: Response) => {
     try {
-        let { tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai } = req.body;
+        let { tieu_de, loai_banner, hinh_anh, video_url, lien_ket, link_dieu_huong, thu_tu, trang_thai } = req.body;
+        const finalLienKet = lien_ket || link_dieu_huong || null;
         const normalizedType = loai_banner === 'VIDEO' ? 'VIDEO' : 'IMAGE';
 
         // 1. Tự động chuyển đổi và lưu file ảnh/video lên Cloudinary nếu là link ngoài
@@ -492,13 +546,14 @@ export const themBanner = async (req: AuthRequest, res: Response) => {
         const result = await pool.request()
             .input('tieu_de', sql.NVarChar(150), tieu_de || null)
             .input('loai_banner', sql.VarChar(10), normalizedType)
-            .input('hinh_anh', sql.VarChar(255), hinh_anh || null)
-            .input('video_url', sql.VarChar(500), video_url || null)
-            .input('lien_ket', sql.VarChar(255), lien_ket || null)
+            .input('hinh_anh', sql.VarChar(sql.MAX), hinh_anh || null)
+            .input('video_url', sql.VarChar(sql.MAX), video_url || null)
+            .input('lien_ket', sql.VarChar(500), finalLienKet)
             .input('thu_tu', sql.Int, thu_tu ? parseInt(thu_tu, 10) : 1)
             .input('trang_thai', sql.Bit, trang_thai === undefined || trang_thai === true || (trang_thai as any) == 1 ? 1 : 0)
             .execute('sp_ThemBanner');
 
+        memoryCache.delPrefix('banner_');
         return res.status(201).json({ success: true, message: 'Thêm banner thành công!', data: result.recordset ? result.recordset[0] : null });
     } catch (error: any) {
         console.error('Lỗi sp_ThemBanner:', error.message);
@@ -509,9 +564,10 @@ export const themBanner = async (req: AuthRequest, res: Response) => {
 export const suaBanner = async (req: AuthRequest, res: Response) => {
     try {
         const id = parseInt(String(req.params.id), 10);
-        let { tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai } = req.body;
+        let { tieu_de, loai_banner, hinh_anh, video_url, lien_ket, link_dieu_huong, thu_tu, trang_thai } = req.body;
         if (isNaN(id)) return res.status(400).json({ success: false, message: 'ID không hợp lệ!' });
 
+        const finalLienKet = lien_ket || link_dieu_huong || null;
         const normalizedType = loai_banner === 'VIDEO' ? 'VIDEO' : 'IMAGE';
         const pool = await poolPromise;
 
@@ -541,13 +597,14 @@ export const suaBanner = async (req: AuthRequest, res: Response) => {
             .input('id', sql.Int, id)
             .input('tieu_de', sql.NVarChar(150), tieu_de || null)
             .input('loai_banner', sql.VarChar(10), normalizedType)
-            .input('hinh_anh', sql.VarChar(255), hinh_anh || null)
-            .input('video_url', sql.VarChar(500), video_url || null)
-            .input('lien_ket', sql.VarChar(255), lien_ket || null)
+            .input('hinh_anh', sql.VarChar(sql.MAX), hinh_anh || null)
+            .input('video_url', sql.VarChar(sql.MAX), video_url || null)
+            .input('lien_ket', sql.VarChar(500), finalLienKet)
             .input('thu_tu', sql.Int, thu_tu ? parseInt(thu_tu, 10) : 1)
             .input('trang_thai', sql.Bit, trang_thai === undefined || trang_thai === true || (trang_thai as any) == 1 ? 1 : 0)
             .execute('sp_SuaBanner');
 
+        memoryCache.delPrefix('banner_');
         return res.status(200).json({ success: true, message: 'Cập nhật banner thành công!' });
     } catch (error: any) {
         console.error('Lỗi sp_SuaBanner:', error.message);
@@ -578,6 +635,7 @@ export const xoaBanner = async (req: AuthRequest, res: Response) => {
 
         // 3. Xóa bản ghi trong CSDL bằng Stored Procedure
         await pool.request().input('id', sql.Int, id).execute('sp_XoaBanner');
+        memoryCache.delPrefix('banner_');
         return res.status(200).json({ success: true, message: 'Xóa banner thành công!' });
     } catch (error: any) {
         console.error('Lỗi sp_XoaBanner:', error.message);

@@ -10,19 +10,29 @@
  * - Liên Hệ: sp_GuiLienHe, sp_LayDanhSachLienHe, sp_CapNhatTrangThaiLienHe, sp_XoaLienHe
  * =====================================================================
  */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.xoaBanner = exports.suaBanner = exports.themBanner = exports.layDanhSachBannerAdmin = exports.layDanhSachBanner = exports.xoaLienHe = exports.traLoiLienHe = exports.capNhatTrangThaiLienHe = exports.layDanhSachLienHe = exports.guiLienHe = exports.capNhatAboutUs = exports.layThongTinAboutUs = exports.xoaTinTuc = exports.suaTinTuc = exports.themTinTuc = exports.layChiTietTinTuc = exports.layDanhSachTinTucAdmin = exports.layDanhSachTinTuc = exports.xoaLoaiTinTuc = exports.suaLoaiTinTuc = exports.themLoaiTinTuc = exports.layDanhSachLoaiTinTucAdmin = exports.layDanhSachLoaiTinTuc = void 0;
 const db_1 = require("../config/db");
 const uploadService_1 = require("../services/uploadService");
 const emailService_1 = require("../services/emailService");
+const cacheService_1 = __importDefault(require("../services/cacheService"));
 // =====================================================================
 // 1. NHÓM LOẠI TIN TỨC (DANH MỤC)
 // =====================================================================
 const layDanhSachLoaiTinTuc = async (req, res) => {
     try {
+        const cached = cacheService_1.default.get('loai_tin_client');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await db_1.poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachLoaiTinTuc');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        cacheService_1.default.set('loai_tin_client', data, 300);
+        return res.status(200).json({ success: true, data });
     }
     catch (error) {
         console.error('Lỗi sp_LayDanhSachLoaiTinTuc:', error.message);
@@ -32,9 +42,15 @@ const layDanhSachLoaiTinTuc = async (req, res) => {
 exports.layDanhSachLoaiTinTuc = layDanhSachLoaiTinTuc;
 const layDanhSachLoaiTinTucAdmin = async (req, res) => {
     try {
+        const cached = cacheService_1.default.get('loai_tin_admin');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await db_1.poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachLoaiTinTucAdmin');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        cacheService_1.default.set('loai_tin_admin', data, 300);
+        return res.status(200).json({ success: true, data });
     }
     catch (error) {
         console.error('Lỗi sp_LayDanhSachLoaiTinTucAdmin:', error.message);
@@ -54,6 +70,7 @@ const themLoaiTinTuc = async (req, res) => {
             .input('ten_loai', db_1.sql.NVarChar(100), ten_loai)
             .input('trang_thai', db_1.sql.Bit, isStatusActive ? 1 : 0)
             .execute('sp_ThemLoaiTinTuc');
+        cacheService_1.default.delPrefix('loai_tin_');
         return res.status(201).json({ success: true, message: 'Thêm loại tin tức thành công!', data: result.recordset ? result.recordset[0] : null });
     }
     catch (error) {
@@ -76,6 +93,7 @@ const suaLoaiTinTuc = async (req, res) => {
             .input('ten_loai', db_1.sql.NVarChar(100), ten_loai)
             .input('trang_thai', db_1.sql.Bit, isStatusActive ? 1 : 0)
             .execute('sp_SuaLoaiTinTuc');
+        cacheService_1.default.delPrefix('loai_tin_');
         return res.status(200).json({ success: true, message: 'Cập nhật loại tin tức thành công!' });
     }
     catch (error) {
@@ -91,6 +109,7 @@ const xoaLoaiTinTuc = async (req, res) => {
             return res.status(400).json({ success: false, message: 'ID không hợp lệ!' });
         const pool = await db_1.poolPromise;
         await pool.request().input('id', db_1.sql.Int, id).execute('sp_XoaLoaiTinTuc');
+        cacheService_1.default.delPrefix('loai_tin_');
         return res.status(200).json({ success: true, message: 'Xóa loại tin tức thành công!' });
     }
     catch (error) {
@@ -107,13 +126,20 @@ const layDanhSachTinTuc = async (req, res) => {
         const ma_loai_tin = req.query.ma_loai_tin ? parseInt(req.query.ma_loai_tin, 10) : null;
         const tu_khoa = req.query.tu_khoa || null;
         const limit = req.query.limit ? parseInt(req.query.limit, 10) : 50;
+        const cacheKey = `tin_tuc_client_${ma_loai_tin || 'all'}_${tu_khoa || ''}_${limit}`;
+        const cached = cacheService_1.default.get(cacheKey);
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await db_1.poolPromise;
         const request = pool.request();
         request.input('ma_loai_tin', db_1.sql.Int, ma_loai_tin);
         request.input('tu_khoa', db_1.sql.NVarChar(100), tu_khoa);
         request.input('limit', db_1.sql.Int, limit);
         const result = await request.execute('sp_LayDanhSachTinTuc');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        cacheService_1.default.set(cacheKey, data, 180); // Cache 3 phút
+        return res.status(200).json({ success: true, data });
     }
     catch (error) {
         console.error('Lỗi sp_LayDanhSachTinTuc:', error.message);
@@ -123,9 +149,15 @@ const layDanhSachTinTuc = async (req, res) => {
 exports.layDanhSachTinTuc = layDanhSachTinTuc;
 const layDanhSachTinTucAdmin = async (req, res) => {
     try {
+        const cached = cacheService_1.default.get('tin_tuc_admin');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await db_1.poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachTinTucAdmin');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        cacheService_1.default.set('tin_tuc_admin', data, 180);
+        return res.status(200).json({ success: true, data });
     }
     catch (error) {
         console.error('Lỗi sp_LayDanhSachTinTucAdmin:', error.message);
@@ -171,6 +203,7 @@ const themTinTuc = async (req, res) => {
             .input('hinh_anh', db_1.sql.VarChar(255), hinh_anh || null)
             .input('trang_thai', db_1.sql.Bit, isStatusActive ? 1 : 0)
             .execute('sp_ThemTinTuc');
+        cacheService_1.default.delPrefix('tin_tuc_');
         return res.status(201).json({ success: true, message: 'Thêm bài viết tin tức thành công!', data: result.recordset ? result.recordset[0] : null });
     }
     catch (error) {
@@ -209,6 +242,7 @@ const suaTinTuc = async (req, res) => {
             .input('hinh_anh', db_1.sql.VarChar(255), hinh_anh || null)
             .input('trang_thai', db_1.sql.Bit, isStatusActive ? 1 : 0)
             .execute('sp_SuaTinTuc');
+        cacheService_1.default.delPrefix('tin_tuc_');
         return res.status(200).json({ success: true, message: 'Cập nhật tin tức thành công!' });
     }
     catch (error) {
@@ -232,6 +266,7 @@ const xoaTinTuc = async (req, res) => {
         }
         // 3. Xóa bài viết trong CSDL qua Stored Procedure
         await pool.request().input('id', db_1.sql.Int, id).execute('sp_XoaTinTuc');
+        cacheService_1.default.delPrefix('tin_tuc_');
         return res.status(200).json({ success: true, message: 'Xóa bài viết tin tức thành công!' });
     }
     catch (error) {
@@ -245,9 +280,16 @@ exports.xoaTinTuc = xoaTinTuc;
 // =====================================================================
 const layThongTinAboutUs = async (req, res) => {
     try {
+        const cached = cacheService_1.default.get('about_us');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await db_1.poolPromise;
         const result = await pool.request().execute('sp_LayThongTinAboutUs');
         const aboutData = result.recordset && result.recordset.length > 0 ? result.recordset[0] : null;
+        if (aboutData) {
+            cacheService_1.default.set('about_us', aboutData, 600); // Cache 10 phút
+        }
         return res.status(200).json({ success: true, data: aboutData });
     }
     catch (error) {
@@ -282,6 +324,7 @@ const capNhatAboutUs = async (req, res) => {
             .input('link_facebook', db_1.sql.VarChar(255), link_facebook || null)
             .input('link_zalo', db_1.sql.VarChar(255), link_zalo || null)
             .execute('sp_CapNhatAboutUs');
+        cacheService_1.default.del('about_us');
         return res.status(200).json({ success: true, message: 'Cập nhật thông tin About Us thành công!', data: { link_map } });
     }
     catch (error) {
@@ -337,7 +380,12 @@ const layDanhSachLienHe = async (req, res) => {
         const request = pool.request();
         request.input('trang_thai_xu_ly', db_1.sql.NVarChar(30), trang_thai_xu_ly);
         const result = await request.execute('sp_LayDanhSachLienHe');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const list = (result.recordset || []).map((row) => ({
+            ...row,
+            trang_thai: row.trang_thai_xu_ly || row.trang_thai || 'CHUA_XU_LY',
+            trang_thai_xu_ly: row.trang_thai_xu_ly || row.trang_thai || 'CHUA_XU_LY'
+        }));
+        return res.status(200).json({ success: true, data: list });
     }
     catch (error) {
         console.error('Lỗi sp_LayDanhSachLienHe:', error.message);
@@ -429,9 +477,15 @@ exports.xoaLienHe = xoaLienHe;
 // =====================================================================
 const layDanhSachBanner = async (req, res) => {
     try {
+        const cached = cacheService_1.default.get('banner_client');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await db_1.poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachBanner');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        cacheService_1.default.set('banner_client', data, 300);
+        return res.status(200).json({ success: true, data });
     }
     catch (error) {
         console.error('Lỗi sp_LayDanhSachBanner:', error.message);
@@ -441,9 +495,15 @@ const layDanhSachBanner = async (req, res) => {
 exports.layDanhSachBanner = layDanhSachBanner;
 const layDanhSachBannerAdmin = async (req, res) => {
     try {
+        const cached = cacheService_1.default.get('banner_admin');
+        if (cached) {
+            return res.status(200).json({ success: true, data: cached });
+        }
         const pool = await db_1.poolPromise;
         const result = await pool.request().execute('sp_LayDanhSachBannerAdmin');
-        return res.status(200).json({ success: true, data: result.recordset || [] });
+        const data = result.recordset || [];
+        cacheService_1.default.set('banner_admin', data, 300);
+        return res.status(200).json({ success: true, data });
     }
     catch (error) {
         console.error('Lỗi sp_LayDanhSachBannerAdmin:', error.message);
@@ -453,7 +513,8 @@ const layDanhSachBannerAdmin = async (req, res) => {
 exports.layDanhSachBannerAdmin = layDanhSachBannerAdmin;
 const themBanner = async (req, res) => {
     try {
-        let { tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai } = req.body;
+        let { tieu_de, loai_banner, hinh_anh, video_url, lien_ket, link_dieu_huong, thu_tu, trang_thai } = req.body;
+        const finalLienKet = lien_ket || link_dieu_huong || null;
         const normalizedType = loai_banner === 'VIDEO' ? 'VIDEO' : 'IMAGE';
         // 1. Tự động chuyển đổi và lưu file ảnh/video lên Cloudinary nếu là link ngoài
         if (normalizedType === 'IMAGE' && hinh_anh) {
@@ -466,12 +527,13 @@ const themBanner = async (req, res) => {
         const result = await pool.request()
             .input('tieu_de', db_1.sql.NVarChar(150), tieu_de || null)
             .input('loai_banner', db_1.sql.VarChar(10), normalizedType)
-            .input('hinh_anh', db_1.sql.VarChar(255), hinh_anh || null)
-            .input('video_url', db_1.sql.VarChar(500), video_url || null)
-            .input('lien_ket', db_1.sql.VarChar(255), lien_ket || null)
+            .input('hinh_anh', db_1.sql.VarChar(db_1.sql.MAX), hinh_anh || null)
+            .input('video_url', db_1.sql.VarChar(db_1.sql.MAX), video_url || null)
+            .input('lien_ket', db_1.sql.VarChar(500), finalLienKet)
             .input('thu_tu', db_1.sql.Int, thu_tu ? parseInt(thu_tu, 10) : 1)
             .input('trang_thai', db_1.sql.Bit, trang_thai === undefined || trang_thai === true || trang_thai == 1 ? 1 : 0)
             .execute('sp_ThemBanner');
+        cacheService_1.default.delPrefix('banner_');
         return res.status(201).json({ success: true, message: 'Thêm banner thành công!', data: result.recordset ? result.recordset[0] : null });
     }
     catch (error) {
@@ -483,9 +545,10 @@ exports.themBanner = themBanner;
 const suaBanner = async (req, res) => {
     try {
         const id = parseInt(String(req.params.id), 10);
-        let { tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai } = req.body;
+        let { tieu_de, loai_banner, hinh_anh, video_url, lien_ket, link_dieu_huong, thu_tu, trang_thai } = req.body;
         if (isNaN(id))
             return res.status(400).json({ success: false, message: 'ID không hợp lệ!' });
+        const finalLienKet = lien_ket || link_dieu_huong || null;
         const normalizedType = loai_banner === 'VIDEO' ? 'VIDEO' : 'IMAGE';
         const pool = await db_1.poolPromise;
         // 1. Lấy thông tin banner hiện tại từ CSDL bằng Stored Procedure
@@ -512,12 +575,13 @@ const suaBanner = async (req, res) => {
             .input('id', db_1.sql.Int, id)
             .input('tieu_de', db_1.sql.NVarChar(150), tieu_de || null)
             .input('loai_banner', db_1.sql.VarChar(10), normalizedType)
-            .input('hinh_anh', db_1.sql.VarChar(255), hinh_anh || null)
-            .input('video_url', db_1.sql.VarChar(500), video_url || null)
-            .input('lien_ket', db_1.sql.VarChar(255), lien_ket || null)
+            .input('hinh_anh', db_1.sql.VarChar(db_1.sql.MAX), hinh_anh || null)
+            .input('video_url', db_1.sql.VarChar(db_1.sql.MAX), video_url || null)
+            .input('lien_ket', db_1.sql.VarChar(500), finalLienKet)
             .input('thu_tu', db_1.sql.Int, thu_tu ? parseInt(thu_tu, 10) : 1)
             .input('trang_thai', db_1.sql.Bit, trang_thai === undefined || trang_thai === true || trang_thai == 1 ? 1 : 0)
             .execute('sp_SuaBanner');
+        cacheService_1.default.delPrefix('banner_');
         return res.status(200).json({ success: true, message: 'Cập nhật banner thành công!' });
     }
     catch (error) {
@@ -546,6 +610,7 @@ const xoaBanner = async (req, res) => {
         }
         // 3. Xóa bản ghi trong CSDL bằng Stored Procedure
         await pool.request().input('id', db_1.sql.Int, id).execute('sp_XoaBanner');
+        cacheService_1.default.delPrefix('banner_');
         return res.status(200).json({ success: true, message: 'Xóa banner thành công!' });
     }
     catch (error) {

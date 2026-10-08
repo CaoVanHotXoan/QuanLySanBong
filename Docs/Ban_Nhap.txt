@@ -18,7 +18,7 @@ Chức năng nhân viên:
     nếu chỉ thanh toán 30% thì sẽ hiện 2 nút lưu và thanh toán)
     + nhấn nút lưu thì sẽ đưa hóa đơn này vào sân đang đá để khách hàng thanh toán sau
 ======================================
-fix lỗi không ảnh đến tất cả các chức năng của toàn bộ trang web
+fix lỗi không ảnh hưởng đến tất cả các chức năng của toàn bộ trang web
 Có thể tùy chỉnh CSDL nhưng phải dùng procedure và cập nhật vào 
 2 file QuanLySanBong.sql và ThuTuc.sql
 File QuanLySanBong.sql thì chứa dữ liệu table không chứa procedure

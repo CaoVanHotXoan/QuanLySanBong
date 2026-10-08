@@ -13,6 +13,7 @@ const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const compression_1 = __importDefault(require("compression"));
 dotenv_1.default.config();
 // Khởi chạy kết nối CSDL
 require("./src/config/db");
@@ -28,6 +29,7 @@ const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // Cấu hình Middleware
 app.use((0, cors_1.default)());
+app.use((0, compression_1.default)()); // Nén toàn bộ dữ liệu phản hồi API (Gzip/Brotli) giúp giảm 60-80% băng thông
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 // Trang chào mừng & Kiểm tra trạng thái máy chủ

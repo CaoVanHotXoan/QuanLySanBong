@@ -12,14 +12,14 @@ const storage = multer_1.default.memoryStorage();
 const upload = (0, multer_1.default)({
     storage,
     limits: {
-        fileSize: 50 * 1024 * 1024 // Giới hạn 50MB cho cả ảnh và video
+        fileSize: 100 * 1024 * 1024 // Giới hạn 100MB cho cả ảnh và video
     },
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
             cb(null, true);
         }
         else {
-            cb(new Error('Chỉ chấp nhận các định dạng file ảnh (jpg, png, webp...) hoặc video (mp4, webm, mov...)!'));
+            cb(new Error('Chỉ chấp nhận các định dạng file ảnh (jpg, png, webp...) hoặc video (mp4, webm, mov, avi, mkv...)!'));
         }
     }
 });
@@ -40,7 +40,7 @@ router.post('/', (req, res, next) => {
         // Chuẩn hóa req.file nếu người dùng gửi vào bất kỳ field nào
         if (req.files) {
             const files = req.files;
-            req.file = files['image']?.[0] || files['video']?.[0] || files['file']?.[0];
+            req.file = files['file']?.[0] || files['video']?.[0] || files['image']?.[0];
         }
         next();
     });
