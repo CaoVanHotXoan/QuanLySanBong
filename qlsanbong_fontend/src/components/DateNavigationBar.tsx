@@ -267,32 +267,32 @@ export const DateNavigationBar: React.FC<DateNavigationBarProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative inline-block select-none ${isCalendarOpen ? 'z-50' : 'z-30'} ${className}`}
+      className={`relative block sm:inline-block select-none w-full sm:w-auto max-w-full ${isCalendarOpen ? 'z-50' : 'z-30'} ${className}`}
     >
       {/* --- THANH ĐIỀU HƯỚNG NGANG --- */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between sm:justify-start gap-1.5 sm:gap-3 w-full max-w-full">
         {/* Nút Lùi Ngày (<) */}
         <button
           type="button"
           onClick={handlePrevDay}
           disabled={isPrevDisabled}
           title={isPrevDisabled ? 'Không thể lùi về ngày quá khứ' : 'Lùi 1 ngày'}
-          className={`flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 transition-all duration-200 shadow-md ${
+          className={`flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 transition-all duration-200 shadow-md ${
             isPrevDisabled
               ? 'opacity-40 cursor-not-allowed'
               : 'hover:bg-slate-700 hover:text-white hover:border-slate-600 active:scale-95 cursor-pointer'
           }`}
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
 
         {/* Ô Hiển Thị Ngày (Khối to ở giữa) */}
         <button
           type="button"
           onClick={toggleCalendar}
-          className="flex h-11 min-w-[280px] sm:min-w-[320px] items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-6 font-semibold text-slate-100 shadow-md transition-all duration-200 hover:bg-slate-700/80 hover:border-slate-600 active:scale-[0.99] cursor-pointer"
+          className="flex-1 sm:flex-initial flex h-9 sm:h-11 min-w-0 sm:min-w-[240px] md:min-w-[280px] items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-2 sm:px-6 font-semibold text-slate-100 shadow-md transition-all duration-200 hover:bg-slate-700/80 hover:border-slate-600 active:scale-[0.99] cursor-pointer overflow-hidden"
         >
-          <span className="text-sm sm:text-base tracking-wide text-slate-100">
+          <span className="text-[11px] sm:text-sm md:text-base tracking-wide text-slate-100 truncate">
             {formatFullVietnameseDate(selectedDate)}
           </span>
         </button>
@@ -302,9 +302,9 @@ export const DateNavigationBar: React.FC<DateNavigationBarProps> = ({
           type="button"
           onClick={handleNextDay}
           title="Tiến 1 ngày"
-          className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 shadow-md transition-all duration-200 hover:bg-slate-700 hover:text-white hover:border-slate-600 active:scale-95 cursor-pointer"
+          className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 text-slate-200 shadow-md transition-all duration-200 hover:bg-slate-700 hover:text-white hover:border-slate-600 active:scale-95 cursor-pointer"
         >
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
 
         {/* Nút Icon Lịch (🗓️) - Viền & màu xanh ngọc #00e5ff */}
@@ -312,17 +312,17 @@ export const DateNavigationBar: React.FC<DateNavigationBarProps> = ({
           type="button"
           onClick={toggleCalendar}
           title="Mở bảng chọn ngày"
-          className={`flex h-11 w-11 items-center justify-center rounded-xl border border-[#00e5ff]/60 bg-slate-800/90 text-[#00e5ff] shadow-lg shadow-[#00e5ff]/10 transition-all duration-200 hover:bg-[#00e5ff]/15 hover:border-[#00e5ff] hover:shadow-[#00e5ff]/25 active:scale-95 cursor-pointer ${
+          className={`flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl border border-[#00e5ff]/60 bg-slate-800/90 text-[#00e5ff] shadow-lg shadow-[#00e5ff]/10 transition-all duration-200 hover:bg-[#00e5ff]/15 hover:border-[#00e5ff] hover:shadow-[#00e5ff]/25 active:scale-95 cursor-pointer ${
             isCalendarOpen ? 'ring-2 ring-[#00e5ff]/50 bg-[#00e5ff]/20' : ''
           }`}
         >
-          <CalendarIcon className="h-5 w-5" />
+          <CalendarIcon className="h-4 w-4 sm:h-5 sm:w-5" />
         </button>
       </div>
 
       {/* --- KHUNG LỊCH DROPDOWN --- */}
       {isCalendarOpen && (
-        <div className="absolute right-0 top-full z-[999] mt-2 w-80 rounded-2xl border border-slate-700/80 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 top-full z-[999] mt-2 w-80 max-w-[90vw] rounded-2xl border border-slate-700/80 bg-slate-900/95 p-4 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150">
           {/* Header Tháng / Năm */}
           <div className="mb-3 flex items-center justify-between border-b border-slate-800 pb-3">
             <button
