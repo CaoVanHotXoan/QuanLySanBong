@@ -3122,9 +3122,10 @@ export default function AdminDashboard() {
                 TAB 1: TỔNG QUAN & DASHBOARD
                 ================================================================= */}
             {activeTab === 'OVERVIEW' && (
-              <div className="space-y-6 animate-fade-in">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className={`p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+              <div className="space-y-6 animate-fade-in w-full max-w-full min-w-0">
+                {/* 1. 4 THẺ CHỈ SỐ TỔNG QUAN (STAT CARDS) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full mb-6">
+                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">DOANH THU HÔM NAY</span>
                       <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-800 dark:text-emerald-300">
@@ -3139,7 +3140,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className={`p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">TỔNG ĐƠN ĐẶT SÂN</span>
                       <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-800 dark:text-emerald-300">
@@ -3154,7 +3155,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className={`p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">SÂN ĐANG ĐÁ</span>
                       <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-800 dark:text-emerald-300">
@@ -3169,7 +3170,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className={`p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">CÔNG SUẤT SỬ DỤNG</span>
                       <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-800 dark:text-emerald-300">
@@ -3186,14 +3187,14 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* =================================================================
-                    LAYOUT 2X2 ANALYTICS & VISUALIZATION (THEO THIẾT KẾ YÊU CẦU)
+                    2. KHỐI BIỂU ĐỒ DOANH THU & TOP DỊCH VỤ BÁN CHẠY (GRID 1 CỘT MOBILE / 3 CỘT PC)
                     ================================================================= */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full mb-6 min-w-0">
 
                   {/* -------------------------------------------------------------
-                      WIDGET 1 (HÀNG 1 - TRÁI): BIỂU ĐỒ DOANH THU (LINE / BAR CHART)
+                      WIDGET 1: BIỂU ĐỒ DOANH THU (2 CỘT PC, 1 CỘT MOBILE)
                       ------------------------------------------------------------- */}
-                  <div className={`lg:col-span-7 xl:col-span-8 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  <div className={`lg:col-span-2 w-full min-w-0 p-4 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
                     }`}>
                     {/* Header Widget 1 */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-emerald-900/30">
@@ -3483,9 +3484,9 @@ export default function AdminDashboard() {
 
 
                   {/* -------------------------------------------------------------
-                      WIDGET 2 (HÀNG 1 - PHẢI): TOP DỊCH VỤ BÁN CHẠY (PIE / LIST)
+                      WIDGET 2: TOP DỊCH VỤ BÁN CHẠY (1 CỘT PC, 1 CỘT MOBILE)
                       ------------------------------------------------------------- */}
-                  <div className={`lg:col-span-5 xl:col-span-4 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  <div className={`lg:col-span-1 w-full min-w-0 p-4 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
                     }`}>
                     {/* Header Widget 2 */}
                     <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
@@ -3499,7 +3500,7 @@ export default function AdminDashboard() {
                           </h3>
                         </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          Các mặt hàng có doanh số và sản lượng cao nhất
+                          Các mặt hàng có doanh số cao nhất
                         </p>
                       </div>
 
@@ -3612,119 +3613,119 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
+                </div>
 
-                  {/* -------------------------------------------------------------
-                      WIDGET 3: BẢNG ĐƠN ĐẶT SÂN MỚI NHẤT (FULL WIDTH)
-                      ------------------------------------------------------------- */}
-                  <div className={`col-span-12 p-5 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
-                    }`}>
-                    {/* Header Widget 3 */}
-                    <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                            <Receipt className="w-4 h-4 stroke-[2.5]" />
-                          </div>
-                          <h3 className="font-black text-base text-[#0f172a] dark:text-white">
-                            Bảng Đơn Đặt Sân Mới Nhất
-                          </h3>
+                {/* =================================================================
+                    3. WIDGET 3: BẢNG ĐƠN ĐẶT SÂN MỚI NHẤT (FULL WIDTH VỚI OVERFLOW-X-AUTO)
+                    ================================================================= */}
+                <div className={`w-full min-w-0 p-4 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  }`}>
+                  {/* Header Widget 3 */}
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                          <Receipt className="w-4 h-4 stroke-[2.5]" />
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          5 giao dịch đặt lịch thi đấu gần đây nhất trong hệ thống
-                        </p>
+                        <h3 className="font-black text-base text-[#0f172a] dark:text-white">
+                          Bảng Đơn Đặt Sân Mới Nhất
+                        </h3>
                       </div>
-
-                      <button
-                        onClick={() => setActiveTab('DON_DAT_THANH_TOAN')}
-                        className="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        <span>Xem Tất Cả</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </button>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        5 giao dịch đặt lịch thi đấu gần đây nhất trong hệ thống
+                      </p>
                     </div>
 
-                    {/* Table Widget 3 */}
-                    <div className="overflow-x-auto custom-scrollbar my-2">
-                      <table className="w-full text-left text-[10px] md:text-xs lg:text-sm min-w-[550px] border-collapse">
-                        <thead>
-                          <tr className={`border-b font-black uppercase text-[10px] md:text-xs tracking-wider ${isDarkMode ? 'text-emerald-300/80 border-emerald-900/30' : 'text-slate-500 border-slate-200'}`}>
-                            <th className="pb-2 whitespace-nowrap">Khách Hàng</th>
-                            <th className="pb-2 whitespace-nowrap">Sân Bóng</th>
-                            <th className="pb-2 whitespace-nowrap">Ngày & Giờ</th>
-                            <th className="pb-2 whitespace-nowrap">Tổng Tiền</th>
-                            <th className="pb-2 whitespace-nowrap">Trạng Thái</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-emerald-900/20 text-[10px] md:text-xs lg:text-sm">
-                          {recentBookingsAnalytics.map((b) => (
-                            <tr key={b.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
-                              <td className="py-2.5 whitespace-nowrap">
-                                <div className="font-bold text-[#0f172a] dark:text-white flex items-center gap-1.5">
-                                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-black text-[10px] flex items-center justify-center shrink-0">
-                                    {(b.ten_khach_hang || 'K').charAt(0).toUpperCase()}
-                                  </div>
-                                  <span className="truncate max-w-[120px]">{b.ten_khach_hang || 'Khách Đặt'}</span>
-                                </div>
-                                <div className="text-[10px] text-slate-400 font-mono pl-7.5">{b.so_dien_thoai}</div>
-                              </td>
-                              <td className="py-2.5 whitespace-nowrap font-bold text-[#0f172a] dark:text-slate-200">
-                                {b.ten_san}
-                              </td>
-                              <td className="py-2.5 whitespace-nowrap">
-                                <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{formatVNDate(b.ngay_da)}</div>
-                                <div className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">{b.gio_bat_dau} - {b.gio_ket_thuc}</div>
-                              </td>
-                              <td className="py-2.5 whitespace-nowrap font-black font-mono text-emerald-600 dark:text-emerald-400">
-                                {Number(b.tong_tien || b.tien_san || 0).toLocaleString('vi-VN')} đ
-                              </td>
-                              <td className="py-2.5 whitespace-nowrap">
-                                {(() => {
-                                  const soTienDaTra = Number(b.so_tien_da_tra || b.tien_coc_da_tra || 0);
-                                  const tongTien = Number(b.tong_tien || b.tien_san || 0);
-                                  const raw = String(b.trang_thai || '').toUpperCase();
-
-                                  const isCancelled = raw === 'DA_HUY' || raw.includes('HUY') || raw.includes('HỦY');
-                                  if (isCancelled) {
-                                    return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">Đã hủy</span>;
-                                  }
-
-                                  const isFullyPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
-                                    raw === 'DA_THANH_TOAN' ||
-                                    raw === 'HOAN_THANH' ||
-                                    raw.includes('DA_THANH_TOAN') ||
-                                    raw.includes('ĐÃ THANH TOÁN') ||
-                                    raw.includes('ĐÃ_THANH_TOÁN');
-
-                                  const isDeposit = !isFullyPaid && (
-                                    (soTienDaTra > 0 && soTienDaTra < tongTien) ||
-                                    raw === 'DA_COC' ||
-                                    raw.includes('COC') ||
-                                    raw.includes('CỌC')
-                                  );
-
-                                  if (isFullyPaid) {
-                                    return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Đã thanh toán</span>;
-                                  }
-                                  if (isDeposit) {
-                                    return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">Đã cọc</span>;
-                                  }
-                                  return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">Chưa thanh toán</span>;
-                                })()}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Footer Widget 3 */}
-                    <div className="pt-2 text-[11px] text-slate-400 flex items-center justify-between">
-                      <span>Hiển thị 5 đơn mới nhất</span>
-                      <span className="font-bold">Tổng đơn hệ thống: <strong className="text-emerald-500 font-mono">{bookingList.length}</strong></span>
-                    </div>
+                    <button
+                      onClick={() => setActiveTab('DON_DAT_THANH_TOAN')}
+                      className="px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <span>Xem Tất Cả</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
+                  {/* Table Widget 3 bọc trong thẻ div hỗ trợ cuộn ngang */}
+                  <div className="w-full overflow-x-auto min-w-0 rounded-xl my-2">
+                    <table className="w-full text-left text-xs sm:text-sm min-w-[650px] border-collapse">
+                      <thead>
+                        <tr className={`border-b font-black uppercase text-xs tracking-wider ${isDarkMode ? 'text-emerald-300/80 border-emerald-900/30' : 'text-slate-500 border-slate-200'}`}>
+                          <th className="pb-2.5 pt-1 whitespace-nowrap">Khách Hàng</th>
+                          <th className="pb-2.5 pt-1 whitespace-nowrap">Sân Bóng</th>
+                          <th className="pb-2.5 pt-1 whitespace-nowrap">Ngày & Giờ</th>
+                          <th className="pb-2.5 pt-1 whitespace-nowrap">Tổng Tiền</th>
+                          <th className="pb-2.5 pt-1 whitespace-nowrap">Trạng Thái</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-emerald-900/20 text-xs sm:text-sm">
+                        {recentBookingsAnalytics.map((b) => (
+                          <tr key={b.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
+                            <td className="py-2.5 whitespace-nowrap">
+                              <div className="font-bold text-[#0f172a] dark:text-white flex items-center gap-1.5">
+                                <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 font-black text-[10px] flex items-center justify-center shrink-0">
+                                  {(b.ten_khach_hang || 'K').charAt(0).toUpperCase()}
+                                </div>
+                                <span className="truncate max-w-[120px]">{b.ten_khach_hang || 'Khách Đặt'}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono pl-7.5">{b.so_dien_thoai}</div>
+                            </td>
+                            <td className="py-2.5 whitespace-nowrap font-bold text-[#0f172a] dark:text-slate-200">
+                              {b.ten_san}
+                            </td>
+                            <td className="py-2.5 whitespace-nowrap">
+                              <div className="text-[11px] font-bold text-slate-600 dark:text-slate-300">{formatVNDate(b.ngay_da)}</div>
+                              <div className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">{b.gio_bat_dau} - {b.gio_ket_thuc}</div>
+                            </td>
+                            <td className="py-2.5 whitespace-nowrap font-black font-mono text-emerald-600 dark:text-emerald-400">
+                              {Number(b.tong_tien || b.tien_san || 0).toLocaleString('vi-VN')} đ
+                            </td>
+                            <td className="py-2.5 whitespace-nowrap">
+                              {(() => {
+                                const soTienDaTra = Number(b.so_tien_da_tra || b.tien_coc_da_tra || 0);
+                                const tongTien = Number(b.tong_tien || b.tien_san || 0);
+                                const raw = String(b.trang_thai || '').toUpperCase();
+
+                                const isCancelled = raw === 'DA_HUY' || raw.includes('HUY') || raw.includes('HỦY');
+                                if (isCancelled) {
+                                  return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">Đã hủy</span>;
+                                }
+
+                                const isFullyPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
+                                  raw === 'DA_THANH_TOAN' ||
+                                  raw === 'HOAN_THANH' ||
+                                  raw.includes('DA_THANH_TOAN') ||
+                                  raw.includes('ĐÃ THANH TOÁN') ||
+                                  raw.includes('ĐÃ_THANH_TOÁN');
+
+                                const isDeposit = !isFullyPaid && (
+                                  (soTienDaTra > 0 && soTienDaTra < tongTien) ||
+                                  raw === 'DA_COC' ||
+                                  raw.includes('COC') ||
+                                  raw.includes('CỌC')
+                                );
+
+                                if (isFullyPaid) {
+                                  return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">Đã thanh toán</span>;
+                                }
+                                if (isDeposit) {
+                                  return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">Đã cọc</span>;
+                                }
+                                return <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">Chưa thanh toán</span>;
+                              })()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Footer Widget 3 */}
+                  <div className="pt-2 text-[11px] text-slate-400 flex items-center justify-between">
+                    <span>Hiển thị 5 đơn mới nhất</span>
+                    <span className="font-bold">Tổng đơn hệ thống: <strong className="text-emerald-500 font-mono">{bookingList.length}</strong></span>
+                  </div>
                 </div>
+
               </div>
             )}
 
