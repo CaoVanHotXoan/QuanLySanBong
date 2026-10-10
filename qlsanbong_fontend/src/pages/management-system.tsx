@@ -386,7 +386,6 @@ export default function ManagementSystem() {
   const [filterLoaiSan, setFilterLoaiSan] = useState<string>('ALL');
   const [filterSanId, setFilterSanId] = useState<string>('ALL');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
-  const [filterHidePast, setFilterHidePast] = useState<boolean>(false);
 
   // -------------------------------------------------------------
   // STATE LỊCH SỬ (TAB HISTORY) CŨ
@@ -449,6 +448,7 @@ export default function ManagementSystem() {
     ma_don_dat?: string;
     trang_thai: string;
     isPaid: boolean;
+    da_vao_san?: boolean;
     initialServices: SelectedServiceItem[];
     ten_san?: string;
     gio_da?: string;
@@ -719,12 +719,16 @@ export default function ManagementSystem() {
     return `${dayOfWeek}, ${day}/${month}/${year}`;
   };
 
-  // Điều hướng ngày
+  // Điều hướng ngày: Không cho phép lùi về ngày quá khứ
   const handlePrevDay = () => {
     handleClearOrder();
     setCurrentDate((prev) => {
       const newDate = new Date(prev);
       newDate.setDate(newDate.getDate() - 1);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const checkDate = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate());
+      if (checkDate < today) return prev;
       return newDate;
     });
   };
@@ -1027,12 +1031,20 @@ export default function ManagementSystem() {
     const effectivePaid = isPaid && soTienDaTra < tongTien ? tongTien : soTienDaTra;
 
     const bookingId = booking.id || booking.ma_don_dat;
+    const isPlaying = Boolean(
+      booking.da_vao_san === 1 ||
+      booking.da_vao_san === true ||
+      rawStatus === 'DANG_DA' ||
+      rawStatus === 'dang_da' ||
+      String(booking.trang_thai_vao_san || '').toUpperCase() === 'DANG_DA'
+    );
 
     setLoadedBookingState({
       id: bookingId,
       ma_don_dat: booking.ma_don_dat || String(bookingId),
-      trang_thai: isPaid ? 'Đã thanh toán' : (effectivePaid > 0 ? 'Đã cọc' : 'Chờ thanh toán'),
+      trang_thai: isPaid ? 'Đã thanh toán' : (effectivePaid > 0 ? 'Đã cọc' : (isPlaying ? 'Đang đá' : 'Chờ thanh toán')),
       isPaid,
+      da_vao_san: isPlaying,
       so_tien_da_tra: effectivePaid,
       tong_tien: tongTien,
       initialServices: JSON.parse(JSON.stringify(loadedServices)),
@@ -1702,7 +1714,7 @@ export default function ManagementSystem() {
     });
   }, [sanBongList, filterLoaiSan, filterSanId, searchKeyword]);
 
-  // Lọc danh sách khung giờ theo ngày đang xem (currentDate), hỗ trợ bật/tắt ẩn ca đã qua
+  // Lọc danh sách khung giờ theo ngày đang xem (currentDate): Không hiển thị các khung giờ đã qua trong quá khứ
   const availableTimeSlots = useMemo(() => {
     const rawSlots = timeSlotsList.length > 0 ? timeSlotsList : DEFAULT_TIME_SLOTS;
     if (!currentDate) return [];
@@ -1711,19 +1723,24 @@ export default function ManagementSystem() {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const selectedDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()).getTime();
 
-    // Nếu người dùng bật tùy chọn ẩn ca đã qua và đang xem ngày hôm nay
-    if (filterHidePast && selectedDay === today) {
+    // 1. Nếu ngày đang xem là ngày trong quá khứ -> Không hiển thị khung giờ
+    if (selectedDay < today) {
+      return [];
+    }
+
+    // 2. Nếu ngày đang xem là HÔM NAY -> Tự động ẩn toàn bộ các ca giờ đã kết thúc trong quá khứ
+    if (selectedDay === today) {
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
       return rawSlots.filter((slot) => {
-        const [startHourStr, startMinStr] = slot.start.split(':');
-        const slotStartMinutes = parseInt(startHourStr, 10) * 60 + parseInt(startMinStr || '0', 10);
-        return slotStartMinutes > currentMinutes;
+        const [endHourStr, endMinStr] = (slot.end || slot.start).split(':');
+        const slotEndMinutes = parseInt(endHourStr, 10) * 60 + parseInt(endMinStr || '0', 10);
+        return slotEndMinutes > currentMinutes;
       });
     }
 
-    // Mặc định: Trả về đầy đủ tất cả các khung giờ trong ngày để quản lý xem trọn vẹn lịch
+    // 3. Nếu là ngày tương lai -> Hiển thị đầy đủ tất cả khung giờ trong ngày
     return rawSlots;
-  }, [currentDate, timeSlotsList, filterHidePast]);
+  }, [currentDate, timeSlotsList]);
 
   // Thống kê nhanh hôm nay
   const statsSummary = useMemo(() => {
@@ -1762,13 +1779,24 @@ export default function ManagementSystem() {
     setCalendarViewDate((prev) => {
       const newDate = new Date(prev);
       newDate.setMonth(newDate.getMonth() + (direction === 'prev' ? -1 : 1));
+      const now = new Date();
+      // Không cho phép lùi về tháng trước tháng hiện tại
+      if (direction === 'prev') {
+        const isPastMonth = newDate.getFullYear() < now.getFullYear() ||
+          (newDate.getFullYear() === now.getFullYear() && newDate.getMonth() < now.getMonth());
+        if (isPastMonth) return prev;
+      }
       return newDate;
     });
   };
 
   const handleSelectCalendarDate = (day: number) => {
-    handleClearOrder();
     const selected = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), day);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const target = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate());
+    if (target < today) return; // Chặn ngày quá khứ
+    handleClearOrder();
     setCurrentDate(selected);
     setIsCalendarOpen(false);
   };
@@ -1780,26 +1808,34 @@ export default function ManagementSystem() {
     const startOffset = getFirstDayOfMonth(year, month);
     const daysArray = [];
 
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     for (let i = 0; i < startOffset; i++) {
       daysArray.push(<div key={`empty-${i}`} className="h-8 w-8 flex items-center justify-center text-xs opacity-20">-</div>);
     }
 
     for (let d = 1; d <= totalDays; d++) {
+      const cellDate = new Date(year, month, d);
+      const isPast = cellDate < today;
       const isSelected = currentDate.getDate() === d && currentDate.getMonth() === month && currentDate.getFullYear() === year;
-      const isToday = new Date().getDate() === d && new Date().getMonth() === month && new Date().getFullYear() === year;
+      const isToday = now.getDate() === d && now.getMonth() === month && now.getFullYear() === year;
 
       daysArray.push(
         <button
           key={`day-${d}`}
           type="button"
-          onClick={() => handleSelectCalendarDate(d)}
-          className={`h-8 w-8 rounded-xl text-xs font-bold flex items-center justify-center transition-all ${isSelected
-            ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 scale-105'
-            : isToday
-              ? 'border border-emerald-500 text-emerald-500 font-bold hover:bg-emerald-500/10'
-              : isDarkMode
-                ? 'text-slate-200 hover:bg-slate-800'
-                : 'text-slate-700 hover:bg-slate-100'
+          disabled={isPast}
+          onClick={() => !isPast && handleSelectCalendarDate(d)}
+          className={`h-8 w-8 rounded-xl text-xs font-bold flex items-center justify-center transition-all ${isPast
+            ? 'opacity-25 cursor-not-allowed text-slate-600 pointer-events-none'
+            : isSelected
+              ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30 scale-105'
+              : isToday
+                ? 'border border-emerald-500 text-emerald-500 font-bold hover:bg-emerald-500/10 cursor-pointer'
+                : isDarkMode
+                  ? 'text-slate-200 hover:bg-slate-800 cursor-pointer'
+                  : 'text-slate-700 hover:bg-slate-100 cursor-pointer'
             }`}
         >
           {d}
@@ -1927,7 +1963,17 @@ export default function ManagementSystem() {
 
   const handleToggleSlotFromMatrix = (san: SanBong, slot: KhungGioItem, slotData?: SlotLichSan) => {
     const slotKeyRealtime = `${formattedDateISO}_${san.id}_${slot.start}`;
-    if (lockedSlots.includes(slotKeyRealtime)) {
+    const slotId = `pitch_${san.id}_${slot.start}`;
+
+    // Kiểm tra xem ô này có đang được chọn trong giỏ hàng POS của chính mình hay không
+    const existingIdx = selectedPitches.findIndex((p) => p.pitch.id === san.id);
+    const curr = existingIdx !== -1 ? selectedPitches[existingIdx] : null;
+    const isThisSlotSelected =
+      selectedSlots.some((s) => s.id === slotId) ||
+      (curr ? isTimeOverlapping(slot.start, slot.end, curr.startTime, curr.endTime) : false);
+
+    // Chỉ chặn nếu ô này đang bị giữ chỗ bởi người khác (không phải ô trong giỏ của chính mình)
+    if (lockedSlots.includes(slotKeyRealtime) && !isThisSlotSelected) {
       showToast(`⚠️ Ô giờ ${slot.start} - ${slot.end} của ${san.ten_san} đang được giữ chỗ, không thể chọn!`, 'warning', 'Đang Giữ Chỗ');
       return;
     }
@@ -1937,23 +1983,12 @@ export default function ManagementSystem() {
       return;
     }
 
-    const existingIdx = selectedPitches.findIndex((p) => p.pitch.id === san.id);
-
     if (existingIdx === -1) {
-      // Đặt thêm sân mới vào đơn hiện tại:
-      // Quy tắc: Nếu đã có sân trong đơn/đang đá -> Thời gian bắt đầu của sân mới = Thời gian kết thúc của sân trước đó
-      const previousPitch = selectedPitches[selectedPitches.length - 1];
-      let defaultStart = slot.start;
-      let defaultEnd = slot.end;
-
-      if (previousPitch && previousPitch.endTime) {
-        defaultStart = previousPitch.endTime;
-        defaultEnd = slot.end > defaultStart ? slot.end : addMinutesToTimeStr(defaultStart, 30);
-      }
-
-      if (defaultEnd <= defaultStart) {
-        defaultEnd = addMinutesToTimeStr(defaultStart, 30);
-      }
+      // -------------------------------------------------------------
+      // NHẤN LẦN 1 THÌ CHỌN: SÂN NÀY CHƯA CÓ TRONG ĐƠN -> CHỌN Ô NÀY (30 PHÚT)
+      // -------------------------------------------------------------
+      const defaultStart = slot.start;
+      const defaultEnd = slot.end;
 
       // KIỂM TRA TRÙNG LỊCH TRÊN SÂN MỚI ĐƯỢC CHỌN
       const conflict = checkPitchTimeConflict(san.id, defaultStart, defaultEnd);
@@ -1994,52 +2029,105 @@ export default function ManagementSystem() {
       };
       const newPitches = [...selectedPitches, newPitchItem];
       syncPitchesAndSlots(newPitches);
+      return;
+    }
 
-      if (loadedBookingState || editingInvoiceId || selectedPitches.length > 0) {
-        showToast(`⚽ Đã chọn thêm sân ${san.ten_san} (Bắt đầu: ${defaultStart} ngay sau khi hết giờ sân trước)! `, 'success', 'Đặt Thêm Sân Đá Tiếp');
+    if (!curr) return;
+
+    if (isThisSlotSelected) {
+      // -------------------------------------------------------------
+      // NHẤN LẦN 2 THÌ GỠ RA:
+      // CHỈ GỠ ĐƯỢC Ở ĐẦU THỜI GIAN VỚI CUỐI THỜI GIAN
+      // NHỮNG Ô Ở GIỮA THÌ KHÔNG GỠ ĐƯỢC
+      // -------------------------------------------------------------
+      const isStartSlot = slot.start === curr.startTime;
+      const isEndSlot = slot.end === curr.endTime;
+
+      // Nếu không phải ô đầu cũng không phải ô cuối -> Ô Ở GIỮA -> KHÔNG GỠ ĐƯỢC
+      if (!isStartSlot && !isEndSlot) {
+        showToast(
+          `⚠️ Không thể gỡ ô ở giữa (${slot.start} - ${slot.end})! Khung giờ đặt sân phải liên tục, chỉ có thể gỡ ô ở đầu (${curr.startTime}) hoặc cuối (${curr.endTime}).`,
+          'warning',
+          'Không Thể Gỡ Ô Ở Giữa'
+        );
+        return;
+      }
+
+      // Nếu ô này vừa là đầu vừa là cuối (khoảng chỉ có đúng 1 ô 30 phút) -> Hủy chọn sân này
+      if (isStartSlot && isEndSlot) {
+        const newPitches = selectedPitches.filter((p) => p.pitch.id !== san.id);
+        syncPitchesAndSlots(newPitches);
+        showToast(`Đã bỏ chọn sân ${san.ten_san}!`, 'info', 'Đã Bỏ Chọn Sân');
+        return;
+      }
+
+      let newStart = curr.startTime;
+      let newEnd = curr.endTime;
+
+      if (isStartSlot) {
+        // Gỡ ô đầu thời gian: dịch giờ bắt đầu tới kết thúc của ô này
+        newStart = slot.end;
+      } else if (isEndSlot) {
+        // Gỡ ô cuối thời gian: dịch giờ kết thúc về bắt đầu của ô này
+        newEnd = slot.start;
+      }
+
+      if (newStart >= newEnd) {
+        // Không còn khung giờ -> Hủy chọn sân này
+        const newPitches = selectedPitches.filter((p) => p.pitch.id !== san.id);
+        syncPitchesAndSlots(newPitches);
+        showToast(`Đã bỏ chọn sân ${san.ten_san}!`, 'info', 'Đã Bỏ Chọn Sân');
+      } else {
+        const durationMin = calculateMinutesDiff(newStart, newEnd);
+        const price = Math.round(durationMin * (Number(san.don_gia_phut) || 3000));
+        const newPitches = selectedPitches.map((p, idx) =>
+          idx === existingIdx
+            ? { ...p, startTime: newStart, endTime: newEnd, durationMin, price }
+            : p
+        );
+        syncPitchesAndSlots(newPitches);
       }
       return;
     }
 
-    // Sân đã có trong danh sách -> Cập nhật hoặc hủy chọn
-    const curr = selectedPitches[existingIdx];
-    const slotId = `pitch_${san.id}_${slot.start}`;
-    const isThisSlotSelected = selectedSlots.some((s) => s.id === slotId);
-
-    if (isThisSlotSelected && curr.startTime === slot.start && curr.endTime === slot.end) {
-      // Bấm lại chính ô duy nhất của sân này -> Xóa sân này khỏi đơn (nếu có nhiều hơn 1 sân hoặc đơn mới)
-      const newPitches = selectedPitches.filter((p) => p.pitch.id !== san.id);
-      syncPitchesAndSlots(newPitches);
-      return;
-    }
-
+    // -------------------------------------------------------------
+    // NHẤN LẦN 1 THÌ CHỌN: Ô NÀY CHƯA ĐƯỢC CHỌN -> MỞ RỘNG KHUNG GIỜ
+    // -------------------------------------------------------------
     let newStart = curr.startTime;
     let newEnd = curr.endTime;
 
-    if (slot.start < newStart) {
+    if (slot.end <= curr.startTime) {
       newStart = slot.start;
-    } else if (slot.end > newEnd) {
+    } else if (slot.start >= curr.endTime) {
       newEnd = slot.end;
-    } else if (slot.start === newStart) {
-      newStart = slot.end;
-    } else if (slot.end === newEnd) {
-      newEnd = slot.start;
+    } else {
+      if (slot.start < newStart) newStart = slot.start;
+      if (slot.end > newEnd) newEnd = slot.end;
     }
 
-    if (newStart >= newEnd) {
-      // Xóa sân nếu khoảng thời gian không hợp lệ
-      const newPitches = selectedPitches.filter((p) => p.pitch.id !== san.id);
-      syncPitchesAndSlots(newPitches);
-    } else {
-      const durationMin = calculateMinutesDiff(newStart, newEnd);
-      const price = Math.round(durationMin * (Number(san.don_gia_phut) || 3000));
-      const newPitches = selectedPitches.map((p, idx) =>
-        idx === existingIdx
-          ? { ...p, startTime: newStart, endTime: newEnd, durationMin, price }
-          : p
+    // KIỂM TRA TRÙNG LỊCH TRÊN SÂN KHI MỞ RỘNG
+    const conflict = checkPitchTimeConflict(san.id, newStart, newEnd, editingInvoiceId);
+    if (conflict.hasConflict) {
+      const confBooking = conflict.conflictingBooking;
+      const bStart = (confBooking?.gio_bat_dau || '').substring(0, 5);
+      const bEnd = (confBooking?.gio_ket_thuc || '').substring(0, 5);
+      const khach = confBooking?.ten_khach_hang || 'Khách khác';
+      showToast(
+        `⚠️ Không thể mở rộng giờ vì khoảng ${newStart} - ${newEnd} bị trùng lịch với ca của ${khach} (${bStart} - ${bEnd})!`,
+        'warning',
+        'Trùng Lịch Sân'
       );
-      syncPitchesAndSlots(newPitches);
+      return;
     }
+
+    const durationMin = calculateMinutesDiff(newStart, newEnd);
+    const price = Math.round(durationMin * (Number(san.don_gia_phut) || 3000));
+    const newPitches = selectedPitches.map((p, idx) =>
+      idx === existingIdx
+        ? { ...p, startTime: newStart, endTime: newEnd, durationMin, price }
+        : p
+    );
+    syncPitchesAndSlots(newPitches);
   };
 
   const handleUpdatePitchTime = (pitchId: number, newStart: string, newEnd: string) => {
@@ -2250,6 +2338,31 @@ export default function ManagementSystem() {
     const numEditCheck = Number(editingInvoiceId);
     if (editingInvoiceId && !String(editingInvoiceId).startsWith('temp_') && Number.isInteger(numEditCheck) && numEditCheck > 0 && numEditCheck <= 2147483647) {
       try {
+        if (selectedServices.length > 0 || hasAddedExtraServices) {
+          const firstP = selectedPitches[0];
+          await fetch(`${API_BASE_URL}/dat-san/don-dat-thanh-toan/${numEditCheck}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ma_nguoi_dung: currentUser?.id || 1,
+              ten_khach_hang: customerName.trim(),
+              so_dien_thoai: customerPhone.trim(),
+              ma_san: firstP?.pitch?.id || null,
+              ngay_da: formattedDateISO,
+              gio_bat_dau: (firstP?.startTime || '17:00').length === 5 ? `${firstP?.startTime}:00` : firstP?.startTime,
+              gio_ket_thuc: (firstP?.endTime || '18:30').length === 5 ? `${firstP?.endTime}:00` : firstP?.endTime,
+              tien_san: totalPitchPrice,
+              tong_tien: grandTotal,
+              ghi_chu: customerName ? `Khách: ${customerName} - ${customerPhone}` : 'Khách sân đang đá',
+              trang_thai: 'DANG_DA',
+              phuong_thuc: paymentMethod,
+              loai_thanh_toan: Number(loadedBookingState?.so_tien_da_tra || 0) >= grandTotal ? 'TRA_HET' : (Number(loadedBookingState?.so_tien_da_tra || 0) > 0 ? 'DAT_COC' : null),
+              so_tien: Number(loadedBookingState?.so_tien_da_tra || 0),
+              trang_thai_gd: 'THANH_CONG',
+              dich_vu_list: dichVuListPayload,
+            }),
+          });
+        }
         await fetch(`${API_BASE_URL}/dat-san/vao-san/${numEditCheck}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2462,8 +2575,27 @@ export default function ManagementSystem() {
       if (editingInvoiceId && !String(editingInvoiceId).startsWith('temp_')) {
         // CẬP NHẬT HÓA ĐƠN ĐANG SỬA TRÊN CSDL SQL SERVER (sp_SuaDonDatVaThanhToan)
         const firstP = selectedPitches[0];
-        const targetStatus = (isOrderFullyPaid && !hasAddedExtraServices) ? 'DA_THANH_TOAN' : 'DANG_DA';
+        const isAlreadyPlaying = Boolean(
+          loadedBookingState?.da_vao_san === true ||
+          loadedBookingState?.trang_thai === 'Đang đá' ||
+          loadedBookingState?.trang_thai === 'DANG_DA'
+        );
         const preservedPaid = Number(loadedBookingState?.so_tien_da_tra || (isOrderFullyPaid ? totalPitchPrice : 0));
+
+        // NẾU ĐƠN ĐÃ VÀO SÂN THI ĐẤU RỒI: Duy trì DANG_DA hoặc DA_THANH_TOAN
+        // NẾU ĐƠN CHƯA VÀO SÂN (Ở danh sách Chờ vào sân): TUYỆT ĐỐI KHÔNG gán DANG_DA, chỉ cập nhật trạng thái thanh toán
+        let targetStatus = 'CHO_THANH_TOAN';
+        if (isAlreadyPlaying) {
+          targetStatus = (isOrderFullyPaid && !hasAddedExtraServices) ? 'DA_THANH_TOAN' : 'DANG_DA';
+        } else {
+          if (preservedPaid >= grandTotal && grandTotal > 0) {
+            targetStatus = 'DA_THANH_TOAN';
+          } else if (preservedPaid > 0) {
+            targetStatus = 'DA_COC';
+          } else {
+            targetStatus = 'CHO_THANH_TOAN';
+          }
+        }
 
         const res = await fetch(`${API_BASE_URL}/dat-san/don-dat-thanh-toan/${editingInvoiceId}`, {
           method: 'PUT',
@@ -2472,13 +2604,13 @@ export default function ManagementSystem() {
             ma_nguoi_dung: currentUser?.id || 1,
             ten_khach_hang: customerName.trim(),
             so_dien_thoai: customerPhone.trim(),
-            ma_san: firstP?.pitch.id || null,
+            ma_san: firstP?.pitch?.id || null,
             ngay_da: formattedDateISO,
             gio_bat_dau: (firstP?.startTime || '17:00').length === 5 ? `${firstP?.startTime}:00` : firstP?.startTime,
             gio_ket_thuc: (firstP?.endTime || '18:30').length === 5 ? `${firstP?.endTime}:00` : firstP?.endTime,
             tien_san: totalPitchPrice,
             tong_tien: grandTotal,
-            ghi_chu: customerName ? `Khách: ${customerName} - ${customerPhone}` : 'Khách sân đang đá',
+            ghi_chu: customerName ? `Khách: ${customerName} - ${customerPhone}` : (isAlreadyPlaying ? 'Khách sân đang đá' : 'Khách đặt sân'),
             trang_thai: targetStatus,
             phuong_thuc: paymentMethod,
             loai_thanh_toan: preservedPaid >= grandTotal ? 'TRA_HET' : (preservedPaid > 0 ? 'DAT_COC' : null),
@@ -2492,19 +2624,21 @@ export default function ManagementSystem() {
           console.warn('Lỗi khi cập nhật CSDL SQL Server:', data.message);
         }
 
-        // Đảm bảo duy trì trạng thái vao-san trên SQL Server nếu đang thi đấu
-        try {
-          await fetch(`${API_BASE_URL}/dat-san/vao-san/${editingInvoiceId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ trang_thai: targetStatus }),
-          });
-        } catch (e: any) {
-          console.warn('Lỗi vao-san:', e.message);
+        // CHỈ gọi API vao-san nếu đơn này THỰC SỰ ĐÃ VÀO SÂN từ trước đó
+        if (isAlreadyPlaying) {
+          try {
+            await fetch(`${API_BASE_URL}/dat-san/vao-san/${editingInvoiceId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ trang_thai: targetStatus }),
+            });
+          } catch (e: any) {
+            console.warn('Lỗi vao-san:', e.message);
+          }
         }
 
         // Cập nhật state đồng bộ
-        updateSyncOrderStatus(editingInvoiceId, (isOrderFullyPaid && !hasAddedExtraServices) ? 'Đã thanh toán' : 'Chờ thanh toán', {
+        updateSyncOrderStatus(editingInvoiceId, (preservedPaid >= grandTotal && grandTotal > 0) ? 'Đã thanh toán' : (preservedPaid > 0 ? 'Đã cọc' : 'Chờ thanh toán'), {
           ten_khach_hang: customerName.trim() || 'Khách vãng lai',
           so_dien_thoai: customerPhone.trim() || 'Chưa có SĐT',
           ten_san: selectedPitches.length > 0 ? selectedPitches.map((s) => s.pitch.ten_san).join(', ') : 'Quầy nước / Dịch vụ',
@@ -2515,9 +2649,9 @@ export default function ManagementSystem() {
           dich_vu: serviceItems,
           tong_tien: grandTotal,
           so_tien_da_tra: preservedPaid,
-          da_thanh_toan: isOrderFullyPaid && !hasAddedExtraServices,
-          trang_thai_vao_san: 'DANG_DA',
-          da_vao_san: true,
+          da_thanh_toan: preservedPaid >= grandTotal,
+          trang_thai_vao_san: isAlreadyPlaying ? 'DANG_DA' : undefined,
+          da_vao_san: isAlreadyPlaying,
         });
 
         const updateLocal = (orders: any[]) => orders.map((o) => {
@@ -2531,7 +2665,8 @@ export default function ManagementSystem() {
               dich_vu_da_dung: serviceItems,
               dich_vu: serviceItems,
               trang_thai: targetStatus,
-              da_thanh_toan: isOrderFullyPaid && !hasAddedExtraServices,
+              da_vao_san: isAlreadyPlaying,
+              da_thanh_toan: preservedPaid >= grandTotal,
             };
           }
           return o;
@@ -2544,11 +2679,19 @@ export default function ManagementSystem() {
             ...prev,
             so_tien_da_tra: preservedPaid,
             tong_tien: grandTotal,
+            da_vao_san: isAlreadyPlaying,
             initialServices: JSON.parse(JSON.stringify(selectedServices)),
           } : null);
         }
 
-        showToast('💾 Đã lưu và đưa hóa đơn này vào danh sách Sân đang đá để khách thi đấu và thanh toán sau!', 'success', 'Lưu Đơn Thành Công');
+        await fetchLichSan(formattedDateISO, sanBongList);
+        await fetchHistory();
+
+        if (isAlreadyPlaying) {
+          showToast('💾 Đã lưu thay đổi cho sân đang đá!', 'success', 'Lưu Thành Công');
+        } else {
+          showToast('💾 Đã lưu thông tin dịch vụ thành công! Ca đặt vẫn ở danh sách Chờ vào sân.', 'success', 'Lưu Dịch Vụ Thành Công');
+        }
       } else {
         // TẠO CÁC ĐƠN ĐẶT SÂN MỚI TRÊN CSDL SQL SERVER (sp_ThemDonDatVaThanhToan)
         const pitchesToSave = selectedPitches.length > 0
@@ -3083,11 +3226,19 @@ export default function ManagementSystem() {
     setCustomerPhone(invoice.so_dien_thoai || '');
     setEditingInvoiceId(bookingId);
 
+    const isPlaying = Boolean(
+      invoice.da_vao_san === 1 ||
+      invoice.da_vao_san === true ||
+      rawStatus === 'DANG_DA' ||
+      invoice.trang_thai_vao_san === 'DANG_DA'
+    );
+
     setLoadedBookingState({
       id: bookingId,
       ma_don_dat: bookingId,
-      trang_thai: isPaid ? 'Đã thanh toán' : (effectivePaid > 0 ? 'Đã cọc' : (rawStatus === 'DANG_DA' ? 'Đang đá' : 'Chờ thanh toán')),
+      trang_thai: isPaid ? 'Đã thanh toán' : (effectivePaid > 0 ? 'Đã cọc' : (isPlaying ? 'Đang đá' : 'Chờ thanh toán')),
       isPaid,
+      da_vao_san: isPlaying,
       so_tien_da_tra: effectivePaid,
       tong_tien: tongTien,
       initialServices: initialSvcList,
@@ -3187,11 +3338,19 @@ export default function ManagementSystem() {
     setCustomerPhone(invoice.so_dien_thoai || '');
     setEditingInvoiceId(bookingId);
 
+    const isPlaying = Boolean(
+      invoice.da_vao_san === 1 ||
+      invoice.da_vao_san === true ||
+      rawStatus === 'DANG_DA' ||
+      invoice.trang_thai_vao_san === 'DANG_DA'
+    );
+
     setLoadedBookingState({
       id: bookingId,
       ma_don_dat: bookingId,
-      trang_thai: isPaid ? 'Đã thanh toán' : (effectivePaid > 0 ? 'Đã cọc' : (rawStatus === 'DANG_DA' ? 'Đang đá' : 'Chờ thanh toán')),
+      trang_thai: isPaid ? 'Đã thanh toán' : (effectivePaid > 0 ? 'Đã cọc' : (isPlaying ? 'Đang đá' : 'Chờ thanh toán')),
       isPaid,
+      da_vao_san: isPlaying,
       so_tien_da_tra: effectivePaid,
       tong_tien: tongTien,
       initialServices: initialSvcList,
@@ -3498,11 +3657,23 @@ export default function ManagementSystem() {
     setCustomerPhone(invoice.so_dien_thoai || rawInput.so_dien_thoai || '');
     setEditingInvoiceId(bookingId);
 
+    const isPlaying = Boolean(
+      sourceObj.da_vao_san === 1 ||
+      sourceObj.da_vao_san === true ||
+      rawStatus === 'DANG_DA' ||
+      String(sourceObj.trang_thai_vao_san || '').toUpperCase() === 'DANG_DA' ||
+      invoice.da_vao_san === 1 ||
+      invoice.da_vao_san === true ||
+      invoice.trang_thai === 'DANG_DA' ||
+      String(invoice.trang_thai_vao_san || '').toUpperCase() === 'DANG_DA'
+    );
+
     setLoadedBookingState({
       id: bookingId,
       ma_don_dat: bookingId,
-      trang_thai: isPaid ? 'Đã thanh toán' : (effectivePaid > 0 ? 'Đã cọc' : 'Chờ thanh toán'),
+      trang_thai: isPaid ? 'Đã thanh toán' : (effectivePaid > 0 ? 'Đã cọc' : (isPlaying ? 'Đang đá' : 'Chờ thanh toán')),
       isPaid,
+      da_vao_san: isPlaying,
       so_tien_da_tra: effectivePaid,
       tong_tien: tongTien,
       initialServices: initialSvcList,
@@ -4842,8 +5013,12 @@ export default function ManagementSystem() {
                         <button
                           type="button"
                           onClick={handlePrevDay}
-                          className="p-1.5 rounded-lg hover:bg-emerald-500 hover:text-slate-950 text-slate-300 transition-colors cursor-pointer"
-                          title="Xem ngày hôm trước"
+                          disabled={formatDateToISO(currentDate) <= formatDateToISO(new Date())}
+                          className={`p-1.5 rounded-lg transition-colors ${formatDateToISO(currentDate) <= formatDateToISO(new Date())
+                            ? 'opacity-30 cursor-not-allowed text-slate-600'
+                            : 'hover:bg-emerald-500 hover:text-slate-950 text-slate-300 cursor-pointer'
+                            }`}
+                          title={formatDateToISO(currentDate) <= formatDateToISO(new Date()) ? 'Không thể lùi về ngày quá khứ' : 'Xem ngày hôm trước'}
                         >
                           <ChevronLeft className="w-4 h-4" />
                         </button>
@@ -4870,7 +5045,7 @@ export default function ManagementSystem() {
                         </button>
                       </div>
 
-                      {/* Ngày xem hiện tại & Picker ngày trực tiếp */}
+                      {/* Ngày xem hiện tại & Picker ngày trực tiếp (Chặn chọn ngày quá khứ) */}
                       <div className="relative flex items-center">
                         <label className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-black cursor-pointer transition-all ${isDarkMode
                           ? 'bg-slate-900/90 border-slate-700/80 text-emerald-400 hover:border-emerald-500 hover:bg-slate-800/80'
@@ -4882,26 +5057,24 @@ export default function ManagementSystem() {
                           <span>{formatVietnameseDate(currentDate)}</span>
                           <input
                             type="date"
+                            min={formatDateToISO(new Date())}
                             value={formattedDateISO}
                             onChange={(e) => {
                               if (e.target.value) {
                                 handleClearOrder();
-                                setCurrentDate(new Date(e.target.value + 'T00:00:00'));
+                                const selected = new Date(e.target.value + 'T00:00:00');
+                                const now = new Date();
+                                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                if (selected < today) {
+                                  setCurrentDate(now);
+                                } else {
+                                  setCurrentDate(selected);
+                                }
                               }
                             }}
                             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                           />
                         </label>
-                      </div>
-
-                      {/* Thống kê nhanh số sân & số ca */}
-                      <div className="hidden sm:flex items-center gap-2 text-[11px] font-bold text-slate-400 pl-2 border-l border-slate-700/60">
-                        <span className="flex items-center gap-1">
-                          <LandPlot className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>{filteredSanList.length} sân</span>
-                        </span>
-                        <span>•</span>
-                        <span className="text-emerald-400 font-mono">{availableTimeSlots.length} ca</span>
                       </div>
                     </div>
 
@@ -4943,22 +5116,6 @@ export default function ManagementSystem() {
                         </select>
                       </div>
 
-                      {/* Nút bật/tắt ẩn ca đã qua */}
-                      <button
-                        type="button"
-                        onClick={() => setFilterHidePast(!filterHidePast)}
-                        className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${filterHidePast
-                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-300'
-                          : isDarkMode
-                            ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
-                            : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 shadow-sm'
-                          }`}
-                        title="Chuyển chế độ xem tất cả ca trong ngày hoặc chỉ ca sắp tới"
-                      >
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>{filterHidePast ? 'Chỉ ca tới' : 'Tất cả ca'}</span>
-                      </button>
-
                       {/* Nút thu gọn / mở rộng cột Order bên phải để xem toàn màn hình lịch */}
                       <button
                         type="button"
@@ -4977,7 +5134,7 @@ export default function ManagementSystem() {
                     </div>
                   </div>
 
-                  {/* Chú thích màu sắc trạng thái (Legend) */}
+                  {/* Chú thích màu sắc trạng thái (Legend) - Không còn ca đã qua */}
                   <div className="flex flex-wrap items-center gap-3.5 text-[11px] font-bold text-slate-400 pt-2.5 mt-2.5 border-t border-slate-800/60">
                     <div className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50" />
@@ -4994,10 +5151,6 @@ export default function ManagementSystem() {
                     <div className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shadow-sm shadow-amber-400/50" />
                       <span className="text-amber-300">Đang Giữ Chỗ</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-600" />
-                      <span className="text-slate-500">Đã qua</span>
                     </div>
                   </div>
                 </div>
@@ -5018,14 +5171,14 @@ export default function ManagementSystem() {
                     <div className={`p-14 text-center rounded-2xl border border-dashed m-4 ${isDarkMode ? 'border-slate-800 bg-slate-900/30 text-slate-400' : 'border-slate-300 bg-slate-50 text-slate-600'}`}>
                       <Clock className="w-10 h-10 text-slate-400 mx-auto mb-2 opacity-60" />
                       <p className="text-sm font-bold">
-                        Không có khung giờ nào khả dụng với bộ lọc hiện tại.
+                        Tất cả các khung giờ trong ngày hôm nay đã kết thúc hoặc không còn khả dụng.
                       </p>
                       <button
                         type="button"
-                        onClick={() => setFilterHidePast(false)}
-                        className="mt-3 px-3 py-1.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs cursor-pointer hover:bg-emerald-400 transition-colors"
+                        onClick={handleNextDay}
+                        className="mt-3 px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs cursor-pointer hover:bg-emerald-400 transition-colors shadow-md shadow-emerald-500/20"
                       >
-                        Xem tất cả khung giờ trong ngày
+                        Xem lịch ngày tiếp theo ➔
                       </button>
                     </div>
                   ) : filteredSanList.length === 1 ? (
@@ -5143,10 +5296,6 @@ export default function ManagementSystem() {
                                       <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                                       <span>ĐÃ ĐẶT</span>
                                     </div>
-                                    <span className="text-[10px] font-bold text-rose-200/90 truncate max-w-full px-1">
-                                      {customerNameDisplay}
-                                    </span>
-                                    <span className="text-[9px] font-mono text-rose-400/80">{slot.label}</span>
                                   </button>
                                 );
                               }
@@ -5371,9 +5520,6 @@ export default function ManagementSystem() {
                                           <XCircle className="w-3 h-3 text-rose-400 shrink-0" />
                                           <span>ĐÃ ĐẶT</span>
                                         </div>
-                                        <span className="text-[10px] font-bold text-rose-200/90 truncate max-w-full px-1">
-                                          {customerNameDisplay}
-                                        </span>
                                       </button>
                                     ) : isHolding2 ? (
                                       // TRẠNG THÁI: GIỮ CHỖ (VÀNG + HIỆN TÊN KHÁCH)
@@ -5931,8 +6077,8 @@ export default function ManagementSystem() {
                       </div>
                     </div>
 
-                    {/* Nếu khách đã thanh toán đủ và không mua thêm dịch vụ mới -> Hiển thị nút VÀO SÂN */}
-                    {isOrderFullyPaid && !hasAddedExtraServices ? (
+                    {/* Nếu khách đã thanh toán đủ, chưa vào sân và không mua thêm dịch vụ mới -> Hiển thị nút VÀO SÂN */}
+                    {isOrderFullyPaid && !hasAddedExtraServices && (!loadedBookingState || !loadedBookingState.da_vao_san) ? (
                       <div className="pt-1 space-y-1.5">
                         <button
                           type="button"
@@ -5948,12 +6094,12 @@ export default function ManagementSystem() {
                         </p>
                       </div>
                     ) : (
-                      /* Ngược lại (ví dụ chỉ mới thanh toán 30%): Hiển thị 2 nút LƯU & THANH TOÁN */
+                      /* Ngược lại (có dịch vụ phát sinh hoặc cọc 30%): Hiển thị LƯU & THANH TOÁN, và VÀO SÂN nếu chưa vào sân */
                       <div className="space-y-1.5 pt-0.5">
                         {hasAddedExtraServices && (
                           <div className="text-[10px] text-amber-300 text-center font-bold bg-amber-500/15 py-1 px-2 rounded-lg border border-amber-500/30 flex items-center justify-center gap-1">
                             <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
-                            <span>Có dịch vụ phát sinh thêm! Vui lòng lưu hoặc thanh toán.</span>
+                            <span>Có dịch vụ phát sinh thêm! Vui lòng lưu dịch vụ hoặc thanh toán.</span>
                           </div>
                         )}
 
@@ -5968,40 +6114,55 @@ export default function ManagementSystem() {
                             <span>THANH TOÁN LẺ</span>
                           </button>
                         ) : (
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={handleSaveOrder}
-                              className="w-full py-3 px-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                              title="Lưu đơn hàng: đưa vào sân đang đá để khách thanh toán sau"
-                            >
-                              <Save className="w-4 h-4" />
-                              <span>
-                                {hasAddedExtraServices || editingInvoiceId ? 'LƯU DỊCH VỤ' : 'LƯU'}
-                              </span>
-                            </button>
+                          <div className="space-y-1.5">
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={handleSaveOrder}
+                                className="w-full py-3 px-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                                title="Lưu dịch vụ vào đơn đặt sân (ca đặt vẫn ở danh sách Chờ vào sân)"
+                              >
+                                <Save className="w-4 h-4" />
+                                <span>
+                                  {hasAddedExtraServices || editingInvoiceId ? 'LƯU DỊCH VỤ' : 'LƯU'}
+                                </span>
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() => handlePayOrder()}
-                              className="w-full py-3 px-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                              title="Thanh toán số tiền tương ứng (chọn Tiền mặt hoặc Chuyển khoản QR)"
-                            >
-                              <CreditCard className="w-4 h-4" />
-                              <span>
-                                {hasAddedExtraServices || editingInvoiceId ? 'THANH TOÁN' : 'THANH TOÁN'}
-                              </span>
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => handlePayOrder()}
+                                className="w-full py-3 px-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                                title="Thanh toán số tiền tương ứng (chọn Tiền mặt hoặc Chuyển khoản QR)"
+                              >
+                                <CreditCard className="w-4 h-4" />
+                                <span>
+                                  {hasAddedExtraServices || editingInvoiceId ? 'THANH TOÁN' : 'THANH TOÁN'}
+                                </span>
+                              </button>
+                            </div>
+
+                            {/* Nút Vào Sân khi đơn chưa vào sân thi đấu */}
+                            {(!loadedBookingState || !loadedBookingState.da_vao_san) && selectedPitches.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={handleCheckInPitch}
+                                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 active:scale-98 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                                title="Xác nhận cho khách nhận sân và bắt đầu đá ngay"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                                <span>⚽ VÀO SÂN</span>
+                              </button>
+                            )}
                           </div>
                         )}
 
                         {Number(loadedBookingState?.so_tien_da_tra || 0) > 0 ? (
                           <p className="text-[10px] text-amber-400 text-center font-bold">
-                            ℹ Khách đã cọc {Number(loadedBookingState?.so_tien_da_tra).toLocaleString('vi-VN')}đ (30%). Nhấn <strong>"LƯU"</strong> để đưa vào sân đang đá (thanh toán sau), hoặc <strong>"THANH TOÁN"</strong> để trả nốt.
+                            ℹ Nhấn <strong>"LƯU DỊCH VỤ"</strong> để lưu vào ca đặt (ca đặt vẫn ở Chờ vào sân), hoặc nhấn <strong>"⚽ VÀO SÂN"</strong> khi khách bắt đầu đá.
                           </p>
                         ) : (loadedBookingState && !isOrderFullyPaid) ? (
                           <p className="text-[10px] text-amber-400 text-center font-bold">
-                            ℹ Đơn chưa thanh toán tiền sân (đá trả sau). Nhấn <strong>"THANH TOÁN"</strong> để thu tiền khách ({amountDueToPay.toLocaleString('vi-VN')}đ).
+                            ℹ Đơn chưa thanh toán tiền sân. Nhấn <strong>"THANH TOÁN"</strong> để thu tiền khách ({amountDueToPay.toLocaleString('vi-VN')}đ) hoặc <strong>"⚽ VÀO SÂN"</strong> để bắt đầu đá.
                           </p>
                         ) : null}
                       </div>

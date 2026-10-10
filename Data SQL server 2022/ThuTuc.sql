@@ -4479,4 +4479,30 @@ BEGIN
 END;
 GO
 
+-- =====================================================================
+-- 35. THỦ TỤC XÁC NHẬN VÀO SÂN (ĐƯA ĐƠN ĐẶT SÂN VÀO SÂN ĐANG ĐÁ)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_XacNhanVaoSan
+    @id INT,
+    @trang_thai VARCHAR(20) = 'DANG_DA'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE Don_Dat_San 
+    SET da_vao_san = 1, 
+        gio_vao_san = CONVERT(TIME, GETDATE()),
+        trang_thai = ISNULL(@trang_thai, 'DANG_DA')
+    WHERE id = @id;
+
+    SELECT 
+        id, 
+        da_vao_san, 
+        trang_thai, 
+        CONVERT(VARCHAR(5), gio_vao_san, 108) AS gio_vao_san
+    FROM Don_Dat_San
+    WHERE id = @id;
+END;
+GO
+
+
 

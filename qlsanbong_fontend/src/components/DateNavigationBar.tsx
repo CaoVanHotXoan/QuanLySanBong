@@ -267,7 +267,7 @@ export const DateNavigationBar: React.FC<DateNavigationBarProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative block sm:inline-block select-none w-full sm:w-auto max-w-full ${isCalendarOpen ? 'z-50' : 'z-30'} ${className}`}
+      className={`relative block sm:inline-block select-none w-full sm:w-auto max-w-full ${isCalendarOpen ? 'z-30' : 'z-10'} ${className}`}
     >
       {/* --- THANH ĐIỀU HƯỚNG NGANG --- */}
       <div className="flex items-center justify-between sm:justify-start gap-1.5 sm:gap-3 w-full max-w-full">

@@ -1299,7 +1299,7 @@ export default function HomePage() {
       {/* TOAST THÔNG BÁO NỔI */}
       {toastMessage && (
         <div
-          className={`fixed top-28 right-5 z-50 flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border backdrop-blur-md transition-all duration-300 animate-slide-in ${toastMessage.type === 'success'
+          className={`fixed top-28 right-5 z-[70] flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border backdrop-blur-md transition-all duration-300 animate-slide-in ${toastMessage.type === 'success'
             ? isDarkMode ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200' : 'bg-emerald-50 border-emerald-300 text-emerald-900'
             : toastMessage.type === 'error'
               ? isDarkMode ? 'bg-rose-950/90 border-rose-500/50 text-rose-200' : 'bg-rose-50 border-rose-300 text-rose-900'
@@ -1322,7 +1322,7 @@ export default function HomePage() {
       {/* =====================================================================
           1. HEADER & NAVBAR 2 TẦNG (DOUBLE-DECKER HEADER)
           ===================================================================== */}
-      <header className={`fixed top-0 left-0 right-0 z-40 backdrop-blur-xl border-b transition-colors duration-300 shadow-xl ${isDarkMode ? 'bg-slate-950/95 border-emerald-900/40' : 'bg-white/95 border-slate-200'
+      <header className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-xl border-b transition-colors duration-300 shadow-xl ${isDarkMode ? 'bg-slate-950/95 border-emerald-900/40' : 'bg-white/95 border-slate-200'
         }`}>
 
         {/* TẦNG 1: LOGO + KHUNG TÌM KIẾM TÊN SÂN + NÚT SÁNG/TỐI + ĐĂNG NHẬP/ĐĂNG KÝ */}
@@ -1601,7 +1601,7 @@ export default function HomePage() {
       {/* ==================== 1.1 MOBILE & TABLET NAVIGATION DRAWER & OVERLAY ==================== */}
       {/* LỚP PHỦ NỀN MỜ (OVERLAY): Click vào ngoài để tự đóng menu */}
       <div
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity duration-300 lg:hidden ${
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] transition-opacity duration-300 lg:hidden ${
           isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         onClick={() => setIsMobileMenuOpen(false)}
@@ -1609,7 +1609,7 @@ export default function HomePage() {
 
       {/* NGĂN KÉO DRAWER TRƯỢT TỪ MÉP PHẢI */}
       <aside
-        className={`fixed top-0 right-0 bottom-0 w-72 max-w-[85vw] z-50 flex flex-col justify-between p-5 transition-transform duration-300 ease-in-out shadow-2xl lg:hidden ${
+        className={`fixed top-0 right-0 bottom-0 w-72 max-w-[85vw] z-[60] flex flex-col justify-between p-5 transition-transform duration-300 ease-in-out shadow-2xl lg:hidden ${
           isDarkMode ? 'bg-slate-950 border-l border-slate-800 text-white' : 'bg-white border-l border-slate-200 text-slate-900'
         } ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
@@ -1935,7 +1935,7 @@ export default function HomePage() {
           </div>
 
           {/* THANH ĐIỀU HƯỚNG NGÀY & BỘ LỌC SÂN (DATE NAVIGATION & COURT FILTER) */}
-          <div className={`mb-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border shadow-lg backdrop-blur-md relative z-30 w-full max-w-full overflow-hidden ${isDarkMode ? 'bg-slate-900/80 border-slate-800 shadow-slate-950/40' : 'bg-white border-slate-200 shadow-slate-200/50'
+          <div className={`mb-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border shadow-lg backdrop-blur-md relative z-20 w-full max-w-full ${isDarkMode ? 'bg-slate-900/80 border-slate-800 shadow-slate-950/40' : 'bg-white border-slate-200 shadow-slate-200/50'
             }`}>
             <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto min-w-0">
               {/* NÚT LỌC LOẠI SÂN (SÂN 5, SÂN 7, PICKLEBALL... - LOẠI BỎ SÂN DỰ BỊ) */}
@@ -2364,7 +2364,7 @@ export default function HomePage() {
           6. MODAL ĐẶT SÂN TƯƠNG TÁC (GIAO TIẾP VỚI CSDL SQL SERVER)
           ===================================================================== */}
       {selectedSlot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className={`relative w-full max-w-2xl border rounded-3xl shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200 ${isDarkMode ? 'bg-slate-900 border-emerald-700/50' : 'bg-white border-emerald-300'
             }`}>
 
@@ -3257,7 +3257,7 @@ export default function HomePage() {
 
       {/* MODAL PROFILE THÔNG TIN CÁ NHÂN */}
       {isProfileModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className="relative w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200 my-4">
             <Profile
               onClose={() => setIsProfileModalOpen(false)}

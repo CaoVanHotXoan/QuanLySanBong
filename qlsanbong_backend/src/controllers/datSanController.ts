@@ -1672,16 +1672,24 @@ export const vaoSan = async (req: AuthRequest, res: Response) => {
         const pool = await poolPromise;
         const newStatus = trang_thai || 'DANG_DA';
 
-        await pool.request()
-            .input('id', sql.Int, id)
-            .input('trang_thai', sql.VarChar(20), newStatus)
-            .query(`
-                UPDATE Don_Dat_San 
-                SET da_vao_san = 1, 
-                    gio_vao_san = CONVERT(TIME, GETDATE()),
-                    trang_thai = @trang_thai
-                WHERE id = @id
-            `);
+        try {
+            await pool.request()
+                .input('id', sql.Int, id)
+                .input('trang_thai', sql.VarChar(20), newStatus)
+                .execute('sp_XacNhanVaoSan');
+        } catch (procErr: any) {
+            console.warn('Fallback sang query trực tiếp khi chưa có thủ tục:', procErr.message);
+            await pool.request()
+                .input('id', sql.Int, id)
+                .input('trang_thai', sql.VarChar(20), newStatus)
+                .query(`
+                    UPDATE Don_Dat_San 
+                    SET da_vao_san = 1, 
+                        gio_vao_san = CONVERT(TIME, GETDATE()),
+                        trang_thai = @trang_thai
+                    WHERE id = @id
+                `);
+        }
 
         const io = req.app.get('io');
         if (io) {

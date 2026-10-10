@@ -14,16 +14,21 @@ import {
   MessageSquare,
   Sparkles,
   Loader2,
-  CalendarCheck2
+  CalendarCheck2,
+  UserCheck
 } from 'lucide-react';
 import HeaderNav from '@/components/HeaderNav';
 import Footer from '@/components/Footer';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { contentService, LienHePayload, AboutUsData } from '@/services/contentService';
+import { AuthUser } from '@/pages/Login/login';
 
 export default function LienHePage() {
   const { isDarkMode } = useAppTheme(true);
   const [aboutData, setAboutData] = useState<AboutUsData | null>(null);
+
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [useAccountInfo, setUseAccountInfo] = useState<boolean>(false);
 
   const [formData, setFormData] = useState<LienHePayload>({
     ho_ten: '',
@@ -47,7 +52,57 @@ export default function LienHePage() {
         }
       })
       .catch(err => console.warn('LienHe getAboutUs error:', err));
+
+    // Lấy thông tin tài khoản đang đăng nhập từ localStorage
+    try {
+      const savedAuthUser = localStorage.getItem('auth_user') || localStorage.getItem('soccer_current_user');
+      if (savedAuthUser) {
+        const parsed: AuthUser = JSON.parse(savedAuthUser);
+        setCurrentUser(parsed);
+      }
+    } catch (e) {
+      console.warn('Lỗi đọc auth_user:', e);
+    }
   }, []);
+
+  const handleToggleUseAccountInfo = (checked: boolean) => {
+    setUseAccountInfo(checked);
+    if (checked) {
+      let user = currentUser;
+      if (!user) {
+        try {
+          const savedAuthUser = localStorage.getItem('auth_user') || localStorage.getItem('soccer_current_user');
+          if (savedAuthUser) {
+            user = JSON.parse(savedAuthUser);
+            setCurrentUser(user);
+          }
+        } catch (e) {}
+      }
+
+      if (user) {
+        setFormData((prev) => ({
+          ...prev,
+          ho_ten: user?.ho_ten || '',
+          so_dien_thoai: (user?.so_dien_thoai || '').replace(/\D/g, '').slice(0, 10),
+          email: user?.email || '',
+        }));
+      } else {
+        setSubmitStatus({
+          type: 'error',
+          message: 'Bạn chưa đăng nhập! Vui lòng đăng nhập ở góc trên để tự động điền thông tin, hoặc tự nhập thông tin bên dưới.',
+        });
+        setUseAccountInfo(false);
+      }
+    } else {
+      // Khi bỏ tích thì xóa các thông tin tự điền để người dùng tự gõ
+      setFormData((prev) => ({
+        ...prev,
+        ho_ten: '',
+        so_dien_thoai: '',
+        email: '',
+      }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +134,7 @@ export default function LienHePage() {
           type: 'success',
           message: res.message || 'Gửi liên hệ thành công! Ban quản lý Soccer247 sẽ liên hệ lại với bạn trong thời gian sớm nhất.',
         });
+        setUseAccountInfo(false);
         setFormData({
           ho_ten: '',
           email: '',
@@ -161,6 +217,41 @@ export default function LienHePage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Tùy chọn tự động lấy thông tin tài khoản đang đăng nhập */}
+              <div className={`p-3.5 rounded-2xl border transition-all ${
+                useAccountInfo
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 shadow-sm shadow-emerald-500/10'
+                  : isDarkMode
+                    ? 'bg-slate-950/70 border-slate-800 text-slate-300'
+                    : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}>
+                <label className="flex items-center gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    id="auto-fill-user-info"
+                    checked={useAccountInfo}
+                    onChange={(e) => handleToggleUseAccountInfo(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-400 focus:ring-offset-0 accent-emerald-500 cursor-pointer"
+                  />
+                  <div className="flex items-center gap-2 text-xs sm:text-sm font-bold">
+                    <UserCheck className={`w-4 h-4 shrink-0 transition-colors ${useAccountInfo ? 'text-emerald-400' : 'text-slate-400'}`} />
+                    <span>Lấy thông tin tài khoản đang đăng nhập để tự động điền</span>
+                  </div>
+                </label>
+
+                {useAccountInfo && currentUser && (
+                  <div className="mt-2.5 pt-2 border-t border-emerald-500/20 pl-7 text-[11px] text-slate-400 flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span>Họ tên: <strong className="text-white font-semibold">{currentUser.ho_ten}</strong></span>
+                    {currentUser.so_dien_thoai && (
+                      <span>SĐT: <strong className="text-emerald-400 font-mono font-semibold">{currentUser.so_dien_thoai}</strong></span>
+                    )}
+                    {currentUser.email && (
+                      <span>Email: <strong className="text-cyan-400 font-mono font-semibold">{currentUser.email}</strong></span>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={`block text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
