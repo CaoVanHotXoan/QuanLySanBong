@@ -1754,10 +1754,11 @@ export default function HomePage() {
       <main className="pt-16 lg:pt-28 w-full max-w-full overflow-hidden">
         {/* =====================================================================
             2. HERO SECTION VỚI BANNER (ẢNH / VIDEO) LÀM NỀN TRỰC TIẾP DƯỚI CHỮ
+            - Mobile First: Tinh chỉnh nhỏ gọn trên mobile, giữ nguyên vẻ đẹp trên PC (lg:)
             - Ảnh: 9 giây thì tự động chuyển
             - Video: Hết thời lượng video thì tự động chuyển
             ===================================================================== */}
-        <section id="hero" className="relative w-full max-w-full min-h-[520px] sm:min-h-[580px] lg:min-h-[640px] flex items-center justify-center overflow-hidden border-b border-emerald-950/40 group">
+        <section id="hero" className="relative w-full max-w-full overflow-hidden flex items-center justify-center bg-slate-950 group pt-8 pb-12 px-4 h-auto min-h-[320px] lg:h-[500px] lg:py-16">
           {/* LỚP NỀN BANNER SLIDER (ẢNH HOẶC VIDEO NẰM TRỰC TIẾP DƯỚI DÒNG CHỮ) */}
           <div className="absolute inset-0 w-full h-full z-0 overflow-hidden bg-slate-950">
             {banners.length > 0 ? (
@@ -1792,32 +1793,32 @@ export default function HomePage() {
               <div className="w-full h-full bg-gradient-to-br from-emerald-950 via-slate-950 to-slate-900" />
             )}
 
-            {/* LỚP PHỦ GRADIENT ĐỂ CHỮ NỔI RÕ VÀ SANG TRỌNG */}
-            <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/65 to-slate-950/95 backdrop-blur-[2px]" />
+            {/* LỚP PHỦ GRADIENT ĐỂ CHỮ NỔI RÕ VÀ CHUYỂN MÀU LIỀN MẠCH XUỐNG DƯỚI */}
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-950/65 to-slate-950 pointer-events-none" />
           </div>
 
-          {/* NỘI DUNG CHÍNH NẰM NỔI TRÊN LỚP NỀN BANNER (CHỮ NGƯỜI DÙNG KHOANH) */}
-          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center py-16 sm:py-24">
+          {/* NỘI DUNG CHÍNH NẰM NỔI TRÊN LỚP NỀN BANNER (CHỮ TIÊU ĐỀ & CTA) */}
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             
             {/* DÒNG CHỮ CHÍNH NẰM TRÊN NỀN BANNER */}
-            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight max-w-5xl mx-auto leading-tight text-white drop-shadow-2xl">
+            <h1 className="text-lg md:text-2xl lg:text-4xl font-bold tracking-tight max-w-5xl mx-auto leading-tight text-white drop-shadow-2xl">
               <div className="drop-shadow-lg">Đặt Sân Thể Thao</div>
-              <div className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent my-1.5 sm:my-3 drop-shadow-md">
+              <div className="text-xl md:text-3xl lg:text-5xl font-extrabold my-1 bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent drop-shadow-md">
                 Nhanh Dễ Dàng
               </div>
-              <span className="text-3xl sm:text-5xl lg:text-6xl font-extrabold mt-1 block text-slate-100 drop-shadow-lg">
+              <span className="text-sm md:text-xl lg:text-3xl font-extrabold mt-1 block text-slate-100 drop-shadow-lg">
                 Chọn Giờ Vào Đá Ngay
               </span>
             </h1>
 
             {/* NÚT HÀNH ĐỘNG DẪN XUỐNG ĐẶT SÂN */}
-            <div className="mt-8 sm:mt-10 flex flex-wrap items-center justify-center gap-4">
+            <div className="flex flex-wrap items-center justify-center">
               <a
                 href="#ma-tran-lich-san"
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm sm:text-base shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 cursor-pointer"
+                className="inline-flex items-center gap-1.5 md:gap-2 py-2 px-4 text-xs md:py-3 md:px-6 md:text-base font-semibold rounded-full mt-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-xl shadow-emerald-500/30 transition-all hover:scale-105 cursor-pointer"
               >
                 <span>⚽ Đặt Sân Ngay Hôm Nay</span>
-                <ChevronRight className="w-5 h-5 stroke-[3]" />
+                <ChevronRight className="w-3.5 h-3.5 md:w-5 md:h-5 stroke-[3]" />
               </a>
             </div>
           </div>
@@ -1843,10 +1844,10 @@ export default function HomePage() {
                   bannerVideoRef.current.muted = !isBannerMuted;
                 }
               }}
-              className="absolute top-6 right-6 z-20 p-3 rounded-full bg-black/60 hover:bg-black/85 text-white backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl flex items-center gap-2 text-xs font-bold"
+              className="absolute top-3 right-3 md:top-6 md:right-6 z-20 p-2 md:p-3 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-sm border border-white/20 transition-all cursor-pointer shadow-xl flex items-center gap-1.5 md:gap-2 text-[10px] md:text-xs font-bold"
               title={isBannerMuted ? 'Bật âm thanh video' : 'Tắt âm thanh'}
             >
-              {isBannerMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />}
+              {isBannerMuted ? <VolumeX className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Volume2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-400 animate-pulse" />}
               <span className="hidden sm:inline">{isBannerMuted ? 'Bật âm thanh' : 'Đang phát âm thanh'}</span>
             </button>
           )}
@@ -1860,10 +1861,10 @@ export default function HomePage() {
                   e.stopPropagation();
                   handlePrevBanner();
                 }}
-                className="absolute left-4 sm:left-8 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md border border-white/20 opacity-70 group-hover:opacity-100 transition-all cursor-pointer shadow-2xl hover:scale-110"
+                className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 z-20 w-7 h-7 md:w-10 md:h-10 rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/60 text-white flex items-center justify-center border border-white/20 opacity-70 group-hover:opacity-100 transition-all cursor-pointer shadow-xl hover:scale-110"
                 title="Banner trước"
               >
-                <ArrowLeft className="w-6 h-6 stroke-[2.5]" />
+                <ArrowLeft className="w-3.5 h-3.5 md:w-5 md:h-5 stroke-[2.5]" />
               </button>
 
               <button
@@ -1872,14 +1873,14 @@ export default function HomePage() {
                   e.stopPropagation();
                   handleNextBanner();
                 }}
-                className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md border border-white/20 opacity-70 group-hover:opacity-100 transition-all cursor-pointer shadow-2xl hover:scale-110"
+                className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 z-20 w-7 h-7 md:w-10 md:h-10 rounded-full bg-black/30 backdrop-blur-sm hover:bg-black/60 text-white flex items-center justify-center border border-white/20 opacity-70 group-hover:opacity-100 transition-all cursor-pointer shadow-xl hover:scale-110"
                 title="Banner tiếp theo"
               >
-                <ArrowRight className="w-6 h-6 stroke-[2.5]" />
+                <ArrowRight className="w-3.5 h-3.5 md:w-5 md:h-5 stroke-[2.5]" />
               </button>
 
               {/* CÁC CHẤM CHUYỂN SLIDE Ở DƯỚI CÙNG HERO SECTION */}
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2.5 bg-black/50 px-4 py-2 rounded-full backdrop-blur-md border border-white/15 shadow-xl">
+              <div className="absolute bottom-3 md:bottom-5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 md:gap-2.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 px-2.5 py-1 md:px-4 md:py-1.5 rounded-full border border-white/15 shadow-xl transition-colors">
                 {banners.map((b, i) => (
                   <button
                     key={b.id || i}
@@ -1890,8 +1891,8 @@ export default function HomePage() {
                     }}
                     className={`transition-all rounded-full cursor-pointer ${
                       i === currentBannerIndex
-                        ? 'w-8 h-2.5 bg-emerald-400 shadow-md shadow-emerald-400/60'
-                        : 'w-2.5 h-2.5 bg-white/40 hover:bg-white/80'
+                        ? 'w-5 md:w-8 h-1.5 md:h-2.5 bg-emerald-400 shadow-md shadow-emerald-400/60'
+                        : 'w-1.5 md:w-2.5 h-1.5 md:h-2.5 bg-white/40 hover:bg-white/80'
                     }`}
                     title={`Chuyển đến banner ${i + 1}`}
                   />
