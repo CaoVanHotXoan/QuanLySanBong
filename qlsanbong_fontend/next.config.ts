@@ -25,6 +25,18 @@ const nextConfig: NextConfig = {
         source: '/tin_tuc/:path*',
         destination: '/tin-tuc/:path*',
       },
+      {
+        source: '/History/History',
+        destination: '/history',
+      },
+      {
+        source: '/History',
+        destination: '/history',
+      },
+      {
+        source: '/History/:path*',
+        destination: '/history/:path*',
+      },
     ];
   },
 };

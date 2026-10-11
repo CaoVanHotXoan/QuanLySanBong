@@ -1,8 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Phone, Mail, MapPin } from 'lucide-react';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { contentService, AboutUsData } from '@/services/contentService';
+
+const DongNaiMap = dynamic(() => import('@/components/DongNaiMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center bg-slate-900 text-slate-400 text-xs">
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+        <span>Đang tải bản đồ Đồng Nai...</span>
+      </div>
+    </div>
+  )
+});
 
 // SoccerBall Icon SVG chuẩn màu đen trắng đồng bộ toàn bộ trang web
 const SoccerBallIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
@@ -24,7 +37,7 @@ const SoccerBallIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
 // Hàm tự động bóc tách link src chuẩn từ mã iframe hoặc đường dẫn URL
 const extractMapSrc = (raw: string | undefined | null): string => {
   if (!raw) {
-    return 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d125397.66986427306!2d106.74558239014159!3d10.950005799999998!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95267b2d5cb%3A0xbcf4a755a9b736b0!2zVHAuIEJpw6puIEjDsmEsIMSQ4buTbmcgTmFp!5e0!3m2!1svi!2s!5m2!1svi!2s';
+    return 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3917.142700043094!2d106.80276227210824!3d10.952591473731976!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95970202f3f%3A0x679e7fa6d33f74e5!2zVHLGsOG7nW5nIMSR4bqhaSBo4buNYyBM4bqhYyBI4buTbmc!5e0!3m2!1svi!2s!4v1791345127082!5m2!1svi!2s';
   }
   const trimmed = raw.trim();
   const match = trimmed.match(/src=["']([^"']+)["']/i);
@@ -126,22 +139,18 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Cột 2: Bản đồ Google Maps */}
+          {/* Cột 2: Bản đồ Vị Trí Cụm Sân (Giới hạn phạm vi Tỉnh Đồng Nai) */}
           <div className="lg:col-span-6 space-y-4">
             <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
               <MapPin className="w-5 h-5 text-emerald-400" />
               Bản Đồ Vị Trí Cụm Sân
             </h3>
             <div className="w-full h-56 rounded-2xl overflow-hidden border border-slate-800 shadow-xl relative bg-slate-900">
-              <iframe
-                title="Bản đồ Soccer247"
-                src={linkMap}
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                allowFullScreen={false}
-                loading="lazy"
-                className="w-full h-full grayscale contrast-125 opacity-80 hover:grayscale-0 hover:opacity-100 transition-all duration-300"
+              <DongNaiMap
+                linkMap={linkMap}
+                diaChi={diaChi}
+                tenTrungTam={tenTrungTam}
+                isDarkMode={isDarkMode}
               />
             </div>
           </div>

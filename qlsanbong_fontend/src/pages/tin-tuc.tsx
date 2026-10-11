@@ -53,7 +53,7 @@ export default function TinTucPage() {
       tieu_de: 'Khởi tranh Giải Bóng Đá Tứ Hùng Soccer247 Cup 2026',
       tom_tat: 'Giải đấu thường niên quy tụ 16 đội bóng phong trào hàng đầu khu vực với tổng giải thưởng lên tới 50 triệu đồng.',
       noi_dung: `Soccer247 chính thức công bố thể lệ và danh sách đăng ký giải bóng đá Tứ Hùng mùa xuân 2026.\n\nGiải đấu quy tụ 16 đội bóng phong trào xuất sắc nhất trên địa bàn Biên Hòa và các khu vực lân cận. Các đội sẽ thi đấu theo thể thức loại trực tiếp kết hợp vòng bảng để tìm ra nhà vô địch nhận cúp và phần thưởng 50.000.000 VNĐ.\n\nĐặc quyền dành cho các đội tham gia:\n- Được cấp miễn phí trang phục thi đấu cao cấp mang thương hiệu Soccer247.\n- Miễn phí toàn bộ nước uống điện giải trong suốt thời gian thi đấu.\n- Toàn bộ các trận đấu được truyền thông, quay phát trực tiếp với bình luận viên chuyên nghiệp.\n\nHãy nhanh tay đăng ký đội bóng của bạn tại quầy lễ tân trung tâm hoặc liên hệ Hotline: 0816344504!`,
-      hinh_anh: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80',
+      hinh_anh: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80',
       luot_xem: 128,
       ngay_dang: new Date().toISOString(),
       trang_thai: 1
@@ -345,7 +345,7 @@ export default function TinTucPage() {
                   >
                     <div className="h-40 rounded-xl overflow-hidden mb-3 bg-slate-950 flex items-center justify-center">
                       <img
-                        src={getOptimizedImageUrl(item.hinh_anh || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=600&q=80', 500)}
+                        src={getOptimizedImageUrl(item.hinh_anh || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=600&q=80', 500)}
                         alt={item.tieu_de}
                         loading="lazy"
                         decoding="async"
@@ -449,7 +449,7 @@ export default function TinTucPage() {
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
                     <div className="lg:col-span-7 relative h-64 sm:h-80 md:h-96 overflow-hidden bg-slate-950 flex items-center justify-center">
                       <img
-                        src={getOptimizedImageUrl(featuredArticle.hinh_anh || 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80', 1000)}
+                        src={getOptimizedImageUrl(featuredArticle.hinh_anh || 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80', 1000)}
                         alt={featuredArticle.tieu_de}
                         loading="lazy"
                         decoding="async"

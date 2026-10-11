@@ -53,7 +53,7 @@ import {
   Menu
 } from 'lucide-react';
 import Login, { AuthUser } from './Login/login';
-import Profile from '../profile/profile';
+import Profile from './profile';
 import SoccerLoader from '../components/SoccerLoader';
 import DateNavigationBar from '../components/DateNavigationBar';
 import Footer from '../components/Footer';
@@ -706,18 +706,36 @@ export default function HomePage() {
     return () => clearInterval(intervalId);
   }, [bookingStep, payOSData?.orderCode, isPaymentSuccess]);
 
-  // Tự động giải phóng đơn tạm thời nếu người dùng tải lại trang hoặc đóng tab khi chưa thanh toán
+  // Tự động giải phóng và hủy đơn tạm thời nếu người dùng tải lại trang (reload) hoặc đóng tab/rời đi khi chưa thanh toán
   useEffect(() => {
-    const handleBeforeUnload = () => {
-      if (bookingStep === 'QR' && payOSData?.ma_don_dat && !isPaymentSuccess) {
+    const handleUnloadOrReload = () => {
+      if (bookingStep === 'QR' && (payOSData?.ma_don_dat || payOSData?.orderCode) && !isPaymentSuccess) {
         try {
-          const blob = new Blob([JSON.stringify({ ma_don_dat: payOSData.ma_don_dat, orderCode: payOSData.orderCode })], { type: 'application/json' });
-          navigator.sendBeacon(`${API_BASE_URL}/thanh-toan/payos/huy-don-tam`, blob);
+          const payload = JSON.stringify({
+            ma_don_dat: payOSData.ma_don_dat,
+            orderCode: payOSData.orderCode,
+          });
+          if (navigator.sendBeacon) {
+            const blob = new Blob([payload], { type: 'application/json' });
+            navigator.sendBeacon(`${API_BASE_URL}/thanh-toan/payos/huy-don-tam`, blob);
+          }
+          if (typeof fetch === 'function') {
+            fetch(`${API_BASE_URL}/thanh-toan/payos/huy-don-tam`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payload,
+              keepalive: true,
+            }).catch(() => {});
+          }
         } catch (_e) {}
       }
     };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('beforeunload', handleUnloadOrReload);
+    window.addEventListener('pagehide', handleUnloadOrReload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnloadOrReload);
+      window.removeEventListener('pagehide', handleUnloadOrReload);
+    };
   }, [bookingStep, payOSData, isPaymentSuccess]);
 
   // Cập nhật ma trận lịch sân khi danh sách sân bóng hoặc ngày đá thay đổi
@@ -797,8 +815,8 @@ export default function HomePage() {
       setIsCheckingPayOS(true);
       setQrModalAlert({
         type: 'info',
-        title: 'Đang kiểm tra giao dịch với MB Bank...',
-        message: 'Hệ thống đang kết nối trực tiếp với MB Bank và PayOS để đối soát giao dịch.',
+        title: 'Đang kiểm tra giao dịch với Soccer247...',
+        message: 'Hệ thống đang kết nối trực tiếp với Soccer247 để đối soát giao dịch.',
       });
     }
     try {
@@ -3025,7 +3043,7 @@ export default function HomePage() {
                     <div className="text-center space-y-1.5">
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/30">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                        <span>MB Bank PayOS VietQR • Tự Động Duyệt 3-5 Giây</span>
+                        <span>Soccer247 VietQR • Tự Động Duyệt 3-5 Giây</span>
                       </div>
                       <h3 className={`text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                         Quét Mã QR MB Bank Để Thanh Toán
@@ -3188,7 +3206,7 @@ export default function HomePage() {
                     <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-500 dark:text-amber-400 flex items-start gap-2">
                       <Info className="w-4 h-4 shrink-0 mt-0.5" />
                       <span>
-                        <strong>Lưu ý:</strong> Vui lòng điền <strong>chính xác nội dung chuyển khoản</strong> để MB Bank và PayOS tự động kích hoạt lịch sân của bạn ngay lập tức mà không cần xác nhận thủ công.
+                        <strong>Lưu ý:</strong> Vui lòng điền <strong>chính xác nội dung chuyển khoản</strong> để Soccer247 tự động kích hoạt lịch sân của bạn ngay lập tức mà không cần xác nhận thủ công.
                       </span>
                     </div>
 

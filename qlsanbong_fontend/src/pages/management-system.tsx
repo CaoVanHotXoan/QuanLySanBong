@@ -526,6 +526,20 @@ export default function ManagementSystem() {
   const [isResizingSidebar, setIsResizingSidebar] = useState<boolean>(false);
   const isCustomResizedRef = useRef<boolean>(false);
 
+  // State đồng bộ thời gian thực để tự động ẩn các ca giờ đã bắt đầu / trôi qua trong quá khứ
+  const [currentMinutesTick, setCurrentMinutesTick] = useState<number>(() => {
+    const d = new Date();
+    return d.getHours() * 60 + d.getMinutes();
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const d = new Date();
+      setCurrentMinutesTick(d.getHours() * 60 + d.getMinutes());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Tự động căn chỉnh chiều rộng Cột Order là 25% màn hình khi khởi chạy và khi thay đổi kích thước màn hình
   useEffect(() => {
     const updateDefaultWidth = () => {
@@ -1728,19 +1742,18 @@ export default function ManagementSystem() {
       return [];
     }
 
-    // 2. Nếu ngày đang xem là HÔM NAY -> Tự động ẩn toàn bộ các ca giờ đã kết thúc trong quá khứ
+    // 2. Nếu ngày đang xem là HÔM NAY -> Tự động ẩn hoàn toàn toàn bộ các ca giờ đã bắt đầu hoặc trôi qua trong quá khứ
     if (selectedDay === today) {
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
       return rawSlots.filter((slot) => {
-        const [endHourStr, endMinStr] = (slot.end || slot.start).split(':');
-        const slotEndMinutes = parseInt(endHourStr, 10) * 60 + parseInt(endMinStr || '0', 10);
-        return slotEndMinutes > currentMinutes;
+        const [startHourStr, startMinStr] = slot.start.split(':');
+        const slotStartMinutes = parseInt(startHourStr, 10) * 60 + parseInt(startMinStr || '0', 10);
+        return slotStartMinutes >= currentMinutesTick;
       });
     }
 
     // 3. Nếu là ngày tương lai -> Hiển thị đầy đủ tất cả khung giờ trong ngày
     return rawSlots;
-  }, [currentDate, timeSlotsList]);
+  }, [currentDate, timeSlotsList, currentMinutesTick]);
 
   // Thống kê nhanh hôm nay
   const statsSummary = useMemo(() => {
@@ -5351,30 +5364,25 @@ export default function ManagementSystem() {
                                 );
                               }
 
-                              // Trạng thái Trống
+                              // Trạng thái Trống (Khả dụng)
                               return (
                                 <button
                                   key={slot.start}
                                   type="button"
                                   onClick={() => handleToggleSlotFromMatrix(san, slot, slotData)}
-                                  className={`w-full h-16 p-2 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer select-none text-center group ${isPastTime
-                                    ? 'border-slate-800/80 bg-slate-900/40 hover:bg-slate-800/60 opacity-60'
-                                    : 'border-emerald-500/40 bg-gradient-to-b from-[#0b241c]/70 to-[#061712]/70 hover:from-[#0e2e24] hover:to-[#081e17] hover:border-emerald-400 hover:scale-[1.02] shadow-sm'
-                                    }`}
+                                  className="w-full h-16 p-2 rounded-xl border border-emerald-500/40 bg-gradient-to-b from-[#0b241c]/70 to-[#061712]/70 hover:from-[#0e2e24] hover:to-[#081e17] hover:border-emerald-400 hover:scale-[1.02] shadow-sm flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer select-none text-center group"
                                   title={`Trống: Bấm để chọn ca ${slot.start} - ${slot.end}`}
                                 >
-                                  <span className={`text-xs font-black uppercase tracking-wide ${isPastTime ? 'text-slate-400' : 'text-emerald-400 group-hover:text-emerald-300'}`}>
-                                    {isPastTime ? 'ĐÃ QUA' : 'TRỐNG'}
+                                  <span className="text-xs font-black uppercase tracking-wide text-emerald-400 group-hover:text-emerald-300">
+                                    TRỐNG
                                   </span>
                                   <div className="flex items-center gap-1.5">
-                                    <span className={`text-[10px] font-mono font-bold ${isPastTime ? 'text-slate-500' : 'text-teal-300'}`}>
+                                    <span className="text-[10px] font-mono font-bold text-teal-300">
                                       {slot.label}
                                     </span>
-                                    {!isPastTime && (
-                                      <span className="text-[9px] font-mono text-emerald-400/80">
-                                        • {Math.round(san.don_gia_phut * 30 / 1000)}k
-                                      </span>
-                                    )}
+                                    <span className="text-[9px] font-mono text-emerald-400/80">
+                                      • {Math.round(san.don_gia_phut * 30 / 1000)}k
+                                    </span>
                                   </div>
                                 </button>
                               );
@@ -5564,16 +5572,13 @@ export default function ManagementSystem() {
                                       <button
                                         type="button"
                                         onClick={() => handleToggleSlotFromMatrix(san, slot, slotData)}
-                                        className={`w-full h-14 lg:h-16 p-1.5 rounded-xl border flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer select-none text-center group ${isPastTime
-                                          ? 'border-slate-800/80 bg-slate-900/40 hover:bg-slate-800/60 opacity-60'
-                                          : 'border-emerald-500/40 bg-gradient-to-b from-[#0b241c]/70 to-[#061712]/70 hover:from-[#0e2e24] hover:to-[#081e17] hover:border-emerald-400 hover:scale-[1.03] shadow-sm hover:shadow-emerald-950/40'
-                                          }`}
+                                        className="w-full h-14 lg:h-16 p-1.5 rounded-xl border border-emerald-500/40 bg-gradient-to-b from-[#0b241c]/70 to-[#061712]/70 hover:from-[#0e2e24] hover:to-[#081e17] hover:border-emerald-400 hover:scale-[1.03] shadow-sm hover:shadow-emerald-950/40 flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer select-none text-center group"
                                         title={`Trống: Bấm để chọn ${san.ten_san} ca ${slot.start} - ${slot.end}`}
                                       >
-                                        <span className={`text-[11px] font-black uppercase tracking-wide ${isPastTime ? 'text-slate-400' : 'text-emerald-400 group-hover:text-emerald-300'}`}>
-                                          {isPastTime ? 'ĐÃ QUA' : 'TRỐNG'}
+                                        <span className="text-[11px] font-black uppercase tracking-wide text-emerald-400 group-hover:text-emerald-300">
+                                          TRỐNG
                                         </span>
-                                        <span className={`text-[9px] font-mono ${isPastTime ? 'text-slate-500' : 'text-teal-300/80'}`}>
+                                        <span className="text-[9px] font-mono text-teal-300/80">
                                           {Math.round(san.don_gia_phut * 30 / 1000)}k
                                         </span>
                                       </button>

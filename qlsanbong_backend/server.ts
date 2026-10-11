@@ -33,6 +33,7 @@ app.use(cors());
 app.use(compression()); // Nén toàn bộ dữ liệu phản hồi API (Gzip/Brotli) giúp giảm 60-80% băng thông
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.text({ type: ['text/plain', 'text/*'] }));
 
 // Trang chào mừng & Kiểm tra trạng thái máy chủ
 app.get('/', (req: Request, res: Response) => {

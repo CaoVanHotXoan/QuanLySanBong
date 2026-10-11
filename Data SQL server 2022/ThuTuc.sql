@@ -1049,6 +1049,7 @@ BEGIN
         LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
         LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
         WHERE NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%')
+          AND NOT (d.trang_thai = 'DA_HUY' AND (d.ghi_chu LIKE '%PayOS VietQR%' OR d.ghi_chu LIKE '%PayOS #%'))
         ORDER BY d.id DESC;
     END TRY
     BEGIN CATCH
@@ -1123,6 +1124,9 @@ AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
+        -- Tự động dọn dẹp các đơn tạm quá hạn hoặc đã hủy do reload
+        EXEC sp_HuyDonTam;
+
         SELECT 
             d.id,
             'DDS-' + CAST(YEAR(d.ngay_tao) AS VARCHAR) + '-' + RIGHT('000' + CAST(d.id AS VARCHAR), 3) AS ma_don,
@@ -1192,6 +1196,7 @@ BEGIN
           AND (@so_dien_thoai IS NULL OR nd.so_dien_thoai = @so_dien_thoai)
           AND (@email IS NULL OR nd.email = @email)
           AND NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%')
+          AND NOT (d.trang_thai = 'DA_HUY' AND (d.ghi_chu LIKE '%PayOS VietQR%' OR d.ghi_chu LIKE '%PayOS #%'))
         ORDER BY d.id DESC;
     END TRY
     BEGIN CATCH
@@ -3044,7 +3049,7 @@ BEGIN
 END;
 GO
 
--- 29.5. Thủ tục Hủy đơn đặt sân tạm thời (PayOS khi chưa thanh toán hoặc hết hạn)
+-- 29.5. Thủ tục Hủy đơn đặt sân tạm thời (PayOS khi chưa thanh toán, reload trang hoặc hết hạn: Xóa bỏ hoàn toàn khỏi CSDL, không lưu lại với trạng thái DA_HUY)
 CREATE OR ALTER PROCEDURE sp_HuyDonTam
     @ma_don_dat INT = NULL,
     @searchStr NVARCHAR(100) = NULL
@@ -3054,23 +3059,50 @@ BEGIN
     BEGIN TRY
         IF @ma_don_dat IS NOT NULL
         BEGIN
-            UPDATE Don_Dat_San
-            SET trang_thai = 'DA_HUY'
+            DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat = @ma_don_dat;
+            DELETE FROM Thanh_Toan WHERE ma_don_dat = @ma_don_dat;
+            DELETE FROM Lich_Su_Hoan_Tien WHERE ma_don_dat = @ma_don_dat;
+            DELETE FROM Don_Dat_San 
             WHERE id = @ma_don_dat AND trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN');
         END
         ELSE IF @searchStr IS NOT NULL
         BEGIN
-            UPDATE Don_Dat_San
-            SET trang_thai = 'DA_HUY'
+            DECLARE @tam_ids TABLE (id INT);
+            INSERT INTO @tam_ids (id)
+            SELECT id FROM Don_Dat_San 
             WHERE ghi_chu LIKE @searchStr AND trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN');
+
+            DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat IN (SELECT id FROM @tam_ids);
+            DELETE FROM Thanh_Toan WHERE ma_don_dat IN (SELECT id FROM @tam_ids);
+            DELETE FROM Lich_Su_Hoan_Tien WHERE ma_don_dat IN (SELECT id FROM @tam_ids);
+            DELETE FROM Don_Dat_San WHERE id IN (SELECT id FROM @tam_ids);
         END
 
-        -- Tự động hủy các đơn tạm PayOS chưa thanh toán quá 10 phút
-        UPDATE Don_Dat_San
-        SET trang_thai = 'DA_HUY'
+        -- Tự động dọn dẹp các đơn tạm PayOS chưa thanh toán quá 10 phút (xóa hoàn toàn, không lưu lại trạng thái DA_HUY)
+        DECLARE @expired_ids TABLE (id INT);
+        INSERT INTO @expired_ids (id)
+        SELECT id FROM Don_Dat_San 
         WHERE trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN')
           AND ngay_tao < DATEADD(MINUTE, -10, GETDATE())
           AND (ghi_chu LIKE '%PayOS%' OR phuong_thuc = 'CHUYEN_KHOAN');
+
+        DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat IN (SELECT id FROM @expired_ids);
+        DELETE FROM Thanh_Toan WHERE ma_don_dat IN (SELECT id FROM @expired_ids);
+        DELETE FROM Lich_Su_Hoan_Tien WHERE ma_don_dat IN (SELECT id FROM @expired_ids);
+        DELETE FROM Don_Dat_San WHERE id IN (SELECT id FROM @expired_ids);
+
+        -- Đồng thời dọn dẹp các bản ghi rác PayOS tạm bị gắn trạng thái DA_HUY trước đây do reload/hủy modal
+        DECLARE @legacy_huy_ids TABLE (id INT);
+        INSERT INTO @legacy_huy_ids (id)
+        SELECT d.id FROM Don_Dat_San d
+        WHERE d.trang_thai = 'DA_HUY'
+          AND (d.ghi_chu LIKE '%PayOS VietQR%' OR d.ghi_chu LIKE '%PayOS #%')
+          AND NOT EXISTS (SELECT 1 FROM Lich_Su_Hoan_Tien ht WHERE ht.ma_don_dat = d.id)
+          AND NOT EXISTS (SELECT 1 FROM Thanh_Toan tt WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd = 'THANH_CONG');
+
+        DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat IN (SELECT id FROM @legacy_huy_ids);
+        DELETE FROM Thanh_Toan WHERE ma_don_dat IN (SELECT id FROM @legacy_huy_ids);
+        DELETE FROM Don_Dat_San WHERE id IN (SELECT id FROM @legacy_huy_ids);
     END TRY
     BEGIN CATCH
         ;THROW;
@@ -3801,7 +3833,7 @@ BEGIN
         INSERT INTO About_Us (ten_trung_tam, hotline, email, dia_chi, link_map, gioi_thieu_ngan, bai_viet_about_us, link_facebook, link_zalo)
         VALUES (
             N'Trung Tâm Thể Thao Soccer247', '0816344504', 'sinhvienxoan@gmail.com', N'Biên Hòa - Đồng Nai', 
-            'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d125397.66986427306!2d106.74558239014159!3d10.950005799999998!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95267b2d5cb%3A0xbcf4a755a9b736b0!2zVHAuIEJpw6puIEjDsmEsIMSQ4buTbmcgTmFp!5e0!3m2!1svi!2s!5m2!1svi!2s',
+            'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3917.142700043094!2d106.80276227210824!3d10.952591473731976!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95970202f3f%3A0x679e7fa6d33f74e5!2zVHLGsOG7nW5nIMSR4bqhaSBo4buNYyBM4bqhYyBI4buTbmc!5e0!3m2!1svi!2s!4v1791345127082!5m2!1svi!2s',
             N'Trung tâm thể thao đa năng hiện đại hàng đầu khu vực với hệ thống sân bóng cỏ nhân tạo đạt chuẩn FIFA, hệ thống chiếu sáng LED chống lóa và dịch vụ tiện ích khép kín.',
             N'Soccer247 ra đời với sứ mệnh mang đến không gian thể thao chuyên nghiệp, hiện đại và tiện lợi nhất cho cộng đồng yêu bóng đá. Chúng tôi trang bị mặt cỏ sợi kim cương cao cấp nhập khẩu, hệ thống thoát nước ngầm tiêu chuẩn, giàn đèn LED công suất cao cùng khu vực căn tin phục vụ giải khát tiện nghi. Hệ thống đặt sân trực tuyến 24/7 giúp khách hàng chủ động chọn sân, giờ đá và thanh toán tự động qua mã QR chỉ trong vài giây.',
             'https://facebook.com/soccer247', 'https://zalo.me/0816344504'

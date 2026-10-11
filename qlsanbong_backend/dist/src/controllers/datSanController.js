@@ -1610,16 +1610,25 @@ const vaoSan = async (req, res) => {
         const { trang_thai } = req.body;
         const pool = await db_1.poolPromise;
         const newStatus = trang_thai || 'DANG_DA';
-        await pool.request()
-            .input('id', db_1.sql.Int, id)
-            .input('trang_thai', db_1.sql.VarChar(20), newStatus)
-            .query(`
-                UPDATE Don_Dat_San 
-                SET da_vao_san = 1, 
-                    gio_vao_san = CONVERT(TIME, GETDATE()),
-                    trang_thai = @trang_thai
-                WHERE id = @id
-            `);
+        try {
+            await pool.request()
+                .input('id', db_1.sql.Int, id)
+                .input('trang_thai', db_1.sql.VarChar(20), newStatus)
+                .execute('sp_XacNhanVaoSan');
+        }
+        catch (procErr) {
+            console.warn('Fallback sang query trực tiếp khi chưa có thủ tục:', procErr.message);
+            await pool.request()
+                .input('id', db_1.sql.Int, id)
+                .input('trang_thai', db_1.sql.VarChar(20), newStatus)
+                .query(`
+                    UPDATE Don_Dat_San 
+                    SET da_vao_san = 1, 
+                        gio_vao_san = CONVERT(TIME, GETDATE()),
+                        trang_thai = @trang_thai
+                    WHERE id = @id
+                `);
+        }
         const io = req.app.get('io');
         if (io) {
             io.emit('booking_updated');

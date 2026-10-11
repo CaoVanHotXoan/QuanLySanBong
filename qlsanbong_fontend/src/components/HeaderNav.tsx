@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import Login, { AuthUser } from '@/pages/Login/login';
-import Profile from '@/profile/profile';
+import Profile from '@/pages/profile';
 
 // SoccerBall Icon SVG quả bóng đá chuẩn màu đen trắng đồng bộ toàn bộ trang web
 const SoccerBallIcon = ({ className = "w-6 h-6" }: { className?: string }) => (

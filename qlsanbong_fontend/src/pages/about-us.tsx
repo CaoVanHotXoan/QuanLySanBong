@@ -47,7 +47,7 @@ export default function AboutUsPage() {
           hotline: '0816344504',
           email: 'sinhvienxoan@gmail.com',
           dia_chi: 'Biên Hòa - Đồng Nai',
-          link_map: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d125397.66986427306!2d106.74558239014159!3d10.950005799999998!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95267b2d5cb%3A0xbcf4a755a9b736b0!2zVHAuIEJpw6puIEjDsmEsIMSQ4buTbmcgTmFp!5e0!3m2!1svi!2s!5m2!1svi!2s',
+          link_map: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3917.142700043094!2d106.80276227210824!3d10.952591473731976!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95970202f3f%3A0x679e7fa6d33f74e5!2zVHLGsOG7nW5nIMSR4bqhaSBo4buNYyBM4bqhYyBI4buTbmc!5e0!3m2!1svi!2s!4v1791345127082!5m2!1svi!2s',
           gioi_thieu_ngan: 'Trung tâm thể thao đa năng hiện đại hàng đầu khu vực với hệ thống sân bóng cỏ nhân tạo đạt chuẩn FIFA, hệ thống chiếu sáng LED chống lóa và dịch vụ tiện ích khép kín.',
           bai_viet_about_us: 'Soccer247 ra đời với sứ mệnh mang đến không gian thể thao chuyên nghiệp, hiện đại và tiện lợi nhất cho cộng đồng yêu bóng đá. Chúng tôi trang bị mặt cỏ sợi kim cương cao cấp nhập khẩu, hệ thống thoát nước ngầm tiêu chuẩn, giàn đèn LED công suất cao cùng khu vực căn tin phục vụ giải khát tiện nghi. Hệ thống đặt sân trực tuyến 24/7 giúp khách hàng chủ động chọn sân, giờ đá và thanh toán tự động qua mã QR chỉ trong vài giây.',
           link_facebook: 'https://facebook.com/soccer247',
@@ -158,7 +158,7 @@ export default function AboutUsPage() {
             </div>
 
             {/* Cột phải: Gallery ảnh */}
-            <div className="lg:col-span-6 grid grid-cols-2 gap-4">
+            <div className="lg:col-span-6 grid grid-cols-2 gap-4 items-stretch">
               <div className="space-y-4">
                 <div className="h-48 sm:h-64 rounded-3xl overflow-hidden shadow-xl">
                   <img
@@ -175,18 +175,11 @@ export default function AboutUsPage() {
                   />
                 </div>
               </div>
-              <div className="space-y-4 pt-8">
-                <div className="h-36 sm:h-48 rounded-3xl overflow-hidden shadow-xl">
+              <div className="h-full">
+                <div className="h-full min-h-[21rem] sm:min-h-[29rem] rounded-3xl overflow-hidden shadow-xl">
                   <img
                     src="https://images.unsplash.com/photo-1511886929837-354d827aae26?auto=format&fit=crop&w=800&q=80"
                     alt="Cầu thủ thi đấu"
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-                <div className="h-48 sm:h-64 rounded-3xl overflow-hidden shadow-xl">
-                  <img
-                    src="https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=800&q=80"
-                    alt="Khung thành và sân"
                     className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
                   />
                 </div>

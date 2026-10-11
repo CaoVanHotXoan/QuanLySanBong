@@ -621,9 +621,14 @@ const huyDonTamPayOS = async (req, res) => {
             request.input('searchStr', db_1.sql.NVarChar(100), null);
         }
         await request.execute('sp_HuyDonTam');
+        // Phát tín hiệu Socket.IO để các client cập nhật lại ma trận lịch ngay lập tức
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+        }
         return res.status(200).json({
             success: true,
-            message: 'Đã hủy đơn tạm thời'
+            message: 'Đã hủy đơn tạm thời và giải phóng lịch sân'
         });
     }
     catch (error) {
