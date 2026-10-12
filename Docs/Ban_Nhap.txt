@@ -10,6 +10,10 @@ Làm thêm đặt trực tiếp
 - thêm 2 sân dự phòng
 
 
+Em chào anh,em là Cao Văn Hột Xoàn, em là sinh viên trường Đại Học Lạc Hồng, ngành CNTT liên thông ạ.
+Dạ em được thầy Hải giới thiệu.
+Cho em hỏi công ty truyền thông đông á anh còn tuyển thực tập sinh không ạ
+
 Chức năng nhân viên:
 1. Mục sân đang đá:
     + Hiện thị danh sách các khách đã đặt vào ngày hôm nay
@@ -17,6 +21,13 @@ Chức năng nhân viên:
     (nếu thanh toán đầy đủ thì hiện nút vào sân, 
     nếu chỉ thanh toán 30% thì sẽ hiện 2 nút lưu và thanh toán)
     + nhấn nút lưu thì sẽ đưa hóa đơn này vào sân đang đá để khách hàng thanh toán sau
+============================================================================
+
+Ở đây bạn hãy soạn cho tôi tất cả các câu hỏi mà giáo viên sẽ hỏi ở trang chủ
+Bao gồm các công nghệ, thư viện, ngôn ngữ
+Cách thức hoạt động
+Để tôi bảo vệ Dự án cụ thể là trang chủ
+
 ======================================
 fix lỗi không ảnh hưởng đến tất cả các chức năng của toàn bộ trang web
 Có thể tùy chỉnh CSDL nhưng phải dùng procedure và cập nhật vào 
