@@ -116,6 +116,7 @@ CREATE TABLE Thanh_Toan (
     loai_thanh_toan VARCHAR(20) CHECK (loai_thanh_toan IN ('DAT_COC', 'TRA_HET', 'THANH_TOAN_SAU', 'CHUA_THANH_TOAN')) NOT NULL,
     so_tien DECIMAL(10, 2) NOT NULL,
     ma_giao_dich VARCHAR(100) NULL,
+    noi_dung_chuyen_khoan NVARCHAR(255) NULL,
     trang_thai_gd VARCHAR(20) CHECK (trang_thai_gd IN ('DANG_CHO', 'CHO_XU_LY', 'THANH_CONG', 'THAT_BAI', 'HOAN_TIEN')) DEFAULT 'THANH_CONG',
     ngay_thanh_toan DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id) ON DELETE CASCADE

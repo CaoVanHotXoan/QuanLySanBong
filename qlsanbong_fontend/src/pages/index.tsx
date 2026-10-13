@@ -738,6 +738,17 @@ export default function HomePage() {
     };
   }, [bookingStep, payOSData, isPaymentSuccess]);
 
+  // Khóa cuộn trang nền khi đang mở Modal đặt sân hoặc Modal Profile để tránh các thành phần bên dưới nổi lên
+  useEffect(() => {
+    if (selectedSlot || isProfileModalOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [selectedSlot, isProfileModalOpen]);
+
   // Cập nhật ma trận lịch sân khi danh sách sân bóng hoặc ngày đá thay đổi
   useEffect(() => {
     if (sanBongList.length > 0) {
@@ -825,6 +836,29 @@ export default function HomePage() {
       if (data.success && (data.isPaid || data.status === 'PAID')) {
         setQrModalAlert(null);
         handlePaymentSuccessAction(data.data);
+      } else if (data.invalidDescription) {
+        const cleanActual = (data.actualDescription || '')
+          .replace(/\b(Qam|VQR)[a-zA-Z0-9]+\b/gi, '')
+          .replace(/\bCASSO\w*(\s+\d+)?\b/gi, '')
+          .replace(/\b(SNL|FT|REF|TRX)[a-zA-Z0-9]+\b/gi, '')
+          .replace(/\bi[a-zA-Z0-9]{5,}\b/gi, '')
+          .replace(/\b\d+VND\b/gi, '')
+          .replace(/\b[a-zA-Z0-9]{12,}\b/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const displayDesc = cleanActual || data.actualDescription || '(trống)';
+
+        setQrModalAlert({
+          type: 'error',
+          title: '⚠️ Sai Nội Dung Chuyển Khoản!',
+          message: `Hệ thống phát hiện bạn đã chuyển khoản nhưng SAI NỘI DUNG CHUYỂN KHOẢN! Nội dung nhận được: "${displayDesc}". Nội dung yêu cầu: "${data.expectedDescription}". Đơn đặt sân không thể tự động duyệt! Vui lòng liên hệ ban quản lý để được hỗ trợ.`,
+        });
+        if (manual) {
+          triggerToast({
+            type: 'error',
+            message: `⚠️ Sai nội dung chuyển khoản! Yêu cầu: ${data.expectedDescription}`,
+          });
+        }
       } else if (manual) {
         setQrModalAlert({
           type: 'error',
@@ -2382,7 +2416,7 @@ export default function HomePage() {
           6. MODAL ĐẶT SÂN TƯƠNG TÁC (GIAO TIẾP VỚI CSDL SQL SERVER)
           ===================================================================== */}
       {selectedSlot && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className={`relative w-full max-w-2xl border rounded-3xl shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200 ${isDarkMode ? 'bg-slate-900 border-emerald-700/50' : 'bg-white border-emerald-300'
             }`}>
 
@@ -3275,7 +3309,7 @@ export default function HomePage() {
 
       {/* MODAL PROFILE THÔNG TIN CÁ NHÂN */}
       {isProfileModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
           <div className="relative w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200 my-4">
             <Profile
               onClose={() => setIsProfileModalOpen(false)}

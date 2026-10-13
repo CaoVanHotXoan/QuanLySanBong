@@ -172,6 +172,12 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID('Thanh_Toan', 'U') IS NOT NULL AND COL_LENGTH('Thanh_Toan', 'noi_dung_chuyen_khoan') IS NULL
+BEGIN
+    ALTER TABLE Thanh_Toan ADD noi_dung_chuyen_khoan NVARCHAR(255) NULL;
+END;
+GO
+
 -- 3.6. Bảng Lich_Su_Hoan_Tien
 IF OBJECT_ID('Lich_Su_Hoan_Tien', 'U') IS NULL
 BEGIN
@@ -1038,7 +1044,7 @@ BEGIN
                 ELSE ISNULL((
                     SELECT SUM(tt.so_tien) 
                     FROM Thanh_Toan tt 
-                    WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd = 'THANH_CONG'
+                    WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd IN ('THANH_CONG', 'DANG_CHO', 'CHO_XU_LY')
                 ), CASE 
                     WHEN d.trang_thai = 'DA_COC' THEN ROUND(d.tong_tien * 0.3, 0)
                     ELSE 0 
@@ -1048,7 +1054,7 @@ BEGIN
         LEFT JOIN San_Bong sb ON d.ma_san = sb.id
         LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
         LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
-        WHERE NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%')
+        WHERE NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%' AND (d.ghi_chu IS NULL OR d.ghi_chu NOT LIKE N'%CẢNH BÁO%'))
           AND NOT (d.trang_thai = 'DA_HUY' AND (d.ghi_chu LIKE '%PayOS VietQR%' OR d.ghi_chu LIKE '%PayOS #%'))
         ORDER BY d.id DESC;
     END TRY
@@ -1154,14 +1160,14 @@ BEGIN
             ISNULL((
                 SELECT SUM(tt.so_tien) 
                 FROM Thanh_Toan tt 
-                WHERE tt.ma_don_dat = d.id AND tt.loai_thanh_toan = 'DAT_COC' AND tt.trang_thai_gd = 'THANH_CONG'
+                WHERE tt.ma_don_dat = d.id AND tt.loai_thanh_toan = 'DAT_COC' AND tt.trang_thai_gd IN ('THANH_CONG', 'DANG_CHO', 'CHO_XU_LY')
             ), ROUND(d.tong_tien * 0.3, 0)) AS tien_coc,
             CASE 
                 WHEN d.trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'KET_THUC') THEN d.tong_tien
                 ELSE ISNULL((
                     SELECT SUM(tt.so_tien) 
                     FROM Thanh_Toan tt 
-                    WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd = 'THANH_CONG'
+                    WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd IN ('THANH_CONG', 'DANG_CHO', 'CHO_XU_LY')
                 ), CASE 
                     WHEN d.trang_thai = 'DA_COC' THEN ROUND(d.tong_tien * 0.3, 0)
                     ELSE 0 
@@ -1173,7 +1179,7 @@ BEGIN
                     WHEN (d.tong_tien - ISNULL((
                         SELECT SUM(tt.so_tien) 
                         FROM Thanh_Toan tt 
-                        WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd = 'THANH_CONG'
+                        WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd IN ('THANH_CONG', 'DANG_CHO', 'CHO_XU_LY')
                     ), CASE 
                         WHEN d.trang_thai = 'DA_COC' THEN ROUND(d.tong_tien * 0.3, 0)
                         ELSE 0 
@@ -1181,7 +1187,7 @@ BEGIN
                     ELSE (d.tong_tien - ISNULL((
                         SELECT SUM(tt.so_tien) 
                         FROM Thanh_Toan tt 
-                        WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd = 'THANH_CONG'
+                        WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd IN ('THANH_CONG', 'DANG_CHO', 'CHO_XU_LY')
                     ), CASE 
                         WHEN d.trang_thai = 'DA_COC' THEN ROUND(d.tong_tien * 0.3, 0)
                         ELSE 0 
@@ -1195,7 +1201,7 @@ BEGIN
         WHERE (@ma_nguoi_dung IS NULL OR d.ma_nguoi_dung = @ma_nguoi_dung)
           AND (@so_dien_thoai IS NULL OR nd.so_dien_thoai = @so_dien_thoai)
           AND (@email IS NULL OR nd.email = @email)
-          AND NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%')
+          AND NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%' AND (d.ghi_chu IS NULL OR d.ghi_chu NOT LIKE N'%CẢNH BÁO%'))
           AND NOT (d.trang_thai = 'DA_HUY' AND (d.ghi_chu LIKE '%PayOS VietQR%' OR d.ghi_chu LIKE '%PayOS #%'))
         ORDER BY d.id DESC;
     END TRY
@@ -1709,7 +1715,8 @@ CREATE OR ALTER PROCEDURE sp_ThanhToanDon
     @phuong_thuc VARCHAR(20),
     @loai_thanh_toan VARCHAR(20),
     @so_tien DECIMAL(10, 2),
-    @ma_giao_dich VARCHAR(100) = NULL
+    @ma_giao_dich VARCHAR(100) = NULL,
+    @noi_dung_chuyen_khoan NVARCHAR(255) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1737,11 +1744,28 @@ BEGIN
             ;THROW 50052, N'Số tiền thanh toán phải lớn hơn 0.', 1;
         END;
 
+        -- KIỂM TRA ĐỐI SOÁT NỘI DUNG CHUYỂN KHOẢN NẾU LÀ CHUYỂN KHOẢN CÓ NỘI DUNG
+        IF @phuong_thuc = 'CHUYEN_KHOAN' AND @noi_dung_chuyen_khoan IS NOT NULL AND LTRIM(RTRIM(@noi_dung_chuyen_khoan)) <> ''
+        BEGIN
+            DECLARE @ma_don_str VARCHAR(20) = CAST(@ma_don_dat AS VARCHAR(20));
+            DECLARE @pattern1 NVARCHAR(50) = N'%DS' + @ma_don_str + N'%';
+            DECLARE @pattern2 NVARCHAR(50) = N'%DS ' + @ma_don_str + N'%';
+            DECLARE @pattern3 NVARCHAR(50) = N'%DS0%' + @ma_don_str + N'%';
+
+            IF (UPPER(@noi_dung_chuyen_khoan) NOT LIKE @pattern1
+                AND UPPER(@noi_dung_chuyen_khoan) NOT LIKE @pattern2
+                AND UPPER(@noi_dung_chuyen_khoan) NOT LIKE @pattern3
+                AND (@ma_giao_dich IS NULL OR UPPER(@noi_dung_chuyen_khoan) NOT LIKE N'%' + UPPER(@ma_giao_dich) + N'%'))
+            BEGIN
+                ;THROW 50060, N'Nội dung chuyển khoản không khớp với mã đơn đặt sân (Yêu cầu cú pháp DS + mã đơn)!', 1;
+            END;
+        END;
+
         INSERT INTO Thanh_Toan (
-            ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan
+            ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, noi_dung_chuyen_khoan, trang_thai_gd, ngay_thanh_toan
         )
         VALUES (
-            @ma_don_dat, @phuong_thuc, @loai_thanh_toan, @so_tien, @ma_giao_dich, 'THANH_CONG', GETDATE()
+            @ma_don_dat, @phuong_thuc, @loai_thanh_toan, @so_tien, @ma_giao_dich, @noi_dung_chuyen_khoan, 'THANH_CONG', GETDATE()
         );
 
         IF @loai_thanh_toan = 'DAT_COC'
@@ -1766,6 +1790,7 @@ BEGIN
             tt.loai_thanh_toan,
             tt.so_tien,
             tt.ma_giao_dich,
+            tt.noi_dung_chuyen_khoan,
             tt.trang_thai_gd,
             tt.ngay_thanh_toan,
             d.trang_thai AS trang_thai_don_moi
@@ -1779,6 +1804,109 @@ BEGIN
         BEGIN
             ROLLBACK TRANSACTION;
         END;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- Thủ tục kiểm tra tính hợp lệ của nội dung chuyển khoản cho đơn đặt sân (sp_KiemTraNoiDungChuyenKhoan)
+CREATE OR ALTER PROCEDURE sp_KiemTraNoiDungChuyenKhoan
+    @ma_don_dat INT,
+    @noi_dung_chuyen_khoan NVARCHAR(255),
+    @ma_giao_dich VARCHAR(100) = NULL,
+    @hop_le BIT OUTPUT,
+    @thong_bao NVARCHAR(255) OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    IF NOT EXISTS (SELECT 1 FROM Don_Dat_San WHERE id = @ma_don_dat)
+    BEGIN
+        SET @hop_le = 0;
+        SET @thong_bao = N'Không tìm thấy đơn đặt sân #' + CAST(@ma_don_dat AS NVARCHAR(20));
+        RETURN;
+    END;
+
+    IF @noi_dung_chuyen_khoan IS NULL OR LTRIM(RTRIM(@noi_dung_chuyen_khoan)) = ''
+    BEGIN
+        SET @hop_le = 0;
+        SET @thong_bao = N'Nội dung chuyển khoản rỗng!';
+        RETURN;
+    END;
+
+    DECLARE @ma_don_str VARCHAR(20) = CAST(@ma_don_dat AS VARCHAR(20));
+    DECLARE @p1 NVARCHAR(50) = N'%DS' + @ma_don_str + N'%';
+    DECLARE @p2 NVARCHAR(50) = N'%DS ' + @ma_don_str + N'%';
+    DECLARE @p3 NVARCHAR(50) = N'%DS0%' + @ma_don_str + N'%';
+
+    IF (UPPER(@noi_dung_chuyen_khoan) LIKE @p1 
+        OR UPPER(@noi_dung_chuyen_khoan) LIKE @p2 
+        OR UPPER(@noi_dung_chuyen_khoan) LIKE @p3
+        OR (@ma_giao_dich IS NOT NULL AND LTRIM(RTRIM(@ma_giao_dich)) <> '' AND UPPER(@noi_dung_chuyen_khoan) LIKE N'%' + UPPER(@ma_giao_dich) + N'%'))
+    BEGIN
+        SET @hop_le = 1;
+        SET @thong_bao = N'Nội dung chuyển khoản hợp lệ';
+    END
+    ELSE
+    BEGIN
+        SET @hop_le = 0;
+        SET @thong_bao = N'Nội dung chuyển khoản không khớp. Yêu cầu cú pháp: DS' + @ma_don_str;
+    END;
+END;
+GO
+
+-- Thủ tục ghi nhận cảnh báo khi khách hàng chuyển khoản sai nội dung (sp_GhiNhanChuyenKhoanSaiNoiDung)
+CREATE OR ALTER PROCEDURE sp_GhiNhanChuyenKhoanSaiNoiDung
+    @ma_don_dat INT,
+    @so_tien DECIMAL(10, 2),
+    @ma_giao_dich VARCHAR(100) = NULL,
+    @noi_dung_thuc_te NVARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        -- Cập nhật đơn đặt sân sang trạng thái CHO_XAC_NHAN và ghi chú cảnh báo
+        UPDATE Don_Dat_San
+        SET trang_thai = 'CHO_XAC_NHAN',
+            ghi_chu = CASE 
+                WHEN ghi_chu LIKE N'%[CẢNH BÁO CK SAI NỘI DUNG%' THEN ghi_chu
+                ELSE ISNULL(ghi_chu, '') + N' | [CẢNH BÁO CK SAI NỘI DUNG: Nhận ' + CAST(@so_tien AS NVARCHAR(30)) + N'đ, ND: "' + ISNULL(@noi_dung_thuc_te, N'') + N'"]'
+            END
+        WHERE id = @ma_don_dat;
+
+        -- Ghi nhận giao dịch vào bảng Thanh_Toan với trạng thái DANG_CHO (đang chờ xử lý)
+        IF @ma_don_dat IS NOT NULL AND @so_tien > 0
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM Thanh_Toan 
+                WHERE ma_don_dat = @ma_don_dat 
+                  AND ((ma_giao_dich = @ma_giao_dich AND @ma_giao_dich IS NOT NULL) OR trang_thai_gd = 'DANG_CHO')
+            )
+            BEGIN
+                INSERT INTO Thanh_Toan (
+                    ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, noi_dung_chuyen_khoan, trang_thai_gd, ngay_thanh_toan
+                ) VALUES (
+                    @ma_don_dat, 
+                    'CHUYEN_KHOAN', 
+                    'DAT_COC', 
+                    @so_tien, 
+                    ISNULL(@ma_giao_dich, 'CK_SAI_ND_' + CAST(@ma_don_dat AS VARCHAR(20))), 
+                    @noi_dung_thuc_te, 
+                    'DANG_CHO', 
+                    GETDATE()
+                );
+            END
+            ELSE IF @ma_giao_dich IS NOT NULL
+            BEGIN
+                UPDATE Thanh_Toan
+                SET noi_dung_chuyen_khoan = @noi_dung_thuc_te,
+                    so_tien = @so_tien,
+                    ngay_thanh_toan = GETDATE()
+                WHERE ma_don_dat = @ma_don_dat AND trang_thai_gd = 'DANG_CHO';
+            END
+        END
+    END TRY
+    BEGIN CATCH
         ;THROW;
     END CATCH;
 END;
@@ -1877,6 +2005,8 @@ BEGIN
             tt.phuong_thuc,
             tt.loai_thanh_toan,
             tt.ma_giao_dich,
+            tt.noi_dung_chuyen_khoan,
+            tt.trang_thai_gd,
             tt.ngay_thanh_toan
         FROM Thanh_Toan tt
         LEFT JOIN Don_Dat_San d ON tt.ma_don_dat = d.id
@@ -3049,7 +3179,7 @@ BEGIN
 END;
 GO
 
--- 29.5. Thủ tục Hủy đơn đặt sân tạm thời (PayOS khi chưa thanh toán, reload trang hoặc hết hạn: Xóa bỏ hoàn toàn khỏi CSDL, không lưu lại với trạng thái DA_HUY)
+-- 29.5. Thủ tục Hủy đơn đặt sân tạm thời (PayOS khi chưa thanh toán, reload trang hoặc hết hạn: Xóa bỏ hoàn toàn khỏi CSDL, không lưu lại với trạng thái DA_HUY; Bảo toàn đơn đã nhận tiền sai nội dung)
 CREATE OR ALTER PROCEDURE sp_HuyDonTam
     @ma_don_dat INT = NULL,
     @searchStr NVARCHAR(100) = NULL
@@ -3059,35 +3189,66 @@ BEGIN
     BEGIN TRY
         IF @ma_don_dat IS NOT NULL
         BEGIN
-            DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat = @ma_don_dat;
-            DELETE FROM Thanh_Toan WHERE ma_don_dat = @ma_don_dat;
-            DELETE FROM Lich_Su_Hoan_Tien WHERE ma_don_dat = @ma_don_dat;
+            -- Tuyệt đối KHÔNG xóa đơn đã có cảnh báo chuyển khoản hoặc đơn đã chuyển sang CHO_XAC_NHAN
+            DELETE FROM Chi_Tiet_Dich_Vu 
+            WHERE ma_don_dat = @ma_don_dat
+              AND EXISTS (
+                  SELECT 1 FROM Don_Dat_San 
+                  WHERE id = @ma_don_dat 
+                    AND trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') 
+                    AND (ghi_chu IS NULL OR ghi_chu NOT LIKE N'%CẢNH BÁO%')
+              );
+
+            DELETE FROM Thanh_Toan 
+            WHERE ma_don_dat = @ma_don_dat 
+              AND trang_thai_gd NOT IN ('THANH_CONG', 'CHO_XU_LY')
+              AND EXISTS (
+                  SELECT 1 FROM Don_Dat_San 
+                  WHERE id = @ma_don_dat 
+                    AND trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') 
+                    AND (ghi_chu IS NULL OR ghi_chu NOT LIKE N'%CẢNH BÁO%')
+              );
+
+            DELETE FROM Lich_Su_Hoan_Tien 
+            WHERE ma_don_dat = @ma_don_dat 
+              AND EXISTS (
+                  SELECT 1 FROM Don_Dat_San 
+                  WHERE id = @ma_don_dat 
+                    AND trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') 
+                    AND (ghi_chu IS NULL OR ghi_chu NOT LIKE N'%CẢNH BÁO%')
+              );
+
             DELETE FROM Don_Dat_San 
-            WHERE id = @ma_don_dat AND trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN');
+            WHERE id = @ma_don_dat 
+              AND trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') 
+              AND (ghi_chu IS NULL OR ghi_chu NOT LIKE N'%CẢNH BÁO%');
         END
         ELSE IF @searchStr IS NOT NULL
         BEGIN
             DECLARE @tam_ids TABLE (id INT);
             INSERT INTO @tam_ids (id)
             SELECT id FROM Don_Dat_San 
-            WHERE ghi_chu LIKE @searchStr AND trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN');
+            WHERE ghi_chu LIKE @searchStr 
+              AND trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') 
+              AND (ghi_chu IS NULL OR ghi_chu NOT LIKE N'%CẢNH BÁO%');
 
             DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat IN (SELECT id FROM @tam_ids);
-            DELETE FROM Thanh_Toan WHERE ma_don_dat IN (SELECT id FROM @tam_ids);
+            DELETE FROM Thanh_Toan WHERE ma_don_dat IN (SELECT id FROM @tam_ids) AND trang_thai_gd NOT IN ('THANH_CONG', 'CHO_XU_LY');
             DELETE FROM Lich_Su_Hoan_Tien WHERE ma_don_dat IN (SELECT id FROM @tam_ids);
             DELETE FROM Don_Dat_San WHERE id IN (SELECT id FROM @tam_ids);
         END
 
-        -- Tự động dọn dẹp các đơn tạm PayOS chưa thanh toán quá 10 phút (xóa hoàn toàn, không lưu lại trạng thái DA_HUY)
+        -- Tự động dọn dẹp các đơn tạm PayOS chưa thanh toán quá 10 phút (không xóa đơn đã có cảnh báo nhận tiền)
         DECLARE @expired_ids TABLE (id INT);
         INSERT INTO @expired_ids (id)
         SELECT id FROM Don_Dat_San 
-        WHERE trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN')
+        WHERE trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') 
+          AND (ghi_chu IS NULL OR ghi_chu NOT LIKE N'%CẢNH BÁO%')
           AND ngay_tao < DATEADD(MINUTE, -10, GETDATE())
           AND (ghi_chu LIKE '%PayOS%' OR phuong_thuc = 'CHUYEN_KHOAN');
 
         DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat IN (SELECT id FROM @expired_ids);
-        DELETE FROM Thanh_Toan WHERE ma_don_dat IN (SELECT id FROM @expired_ids);
+        DELETE FROM Thanh_Toan WHERE ma_don_dat IN (SELECT id FROM @expired_ids) AND trang_thai_gd NOT IN ('THANH_CONG', 'CHO_XU_LY');
         DELETE FROM Lich_Su_Hoan_Tien WHERE ma_don_dat IN (SELECT id FROM @expired_ids);
         DELETE FROM Don_Dat_San WHERE id IN (SELECT id FROM @expired_ids);
 
@@ -3097,8 +3258,9 @@ BEGIN
         SELECT d.id FROM Don_Dat_San d
         WHERE d.trang_thai = 'DA_HUY'
           AND (d.ghi_chu LIKE '%PayOS VietQR%' OR d.ghi_chu LIKE '%PayOS #%')
+          AND (d.ghi_chu IS NULL OR d.ghi_chu NOT LIKE N'%CẢNH BÁO%')
           AND NOT EXISTS (SELECT 1 FROM Lich_Su_Hoan_Tien ht WHERE ht.ma_don_dat = d.id)
-          AND NOT EXISTS (SELECT 1 FROM Thanh_Toan tt WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd = 'THANH_CONG');
+          AND NOT EXISTS (SELECT 1 FROM Thanh_Toan tt WHERE tt.ma_don_dat = d.id);
 
         DELETE FROM Chi_Tiet_Dich_Vu WHERE ma_don_dat IN (SELECT id FROM @legacy_huy_ids);
         DELETE FROM Thanh_Toan WHERE ma_don_dat IN (SELECT id FROM @legacy_huy_ids);

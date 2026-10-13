@@ -17,6 +17,39 @@ import { AuthRequest } from '../types';
 import { cleanTimeForSql } from './datSanController';
 
 /**
+ * Hàm làm sạch nội dung sao kê ngân hàng:
+ * Lọc bỏ triệt để các mã kỹ thuật hệ thống (Mã tài khoản ảo Qamtnt..., CASSO..., Trace SNL..., FT Code, i1WZU...)
+ * để chỉ giữ lại phần nội dung người dùng thực tế nhập (VD: CAO VAN HOT XOAN chuyen tien)
+ */
+export const lamSachNoiDungChuyenKhoan = (rawDesc: string): string => {
+    if (!rawDesc) return '';
+    let cleaned = rawDesc;
+
+    // 1. Loại bỏ toàn bộ mã tài khoản ảo VietQR / MB Bank (Qam..., Qamt..., VQR..., VQRQ...)
+    cleaned = cleaned.replace(/\b(Qam|VQR)[a-zA-Z0-9]+\b/gi, '');
+
+    // 2. Loại bỏ mã định tuyến CASSO (CASSO12265 4, CASSO...)
+    cleaned = cleaned.replace(/\bCASSO\w*(\s+\d+)?\b/gi, '');
+
+    // 3. Loại bỏ mã tham chiếu trace hệ thống (SNL..., FT..., REF..., TRX...)
+    cleaned = cleaned.replace(/\b(SNL|FT|REF|TRX)[a-zA-Z0-9]+\b/gi, '');
+
+    // 4. Loại bỏ mã phiên giao dịch app ngân hàng sinh ở đuôi (ví dụ: i1WZU4KQ160165)
+    cleaned = cleaned.replace(/\bi[a-zA-Z0-9]{5,}\b/gi, '');
+
+    // 5. Loại bỏ hậu tố số tiền ngân hàng tự gắn dính liền (ví dụ: 1015VND, 2700VND)
+    cleaned = cleaned.replace(/\b\d+VND\b/gi, '');
+
+    // 6. Loại bỏ các chuỗi hash kỹ thuật ngẫu nhiên dài >= 12 ký tự
+    cleaned = cleaned.replace(/\b[a-zA-Z0-9]{12,}\b/g, '');
+
+    // 7. Chuẩn hóa khoảng trắng
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+    return cleaned || rawDesc;
+};
+
+/**
  * 1. Xử lý thanh toán đơn đặt sân (Stored Procedure: sp_ThanhToanDon)
  * Method: POST /api/thanh-toan
  */
@@ -48,6 +81,7 @@ export const thanhToanDon = async (req: AuthRequest, res: Response) => {
             .input('loai_thanh_toan', sql.VarChar(20), loai_thanh_toan)
             .input('so_tien', sql.Decimal(10, 2), parseFloat(so_tien))
             .input('ma_giao_dich', sql.VarChar(100), ma_giao_dich || null)
+            .input('noi_dung_chuyen_khoan', sql.NVarChar(255), req.body.noi_dung_chuyen_khoan || null)
             .execute('sp_ThanhToanDon');
 
         const payment = result.recordset[0];
@@ -316,6 +350,54 @@ export const kiemTraTrangThaiPayOS = async (req: AuthRequest, res: Response) => 
             }
 
             if (donDatId) {
+                const expectedCode = `DS${donDatId}`;
+                const transactions: any[] = paymentInfo.transactions || [];
+
+                // KIỂM TRA ĐỐI SOÁT NỘI DUNG CHUYỂN KHOẢN TỪ NGÂN HÀNG:
+                // Nếu khách hàng chuyển khoản thủ công, nội dung phải chứa "DS" + donDatId (hoặc orderCode)
+                const isValidDesc = (rawText: string) => {
+                    if (!rawText) return false;
+                    const pattern = new RegExp(`DS\\s*0*${donDatId}(?!\\d)`, 'i');
+                    if (pattern.test(rawText)) return true;
+                    if (orderCode && rawText.includes(String(orderCode))) return true;
+                    return false;
+                };
+
+                // Nếu ngân hàng có bản ghi giao dịch nhưng KHÔNG khớp nội dung yêu cầu:
+                let matchedTx = transactions.find((tx: any) => isValidDesc(tx.description));
+                let actualTxDesc = transactions.length > 0 ? transactions[0]?.description : desc;
+
+                if (transactions.length > 0 && !matchedTx) {
+                    const cleanDesc = lamSachNoiDungChuyenKhoan(actualTxDesc);
+                    console.warn(`⚠️ [PayOS Check]: Đơn #${donDatId} nhận tiền nhưng SAI NỘI DUNG CK: "${cleanDesc}". Yêu cầu: "${expectedCode}".`);
+                    
+                    // Ghi nhận cảnh báo vào CSDL qua Stored Procedure sp_GhiNhanChuyenKhoanSaiNoiDung
+                    try {
+                        await pool.request()
+                            .input('ma_don_dat', sql.Int, donDatId)
+                            .input('so_tien', sql.Decimal(10, 2), paymentInfo.amountPaid || paymentInfo.amount)
+                            .input('ma_giao_dich', sql.VarChar(100), String(orderCode))
+                            .input('noi_dung_thuc_te', sql.NVarChar(255), cleanDesc)
+                            .execute('sp_GhiNhanChuyenKhoanSaiNoiDung');
+
+                        const io = req.app.get('io');
+                        if (io) {
+                            io.emit('booking_updated');
+                        }
+                    } catch (errDb: any) {
+                        console.warn('⚠️ Lỗi sp_GhiNhanChuyenKhoanSaiNoiDung:', errDb.message);
+                    }
+
+                    return res.status(200).json({
+                        success: false,
+                        isPaid: false,
+                        invalidDescription: true,
+                        expectedDescription: expectedCode,
+                        actualDescription: cleanDesc || '(trống)',
+                        message: `Hệ thống phát hiện bạn đã chuyển khoản nhưng SAI NỘI DUNG CHUYỂN KHOẢN! Nội dung nhận được: "${cleanDesc || '(trống)'}". Nội dung yêu cầu: "${expectedCode}". Đơn đặt sân không thể tự động duyệt! Vui lòng liên hệ ban quản lý để được hỗ trợ.`
+                    });
+                }
+
                 const bookingRes = await pool.request()
                     .input('id', sql.Int, donDatId)
                     .query(`
@@ -334,12 +416,14 @@ export const kiemTraTrangThaiPayOS = async (req: AuthRequest, res: Response) => 
                         .query('SELECT TOP 1 id FROM Thanh_Toan WHERE ma_giao_dich = @magd');
 
                     if (!checkTt.recordset || checkTt.recordset.length === 0) {
+                        const finalDescToSave = matchedTx?.description || desc || expectedCode;
                         await pool.request()
                             .input('ma_don_dat', sql.Int, donDatId)
                             .input('phuong_thuc', sql.VarChar(20), 'CHUYEN_KHOAN')
                             .input('loai_thanh_toan', sql.VarChar(20), isDatCoc ? 'DAT_COC' : 'TRA_HET')
                             .input('so_tien', sql.Decimal(10, 2), paymentInfo.amountPaid || paymentInfo.amount)
                             .input('ma_giao_dich', sql.VarChar(100), String(orderCode))
+                            .input('noi_dung_chuyen_khoan', sql.NVarChar(255), finalDescToSave)
                             .execute('sp_ThanhToanDon');
 
                         const io = req.app.get('io');
@@ -430,6 +514,40 @@ export const xuLyWebhookPayOS = async (req: AuthRequest, res: Response) => {
             }
 
             if (donDatId) {
+                const expectedCode = `DS${donDatId}`;
+                const isValidDesc = (rawText: string) => {
+                    if (!rawText) return false;
+                    const pattern = new RegExp(`DS\\s*0*${donDatId}(?!\\d)`, 'i');
+                    if (pattern.test(rawText)) return true;
+                    if (orderCode && rawText.includes(String(orderCode))) return true;
+                    return false;
+                };
+
+                // Kiểm tra nội dung webhook thực tế từ ngân hàng:
+                if (desc && !isValidDesc(desc)) {
+                    const cleanDesc = lamSachNoiDungChuyenKhoan(desc);
+                    console.warn(`⚠️ [PayOS Webhook]: Đơn #${donDatId} nhận giao dịch nhưng SAI NỘI DUNG: "${cleanDesc}". Yêu cầu: "${expectedCode}". Từ chối kích hoạt tự động!`);
+                    try {
+                        await pool.request()
+                            .input('ma_don_dat', sql.Int, donDatId)
+                            .input('so_tien', sql.Decimal(10, 2), amount)
+                            .input('ma_giao_dich', sql.VarChar(100), String(orderCode))
+                            .input('noi_dung_thuc_te', sql.NVarChar(255), cleanDesc)
+                            .execute('sp_GhiNhanChuyenKhoanSaiNoiDung');
+
+                        const io = req.app.get('io');
+                        if (io) {
+                            io.emit('booking_updated');
+                        }
+                    } catch (eDb: any) {
+                        console.warn('⚠️ Lỗi sp_GhiNhanChuyenKhoanSaiNoiDung:', eDb.message);
+                    }
+                    return res.status(200).json({
+                        success: false,
+                        message: `Giao dịch nhận tiền nhưng nội dung không khớp (Thực tế: "${cleanDesc}", Yêu cầu: "${expectedCode}")`
+                    });
+                }
+
                 const bookingRes = await pool.request()
                     .input('id', sql.Int, donDatId)
                     .query(`
@@ -454,6 +572,7 @@ export const xuLyWebhookPayOS = async (req: AuthRequest, res: Response) => {
                             .input('loai_thanh_toan', sql.VarChar(20), isDatCoc ? 'DAT_COC' : 'TRA_HET')
                             .input('so_tien', sql.Decimal(10, 2), amount)
                             .input('ma_giao_dich', sql.VarChar(100), String(orderCode))
+                            .input('noi_dung_chuyen_khoan', sql.NVarChar(255), desc || expectedCode)
                             .execute('sp_ThanhToanDon');
                     }
 

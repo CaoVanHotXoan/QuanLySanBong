@@ -164,7 +164,7 @@ export default function DongNaiMap({
     : `https://www.google.com/maps/search/?api=1&query=${coords[0]},${coords[1]}`;
 
   return (
-    <div className={`relative w-full h-full overflow-hidden select-none ${className}`}>
+    <div className={`relative w-full h-full overflow-hidden select-none isolate ${className}`}>
       {/* Vùng chứa bản đồ Leaflet */}
       <div 
         ref={mapContainerRef} 
@@ -173,13 +173,13 @@ export default function DongNaiMap({
       />
 
       {/* Huy hiệu thông báo phạm vi bản đồ */}
-      <div className="absolute top-2.5 left-2.5 z-[1000] flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/85 backdrop-blur-md border border-emerald-500/30 text-[10px] text-emerald-300 font-bold shadow-lg pointer-events-none">
+      <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/85 backdrop-blur-md border border-emerald-500/30 text-[10px] text-emerald-300 font-bold shadow-lg pointer-events-none">
         <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
         <span>Khu vực: Tỉnh Đồng Nai (Đã khóa phạm vi)</span>
       </div>
 
       {/* Các nút tiện ích trên bản đồ */}
-      <div className="absolute top-2.5 right-2.5 z-[1000] flex items-center gap-2">
+      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-2">
         <button
           type="button"
           onClick={handleResetToField}

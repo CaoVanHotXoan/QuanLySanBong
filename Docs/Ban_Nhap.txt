@@ -9,10 +9,10 @@ Làm thêm đặt trực tiếp
 - đặt bất cứ giờ nào
 - thêm 2 sân dự phòng
 
-
-Em chào anh,em là Cao Văn Hột Xoàn, em là sinh viên trường Đại Học Lạc Hồng, ngành CNTT liên thông ạ.
-Dạ em được thầy Hải giới thiệu.
-Cho em hỏi công ty truyền thông đông á anh còn tuyển thực tập sinh không ạ
+=================Làm thêm=====================
+Gửi OTP gmail khi đăng ký
+Làm hủy đơn
+======================================================
 
 Chức năng nhân viên:
 1. Mục sân đang đá:

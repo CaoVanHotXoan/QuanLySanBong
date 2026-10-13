@@ -466,6 +466,14 @@ export default function History() {
         </span>
       );
     }
+    if (s === 'CHO_XAC_NHAN' || s.includes('XAC_NHAN')) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm" title="Chuyển khoản sai nội dung - Đang chờ quản lý xác nhận">
+          <AlertCircle className="w-3 h-3 text-amber-400" />
+          Chờ xác nhận (Sai ND)
+        </span>
+      );
+    }
     const isPaid = (tongTien > 0 && tienDaNhan >= tongTien) || (tienThieu <= 0 && tienDaNhan > 0) || s === 'DA_THANH_TOAN' || s === 'HOAN_THANH';
     if (isPaid) {
       return (

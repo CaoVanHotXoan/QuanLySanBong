@@ -4171,6 +4171,15 @@ export default function AdminDashboard() {
                                     );
                                   }
 
+                                  const isChoXacNhan = raw === 'CHO_XAC_NHAN' || raw.includes('XAC_NHAN') || (b.ghi_chu && b.ghi_chu.includes('CẢNH BÁO'));
+                                  if (isChoXacNhan) {
+                                    return (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30" title={b.ghi_chu}>
+                                        Chờ xác nhận (Sai ND)
+                                      </span>
+                                    );
+                                  }
+
                                   const isFullyPaid = (tongTien > 0 && soTienDaTra >= tongTien) ||
                                     raw === 'DA_THANH_TOAN' ||
                                     raw === 'HOAN_THANH' ||
