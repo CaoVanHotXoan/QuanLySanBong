@@ -12,6 +12,9 @@ Làm thêm đặt trực tiếp
 =================Làm thêm=====================
 Gửi OTP gmail khi đăng ký
 Làm hủy đơn
+
+Làm thống kế xuất ra file excel, doanh thu hôm nay, tuần này, 
+
 ======================================================
 
 Chức năng nhân viên:
@@ -28,12 +31,15 @@ Bao gồm các công nghệ, thư viện, ngôn ngữ
 Cách thức hoạt động
 Để tôi bảo vệ Dự án cụ thể là trang chủ
 
+
+
 ======================================
 fix lỗi không ảnh hưởng đến tất cả các chức năng của toàn bộ trang web
 Có thể tùy chỉnh CSDL nhưng phải dùng procedure và cập nhật vào 
 2 file QuanLySanBong.sql và ThuTuc.sql
 File QuanLySanBong.sql thì chứa dữ liệu table không chứa procedure
 File ThuTuc.sql thì chứa toàn bộ procedure 
+
 
 
 Chỉnh lại upload file ảnh và video và dán link ảnh và video đều lưu trên Cloudinary 

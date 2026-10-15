@@ -181,7 +181,7 @@ export default function LienHePage() {
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight mb-4">
             Liên Hệ Với <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">Soccer247</span>
           </h1>
-          <p className="text-sm sm:text-base text-slate-400 leading-relaxed">
+          <p className={`text-sm sm:text-base leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
             Bạn có câu hỏi về việc đặt sân, tổ chức giải bóng đá doanh nghiệp hay muốn đóng góp ý kiến để hoàn thiện chất lượng dịch vụ? Hãy gửi tin nhắn cho chúng tôi ngay bên dưới.
           </p>
         </div>
@@ -197,7 +197,7 @@ export default function LienHePage() {
               <Send className="w-5 h-5 text-emerald-400" />
               Gửi Tin Nhắn Cho Ban Quản Lý
             </h2>
-            <p className="text-xs sm:text-sm text-slate-400 mb-6">
+            <p className={`text-xs sm:text-sm mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
               Mọi ý kiến của bạn sẽ được lưu trữ trực tiếp trên hệ thống và xử lý trong vòng 30 phút.
             </p>
 
@@ -234,19 +234,21 @@ export default function LienHePage() {
                     className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-400 focus:ring-offset-0 accent-emerald-500 cursor-pointer"
                   />
                   <div className="flex items-center gap-2 text-xs sm:text-sm font-bold">
-                    <UserCheck className={`w-4 h-4 shrink-0 transition-colors ${useAccountInfo ? 'text-emerald-400' : 'text-slate-400'}`} />
+                    <UserCheck className={`w-4 h-4 shrink-0 transition-colors ${useAccountInfo ? 'text-emerald-500' : isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} />
                     <span>Lấy thông tin tài khoản đang đăng nhập để tự động điền</span>
                   </div>
                 </label>
 
                 {useAccountInfo && currentUser && (
-                  <div className="mt-2.5 pt-2 border-t border-emerald-500/20 pl-7 text-[11px] text-slate-400 flex flex-wrap items-center gap-x-4 gap-y-1">
-                    <span>Họ tên: <strong className="text-white font-semibold">{currentUser.ho_ten}</strong></span>
+                  <div className={`mt-2.5 pt-2 border-t pl-7 text-[11px] flex flex-wrap items-center gap-x-4 gap-y-1 ${
+                    isDarkMode ? 'border-emerald-500/20 text-slate-400' : 'border-emerald-500/30 text-slate-700 font-medium'
+                  }`}>
+                    <span>Họ tên: <strong className={`font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{currentUser.ho_ten}</strong></span>
                     {currentUser.so_dien_thoai && (
-                      <span>SĐT: <strong className="text-emerald-400 font-mono font-semibold">{currentUser.so_dien_thoai}</strong></span>
+                      <span>SĐT: <strong className={`font-mono font-semibold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>{currentUser.so_dien_thoai}</strong></span>
                     )}
                     {currentUser.email && (
-                      <span>Email: <strong className="text-cyan-400 font-mono font-semibold">{currentUser.email}</strong></span>
+                      <span>Email: <strong className={`font-mono font-semibold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-700'}`}>{currentUser.email}</strong></span>
                     )}
                   </div>
                 )}
@@ -391,7 +393,7 @@ export default function LienHePage() {
                     <Phone className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Hotline tư vấn & Đặt sân:</div>
+                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Hotline tư vấn & Đặt sân:</div>
                     <div className={`font-bold text-base font-mono ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                       {aboutData?.hotline || '0816344504'}
                     </div>
@@ -403,7 +405,7 @@ export default function LienHePage() {
                     <Mail className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Hòm thư điện tử:</div>
+                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Hòm thư điện tử:</div>
                     <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                       {aboutData?.email || 'sinhvienxoan@gmail.com'}
                     </div>
@@ -415,7 +417,7 @@ export default function LienHePage() {
                     <Clock className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Thời gian mở cửa:</div>
+                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Thời gian mở cửa:</div>
                     <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>06:00 - 19:00 (Tất cả các ngày trong tuần)</div>
                   </div>
                 </div>
@@ -425,7 +427,7 @@ export default function LienHePage() {
                     <MapPin className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Địa chỉ trung tâm:</div>
+                    <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Địa chỉ trung tâm:</div>
                     <div className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                       {aboutData?.dia_chi || 'Biên Hòa - Đồng Nai'}
                     </div>
@@ -440,7 +442,7 @@ export default function LienHePage() {
                 <CalendarCheck2 className="w-4 h-4 text-emerald-400" />
                 Cần sân đá bóng gấp hôm nay?
               </h4>
-              <p className="text-xs text-slate-400 mb-4">
+              <p className="text-xs text-slate-300 mb-4">
                 Xem ma trận lịch trống và giữ chỗ tự động chỉ trong 30 giây trên trang chủ.
               </p>
               <Link

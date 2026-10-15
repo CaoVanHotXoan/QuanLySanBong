@@ -214,7 +214,7 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
                         {currentUser.ho_ten}
                       </p>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
+                    <ChevronDown className={`w-3.5 h-3.5 hidden sm:block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} />
                   </button>
 
                   {/* Dropdown Menu User */}
@@ -223,7 +223,7 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
                       isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
                     }`}>
                       <div className={`px-3 py-2 border-b mb-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                        <p className="text-[11px] text-slate-400">Tài khoản:</p>
+                        <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>Tài khoản:</p>
                         <p className="text-xs font-bold text-emerald-500 truncate">{currentUser.email}</p>
                       </div>
 
@@ -428,7 +428,7 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
 
           {/* Navigation Links */}
           <div className="flex flex-col gap-1.5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+            <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
               Điều hướng chính
             </p>
             {navLinks.map((link) => {
@@ -457,7 +457,7 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
           {/* Management / Admin shortcut for staff/admin on mobile */}
           {currentUser && (
             <div className="flex flex-col gap-1.5 pt-3 border-t border-slate-200 dark:border-slate-800">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+              <p className={`text-[10px] font-bold uppercase tracking-wider mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                 Khu vực Quản lý
               </p>
               {isUserStaffOrAdmin && (
@@ -487,7 +487,7 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
         {/* Footer Drawer: Theme, User & Hotline */}
         <div className="flex flex-col gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Chế độ giao diện:</span>
+            <span className={`text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Chế độ giao diện:</span>
             <button
               onClick={toggleTheme}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold ${

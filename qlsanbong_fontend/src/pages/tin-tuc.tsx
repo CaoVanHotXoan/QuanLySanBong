@@ -282,7 +282,7 @@ export default function TinTucPage() {
                   {article.tieu_de}
                 </h1>
 
-                <div className={`flex flex-wrap items-center gap-6 text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                <div className={`flex flex-wrap items-center gap-6 text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
                   <span className="flex items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-emerald-400" />
                     Ngày đăng: {new Date(article.ngay_dang).toLocaleDateString('vi-VN')}
@@ -310,7 +310,7 @@ export default function TinTucPage() {
               {/* Tóm tắt */}
               {article.tom_tat && (
                 <div className={`p-4 sm:p-5 rounded-2xl font-semibold text-sm sm:text-base mb-8 border-l-4 border-emerald-500 ${
-                  isDarkMode ? 'bg-slate-950/60 text-slate-200' : 'bg-emerald-50/70 text-slate-800'
+                  isDarkMode ? 'bg-slate-950/60 text-slate-200' : 'bg-emerald-50/70 text-slate-900 font-semibold'
                 }`}>
                   {article.tom_tat}
                 </div>
@@ -318,7 +318,7 @@ export default function TinTucPage() {
 
               {/* Nội dung chi tiết */}
               <div className={`max-w-none text-sm sm:text-base leading-relaxed space-y-4 whitespace-pre-line ${
-                isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                isDarkMode ? 'text-slate-300' : 'text-slate-800'
               }`}>
                 {article.noi_dung}
               </div>
@@ -381,7 +381,7 @@ export default function TinTucPage() {
                     ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
                     : isDarkMode
                     ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
+                    : 'bg-white border border-slate-200 text-slate-700 font-bold hover:text-slate-950'
                 }`}
               >
                 🔥 Tất cả
@@ -395,7 +395,7 @@ export default function TinTucPage() {
                       ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 scale-105'
                       : isDarkMode
                       ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900'
+                      : 'bg-white border border-slate-200 text-slate-700 font-bold hover:text-slate-950'
                   }`}
                 >
                   {loai.ten_loai}
@@ -405,7 +405,7 @@ export default function TinTucPage() {
 
             {/* Search Box */}
             <form onSubmit={handleSearchSubmit} className="relative w-full md:w-80">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`} />
               <input
                 type="text"
                 value={searchQuery}
@@ -436,7 +436,7 @@ export default function TinTucPage() {
             <div className={`p-12 text-center rounded-2xl border ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
               <Sparkles className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
               <h3 className="text-lg font-bold">Không tìm thấy bài viết nào</h3>
-              <p className="text-sm text-slate-400 mt-1">Vui lòng thử chọn chuyên mục khác hoặc từ khóa tìm kiếm mới.</p>
+              <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>Vui lòng thử chọn chuyên mục khác hoặc từ khóa tìm kiếm mới.</p>
             </div>
           ) : (
             <div className="space-y-12">
@@ -463,7 +463,7 @@ export default function TinTucPage() {
                     </div>
                     <div className="lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between">
                       <div>
-                        <div className="flex items-center gap-4 text-xs text-slate-400 mb-3">
+                        <div className={`flex items-center gap-4 text-xs mb-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
                           <span className="flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5 text-emerald-400" />
                             {new Date(featuredArticle.ngay_dang).toLocaleDateString('vi-VN')}
@@ -474,11 +474,11 @@ export default function TinTucPage() {
                           </span>
                         </div>
                         <h2 className="text-xl sm:text-2xl font-black mb-3 line-clamp-2 leading-snug">
-                          <Link href={`/tin-tuc?id=${featuredArticle.id}`} className="hover:text-emerald-400 transition-colors">
+                          <Link href={`/tin-tuc?id=${featuredArticle.id}`} className={isDarkMode ? 'hover:text-emerald-400 transition-colors' : 'text-slate-900 hover:text-emerald-600 transition-colors'}>
                             {featuredArticle.tieu_de}
                           </Link>
                         </h2>
-                        <p className="text-xs sm:text-sm text-slate-400 line-clamp-3 leading-relaxed mb-6">
+                        <p className={`text-xs sm:text-sm line-clamp-3 leading-relaxed mb-6 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                           {featuredArticle.tom_tat || featuredArticle.noi_dung}
                         </p>
                       </div>
@@ -527,7 +527,7 @@ export default function TinTucPage() {
 
                         <div className="p-5 flex-1 flex flex-col justify-between">
                           <div>
-                            <div className="flex items-center gap-3 text-[11px] text-slate-400 mb-2">
+                            <div className={`flex items-center gap-3 text-[11px] mb-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3 text-emerald-400" />
                                 {new Date(item.ngay_dang).toLocaleDateString('vi-VN')}
@@ -539,19 +539,21 @@ export default function TinTucPage() {
                             </div>
 
                             <h4 className="font-bold text-sm sm:text-base mb-2 line-clamp-2 leading-snug">
-                              <Link href={`/tin-tuc?id=${item.id}`} className="hover:text-emerald-400 transition-colors">
+                              <Link href={`/tin-tuc?id=${item.id}`} className={isDarkMode ? 'hover:text-emerald-400 transition-colors' : 'text-slate-900 hover:text-emerald-600 transition-colors'}>
                                 {item.tieu_de}
                               </Link>
                             </h4>
 
-                            <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-4">
+                            <p className={`text-xs line-clamp-2 leading-relaxed mb-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                               {item.tom_tat || item.noi_dung}
                             </p>
                           </div>
 
                           <Link
                             href={`/tin-tuc?id=${item.id}`}
-                            className="text-xs font-bold text-emerald-500 hover:text-emerald-400 flex items-center gap-1 mt-auto pt-2 border-t border-slate-800/40"
+                            className={`text-xs font-bold flex items-center gap-1 mt-auto pt-2 border-t ${
+                              isDarkMode ? 'text-emerald-400 hover:text-emerald-300 border-slate-800/40' : 'text-emerald-700 hover:text-emerald-800 border-slate-200'
+                            }`}
                           >
                             Xem chi tiết <ChevronRight className="w-3.5 h-3.5" />
                           </Link>

@@ -2087,15 +2087,15 @@ export default function HomePage() {
                           <div>
                             <h3 className={`text-xl sm:text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{san.ten_san}</h3>
                           </div>
-                          <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2 sm:gap-3">
+                          <div className={`text-xs mt-1 flex flex-wrap items-center gap-2 sm:gap-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
                             <span>Ngày xem: <strong className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}>{formatDateDMY(filterNgayDa)}</strong></span>
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 text-xs font-bold">
-                        <span className="text-slate-400">Trạng thái:</span>
-                        <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 font-bold">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700'}>Trạng thái:</span>
+                        <span className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                           Sẵn sàng đặt sân
                         </span>
                       </div>
@@ -2107,7 +2107,7 @@ export default function HomePage() {
                         <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                           <Clock className="w-4 h-4" /> Danh Sách Khung Giờ (Bấm ô xanh để chọn giờ)
                         </h4>
-                        <span className="text-xs text-slate-400">{filteredTimeSlots.length} khung giờ khả dụng</span>
+                        <span className={`text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{filteredTimeSlots.length} khung giờ khả dụng</span>
                       </div>
 
                       {filteredTimeSlots.length === 0 ? (
@@ -2279,7 +2279,7 @@ export default function HomePage() {
                       <th key={slot.start} className={`p-2 lg:p-3 text-center border-l min-w-[80px] lg:min-w-[140px] ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
                         }`}>
                         <div className={`text-xs lg:text-base font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{slot.label}</div>
-                        <div className="text-[9px] lg:text-[11px] text-slate-400 font-mono mt-0.5">{slot.start}</div>
+                        <div className={`text-[9px] lg:text-[11px] font-mono mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>{slot.start}</div>
                       </th>
                     ))}
                   </tr>
@@ -2446,39 +2446,39 @@ export default function HomePage() {
               <div className="flex items-center gap-2">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${bookingStep === 'DURATION'
                   ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/30'
-                  : 'bg-emerald-500/20 text-emerald-400'
+                  : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold'
                   }`}>
                   1
                 </span>
-                <span className={bookingStep === 'DURATION' ? 'text-emerald-400 font-extrabold' : 'text-slate-400'}>
+                <span className={bookingStep === 'DURATION' ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>
                   Chọn Giờ Kết Thúc
                 </span>
               </div>
 
-              <ArrowRight className="w-3.5 h-3.5 text-slate-600" />
+              <ArrowRight className={`w-3.5 h-3.5 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`} />
 
               <div className="flex items-center gap-2">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${bookingStep === 'INFO'
                   ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/30'
-                  : bookingStep === 'QR' ? 'bg-emerald-500/20 text-emerald-400' : isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'
+                  : bookingStep === 'QR' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-700 font-bold'
                   }`}>
                   2
                 </span>
-                <span className={bookingStep === 'INFO' ? 'text-emerald-400 font-extrabold' : 'text-slate-400'}>
+                <span className={bookingStep === 'INFO' ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>
                   Thông Tin & Dịch Vụ
                 </span>
               </div>
 
-              <ArrowRight className="w-3.5 h-3.5 text-slate-600" />
+              <ArrowRight className={`w-3.5 h-3.5 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`} />
 
               <div className="flex items-center gap-2">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs ${bookingStep === 'QR'
                   ? 'bg-emerald-500 text-slate-950 font-black shadow-md shadow-emerald-500/30'
-                  : isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'
+                  : isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-700 font-bold'
                   }`}>
                   3
                 </span>
-                <span className={bookingStep === 'QR' ? 'text-emerald-400 font-extrabold' : 'text-slate-400'}>
+                <span className={bookingStep === 'QR' ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>
                   Thanh Toán VietQR
                 </span>
               </div>
@@ -2491,19 +2491,19 @@ export default function HomePage() {
                 <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
                   <div>
-                    <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Sân bóng & Ngày đá</div>
+                    <div className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Sân bóng & Ngày đá</div>
                     <div className={`text-base font-black mt-0.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                      {selectedSlot.san.ten_san} <span className="text-xs font-medium text-emerald-500">({selectedSlot.san.ten_loai || 'Sân bóng'})</span>
+                      {selectedSlot.san.ten_san} <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-500">({selectedSlot.san.ten_loai || 'Sân bóng'})</span>
                     </div>
-                    <div className="text-xs text-slate-400 mt-0.5">Ngày: <span className="text-slate-200 font-semibold">{formatDateDMY(filterNgayDa)}</span></div>
+                    <div className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>Ngày: <span className={`font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{formatDateDMY(filterNgayDa)}</span></div>
                   </div>
 
-                  <div className="sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800">
-                    <div className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Giờ Bắt Đầu</div>
-                    <div className="text-xl font-black text-emerald-500 font-mono">
+                  <div className={`sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                    <div className={`text-xs font-bold uppercase tracking-wider ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Giờ Bắt Đầu</div>
+                    <div className="text-xl font-black text-emerald-600 dark:text-emerald-500 font-mono">
                       {selectedSlot.slot.label} ({selectedSlot.slot.start})
                     </div>
-                    <div className="text-[11px] text-slate-400">
+                    <div className={`text-[11px] font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                       Đơn giá: {(Number(selectedSlot.san.don_gia_phut) || 5000).toLocaleString('vi-VN')} đ/phút
                     </div>
                   </div>
@@ -2516,7 +2516,7 @@ export default function HomePage() {
                       <Clock className="w-4 h-4" />
                       Chọn Giờ Kết Thúc / Thời Lượng Thuê
                     </h4>
-                    <span className="text-xs text-slate-400 font-medium">Bấm chọn 1 trong 4 mức</span>
+                    <span className={`text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Bấm chọn 1 trong 4 mức</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -2544,19 +2544,19 @@ export default function HomePage() {
                             }`}
                         >
                           <div className="flex items-center justify-between mb-2">
-                            <span className={`text-base font-black ${isSelected ? 'text-emerald-400' : isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                            <span className={`text-base font-black ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                               30 Phút
                             </span>
-                            <span className="text-xs font-bold font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                            <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${isSelected ? 'bg-emerald-500 text-slate-950 font-black' : isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
                               30 phút
                             </span>
                           </div>
 
-                          <div className="text-xs text-slate-400 mb-1">
-                            Giờ kết thúc: <span className="font-bold text-slate-200 font-mono">{endTime}</span>
+                          <div className={`text-xs mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
+                            Giờ kết thúc: <span className={`font-bold font-mono ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{endTime}</span>
                           </div>
 
-                          <div className="text-sm font-extrabold text-emerald-500 mt-2">
+                          <div className="text-sm font-extrabold text-emerald-600 dark:text-emerald-500 mt-2">
                             {price.toLocaleString('vi-VN')} đ
                           </div>
 
@@ -2593,19 +2593,19 @@ export default function HomePage() {
                             }`}
                         >
                           <div className="flex items-center justify-between mb-2">
-                            <span className={`text-base font-black ${isSelected ? 'text-emerald-400' : isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                            <span className={`text-base font-black ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                               1 Tiếng
                             </span>
-                            <span className="text-xs font-bold font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                            <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${isSelected ? 'bg-emerald-500 text-slate-950 font-black' : isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
                               60 phút
                             </span>
                           </div>
 
-                          <div className="text-xs text-slate-400 mb-1">
-                            Giờ kết thúc: <span className="font-bold text-slate-200 font-mono">{endTime}</span>
+                          <div className={`text-xs mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
+                            Giờ kết thúc: <span className={`font-bold font-mono ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{endTime}</span>
                           </div>
 
-                          <div className="text-sm font-extrabold text-emerald-500 mt-2">
+                          <div className="text-sm font-extrabold text-emerald-600 dark:text-emerald-500 mt-2">
                             {price.toLocaleString('vi-VN')} đ
                           </div>
 
@@ -2646,16 +2646,19 @@ export default function HomePage() {
                           </div>
 
                           <div className="flex items-center justify-between mb-2">
-                            <span className={`text-base font-black ${isSelected ? 'text-emerald-400' : isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                            <span className={`text-base font-black ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                               1 Tiếng 30 Phút
+                            </span>
+                            <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${isSelected ? 'bg-emerald-500 text-slate-950 font-black' : isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
+                              90 phút
                             </span>
                           </div>
 
-                          <div className="text-xs text-slate-400 mb-1">
-                            Giờ kết thúc: <span className="font-bold text-slate-200 font-mono">{endTime}</span>
+                          <div className={`text-xs mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
+                            Giờ kết thúc: <span className={`font-bold font-mono ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{endTime}</span>
                           </div>
 
-                          <div className="text-sm font-extrabold text-emerald-500 mt-2">
+                          <div className="text-sm font-extrabold text-emerald-600 dark:text-emerald-500 mt-2">
                             {price.toLocaleString('vi-VN')} đ
                           </div>
 
@@ -2692,19 +2695,19 @@ export default function HomePage() {
                             }`}
                         >
                           <div className="flex items-center justify-between mb-2">
-                            <span className={`text-base font-black ${isSelected ? 'text-emerald-400' : isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                            <span className={`text-base font-black ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                               2 Tiếng
                             </span>
-                            <span className="text-xs font-bold font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                            <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded ${isSelected ? 'bg-emerald-500 text-slate-950 font-black' : isDarkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-800'}`}>
                               120 phút
                             </span>
                           </div>
 
-                          <div className="text-xs text-slate-400 mb-1">
-                            Giờ kết thúc: <span className="font-bold text-slate-200 font-mono">{endTime}</span>
+                          <div className={`text-xs mb-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
+                            Giờ kết thúc: <span className={`font-bold font-mono ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{endTime}</span>
                           </div>
 
-                          <div className="text-sm font-extrabold text-emerald-500 mt-2">
+                          <div className="text-sm font-extrabold text-emerald-600 dark:text-emerald-500 mt-2">
                             {price.toLocaleString('vi-VN')} đ
                           </div>
 
@@ -2721,21 +2724,21 @@ export default function HomePage() {
 
                 {/* Tóm tắt khung giờ đã chọn */}
                 <div className={`p-4 rounded-2xl border space-y-2 text-xs ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className="flex justify-between items-center text-slate-400">
+                  <div className={`flex justify-between items-center ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>
                     <span>Khung giờ đá:</span>
-                    <span className="font-black text-sm text-emerald-400 font-mono">
+                    <span className="font-black text-sm text-emerald-600 dark:text-emerald-400 font-mono">
                       {selectedSlot.slot.start} ➔ {selectedSlot.gioKetThuc}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-slate-400">
+                  <div className={`flex justify-between items-center ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>
                     <span>Thời lượng:</span>
-                    <span className="font-bold text-slate-200">
+                    <span className={`font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
                       {selectedSlot.durationMin} phút ({selectedSlot.durationMin === 30 ? '30 phút' : selectedSlot.durationMin === 60 ? '1 tiếng' : selectedSlot.durationMin === 90 ? '1 tiếng 30 phút' : `${Math.floor(selectedSlot.durationMin / 60)} tiếng`})
                     </span>
                   </div>
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-800 text-sm font-bold">
+                  <div className={`flex justify-between items-center pt-2 border-t text-sm font-bold ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                     <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>Tiền thuê sân:</span>
-                    <span className="text-emerald-500 text-base font-black">{selectedSlot.giaTien.toLocaleString('vi-VN')} đ</span>
+                    <span className="text-emerald-600 dark:text-emerald-500 text-base font-black">{selectedSlot.giaTien.toLocaleString('vi-VN')} đ</span>
                   </div>
                 </div>
 
@@ -2769,17 +2772,17 @@ export default function HomePage() {
                 <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border text-xs ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
                   <div>
-                    <span className="text-slate-400">Ngày thi đấu:</span>
+                    <span className={`font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Ngày thi đấu:</span>
                     <div className={`font-bold text-sm mt-0.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{formatDateDMY(filterNgayDa)}</div>
                   </div>
                   <div>
-                    <span className="text-slate-400">Khung giờ ({selectedSlot.durationMin}p):</span>
-                    <div className="font-black text-emerald-500 text-sm mt-0.5 font-mono">
+                    <span className={`font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Khung giờ ({selectedSlot.durationMin}p):</span>
+                    <div className="font-black text-emerald-600 dark:text-emerald-500 text-sm mt-0.5 font-mono">
                       {selectedSlot.slot.start} - {selectedSlot.gioKetThuc}
                     </div>
                   </div>
                   <div>
-                    <span className="text-slate-400">Tiền sân:</span>
+                    <span className={`font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Tiền sân:</span>
                     <div className={`font-extrabold text-sm mt-0.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                       {selectedSlot.giaTien.toLocaleString('vi-VN')} đ
                     </div>
@@ -2843,8 +2846,8 @@ export default function HomePage() {
                         >
                           <div>
                             <div className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{dv.ten_dich_vu}</div>
-                            <div className="text-[11px] text-emerald-500 font-semibold">
-                              {dv.don_gia.toLocaleString('vi-VN')} đ <span className="text-slate-400 font-normal">/{dv.don_vi_tinh}</span>
+                            <div className="text-[11px] text-emerald-600 dark:text-emerald-500 font-semibold">
+                              {dv.don_gia.toLocaleString('vi-VN')} đ <span className={isDarkMode ? 'text-slate-400 font-normal' : 'text-slate-600 font-medium'}>/{dv.don_vi_tinh}</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -2898,9 +2901,9 @@ export default function HomePage() {
                           />
                           <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>Đặt Cọc 30%</span>
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-1">Giữ chỗ trước, thanh toán số còn lại khi đến sân</p>
+                        <p className={`text-[11px] mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>Giữ chỗ trước, thanh toán số còn lại khi đến sân</p>
                       </div>
-                      <span className="text-sm font-black text-emerald-500">
+                      <span className="text-sm font-black text-emerald-600 dark:text-emerald-500">
                         {Math.round(tongTienDon * 0.3).toLocaleString('vi-VN')} đ
                       </span>
                     </label>
@@ -2923,9 +2926,9 @@ export default function HomePage() {
                           />
                           <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>Thanh Toán 100%</span>
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-1">Vào sân thi đấu ngay không cần trả thêm</p>
+                        <p className={`text-[11px] mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>Vào sân thi đấu ngay không cần trả thêm</p>
                       </div>
-                      <span className="text-sm font-black text-emerald-500">
+                      <span className="text-sm font-black text-emerald-600 dark:text-emerald-500">
                         {tongTienDon.toLocaleString('vi-VN')} đ
                       </span>
                     </label>
@@ -2934,19 +2937,19 @@ export default function HomePage() {
 
                 {/* Bảng tổng tiền */}
                 <div className={`p-4 rounded-2xl border space-y-2 text-xs ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className="flex justify-between text-slate-400">
+                  <div className={`flex justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                     <span>Tiền thuê sân ({selectedSlot.durationMin} phút):</span>
-                    <span className="font-semibold text-slate-200">{selectedSlot.giaTien.toLocaleString('vi-VN')} đ</span>
+                    <span className={`font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{selectedSlot.giaTien.toLocaleString('vi-VN')} đ</span>
                   </div>
                   {tongTienDichVu > 0 && (
-                    <div className="flex justify-between text-slate-400">
+                    <div className={`flex justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                       <span>Dịch vụ & Nước uống chọn thêm:</span>
-                      <span className="font-semibold text-slate-200">{tongTienDichVu.toLocaleString('vi-VN')} đ</span>
+                      <span className={`font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{tongTienDichVu.toLocaleString('vi-VN')} đ</span>
                     </div>
                   )}
-                  <div className="flex justify-between pt-2 border-t border-slate-800 text-sm font-bold">
+                  <div className={`flex justify-between pt-2 border-t text-sm font-bold ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                     <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>Tổng giá trị đơn:</span>
-                    <span className="text-emerald-500 text-base">{tongTienDon.toLocaleString('vi-VN')} đ</span>
+                    <span className="text-emerald-600 dark:text-emerald-500 text-base">{tongTienDon.toLocaleString('vi-VN')} đ</span>
                   </div>
                 </div>
 
@@ -3017,32 +3020,32 @@ export default function HomePage() {
 
                     <div className={`p-4 rounded-2xl border text-xs max-w-md mx-auto space-y-2.5 text-left ${isDarkMode ? 'bg-slate-950/80 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-700'
                       }`}>
-                      <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
-                        <span className="text-slate-400">Mã đơn đặt sân:</span>
-                        <span className="font-mono font-black text-emerald-400 text-sm">#{payOSData?.ma_don_dat || selectedSlot?.san.id}</span>
+                      <div className={`flex justify-between items-center pb-2 border-b ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}>Mã đơn đặt sân:</span>
+                        <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">#{payOSData?.ma_don_dat || selectedSlot?.san.id}</span>
                       </div>
-                      <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
-                        <span className="text-slate-400">Mã giao dịch PayOS:</span>
-                        <span className="font-mono font-bold text-slate-200">#{payOSData?.orderCode}</span>
+                      <div className={`flex justify-between items-center pb-2 border-b ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}>Mã giao dịch PayOS:</span>
+                        <span className={`font-mono font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>#{payOSData?.orderCode}</span>
                       </div>
-                      <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
-                        <span className="text-slate-400">Sân bóng & Khung giờ:</span>
-                        <span className="font-bold text-slate-200">{selectedSlot?.san.ten_san} ({selectedSlot?.slot.start} - {selectedSlot?.gioKetThuc})</span>
+                      <div className={`flex justify-between items-center pb-2 border-b ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}>Sân bóng & Khung giờ:</span>
+                        <span className={`font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{selectedSlot?.san.ten_san} ({selectedSlot?.slot.start} - {selectedSlot?.gioKetThuc})</span>
                       </div>
-                      <div className="flex justify-between items-center pb-2 border-b border-slate-800/60">
-                        <span className="text-slate-400">Khách hàng:</span>
-                        <span className="font-bold text-slate-200">{bookingForm.ho_ten} ({bookingForm.so_dien_thoai})</span>
+                      <div className={`flex justify-between items-center pb-2 border-b ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}>Khách hàng:</span>
+                        <span className={`font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{bookingForm.ho_ten} ({bookingForm.so_dien_thoai})</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-400">Số tiền thanh toán:</span>
-                        <span className="font-mono font-black text-emerald-400 text-base">{soTienThanhToan.toLocaleString('vi-VN')} đ</span>
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}>Số tiền thanh toán:</span>
+                        <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-base">{soTienThanhToan.toLocaleString('vi-VN')} đ</span>
                       </div>
                     </div>
 
                     {/* Đếm ngược và các nút hành động */}
                     <div className="space-y-3 max-w-md mx-auto pt-2">
-                      <div className="text-xs text-slate-400 flex items-center justify-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                      <div className={`text-xs flex items-center justify-center gap-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>
+                        <Clock className="w-3.5 h-3.5 text-emerald-500" />
                         <span>Tự động đóng sau <strong className="text-emerald-400 font-mono text-sm">{successCountdown}s</strong></span>
                       </div>
 
@@ -3105,8 +3108,8 @@ export default function HomePage() {
                     {/* Bảng thông tin chi tiết chuyển khoản có nút Sao Chép */}
                     <div className={`p-4 sm:p-5 rounded-2xl border space-y-2.5 text-xs sm:text-sm ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
                       }`}>
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                        <span className="text-slate-400 flex items-center gap-1.5">
+                      <div className={`flex items-center justify-between pb-2 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                        <span className={`flex items-center gap-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>
                           <Building2 className="w-4 h-4 text-emerald-500" /> Ngân hàng:
                         </span>
                         <span className={`font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
@@ -3114,8 +3117,8 @@ export default function HomePage() {
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                        <span className="text-slate-400 flex items-center gap-1.5">
+                      <div className={`flex items-center justify-between pb-2 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                        <span className={`flex items-center gap-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>
                           <User className="w-4 h-4 text-emerald-500" /> Chủ tài khoản:
                         </span>
                         <span className={`font-black tracking-wide ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
@@ -3123,53 +3126,53 @@ export default function HomePage() {
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                        <span className="text-slate-400">Số tài khoản:</span>
+                      <div className={`flex items-center justify-between pb-2 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Số tài khoản:</span>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-black text-emerald-500 text-sm sm:text-base tracking-wider">
+                          <span className="font-mono font-black text-emerald-600 dark:text-emerald-500 text-sm sm:text-base tracking-wider">
                             {payOSData?.accountNumber || 'VQRQAMKSW8778'}
                           </span>
                           <button
                             type="button"
                             onClick={() => handleCopyText(payOSData?.accountNumber || 'VQRQAMKSW8778', 'Số tài khoản')}
-                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                            className={`p-1 rounded transition-colors cursor-pointer ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'}`}
                             title="Sao chép số tài khoản"
                           >
-                            {copiedField === 'Số tài khoản' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedField === 'Số tài khoản' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-800/60 dark:border-slate-800">
-                        <span className="text-slate-400">Số tiền cần chuyển:</span>
+                      <div className={`flex items-center justify-between pb-2 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Số tiền cần chuyển:</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-base sm:text-lg font-black text-emerald-500">
+                          <span className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-500">
                             {(payOSData?.amount || soTienThanhToan).toLocaleString('vi-VN')} đ
                           </span>
                           <button
                             type="button"
                             onClick={() => handleCopyText(String(payOSData?.amount || soTienThanhToan), 'Số tiền')}
-                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                            className={`p-1 rounded transition-colors cursor-pointer ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'}`}
                             title="Sao chép số tiền"
                           >
-                            {copiedField === 'Số tiền' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedField === 'Số tiền' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Nội dung chuyển khoản:</span>
+                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Nội dung chuyển khoản:</span>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm sm:text-base font-black px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          <span className="font-mono text-sm sm:text-base font-black px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                             {payOSData?.description || `DS${payOSData?.orderCode || ''}`}
                           </span>
                           <button
                             type="button"
                             onClick={() => handleCopyText(payOSData?.description || `DS${payOSData?.orderCode || ''}`, 'Nội dung')}
-                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                            className={`p-1 rounded transition-colors cursor-pointer ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'}`}
                             title="Sao chép nội dung chuyển khoản"
                           >
-                            {copiedField === 'Nội dung' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            {copiedField === 'Nội dung' ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </div>

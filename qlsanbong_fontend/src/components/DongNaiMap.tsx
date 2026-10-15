@@ -173,8 +173,12 @@ export default function DongNaiMap({
       />
 
       {/* Huy hiệu thông báo phạm vi bản đồ */}
-      <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/85 backdrop-blur-md border border-emerald-500/30 text-[10px] text-emerald-300 font-bold shadow-lg pointer-events-none">
-        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+      <div className={`absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg backdrop-blur-md text-[10px] font-bold shadow-lg pointer-events-none transition-colors ${
+        isDarkMode
+          ? 'bg-slate-950/85 border border-emerald-500/30 text-emerald-300'
+          : 'bg-white/95 border border-emerald-500/40 text-emerald-800 shadow-slate-300/60'
+      }`}>
+        <ShieldCheck className={`w-3.5 h-3.5 shrink-0 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
         <span>Khu vực: Tỉnh Đồng Nai (Đã khóa phạm vi)</span>
       </div>
 
@@ -184,9 +188,13 @@ export default function DongNaiMap({
           type="button"
           onClick={handleResetToField}
           title="Đưa bản đồ về vị trí sân bóng"
-          className="px-2.5 py-1 rounded-lg bg-slate-900/90 hover:bg-emerald-600 text-white text-[11px] font-semibold border border-slate-700 hover:border-emerald-500 shadow-md transition-all flex items-center gap-1 backdrop-blur-md"
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold shadow-md transition-all flex items-center gap-1 backdrop-blur-md ${
+            isDarkMode
+              ? 'bg-slate-900/90 hover:bg-emerald-600 text-white border border-slate-700 hover:border-emerald-500'
+              : 'bg-white/95 hover:bg-emerald-600 text-slate-800 hover:text-white border border-slate-200 hover:border-emerald-500 shadow-sm'
+          }`}
         >
-          <Navigation className="w-3 h-3 text-emerald-400 hover:text-white" />
+          <Navigation className={`w-3 h-3 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} group-hover:text-white`} />
           <span>Vị trí sân</span>
         </button>
 
@@ -195,7 +203,11 @@ export default function DongNaiMap({
           target="_blank"
           rel="noreferrer"
           title="Mở trên ứng dụng Google Maps"
-          className="px-2.5 py-1 rounded-lg bg-slate-900/90 hover:bg-emerald-600 text-white text-[11px] font-semibold border border-slate-700 hover:border-emerald-500 shadow-md transition-all flex items-center gap-1 backdrop-blur-md"
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold shadow-md transition-all flex items-center gap-1 backdrop-blur-md ${
+            isDarkMode
+              ? 'bg-slate-900/90 hover:bg-emerald-600 text-white border border-slate-700 hover:border-emerald-500'
+              : 'bg-white/95 hover:bg-emerald-600 text-slate-800 hover:text-white border border-slate-200 hover:border-emerald-500 shadow-sm'
+          }`}
         >
           <span>Google Maps</span>
           <ExternalLink className="w-3 h-3" />

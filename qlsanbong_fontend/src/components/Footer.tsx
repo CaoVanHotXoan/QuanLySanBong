@@ -76,64 +76,86 @@ export default function Footer() {
 
   return (
     <footer id="chinh-sach-lien-he" className={`border-t pt-16 pb-12 transition-colors duration-300 ${
-      isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-slate-900 text-slate-100 border-slate-800'
+      isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 pb-16 border-b border-slate-800/80">
+        <div className={`grid grid-cols-1 lg:grid-cols-12 gap-12 pb-16 border-b transition-colors duration-300 ${
+          isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
+        }`}>
           
           {/* Cột 1: Thông tin thương hiệu & Liên hệ */}
           <div className="lg:col-span-6 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white border border-slate-700 flex items-center justify-center overflow-hidden shrink-0">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden shrink-0 transition-colors shadow-sm ${
+                isDarkMode ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-slate-200'
+              }`}>
                 <SoccerBallIcon className="w-6 h-6" />
               </div>
-              <span className="text-2xl font-black text-white tracking-wide">
+              <span className={`text-2xl font-black tracking-wide ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                 {tenTrungTam.toUpperCase().includes('SOCCER') ? (
                   <>
                     {tenTrungTam.split(/(247)/i)[0]}
-                    <span className="text-emerald-400">247</span>
+                    <span className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}>247</span>
                   </>
                 ) : (
                   tenTrungTam
                 )}
               </span>
             </div>
-            <p className="text-slate-400 text-sm leading-relaxed max-w-lg">
+            <p className={`text-sm leading-relaxed max-w-lg transition-colors ${
+              isDarkMode ? 'text-slate-400' : 'text-slate-600'
+            }`}>
               {gioiThieu}
             </p>
 
             <div className="space-y-3 pt-2">
-              <div className="flex items-center gap-3 text-sm text-slate-300">
-                <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
+              <div className="flex items-center gap-3 text-sm">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-colors ${
+                  isDarkMode 
+                    ? 'bg-slate-900 border-slate-800 text-emerald-400' 
+                    : 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                }`}>
                   <Phone className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400">Hotline đặt sân:</div>
-                  <a href={`tel:${hotline}`} className="font-bold text-white text-base font-mono hover:text-emerald-400 transition-colors">
+                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Hotline đặt sân:</div>
+                  <a href={`tel:${hotline}`} className={`font-bold text-base font-mono transition-colors ${
+                    isDarkMode ? 'text-white hover:text-emerald-400' : 'text-slate-900 hover:text-emerald-600'
+                  }`}>
                     {hotline}
                   </a>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 text-sm text-slate-300">
-                <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
+              <div className="flex items-center gap-3 text-sm">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-colors ${
+                  isDarkMode 
+                    ? 'bg-slate-900 border-slate-800 text-emerald-400' 
+                    : 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                }`}>
                   <Mail className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400">Email:</div>
-                  <a href={`mailto:${email}`} className="font-bold text-white hover:text-emerald-400 transition-colors">
+                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Email:</div>
+                  <a href={`mailto:${email}`} className={`font-bold transition-colors ${
+                    isDarkMode ? 'text-white hover:text-emerald-400' : 'text-slate-900 hover:text-emerald-600'
+                  }`}>
                     {email}
                   </a>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 text-sm text-slate-300">
-                <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-emerald-400 shrink-0">
+              <div className="flex items-center gap-3 text-sm">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-colors ${
+                  isDarkMode 
+                    ? 'bg-slate-900 border-slate-800 text-emerald-400' 
+                    : 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                }`}>
                   <MapPin className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-xs text-slate-400">Địa chỉ cụm sân:</div>
-                  <div className="font-bold text-white">{diaChi}</div>
+                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Địa chỉ cụm sân:</div>
+                  <div className={`font-bold transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{diaChi}</div>
                 </div>
               </div>
             </div>
@@ -141,11 +163,15 @@ export default function Footer() {
 
           {/* Cột 2: Bản đồ Vị Trí Cụm Sân (Giới hạn phạm vi Tỉnh Đồng Nai) */}
           <div className="lg:col-span-6 space-y-4">
-            <h3 className="text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-emerald-400" />
+            <h3 className={`text-base font-black uppercase tracking-wider flex items-center gap-2 ${
+              isDarkMode ? 'text-white' : 'text-slate-900'
+            }`}>
+              <MapPin className={`w-5 h-5 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
               Bản Đồ Vị Trí Cụm Sân
             </h3>
-            <div className="w-full h-56 rounded-2xl overflow-hidden border border-slate-800 shadow-xl relative bg-slate-900 z-0 isolate">
+            <div className={`w-full h-56 rounded-2xl overflow-hidden border shadow-xl relative z-0 isolate transition-colors duration-300 ${
+              isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-100'
+            }`}>
               <DongNaiMap
                 linkMap={linkMap}
                 diaChi={diaChi}
@@ -158,12 +184,14 @@ export default function Footer() {
         </div>
 
         {/* Bản quyền & Điều hướng liên quan */}
-        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+        <div className={`pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs transition-colors duration-300 ${
+          isDarkMode ? 'text-slate-400' : 'text-slate-500'
+        }`}>
           <p>© 2026 {tenTrungTam}. Đặt Sân Thể Thao Nhanh Chóng & Chuyên Nghiệp.</p>
           <div className="flex items-center gap-6">
-            <Link href="/about-us" className="hover:text-emerald-400 transition-colors">Giới thiệu</Link>
-            <Link href="/tin-tuc" className="hover:text-emerald-400 transition-colors">Tin tức & Sự kiện</Link>
-            <Link href="/lien-he" className="hover:text-emerald-400 transition-colors">Gửi phản hồi</Link>
+            <Link href="/about-us" className={`transition-colors ${isDarkMode ? 'hover:text-emerald-400' : 'hover:text-emerald-600'}`}>Giới thiệu</Link>
+            <Link href="/tin-tuc" className={`transition-colors ${isDarkMode ? 'hover:text-emerald-400' : 'hover:text-emerald-600'}`}>Tin tức & Sự kiện</Link>
+            <Link href="/lien-he" className={`transition-colors ${isDarkMode ? 'hover:text-emerald-400' : 'hover:text-emerald-600'}`}>Gửi phản hồi</Link>
           </div>
         </div>
       </div>

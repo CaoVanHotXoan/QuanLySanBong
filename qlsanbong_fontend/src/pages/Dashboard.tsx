@@ -3018,7 +3018,7 @@ export default function AdminDashboard() {
                     <div className={`text-xs font-black truncate ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
                       {currentAdminUser?.ho_ten || 'Admin Quản Trị'}
                     </div>
-                    <div className="text-[10px] text-slate-500 font-mono truncate">
+                    <div className={`text-[10px] font-mono truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>
                       {currentAdminUser?.email || 'admin@soccer247.vn'}
                     </div>
                   </div>
@@ -3059,7 +3059,7 @@ export default function AdminDashboard() {
                 <span>⚽</span>
                 <span className="hidden sm:inline">SOCCER 247</span>
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-500 hidden md:block shrink-0" />
+              <ChevronRight className={`w-4 h-4 hidden md:block shrink-0 ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`} />
               <h2 className={`text-xs sm:text-sm md:text-base font-black tracking-tight truncate min-w-0 ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
                 {activeTab === 'OVERVIEW' && 'Dashboard'}
                 {activeTab === 'BANNER' && 'Quản Lý Banner Quảng Cáo'}
@@ -3207,7 +3207,7 @@ export default function AdminDashboard() {
                             Biểu Đồ Doanh Thu
                           </h3>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-1">
                           Thống kê doanh thu tiền sân bóng và dịch vụ phát sinh
                         </p>
                       </div>
@@ -3255,7 +3255,7 @@ export default function AdminDashboard() {
                     {/* Summary Sub-header */}
                     <div className="flex flex-wrap items-center justify-between gap-4 my-4 p-3 rounded-xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950/60">
                       <div>
-                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block uppercase">
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-400 font-medium block uppercase">
                           Tổng doanh thu ({revenuePeriod === 'NGAY' ? '7 ngày' : revenuePeriod === 'TUAN' ? '4 tuần' : '12 tháng'}):
                         </span>
                         <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
@@ -3499,7 +3499,7 @@ export default function AdminDashboard() {
                             Top Dịch Vụ Bán Chạy
                           </h3>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-1">
                           Các mặt hàng có doanh số cao nhất
                         </p>
                       </div>
@@ -3631,7 +3631,7 @@ export default function AdminDashboard() {
                           Bảng Đơn Đặt Sân Mới Nhất
                         </h3>
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-1">
                         5 giao dịch đặt lịch thi đấu gần đây nhất trong hệ thống
                       </p>
                     </div>
@@ -3649,7 +3649,7 @@ export default function AdminDashboard() {
                   <div className="w-full overflow-x-auto min-w-0 rounded-xl my-2">
                     <table className="w-full text-left text-xs sm:text-sm min-w-[650px] border-collapse">
                       <thead>
-                        <tr className={`border-b font-black uppercase text-xs tracking-wider ${isDarkMode ? 'text-emerald-300/80 border-emerald-900/30' : 'text-slate-500 border-slate-200'}`}>
+                        <tr className={`border-b font-black uppercase text-xs tracking-wider ${isDarkMode ? 'text-emerald-300/80 border-emerald-900/30' : 'text-slate-800 font-black border-slate-300'}`}>
                           <th className="pb-2.5 pt-1 whitespace-nowrap">Khách Hàng</th>
                           <th className="pb-2.5 pt-1 whitespace-nowrap">Sân Bóng</th>
                           <th className="pb-2.5 pt-1 whitespace-nowrap">Ngày & Giờ</th>
@@ -3740,7 +3740,7 @@ export default function AdminDashboard() {
                       <Layers className="w-5 h-5 text-emerald-600" />
                       Danh Sách Sân Bóng
                     </h3>
-                    <p className="text-xs font-bold text-slate-500 mt-1">Quản lý danh sách sân bóng và đơn giá thuê theo từng phút</p>
+                    <p className={`text-xs font-bold mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Quản lý danh sách sân bóng và đơn giá thuê theo từng phút</p>
                   </div>
                   <button onClick={() => setCourtModal({ isOpen: true, mode: 'ADD', data: { ma_loai_san: 1, don_gia_phut: 5000, trang_thai: 'SAN_SANG' } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
                     <Plus className="w-4 h-4 stroke-[3]" /> Thêm Sân Mới
@@ -3783,7 +3783,7 @@ export default function AdminDashboard() {
                             <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
                               {Number(c.don_gia_phut || 5000).toLocaleString('vi-VN')} đ/phút
                             </span>
-                            <div className="text-[10px] text-slate-500 font-medium">
+                            <div className={`text-[10px] font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                               ~ {(Number(c.don_gia_phut || 5000) * 60).toLocaleString('vi-VN')} đ/giờ
                             </div>
                           </td>
@@ -3822,7 +3822,7 @@ export default function AdminDashboard() {
                       <h3 className="text-base font-black flex items-center gap-2">
                         <Layers className="w-5 h-5 text-emerald-600" /> Bảng Loại Sân (Loai_San)
                       </h3>
-                      <p className="text-xs font-bold text-slate-500 mt-1">Định nghĩa các loại sân thể thao (Sân 5, Sân 7, Sân 11...)</p>
+                      <p className={`text-xs font-bold mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Định nghĩa các loại sân thể thao (Sân 5, Sân 7, Sân 11...)</p>
                     </div>
                     <button onClick={() => setLoaiSanModal({ isOpen: true, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
                       <Plus className="w-4 h-4 stroke-[3]" /> Thêm Loại Sân
@@ -3841,7 +3841,7 @@ export default function AdminDashboard() {
                         {categoryList.map((l) => (
                           <tr key={l.id}>
                             <td className="p-4 font-black text-sm">{l.ten_loai}</td>
-                            <td className="p-4 text-slate-500">{l.mo_ta}</td>
+                            <td className={`p-4 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>{l.mo_ta}</td>
                             <td className="p-4 text-right space-x-2">
                               <button onClick={() => setLoaiSanModal({ isOpen: true, mode: 'EDIT', data: l })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 cursor-pointer font-bold inline-flex items-center gap-1"><Edit2 className="w-3.5 h-3.5" /> Sửa</button>
                               <button onClick={() => handleDeleteLoaiSan(l.id)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
@@ -3974,7 +3974,7 @@ export default function AdminDashboard() {
                       <Receipt className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                       Bảng Đơn Đặt Sân & Thanh Toán
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
                       Quản lý toàn bộ thông tin lịch đặt sân, khách hàng và giao dịch thanh toán / cọc sân.
                     </p>
                   </div>
@@ -4103,7 +4103,7 @@ export default function AdminDashboard() {
                             <tr key={b.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
                               <td className="p-4 whitespace-nowrap">
                                 <div className="font-black text-sm text-[#0f172a] dark:text-white">{b.ten_khach_hang || 'Khách Hàng'}</div>
-                                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">{b.so_dien_thoai}</div>
+                                <div className="text-[11px] text-slate-700 dark:text-slate-400 font-medium font-mono mt-0.5">{b.so_dien_thoai}</div>
                               </td>
                               <td className="p-4 whitespace-nowrap font-bold text-[#0f172a] dark:text-white">
                                 {b.ten_san}
@@ -4132,7 +4132,7 @@ export default function AdminDashboard() {
                                         </span>
                                       ))}
                                     </div>
-                                    <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                    <div className="text-[10px] font-bold text-slate-700 dark:text-slate-400 font-medium">
                                       Tiền DV: <span className="text-emerald-600 dark:text-emerald-400 font-black">{totalDvPrice.toLocaleString('vi-VN')} đ</span>
                                     </div>
                                   </div>
@@ -4145,7 +4145,7 @@ export default function AdminDashboard() {
                                   {Number(b.tong_tien || b.tien_san || 0).toLocaleString('vi-VN')} đ
                                 </div>
                                 {totalDvPrice > 0 && (
-                                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                                  <div className="text-[10px] text-slate-700 dark:text-slate-400 font-medium font-medium mt-0.5">
                                     <span>Sân: {Number(b.tien_san || 0).toLocaleString('vi-VN')} đ</span>
                                   </div>
                                 )}
@@ -4215,7 +4215,7 @@ export default function AdminDashboard() {
                                   );
                                 })()}
                               </td>
-                              <td className="p-4 text-slate-500 dark:text-slate-400 text-[11px] max-w-[150px] truncate">
+                              <td className="p-4 text-slate-700 dark:text-slate-400 font-medium text-[11px] max-w-[150px] truncate">
                                 {b.ghi_chu || '—'}
                               </td>
                               <td className="p-4 text-right space-x-2 whitespace-nowrap">
@@ -4291,7 +4291,7 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <RefreshCw className="w-5 h-5 text-rose-500" /> Bảng Lịch Sử Hoàn Tiền
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
                       Ghi nhận và quản lý các giao dịch hoàn cọc do khách hủy lịch hoặc thay đổi sân.
                     </p>
                   </div>
@@ -4363,7 +4363,7 @@ export default function AdminDashboard() {
                       <Clock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                       Bảng Khung Giờ Hoạt Động
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
                       Quản lý danh sách các mốc thời gian đá bóng (6h00 - 19h30). Dữ liệu được đồng bộ trực tiếp với CSDL SQL Server.
                     </p>
                   </div>
@@ -4456,7 +4456,7 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <User className="w-5 h-5 text-emerald-600" /> Danh Sách Tài Khoản Người Dùng
                     </h3>
-                    <p className="text-xs text-slate-500 mt-1">Quản lý danh sách người dùng, mật khẩu, phân quyền và ảnh đại diện</p>
+                    <p className={`text-xs font-bold mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Quản lý danh sách người dùng, mật khẩu, phân quyền và ảnh đại diện</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {/* Bộ lọc vai trò */}
@@ -4625,7 +4625,7 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Sparkles className="w-5 h-5 text-emerald-500" /> Quản Lý Thông Tin Về Chúng Tôi (About Us)
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
                       Cập nhật nội dung giới thiệu trung tâm, số hotline, email, địa chỉ và bản đồ hiển thị trên trang About Us và chân trang.
                     </p>
                   </div>
@@ -4813,7 +4813,7 @@ export default function AdminDashboard() {
                         <div className="font-bold text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                           <CheckCircle2 className="w-4 h-4" /> Đồng bộ thời gian thực
                         </div>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        <p className="text-[11px] text-slate-700 dark:text-slate-400 font-medium leading-relaxed">
                           Khi bạn bấm <strong className="text-emerald-600 dark:text-emerald-400">&quot;Lưu Thay Đổi&quot;</strong>, toàn bộ thông tin này sẽ được cập nhật tức thì vào CSDL qua Stored Procedure và tự động hiển thị ra trang <strong>About Us</strong> và <strong>Chân trang (Footer)</strong> của website.
                         </p>
                       </div>
@@ -4846,7 +4846,7 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <ImageIcon className="w-5 h-5 text-emerald-600" /> Quản Lý Banner Quảng Cáo Trang Chủ
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Hiển thị slider hình ảnh và video quảng cáo ngoài trang chủ website</p>
+                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">Hiển thị slider hình ảnh và video quảng cáo ngoài trang chủ website</p>
                   </div>
                   <button
                     onClick={() => setBannerModal({ isOpen: true, mode: 'ADD', data: { loai_banner: 'IMAGE', thu_tu: bannerList.length + 1, trang_thai: 1 } })}
@@ -4956,7 +4956,7 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Mail className="w-5 h-5 text-emerald-600" /> Quản Lý Phản Hồi & Thắc Mắc Từ Khách Hàng
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Danh sách các thư liên hệ gửi từ form liên hệ ngoài website</p>
+                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">Danh sách các thư liên hệ gửi từ form liên hệ ngoài website</p>
                   </div>
                   <div className="flex items-center gap-2 text-xs font-bold">
                     <span className="px-3 py-1.5 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
@@ -5009,11 +5009,11 @@ export default function AdminDashboard() {
                               <div className="font-black text-slate-900 dark:text-white truncate" title={lh.tieu_de || ''}>
                                 {lh.tieu_de || '(Không có tiêu đề)'}
                               </div>
-                              <div className="text-slate-500 dark:text-slate-400 truncate text-[10px] md:text-[11px] mt-0.5" title={lh.noi_dung}>
+                              <div className="text-slate-700 dark:text-slate-400 font-medium truncate text-[10px] md:text-[11px] mt-0.5" title={lh.noi_dung}>
                                 {lh.noi_dung}
                               </div>
                             </td>
-                            <td className="p-3 md:p-4 text-center font-mono text-slate-500 whitespace-nowrap text-[10px] md:text-xs">
+                            <td className={`p-3 md:p-4 text-center font-mono whitespace-nowrap text-[10px] md:text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                               {lh.ngay_gui ? formatVNDate(lh.ngay_gui) : '---'}
                             </td>
                             <td className="p-3 md:p-4 text-center whitespace-nowrap">
@@ -5068,7 +5068,7 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <FolderTree className="w-5 h-5 text-emerald-600" /> Quản Lý Loại / Danh Mục Tin Tức
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Phân loại các bài viết tin tức: Giải đấu, Khuyến mãi, Hướng dẫn, Cẩm nang sân bóng...</p>
+                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">Phân loại các bài viết tin tức: Giải đấu, Khuyến mãi, Hướng dẫn, Cẩm nang sân bóng...</p>
                   </div>
                   <button
                     onClick={() => setLoaiTinModal({ isOpen: true, mode: 'ADD', data: { ten_loai: '', trang_thai: 1 } })}
@@ -5095,7 +5095,7 @@ export default function AdminDashboard() {
                       ) : (
                         loaiTinList.map((lt) => (
                           <tr key={lt.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
-                            <td className="p-4 font-mono font-black text-slate-500">#{lt.id}</td>
+                            <td className={`p-4 font-mono font-black ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>#{lt.id}</td>
                             <td className="p-4 font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
                               📁 {lt.ten_loai}
                             </td>
@@ -5150,7 +5150,7 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <FileText className="w-5 h-5 text-emerald-600" /> Quản Lý Tin Tức & Bài Viết
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Soạn thảo, đăng tải các bài viết thể thao, tin giải đấu và sự kiện sân bóng</p>
+                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">Soạn thảo, đăng tải các bài viết thể thao, tin giải đấu và sự kiện sân bóng</p>
                   </div>
                   <button
                     onClick={() => setNewsModal({
@@ -5199,7 +5199,7 @@ export default function AdminDashboard() {
                             </td>
                             <td className="p-4 max-w-sm">
                               <div className="font-black text-sm text-slate-900 dark:text-white line-clamp-1">{nw.tieu_de}</div>
-                              <div className="text-slate-500 dark:text-slate-400 line-clamp-2 text-[11px] mt-0.5">{nw.tom_tat}</div>
+                              <div className="text-slate-700 dark:text-slate-400 font-medium line-clamp-2 text-[11px] mt-0.5">{nw.tom_tat}</div>
                             </td>
                             <td className="p-4 font-bold text-emerald-700 dark:text-emerald-400">
                               <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-900/40 text-[11px]">
@@ -5209,7 +5209,7 @@ export default function AdminDashboard() {
                             <td className="p-4 text-center font-mono font-bold text-slate-600 dark:text-slate-300">
                               👁️ {nw.luot_xem ?? 0}
                             </td>
-                            <td className="p-4 text-center font-mono text-slate-500">
+                            <td className={`p-4 text-center font-mono font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                               {nw.ngay_dang ? formatVNDate(nw.ngay_dang) : '---'}
                             </td>
                             <td className="p-4 text-center">
@@ -5564,7 +5564,7 @@ export default function AdminDashboard() {
                     <div className="space-y-2.5 pt-1">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block font-black uppercase mb-1 text-[10px] text-slate-500 dark:text-slate-400">Số Lượng Nhập Ban Đầu *</label>
+                          <label className="block font-black uppercase mb-1 text-[10px] text-slate-700 dark:text-slate-400 font-medium">Số Lượng Nhập Ban Đầu *</label>
                           <input
                             type="number"
                             min="1"
@@ -5577,7 +5577,7 @@ export default function AdminDashboard() {
                           />
                         </div>
                         <div>
-                          <label className="block font-black uppercase mb-1 text-[10px] text-slate-500 dark:text-slate-400">Đơn Giá Vốn Nhập (VNĐ) *</label>
+                          <label className="block font-black uppercase mb-1 text-[10px] text-slate-700 dark:text-slate-400 font-medium">Đơn Giá Vốn Nhập (VNĐ) *</label>
                           <input
                             type="number"
                             min="0"
@@ -5591,7 +5591,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div>
-                        <label className="block font-black uppercase mb-1 text-[10px] text-slate-500 dark:text-slate-400">Ngày Nhập Kho *</label>
+                        <label className="block font-black uppercase mb-1 text-[10px] text-slate-700 dark:text-slate-400 font-medium">Ngày Nhập Kho *</label>
                         <input
                           type="date"
                           value={serviceModal.data.ngay_nhap || new Date().toISOString().split('T')[0]}
@@ -5863,7 +5863,7 @@ export default function AdminDashboard() {
                   <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shadow-sm animate-pulse"></span>
                   <span>🟠 Đang có người chọn / Đã đặt (Màu cam)</span>
                 </span>
-                <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-400 font-medium">
                   <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 inline-block"></span>
                   <span>⚪ Đã qua giờ (Tự động ẩn)</span>
                 </span>
@@ -6110,7 +6110,7 @@ export default function AdminDashboard() {
 
               <div className="flex items-center justify-between pt-3 border-t">
                 <div className="text-xs">
-                  <span className="text-slate-500 font-bold">Tổng Thanh Toán: </span>
+                  <span className={`font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Tổng Thanh Toán: </span>
                   <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm font-mono">
                     {Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0).toLocaleString('vi-VN')} đ
                   </span>
@@ -6507,7 +6507,7 @@ export default function AdminDashboard() {
                 <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center gap-1.5">
                   {deleteConfirmModal.title || 'Xác nhận xóa'}
                 </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-1 leading-relaxed">
                   {deleteConfirmModal.message}
                 </p>
               </div>
@@ -6519,7 +6519,7 @@ export default function AdminDashboard() {
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>Dữ liệu bị xóa: <strong className="underline decoration-rose-400 underline-offset-2">{deleteConfirmModal.itemDescription}</strong></span>
                 </div>
-                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 pl-5">
+                <div className="text-[10px] text-slate-700 dark:text-slate-400 font-medium mt-1 pl-5">
                   Hành động này không thể hoàn tác sau khi thực hiện.
                 </div>
               </div>
@@ -6856,7 +6856,7 @@ export default function AdminDashboard() {
                   <MessageSquareReply className="w-5 h-5" />
                   <span>Soạn Thư Phản Hồi Khách Hàng</span>
                 </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Gửi thư trả lời trực tiếp đến Gmail của khách hàng</p>
+                <p className="text-[11px] text-slate-700 dark:text-slate-400 font-medium mt-0.5">Gửi thư trả lời trực tiếp đến Gmail của khách hàng</p>
               </div>
               <button
                 onClick={() => setReplyLienHeModal({ isOpen: false, data: null, tieu_de_tra_loi: '', noi_dung_tra_loi: '', isSubmitting: false })}
@@ -6893,7 +6893,7 @@ export default function AdminDashboard() {
               {/* Tóm tắt nội dung câu hỏi ban đầu */}
               <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-1">
                 <div className="flex justify-between items-center text-[11px]">
-                  <span className="font-bold text-slate-500 dark:text-slate-400">📌 Yêu cầu ban đầu:</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-400 font-medium">📌 Yêu cầu ban đầu:</span>
                   <span className="font-black text-slate-700 dark:text-slate-300">{replyLienHeModal.data.tieu_de || 'Đặt sân / Dịch vụ'}</span>
                 </div>
                 <p className="text-[11px] text-slate-600 dark:text-slate-400 italic line-clamp-2">
@@ -6903,7 +6903,7 @@ export default function AdminDashboard() {
 
               {/* Mẫu trả lời nhanh */}
               <div>
-                <label className="block font-black uppercase text-[11px] text-slate-500 dark:text-slate-400 mb-1.5">
+                <label className="block font-black uppercase text-[11px] text-slate-700 dark:text-slate-400 font-medium mb-1.5">
                   💡 Chọn Mẫu Trả Lời Nhanh (Gợi ý)
                 </label>
                 <div className="flex flex-wrap gap-1.5">

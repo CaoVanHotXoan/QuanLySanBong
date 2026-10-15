@@ -553,7 +553,7 @@ export default function History() {
                 <Receipt className="w-7 h-7 text-emerald-500" />
                 Lịch Sử Đặt Sân & Hóa Đơn
               </h1>
-              <p className={`text-xs sm:text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              <p className={`text-xs sm:text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                 Theo dõi danh sách đơn đặt sân bóng, dịch vụ kèm theo và thanh toán
               </p>
             </div>
@@ -616,7 +616,7 @@ export default function History() {
               <Receipt className="w-6 h-6" />
             </div>
             <div>
-              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tổng số đơn</p>
+              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Tổng số đơn</p>
               <p className={`text-xl font-extrabold mt-0.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                 {isLoading ? '...' : `${totalBookings} đơn`}
               </p>
@@ -635,7 +635,7 @@ export default function History() {
               <Clock3 className="w-6 h-6" />
             </div>
             <div>
-              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Đã cọc</p>
+              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Đã cọc</p>
               <p className={`text-xl font-extrabold mt-0.5 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
                 {isLoading ? '...' : `${daCocCount} đơn`}
               </p>
@@ -654,7 +654,7 @@ export default function History() {
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
-              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Đã thanh toán</p>
+              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Đã thanh toán</p>
               <p className={`text-xl font-extrabold mt-0.5 ${isDarkMode ? 'text-teal-300' : 'text-teal-600'}`}>
                 {isLoading ? '...' : `${daThanhToanCount} đơn`}
               </p>
@@ -673,7 +673,7 @@ export default function History() {
               <CreditCard className="w-6 h-6" />
             </div>
             <div>
-              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tổng giá trị đơn đặt</p>
+              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Tổng giá trị đơn đặt</p>
               <p className={`text-xl font-extrabold mt-0.5 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                 {isLoading ? '...' : formatCurrency(totalSpent)}
               </p>
@@ -702,8 +702,8 @@ export default function History() {
               <HistoryIcon className="w-5 h-5 text-emerald-500" />
               Chi Tiết Đơn Đặt Sân
             </h2>
-            <span className={`text-xs px-3 py-1 rounded-full border font-medium ${
-              isDarkMode ? 'text-slate-400 bg-slate-950 border-slate-800' : 'text-slate-600 bg-slate-100 border-slate-200'
+            <span className={`text-xs px-3 py-1 rounded-full border font-bold ${
+              isDarkMode ? 'text-slate-400 bg-slate-950 border-slate-800' : 'text-slate-700 bg-slate-100 border-slate-300'
             }`}>
               Hiển thị {danhSachDon.length} đơn
             </span>
@@ -713,18 +713,18 @@ export default function History() {
             /* Hiệu ứng Skeleton Loading */
             <div className="p-12 text-center space-y-3">
               <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto" />
-              <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Đang tải lịch sử đơn đặt sân từ CSDL SQL Server...</p>
+              <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>Đang tải lịch sử đơn đặt sân từ CSDL SQL Server...</p>
             </div>
           ) : danhSachDon.length === 0 ? (
             /* Trạng thái rỗng khi chưa có đơn */
             <div className="py-16 px-4 text-center">
               <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border shadow-inner ${
-                isDarkMode ? 'bg-slate-950 text-slate-500 border-slate-800' : 'bg-slate-100 text-slate-400 border-slate-200'
+                isDarkMode ? 'bg-slate-950 text-slate-500 border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-300'
               }`}>
                 <Receipt className="w-8 h-8" />
               </div>
               <p className={`text-base font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Bạn chưa có đơn đặt sân nào trong hệ thống CSDL.</p>
-              <p className={`text-xs mt-1 max-w-md mx-auto ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              <p className={`text-xs mt-1 max-w-md mx-auto ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                 Khi bạn đặt sân bóng trên trang chủ, toàn bộ thông tin đơn đặt và dịch vụ kèm theo sẽ được hiển thị đầy đủ tại đây.
               </p>
               <button
@@ -740,7 +740,7 @@ export default function History() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className={`border-b text-[11px] uppercase tracking-wider font-bold transition-colors ${
-                    isDarkMode ? 'bg-slate-950/80 border-slate-800 text-slate-400' : 'bg-slate-100/90 border-slate-200 text-slate-600'
+                    isDarkMode ? 'bg-slate-950/80 border-slate-800 text-slate-400' : 'bg-slate-100/90 border-slate-300 text-slate-800 font-bold'
                   }`}>
                     <th className="py-3.5 px-4 whitespace-nowrap">Tên Sân</th>
                     <th className="py-3.5 px-4 whitespace-nowrap">Ngày & Giờ Đá</th>
@@ -786,13 +786,13 @@ export default function History() {
                         <td className="py-4 px-4 whitespace-nowrap">
                           <div className={`font-bold transition-colors ${
                             isPast 
-                              ? isDarkMode ? 'text-slate-300 group-hover:text-white' : 'text-slate-600 group-hover:text-slate-900'
+                              ? isDarkMode ? 'text-slate-300 group-hover:text-white' : 'text-slate-700 group-hover:text-slate-900'
                               : isDarkMode ? 'text-white group-hover:text-emerald-400' : 'text-slate-900 group-hover:text-emerald-600'
                           }`}>
                             {item.ten_san}
                           </div>
                           {item.ten_loai && (
-                            <div className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
                               {item.ten_loai}
                             </div>
                           )}
@@ -805,14 +805,14 @@ export default function History() {
                             {formatDateDMY(item.ngay_da)}
                           </div>
                           <div className={`flex items-center gap-1.5 font-mono text-[11px] mt-1 whitespace-nowrap ${
-                            isDarkMode ? 'text-slate-400' : 'text-slate-500'
+                            isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'
                           }`}>
-                            <Clock className="w-3 h-3 text-slate-400" />
+                            <Clock className={`w-3 h-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} />
                             <span>{item.gio_bat_dau} - {item.gio_ket_thuc}</span>
                           </div>
                           {isPast && (
                             <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] mt-1 font-medium ${
-                              isDarkMode ? 'bg-slate-800/80 border-slate-700/60 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'
+                              isDarkMode ? 'bg-slate-800/80 border-slate-700/60 text-slate-400' : 'bg-slate-100 border-slate-300 text-slate-700 font-semibold'
                             }`}>
                               <Clock3 className="w-2.5 h-2.5" />
                               <span>Đã qua giờ</span>
@@ -828,7 +828,7 @@ export default function History() {
                                 <span
                                   key={idx}
                                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium whitespace-nowrap ${
-                                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+                                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700 font-medium'
                                   }`}
                                   title={`${dv.ten_dich_vu} x${dv.so_luong} = ${formatCurrency(dv.tongtien_dichvu)}`}
                                 >
@@ -838,7 +838,7 @@ export default function History() {
                               ))}
                             </div>
                           ) : (
-                            <span className={`text-[11px] italic ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Chưa chọn dịch vụ</span>
+                            <span className={`text-[11px] italic ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>Chưa chọn dịch vụ</span>
                           )}
                         </td>
 
@@ -983,7 +983,7 @@ export default function History() {
                 </div>
                 <div>
                   <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Thêm Dịch Vụ Vào Đơn Hàng</h3>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                     Đơn: <span className="font-mono text-emerald-500 font-bold">{selectedOrderForService.ma_don || `DDS-${selectedOrderForService.id}`}</span> • {selectedOrderForService.ten_san}
                   </p>
                 </div>
@@ -991,7 +991,7 @@ export default function History() {
               <button
                 onClick={() => setSelectedOrderForService(null)}
                 className={`p-2 rounded-xl transition-colors ${
-                  isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                  isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 <X className="w-5 h-5" />
@@ -1004,11 +1004,11 @@ export default function History() {
                 isDarkMode ? 'bg-slate-950/70 border-slate-800/80' : 'bg-slate-50 border-slate-200'
               }`}>
                 <div>
-                  <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Tổng tiền hiện tại của đơn:</span>
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}>Tổng tiền hiện tại của đơn:</span>
                   <span className={`font-bold ml-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(selectedOrderForService.tong_tien)}</span>
                 </div>
                 <div>
-                  <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Đã trả:</span>
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}>Đã trả:</span>
                   <span className="font-bold text-emerald-500 ml-2">{formatCurrency(selectedOrderForService.tien_da_nhan || 0)}</span>
                 </div>
               </div>
@@ -1035,9 +1035,9 @@ export default function History() {
                           <span>{service.ten_dich_vu}</span>
                         </div>
                         <div className="text-xs font-semibold text-emerald-500">
-                          {formatCurrency(service.don_gia)} <span className={`text-[10px] font-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>/ {service.don_vi_tinh}</span>
+                          {formatCurrency(service.don_gia)} <span className={`text-[10px] font-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>/ {service.don_vi_tinh}</span>
                         </div>
-                        <div className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                        <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
                           Còn lại trong kho: {service.ton_kho}
                         </div>
                       </div>
@@ -1079,7 +1079,7 @@ export default function History() {
               isDarkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'
             }`}>
               <div>
-                <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Tiền dịch vụ đã chọn:</div>
+                <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Tiền dịch vụ đã chọn:</div>
                 <div className="text-lg font-black text-emerald-500">
                   {formatCurrency(calculateAddedServicesTotal())}
                 </div>
@@ -1138,7 +1138,7 @@ export default function History() {
                   <h3 className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                     Thanh Toán Số Tiền Còn Thiếu
                   </h3>
-                  <p className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  <p className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                     Đơn đặt: <span className="text-emerald-500 font-mono font-bold">{selectedOrderForPayment.ma_don || `DDS-${selectedOrderForPayment.id}`}</span>
                     <span className="ml-1.5 text-amber-500 font-bold">• VietQR MB Bank</span>
                   </p>
@@ -1147,7 +1147,7 @@ export default function History() {
               <button
                 onClick={handleCloseQRModal}
                 className={`p-1.5 rounded-lg transition-colors ${
-                  isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                  isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 <X className="w-4 h-4" />
@@ -1163,7 +1163,7 @@ export default function History() {
                   </div>
                   <div>
                     <h4 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Thanh Toán Thành Công!</h4>
-                    <p className={`text-xs mt-1 max-w-xs mx-auto ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                    <p className={`text-xs mt-1 max-w-xs mx-auto ${isDarkMode ? 'text-slate-300' : 'text-slate-700 font-medium'}`}>
                       Hệ thống MB Bank đã xác nhận khoản thanh toán. Đơn hàng của bạn đã hoàn tất thanh toán!
                     </p>
                   </div>
@@ -1177,7 +1177,7 @@ export default function History() {
               ) : isCreatingPayOS ? (
                 <div className="py-12 text-center space-y-3">
                   <div className="w-7 h-7 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto" />
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Đang khởi tạo mã VietQR MB Bank...</p>
+                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>Đang khởi tạo mã VietQR MB Bank...</p>
                 </div>
               ) : payOSData ? (
                 <>
@@ -1190,7 +1190,7 @@ export default function History() {
                         className="w-40 h-40 sm:w-44 sm:h-44 object-contain rounded-lg"
                       />
                     </div>
-                    <p className={`text-[10px] mt-1.5 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    <p className={`text-[10px] mt-1.5 text-center ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                       Quét mã bằng App ngân hàng bất kỳ để thanh toán tự động
                     </p>
                   </div>
@@ -1200,23 +1200,23 @@ export default function History() {
                     isDarkMode ? 'bg-slate-950 border-slate-800/90' : 'bg-slate-50 border-slate-200'
                   }`}>
                     <div className={`flex items-center justify-between pb-1.5 border-b ${isDarkMode ? 'border-slate-800/70' : 'border-slate-200'}`}>
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Ngân hàng:</span>
+                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Ngân hàng:</span>
                       <span className={`font-bold text-right ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{payOSData.bankName || 'MB Bank (Quân Đội)'}</span>
                     </div>
 
                     <div className={`flex items-center justify-between pb-1.5 border-b ${isDarkMode ? 'border-slate-800/70' : 'border-slate-200'}`}>
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Chủ tài khoản:</span>
+                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Chủ tài khoản:</span>
                       <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{payOSData.accountName || 'CAO VAN HOT XOAN'}</span>
                     </div>
 
                     <div className={`flex items-center justify-between pb-1.5 border-b ${isDarkMode ? 'border-slate-800/70' : 'border-slate-200'}`}>
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Số tài khoản:</span>
+                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Số tài khoản:</span>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono font-bold text-emerald-500">{payOSData.accountNumber}</span>
+                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{payOSData.accountNumber}</span>
                         <button
                           type="button"
                           onClick={() => handleCopyText(payOSData.accountNumber, 'Số tài khoản')}
-                          className={`p-1 rounded ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'}`}
+                          className={`p-1 rounded cursor-pointer ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900'}`}
                           title="Sao chép"
                         >
                           <Copy className="w-3 h-3" />
@@ -1225,7 +1225,7 @@ export default function History() {
                     </div>
 
                     <div className={`flex items-center justify-between pb-1.5 border-b ${isDarkMode ? 'border-slate-800/70' : 'border-slate-200'}`}>
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Số tiền thanh toán:</span>
+                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Số tiền thanh toán:</span>
                       <div className="flex items-center gap-1.5">
                         <span className={`font-mono font-black text-xs sm:text-sm ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
                           {formatCurrency(payOSData.amount)}
@@ -1233,7 +1233,7 @@ export default function History() {
                         <button
                           type="button"
                           onClick={() => handleCopyText(String(payOSData.amount), 'Số tiền')}
-                          className={`p-1 rounded ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'}`}
+                          className={`p-1 rounded cursor-pointer ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900'}`}
                           title="Sao chép"
                         >
                           <Copy className="w-3 h-3" />
@@ -1242,7 +1242,7 @@ export default function History() {
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Nội dung:</span>
+                      <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Nội dung:</span>
                       <div className="flex items-center gap-1.5">
                         <span className={`font-mono font-bold px-2 py-0.5 rounded border ${
                           isDarkMode ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-emerald-700 bg-emerald-50 border-emerald-200'
@@ -1252,7 +1252,7 @@ export default function History() {
                         <button
                           type="button"
                           onClick={() => handleCopyText(payOSData.description, 'Nội dung')}
-                          className={`p-1 rounded ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'}`}
+                          className={`p-1 rounded cursor-pointer ${isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-200 text-slate-600 hover:text-slate-900'}`}
                           title="Sao chép"
                         >
                           <Copy className="w-3 h-3" />
@@ -1317,13 +1317,13 @@ export default function History() {
                     <span>Chi Tiết Hóa Đơn Đặt Sân</span>
                     {isOrderPastTime(selectedOrderForDetail) && (
                       <span className={`text-[10px] font-normal px-2 py-0.5 rounded border ${
-                        isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-200'
+                        isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-700 font-bold border-slate-300'
                       }`}>
                         Đã qua giờ
                       </span>
                     )}
                   </h3>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                     Mã đơn: <span className="font-mono text-emerald-500 font-bold">{selectedOrderForDetail.ma_don || `DDS-${selectedOrderForDetail.id}`}</span>
                   </p>
                 </div>
@@ -1331,7 +1331,7 @@ export default function History() {
               <button
                 onClick={() => setSelectedOrderForDetail(null)}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                  isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                  isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 <X className="w-5 h-5" />
@@ -1351,31 +1351,31 @@ export default function History() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <span className={`block ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Sân bóng:</span>
+                    <span className={`block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Sân bóng:</span>
                     <span className={`font-bold text-sm ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{selectedOrderForDetail.ten_san}</span>
                     {selectedOrderForDetail.ten_loai && (
-                      <span className={`text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>({selectedOrderForDetail.ten_loai})</span>
+                      <span className={`text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>({selectedOrderForDetail.ten_loai})</span>
                     )}
                   </div>
                   <div>
-                    <span className={`block ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Ngày thi đấu:</span>
-                    <span className="font-bold text-emerald-500">{formatDateDMY(selectedOrderForDetail.ngay_da)}</span>
+                    <span className={`block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Ngày thi đấu:</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-500">{formatDateDMY(selectedOrderForDetail.ngay_da)}</span>
                   </div>
                   <div>
-                    <span className={`block ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Khung giờ đá:</span>
+                    <span className={`block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Khung giờ đá:</span>
                     <span className={`font-mono font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{selectedOrderForDetail.gio_bat_dau} - {selectedOrderForDetail.gio_ket_thuc}</span>
                   </div>
                   <div>
-                    <span className={`block ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Trạng thái:</span>
+                    <span className={`block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Trạng thái:</span>
                     <span className="mt-0.5 block">{renderStatusBadge(selectedOrderForDetail.trang_thai, selectedOrderForDetail.tien_thieu || 0, selectedOrderForDetail.tien_da_nhan || 0, selectedOrderForDetail.tong_tien)}</span>
                   </div>
                 </div>
 
                 {selectedOrderForDetail.ghi_chu && (
                   <div className={`pt-2 border-t text-[11px] ${
-                    isDarkMode ? 'border-slate-800/60 text-slate-400' : 'border-slate-200 text-slate-500'
+                    isDarkMode ? 'border-slate-800/60 text-slate-400' : 'border-slate-200 text-slate-700'
                   }`}>
-                    <span className={isDarkMode ? 'text-slate-500' : 'text-slate-400'}>Ghi chú:</span> {selectedOrderForDetail.ghi_chu}
+                    <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Ghi chú:</span> {selectedOrderForDetail.ghi_chu}
                   </div>
                 )}
               </div>
@@ -1390,24 +1390,24 @@ export default function History() {
                   Thông Tin Người Đặt
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className={isDarkMode ? 'text-slate-500' : 'text-slate-400'}>Khách hàng:</span>
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}>Khách hàng:</span>
                   <span className={`font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{selectedOrderForDetail.ten_khach_hang || 'Khách vãng lai'}</span>
                 </div>
                 {selectedOrderForDetail.sdt_khach_hang && (
                   <div className="flex items-center justify-between">
-                    <span className={isDarkMode ? 'text-slate-500' : 'text-slate-400'}>Số điện thoại:</span>
-                    <span className={`font-mono font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedOrderForDetail.sdt_khach_hang}</span>
+                    <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}>Số điện thoại:</span>
+                    <span className={`font-mono font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{selectedOrderForDetail.sdt_khach_hang}</span>
                   </div>
                 )}
                 {selectedOrderForDetail.ngay_tao && (
                   <div className="flex items-center justify-between">
-                    <span className={isDarkMode ? 'text-slate-500' : 'text-slate-400'}>Thời gian tạo đơn:</span>
-                    <span className={`font-mono text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{new Date(selectedOrderForDetail.ngay_tao).toLocaleString('vi-VN')}</span>
+                    <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}>Thời gian tạo đơn:</span>
+                    <span className={`font-mono text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>{new Date(selectedOrderForDetail.ngay_tao).toLocaleString('vi-VN')}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
-                  <span className={isDarkMode ? 'text-slate-500' : 'text-slate-400'}>Phương thức:</span>
-                  <span className={`font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{selectedOrderForDetail.phuong_thuc === 'CHUYEN_KHOAN' ? 'Chuyển khoản (VietQR)' : 'Tiền mặt tại quầy'}</span>
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}>Phương thức:</span>
+                  <span className={`font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-900'}`}>{selectedOrderForDetail.phuong_thuc === 'CHUYEN_KHOAN' ? 'Chuyển khoản (VietQR)' : 'Tiền mặt tại quầy'}</span>
                 </div>
               </div>
 
@@ -1429,10 +1429,10 @@ export default function History() {
                 {/* Danh sách dịch vụ nếu có */}
                 {selectedOrderForDetail.chi_tiet_dich_vu && selectedOrderForDetail.chi_tiet_dich_vu.length > 0 ? (
                   <div className={`pt-2 border-t space-y-1.5 ${isDarkMode ? 'border-slate-800/60' : 'border-slate-200'}`}>
-                    <div className={`text-[11px] font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Dịch vụ / Nước uống đã gọi:</div>
+                    <div className={`text-[11px] font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>Dịch vụ / Nước uống đã gọi:</div>
                     {selectedOrderForDetail.chi_tiet_dich_vu.map((dv, idx) => (
                       <div key={idx} className={`flex items-center justify-between text-[11px] pl-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                        <span>• {dv.ten_dich_vu} <span className={isDarkMode ? 'text-slate-500' : 'text-slate-400'}>(x{dv.so_luong})</span>:</span>
+                        <span>• {dv.ten_dich_vu} <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}>(x{dv.so_luong})</span>:</span>
                         <span className="font-mono text-emerald-500">{formatCurrency(dv.tongtien_dichvu)}</span>
                       </div>
                     ))}
@@ -1455,12 +1455,12 @@ export default function History() {
                     const modalThieu = isFullyPaid ? 0 : (selectedOrderForDetail.tien_thieu || Math.max(0, (selectedOrderForDetail.tong_tien || 0) - modalDaNhan));
                     return (
                       <>
-                        <div className={`flex items-center justify-between text-xs ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                        <div className={`flex items-center justify-between text-xs ${isDarkMode ? 'text-slate-300' : 'text-slate-800 font-semibold'}`}>
                           <span>Đã nhận / Đã thanh toán:</span>
                           <span className="font-mono font-bold text-emerald-500">{formatCurrency(modalDaNhan)}</span>
                         </div>
                         <div className={`flex items-center justify-between text-xs font-bold pt-1 border-t ${isDarkMode ? 'border-slate-800/50' : 'border-slate-200'}`}>
-                          <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Số tiền còn thiếu:</span>
+                          <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Số tiền còn thiếu:</span>
                           <span className={`font-mono text-sm ${modalThieu > 0 ? (isDarkMode ? 'text-amber-400' : 'text-amber-600') : 'text-emerald-500'}`}>
                             {modalThieu > 0 ? formatCurrency(modalThieu) : '0 ₫ (Đã thanh toán đủ)'}
                           </span>

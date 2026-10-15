@@ -111,7 +111,7 @@ export default function AboutUsPage() {
                 {aboutData?.ten_trung_tam || 'Trung Tâm Thể Thao Soccer247'}
               </h2>
               <div className={`text-sm sm:text-base leading-relaxed space-y-4 whitespace-pre-line ${
-                isDarkMode ? 'text-slate-300' : 'text-slate-600'
+                isDarkMode ? 'text-slate-300' : 'text-slate-700'
               }`}>
                 <p>
                   {aboutData?.bai_viet_about_us || aboutData?.gioi_thieu_ngan}
@@ -121,12 +121,12 @@ export default function AboutUsPage() {
               {/* Thông tin nhanh */}
               <div className={`grid grid-cols-2 gap-4 pt-4 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                 <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
-                  <div className="text-2xl sm:text-3xl font-black text-emerald-400">100%</div>
-                  <div className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Cỏ nhân tạo đạt chuẩn FIFA</div>
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-500 dark:text-emerald-400">100%</div>
+                  <div className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Cỏ nhân tạo đạt chuẩn FIFA</div>
                 </div>
                 <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-slate-900/60 border-slate-800' : 'bg-white border-slate-200'}`}>
-                  <div className="text-2xl sm:text-3xl font-black text-emerald-400">24/7</div>
-                  <div className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Hệ thống đặt sân & thanh toán tự động</div>
+                  <div className="text-2xl sm:text-3xl font-black text-emerald-500 dark:text-emerald-400">24/7</div>
+                  <div className={`text-xs mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Hệ thống đặt sân & thanh toán tự động</div>
                 </div>
               </div>
 
@@ -196,7 +196,7 @@ export default function AboutUsPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-2xl mx-auto mb-12">
               <h3 className="text-2xl sm:text-3xl font-black mb-3">Ưu Điểm Vượt Trội Của Soccer247</h3>
-              <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                 Mang đến trải nghiệm đặt sân mượt mà và không gian thi đấu bùng nổ năng lượng thể thao.
               </p>
             </div>
@@ -213,7 +213,7 @@ export default function AboutUsPage() {
                     {item.icon}
                   </div>
                   <h4 className="font-bold text-base mb-2">{item.title}</h4>
-                  <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{item.desc}</p>
+                  <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>{item.desc}</p>
                 </div>
               ))}
             </div>
