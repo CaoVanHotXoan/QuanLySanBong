@@ -10,6 +10,8 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import compression from 'compression';
+import path from 'path';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -61,6 +63,16 @@ app.use('/api/thanh-toan', thanhToanRoutes);
 app.use('/api/bao-cao', baoCaoRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api', contentRoutes);
+
+// Cung cấp tài liệu OpenAPI Specification (Swagger)
+app.get(['/OpenAPI.yaml', '/openapi.yaml'], (req: Request, res: Response) => {
+    const yamlPath = path.join(__dirname, 'OpenAPI.yaml');
+    if (fs.existsSync(yamlPath)) {
+        res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
+        return res.sendFile(yamlPath);
+    }
+    return res.status(404).send('OpenAPI.yaml not found');
+});
 
 // Middleware xử lý 404 - Không tìm thấy Endpoint
 app.use((req: Request, res: Response, next: NextFunction) => {

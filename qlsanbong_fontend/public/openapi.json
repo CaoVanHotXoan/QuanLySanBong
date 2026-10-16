@@ -1,0 +1,1966 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Sport 247 - Hệ Thống Quản Lý & Đặt Sân Bóng Đá RESTful API",
+    "description": "Tài liệu OpenAPI 3.0 chuẩn Swagger UI tích hợp cho toàn bộ hệ thống Sport 247.\nBao gồm đầy đủ 100% các API: Đăng nhập/Đăng ký OTP, Quản lý sân bóng, Đặt sân linh hoạt, POS bán nước/dịch vụ, Thanh toán PayOS VietQR MB Bank, Báo cáo doanh thu và Quản trị nội dung.\n",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Sport 247 Admin Team",
+      "email": "admin@sport247.vn"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Máy chủ API Backend Local (Node.js & Express)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "1. Xác thực & Phân quyền (Auth)",
+      "description": "Đăng nhập, đăng ký, xác thực mã OTP Gmail, đổi mật khẩu và quản lý người dùng / vai trò."
+    },
+    {
+      "name": "2. Quản lý Sân bóng & Đặt sân (DatSan)",
+      "description": "Quản lý sân, loại sân, khung giờ, ma trận đặt lịch, bấm giờ linh hoạt và tính tiền sân."
+    },
+    {
+      "name": "3. Dịch vụ & Kho hàng (DichVu)",
+      "description": "Quản lý danh mục nước uống, phụ kiện thể thao, phiếu nhập kho và chi tiết bán lẻ dịch vụ."
+    },
+    {
+      "name": "4. Thanh toán & PayOS VietQR (ThanhToan)",
+      "description": "Tích hợp cổng thanh toán tự động VietQR MB Bank qua PayOS, lịch sử giao dịch và hoàn tiền."
+    },
+    {
+      "name": "5. Báo cáo & Thống kê (BaoCao)",
+      "description": "Báo cáo doanh thu ngày hôm nay, biểu đồ doanh thu theo tuần/tháng, top dịch vụ bán chạy."
+    },
+    {
+      "name": "6. Quản lý Tải lên Media (Upload)",
+      "description": "Tải lên hình ảnh sân bóng, video banner và bài viết trực tiếp lên Cloudinary."
+    },
+    {
+      "name": "7. Nội dung & Truyền thông (Content)",
+      "description": "Quản lý tin tức bài viết, danh mục tin tức, giới thiệu About Us, banner slider và phản hồi liên hệ."
+    }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Đăng nhập tài khoản",
+        "description": "Xác thực người dùng bằng email và mật khẩu (Bảo vệ bởi Invisible Captcha Guard)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "mat_khau"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "example": "admin@gmail.com"
+                  },
+                  "mat_khau": {
+                    "type": "string",
+                    "example": "123456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đăng nhập thành công, trả về token JWT"
+          },
+          "400": {
+            "description": "Sai mật khẩu hoặc tài khoản không tồn tại"
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Đăng ký tài khoản người dùng mới",
+        "description": "Tạo tài khoản khách hàng mới kèm số điện thoại và mật khẩu",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ho_ten",
+                  "email",
+                  "so_dien_thoai",
+                  "mat_khau"
+                ],
+                "properties": {
+                  "ho_ten": {
+                    "type": "string",
+                    "example": "Nguyễn Văn A"
+                  },
+                  "email": {
+                    "type": "string",
+                    "example": "nguyenvana@gmail.com"
+                  },
+                  "so_dien_thoai": {
+                    "type": "string",
+                    "example": "0909123456"
+                  },
+                  "mat_khau": {
+                    "type": "string",
+                    "example": "123456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đăng ký thành công"
+          },
+          "400": {
+            "description": "Email hoặc số điện thoại đã tồn tại"
+          }
+        }
+      }
+    },
+    "/api/auth/send-otp": {
+      "post": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Gửi mã OTP xác thực qua Gmail",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "loai_otp"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "example": "user@gmail.com"
+                  },
+                  "loai_otp": {
+                    "type": "string",
+                    "enum": [
+                      "DANG_KY",
+                      "DOI_MAT_KHAU",
+                      "CAP_NHAT_EMAIL"
+                    ],
+                    "example": "DOI_MAT_KHAU"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã gửi mã OTP 6 số vào hộp thư"
+          }
+        }
+      }
+    },
+    "/api/auth/verify-otp": {
+      "post": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Xác thực mã OTP 6 chữ số",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "ma_otp",
+                  "loai_otp"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "example": "user@gmail.com"
+                  },
+                  "ma_otp": {
+                    "type": "string",
+                    "example": "123456"
+                  },
+                  "loai_otp": {
+                    "type": "string",
+                    "example": "DOI_MAT_KHAU"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Xác thực OTP thành công"
+          }
+        }
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Đổi mật khẩu tài khoản",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "mat_khau_moi"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "mat_khau_cu": {
+                    "type": "string"
+                  },
+                  "mat_khau_moi": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật mật khẩu thành công"
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Lấy thông tin tài khoản đang đăng nhập",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thông tin người dùng hiện tại"
+          },
+          "401": {
+            "description": "Chưa đăng nhập hoặc token hết hạn"
+          }
+        }
+      }
+    },
+    "/api/auth/users": {
+      "get": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Lấy danh sách tất cả người dùng (Admin)",
+        "responses": {
+          "200": {
+            "description": "Danh sách tài khoản người dùng"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Thêm mới tài khoản người dùng",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ho_ten",
+                  "email",
+                  "mat_khau"
+                ],
+                "properties": {
+                  "ho_ten": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "so_dien_thoai": {
+                    "type": "string"
+                  },
+                  "mat_khau": {
+                    "type": "string"
+                  },
+                  "MaVaiTro": {
+                    "type": "integer",
+                    "example": 3
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đã tạo người dùng mới"
+          }
+        }
+      }
+    },
+    "/api/auth/users/{id}": {
+      "put": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Cập nhật thông tin tài khoản người dùng",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ho_ten": {
+                    "type": "string"
+                  },
+                  "so_dien_thoai": {
+                    "type": "string"
+                  },
+                  "mat_khau": {
+                    "type": "string"
+                  },
+                  "MaVaiTro": {
+                    "type": "integer"
+                  },
+                  "anh_dai_dien": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật thành công"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Xóa tài khoản người dùng",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xóa người dùng thành công"
+          }
+        }
+      }
+    },
+    "/api/auth/vai-tro": {
+      "get": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Lấy danh sách tất cả các vai trò quyền hạn",
+        "responses": {
+          "200": {
+            "description": "Danh sách vai trò (Admin, Nhân viên, Khách hàng)"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Thêm vai trò mới",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "TenVaiTro"
+                ],
+                "properties": {
+                  "TenVaiTro": {
+                    "type": "string"
+                  },
+                  "MoTa": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo vai trò thành công"
+          }
+        }
+      }
+    },
+    "/api/auth/vai-tro/{id}": {
+      "put": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Sửa thông tin vai trò",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cập nhật vai trò thành công"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "1. Xác thực & Phân quyền (Auth)"
+        ],
+        "summary": "Xóa vai trò",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xóa vai trò thành công"
+          }
+        }
+      }
+    },
+    "/api/dat-san/san-bong": {
+      "get": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Lấy danh sách sân bóng kèm đơn giá và trạng thái",
+        "responses": {
+          "200": {
+            "description": "Danh sách các sân bóng cụ thể"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Thêm sân bóng mới (sp_ThemSanBong)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ma_loai_san",
+                  "ten_san",
+                  "don_gia_phut"
+                ],
+                "properties": {
+                  "ma_loai_san": {
+                    "type": "integer"
+                  },
+                  "ten_san": {
+                    "type": "string"
+                  },
+                  "hinh_anh": {
+                    "type": "string"
+                  },
+                  "don_gia_phut": {
+                    "type": "number",
+                    "example": 5000
+                  },
+                  "trang_thai": {
+                    "type": "string",
+                    "enum": [
+                      "SAN_SANG",
+                      "BAO_TRI"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo sân bóng thành công"
+          }
+        }
+      }
+    },
+    "/api/dat-san/san-bong/{id}": {
+      "put": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Sửa thông tin sân bóng (sp_SuaSanBong)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cập nhật sân thành công"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Xóa sân bóng (sp_XoaSanBong)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xóa sân thành công"
+          }
+        }
+      }
+    },
+    "/api/dat-san/loai-san": {
+      "get": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Lấy danh sách loại sân bóng (Sân 5, Sân 7, Sân 11)",
+        "responses": {
+          "200": {
+            "description": "Danh sách loại sân"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Thêm loại sân mới",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ten_loai"
+                ],
+                "properties": {
+                  "ten_loai": {
+                    "type": "string"
+                  },
+                  "mo_ta": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Thêm loại sân thành công"
+          }
+        }
+      }
+    },
+    "/api/dat-san/loai-san/{id}": {
+      "put": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Sửa loại sân",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cập nhật thành công"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Xóa loại sân",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xóa thành công"
+          }
+        }
+      }
+    },
+    "/api/dat-san/khung-gio/all": {
+      "get": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Lấy tất cả các mốc khung giờ (27 mốc từ 6h00 đến 19h30)",
+        "responses": {
+          "200": {
+            "description": "Danh sách khung giờ"
+          }
+        }
+      }
+    },
+    "/api/dat-san/khung-gio": {
+      "post": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Thêm khung giờ mới",
+        "responses": {
+          "201": {
+            "description": "Thêm khung giờ thành công"
+          }
+        }
+      }
+    },
+    "/api/dat-san/khung-gio/{id}": {
+      "put": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Sửa khung giờ",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cập nhật thành công"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Xóa khung giờ",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xóa thành công"
+          }
+        }
+      }
+    },
+    "/api/dat-san/tat-ca-don": {
+      "get": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Lấy danh sách tất cả các đơn đặt sân & hóa đơn (Admin Dashboard)",
+        "description": "Thực thi Stored Procedure `sp_LayTatCaDonDat` đồng bộ chi tiết dịch vụ và tổng tiền",
+        "responses": {
+          "200": {
+            "description": "Toàn bộ danh sách đơn đặt sân kèm dịch vụ đã dùng"
+          }
+        }
+      }
+    },
+    "/api/dat-san/don-dat-thanh-toan": {
+      "post": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Tạo mới đơn đặt sân kèm thanh toán (sp_ThemDonDatVaThanhToan)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ma_san",
+                  "ngay_da",
+                  "gio_bat_dau",
+                  "gio_ket_thuc",
+                  "tong_tien"
+                ],
+                "properties": {
+                  "ma_san": {
+                    "type": "integer"
+                  },
+                  "ma_nguoi_dung": {
+                    "type": "integer"
+                  },
+                  "ngay_da": {
+                    "type": "string",
+                    "example": "2026-10-16"
+                  },
+                  "gio_bat_dau": {
+                    "type": "string",
+                    "example": "17:00:00"
+                  },
+                  "gio_ket_thuc": {
+                    "type": "string",
+                    "example": "18:30:00"
+                  },
+                  "tien_san": {
+                    "type": "number"
+                  },
+                  "tong_tien": {
+                    "type": "number"
+                  },
+                  "phuong_thuc": {
+                    "type": "string",
+                    "enum": [
+                      "TIEN_MAT",
+                      "CHUYEN_KHOAN"
+                    ]
+                  },
+                  "trang_thai": {
+                    "type": "string",
+                    "enum": [
+                      "CHO_THANH_TOAN",
+                      "DA_COC",
+                      "DA_THANH_TOAN",
+                      "DANG_DA",
+                      "HOAN_THANH"
+                    ]
+                  },
+                  "dich_vu_list": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ma_dich_vu": {
+                          "type": "integer"
+                        },
+                        "so_luong": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo đơn đặt sân thành công"
+          }
+        }
+      }
+    },
+    "/api/dat-san/don-dat-thanh-toan/{id}": {
+      "put": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Cập nhật đơn đặt sân và dịch vụ trong hóa đơn (sp_SuaDonDatVaThanhToan)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cập nhật đơn đặt sân thành công"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Xóa đơn đặt sân & toàn bộ thanh toán liên quan (sp_XoaDonDatVaThanhToan)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xóa đơn thành công"
+          }
+        }
+      }
+    },
+    "/api/dat-san/lich-san": {
+      "get": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Lấy lịch và trạng thái sân theo ngày",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ngay_da",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "2026-10-16"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ma_san",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ma trận lịch sân bóng"
+          }
+        }
+      }
+    },
+    "/api/dat-san/checkin-linh-hoat": {
+      "post": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Khách vào sân đá bóng - Bấm giờ linh hoạt",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ma_san"
+                ],
+                "properties": {
+                  "ma_san": {
+                    "type": "integer"
+                  },
+                  "ten_khach_hang": {
+                    "type": "string"
+                  },
+                  "so_dien_thoai": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bắt đầu bấm giờ đá bóng thành công"
+          }
+        }
+      }
+    },
+    "/api/dat-san/checkout-linh-hoat": {
+      "post": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Khách trả sân - Tính tiền theo số phút thực tế",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ma_don_dat"
+                ],
+                "properties": {
+                  "ma_don_dat": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tính tiền và xuất hóa đơn hoàn tất"
+          }
+        }
+      }
+    },
+    "/api/dat-san/huy-don": {
+      "post": {
+        "tags": [
+          "2. Quản lý Sân bóng & Đặt sân (DatSan)"
+        ],
+        "summary": "Hủy đơn đặt sân và hoàn cọc (sp_HuyDonVaHoanCoc)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ma_don_dat"
+                ],
+                "properties": {
+                  "ma_don_dat": {
+                    "type": "integer"
+                  },
+                  "ly_do_huy": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hủy đơn và ghi nhận lịch sử hoàn tiền"
+          }
+        }
+      }
+    },
+    "/api/dich-vu": {
+      "get": {
+        "tags": [
+          "3. Dịch vụ & Kho hàng (DichVu)"
+        ],
+        "summary": "Lấy danh mục dịch vụ & nước uống (Dich_Vu)",
+        "responses": {
+          "200": {
+            "description": "Danh mục dịch vụ và số lượng tồn kho"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "3. Dịch vụ & Kho hàng (DichVu)"
+        ],
+        "summary": "Thêm dịch vụ mới",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ten_dich_vu",
+                  "don_gia"
+                ],
+                "properties": {
+                  "ten_dich_vu": {
+                    "type": "string"
+                  },
+                  "don_gia": {
+                    "type": "number"
+                  },
+                  "ton_kho": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Thêm dịch vụ thành công"
+          }
+        }
+      }
+    },
+    "/api/dich-vu/{id}": {
+      "put": {
+        "tags": [
+          "3. Dịch vụ & Kho hàng (DichVu)"
+        ],
+        "summary": "Sửa thông tin dịch vụ",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cập nhật dịch vụ thành công"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "3. Dịch vụ & Kho hàng (DichVu)"
+        ],
+        "summary": "Xóa dịch vụ",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xóa dịch vụ thành công"
+          }
+        }
+      }
+    },
+    "/api/dich-vu/phieu-nhap": {
+      "get": {
+        "tags": [
+          "3. Dịch vụ & Kho hàng (DichVu)"
+        ],
+        "summary": "Lấy danh sách phiếu nhập kho (Phieu_Nhap_Kho)",
+        "responses": {
+          "200": {
+            "description": "Danh sách các phiếu nhập hàng"
+          }
+        }
+      }
+    },
+    "/api/dich-vu/nhap-kho": {
+      "post": {
+        "tags": [
+          "3. Dịch vụ & Kho hàng (DichVu)"
+        ],
+        "summary": "Tạo phiếu nhập kho và tăng tồn kho",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ma_dich_vu",
+                  "so_luong_nhap",
+                  "gia_nhap"
+                ],
+                "properties": {
+                  "ma_dich_vu": {
+                    "type": "integer"
+                  },
+                  "so_luong_nhap": {
+                    "type": "integer"
+                  },
+                  "gia_nhap": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Nhập kho thành công"
+          }
+        }
+      }
+    },
+    "/api/dich-vu/chi-tiet-ban-hang": {
+      "get": {
+        "tags": [
+          "3. Dịch vụ & Kho hàng (DichVu)"
+        ],
+        "summary": "Lấy danh sách chi tiết các mặt hàng đã bán theo đơn",
+        "responses": {
+          "200": {
+            "description": "Danh sách dịch vụ bán lẻ"
+          }
+        }
+      }
+    },
+    "/api/dich-vu/them-vao-don": {
+      "post": {
+        "tags": [
+          "3. Dịch vụ & Kho hàng (DichVu)"
+        ],
+        "summary": "Mini POS - Bán thêm nước/dịch vụ vào đơn đặt sân",
+        "description": "Tự động trừ tồn kho và cập nhật tổng tiền đơn đặt sân",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ma_don_dat",
+                  "dich_vu_list"
+                ],
+                "properties": {
+                  "ma_don_dat": {
+                    "type": "integer"
+                  },
+                  "dich_vu_list": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "ma_dich_vu": {
+                          "type": "integer"
+                        },
+                        "so_luong": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã thêm dịch vụ vào đơn thành công"
+          }
+        }
+      }
+    },
+    "/api/thanh-toan/payos/tao-link": {
+      "post": {
+        "tags": [
+          "4. Thanh toán & PayOS VietQR (ThanhToan)"
+        ],
+        "summary": "Tạo mã VietQR thanh toán tự động MB Bank qua cổng PayOS",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ma_don_dat",
+                  "so_tien"
+                ],
+                "properties": {
+                  "ma_don_dat": {
+                    "type": "integer"
+                  },
+                  "so_tien": {
+                    "type": "number"
+                  },
+                  "mo_ta": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Trả về link checkout, mã QR và mã đơn thanh toán"
+          }
+        }
+      }
+    },
+    "/api/thanh-toan/payos/trang-thai/{orderCode}": {
+      "get": {
+        "tags": [
+          "4. Thanh toán & PayOS VietQR (ThanhToan)"
+        ],
+        "summary": "Kiểm tra trạng thái giao dịch PayOS theo orderCode",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orderCode",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trạng thái giao dịch (PAID, PENDING, CANCELLED)"
+          }
+        }
+      }
+    },
+    "/api/thanh-toan/payos/webhook": {
+      "post": {
+        "tags": [
+          "4. Thanh toán & PayOS VietQR (ThanhToan)"
+        ],
+        "summary": "Webhook tự động nhận thông báo tiền về từ PayOS (MB Bank)",
+        "description": "Tự động cập nhật trạng thái đơn đặt sang ĐÃ CỌC hoặc ĐÃ THANH TOÁN và emit socket realtime",
+        "responses": {
+          "200": {
+            "description": "Đã xử lý webhook thành công"
+          }
+        }
+      }
+    },
+    "/api/thanh-toan/danh-sach": {
+      "get": {
+        "tags": [
+          "4. Thanh toán & PayOS VietQR (ThanhToan)"
+        ],
+        "summary": "Lấy danh sách lịch sử giao dịch thanh toán (Thanh_Toan)",
+        "responses": {
+          "200": {
+            "description": "Lịch sử thanh toán cọc và trả hết"
+          }
+        }
+      }
+    },
+    "/api/thanh-toan/hoan-tien": {
+      "get": {
+        "tags": [
+          "4. Thanh toán & PayOS VietQR (ThanhToan)"
+        ],
+        "summary": "Lấy danh sách phiếu hoàn tiền do hủy sân (Lich_Su_Hoan_Tien)",
+        "responses": {
+          "200": {
+            "description": "Lịch sử hoàn tiền"
+          }
+        }
+      }
+    },
+    "/api/thanh-toan": {
+      "post": {
+        "tags": [
+          "4. Thanh toán & PayOS VietQR (ThanhToan)"
+        ],
+        "summary": "Thanh toán đơn đặt sân truyền thống (Tiền mặt / Chuyển khoản)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ma_don_dat",
+                  "so_tien",
+                  "phuong_thuc"
+                ],
+                "properties": {
+                  "ma_don_dat": {
+                    "type": "integer"
+                  },
+                  "so_tien": {
+                    "type": "number"
+                  },
+                  "phuong_thuc": {
+                    "type": "string",
+                    "enum": [
+                      "TIEN_MAT",
+                      "CHUYEN_KHOAN"
+                    ]
+                  },
+                  "loai_thanh_toan": {
+                    "type": "string",
+                    "enum": [
+                      "DAT_COC",
+                      "TRA_HET"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thanh toán thành công"
+          }
+        }
+      }
+    },
+    "/api/bao-cao/doanh-thu-ngay": {
+      "get": {
+        "tags": [
+          "5. Báo cáo & Thống kê (BaoCao)"
+        ],
+        "summary": "Lấy tổng doanh thu hôm nay hoặc ngày chỉ định (sp_LayDoanhThuNgay)",
+        "description": "Chỉ cộng doanh thu của các đơn ĐÃ THANH TOÁN (100% tổng tiền hóa đơn) và ĐÃ CỌC (số tiền cọc tương ứng).\nKhông tính đơn chưa thanh toán hoặc đã hủy. Khi tổng tiền hóa đơn thay đổi thì doanh thu cập nhật theo.\n",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ngay",
+            "schema": {
+              "type": "string",
+              "example": "2026-10-16"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Doanh thu thực thu, tiền sân, tiền dịch vụ và số lượng đơn"
+          }
+        }
+      }
+    },
+    "/api/bao-cao/doanh-thu-bieu-do": {
+      "get": {
+        "tags": [
+          "5. Báo cáo & Thống kê (BaoCao)"
+        ],
+        "summary": "Dữ liệu vẽ biểu đồ doanh thu theo Ngày, Tuần, Tháng (sp_BaoCaoDoanhThuBieuDo)",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kieu",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "NGAY",
+                "TUAN",
+                "THANG"
+              ],
+              "default": "NGAY"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ngay_moc",
+            "schema": {
+              "type": "string",
+              "example": "2026-10-16"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dữ liệu biểu đồ cột và đường doanh thu"
+          }
+        }
+      }
+    },
+    "/api/bao-cao/top-dich-vu": {
+      "get": {
+        "tags": [
+          "5. Báo cáo & Thống kê (BaoCao)"
+        ],
+        "summary": "Top mặt hàng dịch vụ bán chạy nhất (sp_TopDichVuBanChay)",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "top",
+            "schema": {
+              "type": "integer",
+              "default": 5
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách top sản phẩm bán chạy kèm doanh thu và tỷ lệ %"
+          }
+        }
+      }
+    },
+    "/api/bao-cao/don-moi-nhat": {
+      "get": {
+        "tags": [
+          "5. Báo cáo & Thống kê (BaoCao)"
+        ],
+        "summary": "Lấy danh sách các đơn đặt sân mới nhất gần đây (sp_LayDonDatMoiNhat)",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 5
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "5 đơn đặt sân mới nhất"
+          }
+        }
+      }
+    },
+    "/api/bao-cao/trang-thai-san": {
+      "get": {
+        "tags": [
+          "5. Báo cáo & Thống kê (BaoCao)"
+        ],
+        "summary": "Ma trận trạng thái sân bóng thời gian thực (sp_LayTrangThaiSanTrucQuan)",
+        "responses": {
+          "200": {
+            "description": "Danh sách trạng thái sân (Sẵn sàng, Đang có trận, Đã có lịch, Bảo trì)"
+          }
+        }
+      }
+    },
+    "/api/upload": {
+      "post": {
+        "tags": [
+          "6. Quản lý Tải lên Media (Upload)"
+        ],
+        "summary": "Tải file ảnh hoặc video lên Cloudinary",
+        "description": "Hỗ trợ cả file máy tính (multipart/form-data) lẫn dán URL từ internet (JSON)",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "example": "https://example.com/image.jpg"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tải lên thành công, trả về link Cloudinary an toàn"
+          }
+        }
+      }
+    },
+    "/api/upload/delete": {
+      "post": {
+        "tags": [
+          "6. Quản lý Tải lên Media (Upload)"
+        ],
+        "summary": "Xóa file ảnh hoặc video cũ khỏi Cloudinary khi cập nhật hoặc xóa sân/tin tức",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "example": "https://res.cloudinary.com/.../image.jpg"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã xóa file trên Cloudinary"
+          }
+        }
+      }
+    },
+    "/api/tin-tuc": {
+      "get": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Lấy danh sách tin tức & bài viết thể thao",
+        "responses": {
+          "200": {
+            "description": "Danh sách bài viết"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Đăng bài viết mới",
+        "responses": {
+          "201": {
+            "description": "Đăng bài thành công"
+          }
+        }
+      }
+    },
+    "/api/tin-tuc/{id}": {
+      "get": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Xem chi tiết bài viết tin tức",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chi tiết bài viết"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Sửa bài viết tin tức",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cập nhật thành công"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Xóa bài viết tin tức",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Xóa bài viết thành công"
+          }
+        }
+      }
+    },
+    "/api/tin-tuc/loai-tin": {
+      "get": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Lấy danh mục loại tin tức",
+        "responses": {
+          "200": {
+            "description": "Danh mục loại tin"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Thêm danh mục tin tức",
+        "responses": {
+          "201": {
+            "description": "Thêm thành công"
+          }
+        }
+      }
+    },
+    "/api/about-us": {
+      "get": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Lấy thông tin giới thiệu trung tâm thể thao About Us",
+        "responses": {
+          "200": {
+            "description": "Thông tin trung tâm, hotline, địa chỉ, bản đồ"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Cập nhật thông tin About Us",
+        "responses": {
+          "200": {
+            "description": "Cập nhật thông tin thành công"
+          }
+        }
+      }
+    },
+    "/api/lien-he": {
+      "get": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Lấy danh sách tin nhắn liên hệ & góp ý từ khách hàng",
+        "responses": {
+          "200": {
+            "description": "Danh sách thư liên hệ"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Khách gửi lời nhắn liên hệ qua website",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ho_ten",
+                  "email",
+                  "so_dien_thoai",
+                  "noi_dung"
+                ],
+                "properties": {
+                  "ho_ten": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "so_dien_thoai": {
+                    "type": "string"
+                  },
+                  "tieu_de": {
+                    "type": "string"
+                  },
+                  "noi_dung": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Gửi liên hệ thành công"
+          }
+        }
+      }
+    },
+    "/api/banner": {
+      "get": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Lấy danh sách banner slider trang chủ (Ảnh / Video)",
+        "responses": {
+          "200": {
+            "description": "Danh sách banner"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "7. Nội dung & Truyền thông (Content)"
+        ],
+        "summary": "Thêm banner mới",
+        "responses": {
+          "201": {
+            "description": "Thêm banner thành công"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Nhập JWT Token vào header dạng 'Bearer <token>'"
+      }
+    },
+    "schemas": {
+      "NguoiDung": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "ho_ten": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "so_dien_thoai": {
+            "type": "string"
+          },
+          "MaVaiTro": {
+            "type": "integer"
+          },
+          "anh_dai_dien": {
+            "type": "string"
+          }
+        }
+      },
+      "SanBong": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "ma_loai_san": {
+            "type": "integer"
+          },
+          "ten_san": {
+            "type": "string"
+          },
+          "hinh_anh": {
+            "type": "string"
+          },
+          "don_gia_phut": {
+            "type": "number"
+          },
+          "trang_thai": {
+            "type": "string",
+            "enum": [
+              "SAN_SANG",
+              "BAO_TRI"
+            ]
+          }
+        }
+      },
+      "DonDatSan": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "ma_san": {
+            "type": "integer"
+          },
+          "ma_nguoi_dung": {
+            "type": "integer"
+          },
+          "ngay_da": {
+            "type": "string",
+            "format": "date"
+          },
+          "gio_bat_dau": {
+            "type": "string"
+          },
+          "gio_ket_thuc": {
+            "type": "string"
+          },
+          "tien_san": {
+            "type": "number"
+          },
+          "tong_tien": {
+            "type": "number"
+          },
+          "phuong_thuc": {
+            "type": "string",
+            "enum": [
+              "TIEN_MAT",
+              "CHUYEN_KHOAN"
+            ]
+          },
+          "trang_thai": {
+            "type": "string",
+            "enum": [
+              "CHO_THANH_TOAN",
+              "DA_COC",
+              "DA_THANH_TOAN",
+              "DANG_DA",
+              "HOAN_THANH",
+              "DA_HUY"
+            ]
+          }
+        }
+      },
+      "ThanhToan": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "ma_don_dat": {
+            "type": "integer"
+          },
+          "so_tien": {
+            "type": "number"
+          },
+          "phuong_thuc": {
+            "type": "string"
+          },
+          "loai_thanh_toan": {
+            "type": "string",
+            "enum": [
+              "DAT_COC",
+              "TRA_HET"
+            ]
+          },
+          "ma_giao_dich": {
+            "type": "string"
+          },
+          "ngay_thanh_toan": {
+            "type": "string"
+          }
+        }
+      },
+      "DichVu": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "ten_dich_vu": {
+            "type": "string"
+          },
+          "don_gia": {
+            "type": "number"
+          },
+          "ton_kho": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

@@ -152,3 +152,36 @@ export const layTrangThaiSanTrucQuan = async (req: AuthRequest, res: Response) =
         });
     }
 };
+
+/**
+ * 6. Lấy tổng doanh thu của ngày (hôm nay hoặc ngày chỉ định)
+ * Method: GET /api/bao-cao/doanh-thu-ngay?ngay=YYYY-MM-DD
+ * Procedure: sp_LayDoanhThuNgay
+ */
+export const layDoanhThuNgay = async (req: AuthRequest, res: Response) => {
+    try {
+        const ngay = (req.query.ngay as string) || null;
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ngay_da', sql.Date, ngay)
+            .execute('sp_LayDoanhThuNgay');
+
+        return res.status(200).json({
+            success: true,
+            data: result.recordset?.[0] || {
+                ngay_da: ngay,
+                tong_doanh_thu: 0,
+                tong_so_don: 0,
+                tien_san: 0,
+                tien_dich_vu: 0
+            }
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_LayDoanhThuNgay:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy doanh thu ngày'
+        });
+    }
+};
+

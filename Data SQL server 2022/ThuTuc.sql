@@ -855,7 +855,7 @@ BEGIN
         WHERE ma_don_dat = @ma_don_dat;
 
         UPDATE Don_Dat_San
-        SET tong_tien = tien_san + @tong_tien_dv
+        SET tong_tien = ISNULL(tien_san, 0) + @tong_tien_dv
         WHERE id = @ma_don_dat;
 
         COMMIT TRANSACTION;
@@ -958,7 +958,7 @@ BEGIN
         WHERE ma_don_dat = @ma_don_dat;
 
         UPDATE Don_Dat_San
-        SET tong_tien = tien_san + @tong_tien_dv
+        SET tong_tien = ISNULL(tien_san, 0) + @tong_tien_dv
         WHERE id = @ma_don_dat;
 
         COMMIT TRANSACTION;
@@ -1050,7 +1050,7 @@ BEGIN
             CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
             CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
             d.tien_san,
-            d.tong_tien,
+            ISNULL(d.tong_tien, ISNULL(d.tien_san, 0) + ISNULL((SELECT SUM(ct.tongtien_dichvu) FROM Chi_Tiet_Dich_Vu ct WHERE ct.ma_don_dat = d.id), 0)) AS tong_tien,
             d.phuong_thuc,
             DATEDIFF(MINUTE, CAST(d.gio_bat_dau AS TIME), CAST(d.gio_ket_thuc AS TIME)) AS so_phut_da,
             d.ghi_chu,
@@ -3453,6 +3453,73 @@ BEGIN
             GROUP BY MONTH(d.ngay_da)
             ORDER BY MONTH(d.ngay_da) ASC;
         END;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 6.1b. Lấy tổng doanh thu của ngày (Hôm nay hoặc ngày chỉ định)
+-- Chỉ cộng tiền cho đơn ĐÃ THANH TOÁN (100% tổng tiền hóa đơn) và ĐÃ CỌC (số tiền cọc tương ứng)
+-- Đơn CHƯA THANH TOÁN / CHỜ THANH TOÁN / ĐÃ HỦY: Không cộng vào doanh thu (0 đ)
+-- Khi tổng tiền trong hóa đơn thay đổi thì doanh thu ngày tự động cập nhật theo
+CREATE OR ALTER PROCEDURE sp_LayDoanhThuNgay
+    @ngay_da DATE = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF @ngay_da IS NULL 
+            SET @ngay_da = CAST(GETDATE() AS DATE);
+
+        ;WITH DonHangNgay AS (
+            SELECT 
+                d.id,
+                d.trang_thai,
+                ISNULL(d.tong_tien, ISNULL(d.tien_san, 0)) AS tong_tien,
+                ISNULL(d.tien_san, 0) AS tien_san,
+                ISNULL(tt.da_thanh_toan, 0) AS tien_da_thanh_toan
+            FROM Don_Dat_San d
+            OUTER APPLY (
+                SELECT SUM(t.so_tien) AS da_thanh_toan
+                FROM Thanh_Toan t
+                WHERE t.ma_don_dat = d.id AND t.trang_thai_gd IN ('THANH_CONG', 'DANG_CHO', 'CHO_XU_LY')
+            ) tt
+            WHERE CAST(d.ngay_da AS DATE) = @ngay_da
+        )
+        SELECT 
+            @ngay_da AS ngay_da,
+            ISNULL(SUM(
+                CASE 
+                    -- 1. ĐÃ THANH TOÁN / HOÀN THÀNH: Cộng 100% tổng tiền hóa đơn (thay đổi theo tổng tiền hóa đơn)
+                    WHEN trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_CHOT') 
+                        THEN tong_tien
+                    -- 2. ĐÃ CỌC: Cộng số tiền cọc tương ứng (từ bảng Thanh_Toan hoặc 30% tổng tiền hóa đơn)
+                    WHEN trang_thai = 'DA_COC' 
+                        THEN CASE WHEN tien_da_thanh_toan > 0 THEN tien_da_thanh_toan ELSE ROUND(tong_tien * 0.3, 0) END
+                    -- 3. CHƯA THANH TOÁN / CHỜ THANH TOÁN / CHỜ XÁC NHẬN / ĐÃ HỦY: Không cộng (0 đ)
+                    ELSE 0
+                END
+            ), 0) AS tong_doanh_thu,
+            COUNT(CASE WHEN trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_CHOT', 'DA_COC') THEN id END) AS tong_so_don,
+            ISNULL(SUM(
+                CASE 
+                    WHEN trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_CHOT') THEN tien_san
+                    WHEN trang_thai = 'DA_COC' THEN ROUND(tien_san * 0.3, 0)
+                    ELSE 0
+                END
+            ), 0) AS tien_san,
+            ISNULL(SUM(
+                CASE 
+                    WHEN trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_CHOT') 
+                        THEN (tong_tien - tien_san)
+                    WHEN trang_thai = 'DA_COC' 
+                        THEN ROUND((tong_tien - tien_san) * 0.3, 0)
+                    ELSE 0
+                END
+            ), 0) AS tien_dich_vu
+        FROM DonHangNgay;
     END TRY
     BEGIN CATCH
         ;THROW;

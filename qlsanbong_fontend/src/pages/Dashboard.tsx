@@ -68,10 +68,12 @@ import {
   MessageSquareReply,
   Send,
   Save,
-  Menu
+  Menu,
+  Code2
 } from 'lucide-react';
 import { AuthUser } from './Login/login';
 import { contentService, BannerItem, LienHePayload, LoaiTinTuc, TinTucItem, AboutUsData } from '../services/contentService';
+import SwaggerApiDocs from '../components/SwaggerApiDocs';
 
 // Icon quả bóng đá màu đen trắng chuẩn
 function SoccerBallIcon({ className = "w-6 h-6" }: { className?: string }) {
@@ -115,9 +117,10 @@ export type TabType =
   | 'DON_DAT_THANH_TOAN'
   | 'HOAN_TIEN'
   | 'KHUNG_GIO'
-  // 6. Hệ Thống & Phân Quyền (Nguoi_Dung, Vai_Tro)
+  // 6. Hệ Thống & Phân Quyền (Nguoi_Dung, Vai_Tro, OpenAPI)
   | 'NGUOI_DUNG'
-  | 'VAI_TRO';
+  | 'VAI_TRO'
+  | 'OPENAPI';
 
 // Danh sách các khung giờ 24h từ 00:00 đến 24:00
 export const TIME_OPTIONS_24H: string[] = [
@@ -376,7 +379,8 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     groupIcon: Users,
     items: [
       { id: 'NGUOI_DUNG', label: 'Danh Sách Người Dùng', icon: User, tableHint: 'Nguoi_Dung' },
-      { id: 'VAI_TRO', label: 'Phân Quyền & Vai Trò', icon: ShieldCheck, tableHint: 'Vai_Tro' }
+      { id: 'VAI_TRO', label: 'Phân Quyền & Vai Trò', icon: ShieldCheck, tableHint: 'Vai_Tro' },
+      { id: 'OPENAPI', label: 'OpenAPI.yaml (Swagger)', icon: Code2, badge: 'API' }
     ]
   }
 ];
@@ -1006,32 +1010,83 @@ export default function AdminDashboard() {
 
   // KPI Stats
   const kpiStats = useMemo(() => {
-    const curDate = selectedDate ? String(selectedDate).split('T')[0] : new Date().toISOString().split('T')[0];
+    const curDate = selectedDate
+      ? (String(selectedDate).includes('T') ? String(selectedDate).split('T')[0] : String(selectedDate).substring(0, 10))
+      : (() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      })();
 
-    // Doanh thu ngày hôm nay
+    // Lọc tất cả đơn đặt sân / hóa đơn trong ngày đó (không tính đơn hủy)
     const todayOrders = bookingList.filter((b) => {
-      const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
+      const bDate = b.ngay_da ? (String(b.ngay_da).includes('T') ? String(b.ngay_da).split('T')[0] : String(b.ngay_da).substring(0, 10)) : '';
       const st = (b.trang_thai || '').toUpperCase();
       return bDate === curDate && st !== 'DA_HUY';
     });
 
-    const totalRevenue = todayOrders.reduce((sum, b) => sum + Number(b.tong_tien || b.tien_san || 0), 0);
+    // Doanh thu ngày hôm nay: Chỉ cộng tiền vào cho trạng thái ĐÃ THANH TOÁN (100% tổng tiền hóa đơn) và ĐÃ CỌC (số tiền cọc tương ứng)
+    // Các đơn CHƯA THANH TOÁN / CHỜ THANH TOÁN / CHỜ XÁC NHẬN / ĐÃ HỦY: Không cộng vào (0 đ)
+    // Nếu tổng tiền trong hóa đơn thay đổi thì doanh thu tự động thay đổi theo
+    const totalRevenue = todayOrders.reduce((sum, b) => {
+      const raw = String(b.trang_thai || '').toUpperCase();
+      const isCancelled = raw === 'DA_HUY' || raw.includes('HUY') || raw.includes('HỦY');
+      if (isCancelled) return sum;
+
+      const soTienDaTra = Number(b.so_tien_da_tra || b.tien_coc_da_tra || 0);
+
+      // Tính tổng tiền hóa đơn hiện tại (tiền sân + dịch vụ)
+      let orderTotal = Number(b.tong_tien);
+      if (isNaN(orderTotal) || orderTotal === 0) {
+        const dvList = b.dich_vu_da_dung || b.chi_tiet_dich_vu || [];
+        const dvSum = Array.isArray(dvList)
+          ? dvList.reduce((s: number, d: any) => s + (Number(d.so_luong || 0) * Number(d.gia_luc_ban || d.don_gia || 0)), 0)
+          : 0;
+        orderTotal = Number(b.tien_san || 0) + dvSum;
+      }
+
+      const isFullyPaid = (orderTotal > 0 && soTienDaTra >= orderTotal) ||
+        raw === 'DA_THANH_TOAN' ||
+        raw === 'HOAN_THANH' ||
+        raw === 'DA_CHOT' ||
+        raw.includes('DA_THANH_TOAN') ||
+        raw.includes('ĐÃ THANH TOÁN') ||
+        raw.includes('ĐÃ_THANH_TOÁN');
+
+      const isDeposit = !isFullyPaid && (
+        (soTienDaTra > 0 && soTienDaTra < orderTotal) ||
+        raw === 'DA_COC' ||
+        raw.includes('COC') ||
+        raw.includes('CỌC')
+      );
+
+      // 1. ĐÃ THANH TOÁN: Cộng toàn bộ tổng tiền hóa đơn (nếu hóa đơn thay đổi thì cộng theo số mới)
+      if (isFullyPaid) {
+        return sum + Math.max(orderTotal, soTienDaTra);
+      }
+
+      // 2. ĐÃ CỌC: Cộng số tiền cọc tương ứng (soTienDaTra thực tế hoặc 30% tổng tiền hóa đơn)
+      if (isDeposit) {
+        const depositAmount = soTienDaTra > 0 ? soTienDaTra : Math.round(orderTotal * 0.3);
+        return sum + depositAmount;
+      }
+
+      // 3. CHƯA THANH TOÁN / CHỜ THANH TOÁN / CHỜ XÁC NHẬN: Không cộng (0 đ)
+      return sum;
+    }, 0);
+
     const totalOrders = bookingList.length;
 
     // Đếm số sân đang có người đá
     const activeCourtsCount = courtList.filter(c => {
       return bookingList.some(b => {
-        const bDate = b.ngay_da ? String(b.ngay_da).split('T')[0] : '';
+        const bDate = b.ngay_da ? (String(b.ngay_da).includes('T') ? String(b.ngay_da).split('T')[0] : String(b.ngay_da).substring(0, 10)) : '';
         const st = (b.trang_thai || '').toUpperCase();
         return Number(b.ma_san) === c.id && bDate === curDate && ((b as any).da_vao_san === 1 || st === 'DANG_DA');
       });
     }).length;
 
-    const totalPossibleSlots = (courtList.length || 1) * (khungGioList.length || 27);
-    const occupancyRate = totalPossibleSlots > 0 ? Math.min(100, Math.round((todayOrders.length / totalPossibleSlots) * 100)) : 0;
-
-    return { totalRevenue, totalOrders, activeCourtsCount, occupancyRate };
-  }, [bookingList, courtList, khungGioList, selectedDate]);
+    return { totalRevenue, totalOrders, activeCourtsCount };
+  }, [bookingList, courtList, selectedDate]);
 
   // 1. Dữ liệu Biểu đồ Doanh thu (Theo Ngày / Tuần / Tháng)
   const revenueAnalytics = useMemo(() => {
@@ -3079,10 +3134,29 @@ export default function AdminDashboard() {
                 {activeTab === 'KHUNG_GIO' && 'Bảng Khung Giờ Hoạt Động'}
                 {activeTab === 'NGUOI_DUNG' && 'Danh Sách Người Dùng'}
                 {activeTab === 'VAI_TRO' && 'Phân Quyền & Vai Trò'}
+                {activeTab === 'OPENAPI' && 'Tài Liệu API Toàn Bộ Dự Án (OpenAPI.yaml)'}
               </h2>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+              {/* Nút OpenAPI.yaml - Chuyển sang tab Swagger API trực tiếp trong Dashboard mà không nhảy sang tab trình duyệt khác */}
+              <button
+                type="button"
+                onClick={() => setActiveTab(activeTab === 'OPENAPI' ? 'OVERVIEW' : 'OPENAPI')}
+                title={activeTab === 'OPENAPI' ? 'Quay lại Bảng điều khiển (Dashboard)' : 'Mở tab tài liệu OpenAPI.yaml (Swagger UI) ngay trong Dashboard'}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-black shadow-xs transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${
+                  activeTab === 'OPENAPI'
+                    ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-500/40'
+                    : isDarkMode
+                      ? 'bg-[#14261d] border-emerald-500/40 text-emerald-300 hover:bg-[#1b3528] hover:border-emerald-400'
+                      : 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-400'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${activeTab === 'OPENAPI' ? 'bg-white' : 'bg-[#49cc90]'} animate-pulse`}></span>
+                <span className="font-mono tracking-tight font-extrabold">OpenAPI.yaml</span>
+                <Code2 className="w-3.5 h-3.5" />
+              </button>
+
               {/* Ô chọn & hiển thị ngày theo định dạng DD/MM/YYYY chuẩn Việt Nam */}
               <div className={`relative flex items-center gap-2 px-3 py-1.5 sm:px-3.5 rounded-xl border text-xs font-black shadow-sm transition-all hover:border-emerald-500 cursor-pointer ${isDarkMode ? 'bg-[#0e2116] border-emerald-800/60 text-emerald-200' : 'bg-white border-slate-300 text-[#0f172a]'
                 }`}>
@@ -3123,12 +3197,25 @@ export default function AdminDashboard() {
           <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6 w-full max-w-full min-w-0">
 
             {/* =================================================================
+                TAB OPENAPI: TÀI LIỆU TOÀN BỘ API DỰ ÁN (SWAGGER UI)
+                ================================================================= */}
+            {activeTab === 'OPENAPI' && (
+              <div className="space-y-6 animate-fade-in w-full max-w-full min-w-0">
+                <SwaggerApiDocs
+                  standalone={false}
+                  onBackToDashboard={() => setActiveTab('OVERVIEW')}
+                  isDarkMode={isDarkMode}
+                />
+              </div>
+            )}
+
+            {/* =================================================================
                 TAB 1: TỔNG QUAN & DASHBOARD
                 ================================================================= */}
             {activeTab === 'OVERVIEW' && (
               <div className="space-y-6 animate-fade-in w-full max-w-full min-w-0">
-                {/* 1. 4 THẺ CHỈ SỐ TỔNG QUAN (STAT CARDS) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full mb-6">
+                {/* 1. 3 THẺ CHỈ SỐ TỔNG QUAN (STAT CARDS) */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mb-6">
                   <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">DOANH THU HÔM NAY</span>
@@ -3139,9 +3226,6 @@ export default function AdminDashboard() {
                     <h3 className="text-2xl xl:text-3xl font-black text-emerald-700 dark:text-emerald-400 tracking-tight mt-3">
                       {kpiStats.totalRevenue.toLocaleString('vi-VN')} <span className="text-base font-bold">đ</span>
                     </h3>
-                    <div className="mt-2 text-xs font-bold text-[#1e293b] dark:text-slate-300">
-                      <span className="text-emerald-900 dark:text-emerald-300 font-black bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded mr-1">+18.5%</span> so với hôm qua
-                    </div>
                   </div>
 
                   <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
@@ -3171,21 +3255,6 @@ export default function AdminDashboard() {
                     </h3>
                     <div className="mt-2 text-xs font-bold text-[#1e293b] dark:text-slate-300">
                       <span className="text-emerald-900 dark:text-emerald-300 font-black bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded mr-1">Sẵn sàng: {courtList.filter(c => c.trang_thai === 'SAN_SANG').length} sân</span>
-                    </div>
-                  </div>
-
-                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">CÔNG SUẤT SỬ DỤNG</span>
-                      <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-800 dark:text-emerald-300">
-                        <TrendingUp className="w-5 h-5 stroke-[2.5]" />
-                      </div>
-                    </div>
-                    <h3 className="text-2xl xl:text-3xl font-black text-emerald-700 dark:text-emerald-400 tracking-tight mt-3">
-                      {kpiStats.occupancyRate}%
-                    </h3>
-                    <div className="w-full bg-slate-200 dark:bg-emerald-950 rounded-full h-2 mt-3 overflow-hidden">
-                      <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${kpiStats.occupancyRate}%` }} />
                     </div>
                   </div>
                 </div>
