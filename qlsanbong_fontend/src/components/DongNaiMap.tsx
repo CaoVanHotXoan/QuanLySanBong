@@ -47,7 +47,7 @@ export default function DongNaiMap({
   className = "w-full h-full",
   isDarkMode = true,
   diaChi = "Biên Hòa - Đồng Nai",
-  tenTrungTam = "Trung Tâm Thể Thao Soccer247"
+  tenTrungTam = "Trung Tâm Thể Thao Sport247"
 }: DongNaiMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);

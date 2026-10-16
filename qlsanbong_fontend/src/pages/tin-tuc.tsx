@@ -50,9 +50,9 @@ export default function TinTucPage() {
       id: 1,
       ma_loai_tin: 1,
       ten_loai: 'Sự kiện & Giải đấu',
-      tieu_de: 'Khởi tranh Giải Bóng Đá Tứ Hùng Soccer247 Cup 2026',
+      tieu_de: 'Khởi tranh Giải Bóng Đá Tứ Hùng Sport247 Cup 2026',
       tom_tat: 'Giải đấu thường niên quy tụ 16 đội bóng phong trào hàng đầu khu vực với tổng giải thưởng lên tới 50 triệu đồng.',
-      noi_dung: `Soccer247 chính thức công bố thể lệ và danh sách đăng ký giải bóng đá Tứ Hùng mùa xuân 2026.\n\nGiải đấu quy tụ 16 đội bóng phong trào xuất sắc nhất trên địa bàn Biên Hòa và các khu vực lân cận. Các đội sẽ thi đấu theo thể thức loại trực tiếp kết hợp vòng bảng để tìm ra nhà vô địch nhận cúp và phần thưởng 50.000.000 VNĐ.\n\nĐặc quyền dành cho các đội tham gia:\n- Được cấp miễn phí trang phục thi đấu cao cấp mang thương hiệu Soccer247.\n- Miễn phí toàn bộ nước uống điện giải trong suốt thời gian thi đấu.\n- Toàn bộ các trận đấu được truyền thông, quay phát trực tiếp với bình luận viên chuyên nghiệp.\n\nHãy nhanh tay đăng ký đội bóng của bạn tại quầy lễ tân trung tâm hoặc liên hệ Hotline: 0816344504!`,
+      noi_dung: `Sport247 chính thức công bố thể lệ và danh sách đăng ký giải bóng đá Tứ Hùng mùa xuân 2026.\n\nGiải đấu quy tụ 16 đội bóng phong trào xuất sắc nhất trên địa bàn Biên Hòa và các khu vực lân cận. Các đội sẽ thi đấu theo thể thức loại trực tiếp kết hợp vòng bảng để tìm ra nhà vô địch nhận cúp và phần thưởng 50.000.000 VNĐ.\n\nĐặc quyền dành cho các đội tham gia:\n- Được cấp miễn phí trang phục thi đấu cao cấp mang thương hiệu Sport247.\n- Miễn phí toàn bộ nước uống điện giải trong suốt thời gian thi đấu.\n- Toàn bộ các trận đấu được truyền thông, quay phát trực tiếp với bình luận viên chuyên nghiệp.\n\nHãy nhanh tay đăng ký đội bóng của bạn tại quầy lễ tân trung tâm hoặc liên hệ Hotline: 0816344504!`,
       hinh_anh: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80',
       luot_xem: 128,
       ngay_dang: new Date().toISOString(),
@@ -75,8 +75,8 @@ export default function TinTucPage() {
       ma_loai_tin: 3,
       ten_loai: 'Khuyến mãi & Ưu đãi',
       tieu_de: 'Ưu Đãi Vàng Giờ Vàng: Giảm 20% Cho Khung Giờ Sáng Sớm & Đêm Muộn',
-      tom_tat: 'Áp dụng cho tất cả các khách hàng đặt sân trực tuyến qua hệ thống Soccer247 vào các khung giờ từ 06:00 - 08:00 và sau 21:30.',
-      noi_dung: 'Nhằm khuyến khích tinh thần rèn luyện thể thao nâng cao sức khỏe, Soccer247 tung chương trình ưu đãi cực khủng giảm ngay 20% tổng tiền sân khi đặt online.',
+      tom_tat: 'Áp dụng cho tất cả các khách hàng đặt sân trực tuyến qua hệ thống Sport247 vào các khung giờ từ 06:00 - 08:00 và sau 21:30.',
+      noi_dung: 'Nhằm khuyến khích tinh thần rèn luyện thể thao nâng cao sức khỏe, Sport247 tung chương trình ưu đãi cực khủng giảm ngay 20% tổng tiền sân khi đặt online.',
       hinh_anh: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80',
       luot_xem: 256,
       ngay_dang: new Date(Date.now() - 86400000 * 5).toISOString(),
@@ -198,12 +198,12 @@ export default function TinTucPage() {
       <Head>
         <title>
           {id && article 
-            ? `${article.tieu_de} | Soccer247`
-            : 'Tin Tức & Sự Kiện Thể Thao | Soccer247'}
+            ? `${article.tieu_de} | Sport247`
+            : 'Tin Tức & Sự Kiện Thể Thao | Sport247'}
         </title>
         <meta 
           name="description" 
-          content={id && article?.tom_tat ? article.tom_tat : "Cập nhật tin tức giải đấu, ưu đãi đặt sân và kỹ thuật bóng đá tại Soccer247"} 
+          content={id && article?.tom_tat ? article.tom_tat : "Cập nhật tin tức giải đấu, ưu đãi đặt sân và kỹ thuật bóng đá tại Sport247"} 
         />
       </Head>
 

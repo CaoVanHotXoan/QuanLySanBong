@@ -411,7 +411,7 @@ export default function AdminDashboard() {
   const [loaiTinList, setLoaiTinList] = useState<LoaiTinTuc[]>([]);
   const [newsList, setNewsList] = useState<TinTucItem[]>([]);
   const [aboutUsData, setAboutUsData] = useState<AboutUsData>({
-    ten_trung_tam: 'Trung Tâm Thể Thao Soccer247',
+    ten_trung_tam: 'Trung Tâm Thể Thao Sport247',
     hotline: '0816344504',
     email: 'sinhvienxoan@gmail.com',
     dia_chi: 'Biên Hòa - Đồng Nai',
@@ -2852,8 +2852,8 @@ export default function AdminDashboard() {
   return (
     <div className={`min-h-screen font-sans transition-colors duration-300 ${isDarkMode ? 'dark bg-[#060e09] text-white bg-pitch-grid' : 'bg-[#f4f7f5] text-[#0f172a]'}`}>
       <Head>
-        <title>Soccer 247 - Quản Lý Sân Bóng & 11 Bảng CSDL</title>
-        <meta name="description" content="Hệ thống điều hành và quản trị sân bóng đá chuyên nghiệp Soccer 247: Sơ đồ sân, POS bán nước, phân quyền & báo cáo doanh thu." />
+        <title>Sport 247 - Quản Lý Sân Bóng & 11 Bảng CSDL</title>
+        <meta name="description" content="Hệ thống điều hành và quản trị sân bóng đá chuyên nghiệp Sport 247: Sơ đồ sân, POS bán nước, phân quyền & báo cáo doanh thu." />
       </Head>
 
       {/* TOAST THÔNG BÁO NỔI */}
@@ -2902,7 +2902,7 @@ export default function AdminDashboard() {
             }`}
         >
           <div className="flex flex-col h-full overflow-hidden">
-            {/* Logo Thương Hiệu: SOCCER 247 ADMIN & Nút đóng Mobile */}
+            {/* Logo Thương Hiệu: SPORT 247 ADMIN & Nút đóng Mobile */}
             <div className={`p-3.5 flex items-center justify-between border-b shrink-0 overflow-hidden ${isDarkMode ? 'border-emerald-900/40' : 'border-slate-200'}`}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-green-400 flex items-center justify-center shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/40 shrink-0 mx-auto lg:group-hover/sidebar:mx-0 transition-all">
@@ -2910,7 +2910,7 @@ export default function AdminDashboard() {
                 </div>
                 <div className="block lg:hidden lg:group-hover/sidebar:block whitespace-nowrap overflow-hidden transition-all duration-300">
                   <h1 className="text-base font-black tracking-tight flex items-center gap-1 leading-none">
-                    <span className={isDarkMode ? 'text-white' : 'text-[#0f172a]'}>SOCCER247</span>
+                    <span className={isDarkMode ? 'text-white' : 'text-[#0f172a]'}>SPORT247</span>
                     <span className="text-emerald-600">ADMIN</span>
                   </h1>
                   <p className={`text-[9px] uppercase font-black tracking-widest mt-1 flex items-center gap-1 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'}`}>
@@ -3019,7 +3019,7 @@ export default function AdminDashboard() {
                       {currentAdminUser?.ho_ten || 'Admin Quản Trị'}
                     </div>
                     <div className={`text-[10px] font-mono truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>
-                      {currentAdminUser?.email || 'admin@soccer247.vn'}
+                      {currentAdminUser?.email || 'admin@sport247.vn'}
                     </div>
                   </div>
                 </div>
@@ -3057,7 +3057,7 @@ export default function AdminDashboard() {
 
               <div className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg border text-xs font-black uppercase tracking-wider shrink-0 ${isDarkMode ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300' : 'bg-emerald-50 border-emerald-300 text-[#064e3b]'}`}>
                 <span>⚽</span>
-                <span className="hidden sm:inline">SOCCER 247</span>
+                <span className="hidden sm:inline">SPORT 247</span>
               </div>
               <ChevronRight className={`w-4 h-4 hidden md:block shrink-0 ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`} />
               <h2 className={`text-xs sm:text-sm md:text-base font-black tracking-tight truncate min-w-0 ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
@@ -4668,7 +4668,7 @@ export default function AdminDashboard() {
                           required
                           value={aboutUsData.ten_trung_tam || ''}
                           onChange={(e) => setAboutUsData({ ...aboutUsData, ten_trung_tam: e.target.value })}
-                          placeholder="Ví dụ: Trung Tâm Thể Thao Soccer247"
+                          placeholder="Ví dụ: Trung Tâm Thể Thao Sport247"
                           className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                         />
                       </div>
@@ -4724,7 +4724,7 @@ export default function AdminDashboard() {
                             type="text"
                             value={aboutUsData.link_facebook || ''}
                             onChange={(e) => setAboutUsData({ ...aboutUsData, link_facebook: e.target.value })}
-                            placeholder="https://facebook.com/soccer247"
+                            placeholder="https://facebook.com/sport247"
                             className={`w-full p-2.5 rounded-xl border font-medium ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                           />
                         </div>
@@ -4804,7 +4804,7 @@ export default function AdminDashboard() {
                           rows={7}
                           value={aboutUsData.bai_viet_about_us || ''}
                           onChange={(e) => setAboutUsData({ ...aboutUsData, bai_viet_about_us: e.target.value })}
-                          placeholder="Nhập toàn bộ nội dung giới thiệu cơ sở vật chất, mặt sân cỏ, giàn đèn, dịch vụ tiện ích của Soccer247..."
+                          placeholder="Nhập toàn bộ nội dung giới thiệu cơ sở vật chất, mặt sân cỏ, giàn đèn, dịch vụ tiện ích của Sport247..."
                           className={`w-full p-2.5 rounded-xl border font-medium resize-none ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                         />
                       </div>
@@ -5032,7 +5032,7 @@ export default function AdminDashboard() {
                                   onClick={() => setReplyLienHeModal({
                                     isOpen: true,
                                     data: lh,
-                                    tieu_de_tra_loi: `Phản hồi yêu cầu: ${lh.tieu_de || 'Đặt sân / Dịch vụ Soccer247'}`,
+                                    tieu_de_tra_loi: `Phản hồi yêu cầu: ${lh.tieu_de || 'Đặt sân / Dịch vụ Sport247'}`,
                                     noi_dung_tra_loi: '',
                                     isSubmitting: false,
                                   })}
@@ -6912,7 +6912,7 @@ export default function AdminDashboard() {
                     onClick={() => {
                       setReplyLienHeModal(prev => ({
                         ...prev,
-                        noi_dung_tra_loi: `Chào bạn ${prev.data?.ho_ten},\n\nSoccer247 đã tiếp nhận yêu cầu đặt sân sự kiện của bạn. Chúng tôi hiện còn các khung giờ thi đấu phù hợp. Bạn vui lòng chuẩn bị số lượng đội tham gia và liên hệ Hotline 0816344504 để ban quản lý giữ sân nhé!\n\nTrân trọng,\nBan Quản Lý Soccer247.`
+                        noi_dung_tra_loi: `Chào bạn ${prev.data?.ho_ten},\n\nSport247 đã tiếp nhận yêu cầu đặt sân sự kiện của bạn. Chúng tôi hiện còn các khung giờ thi đấu phù hợp. Bạn vui lòng chuẩn bị số lượng đội tham gia và liên hệ Hotline 0816344504 để ban quản lý giữ sân nhé!\n\nTrân trọng,\nBan Quản Lý Sport247.`
                       }));
                     }}
                     className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-emerald-100 dark:bg-slate-800 dark:hover:bg-emerald-950/60 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
@@ -6924,7 +6924,7 @@ export default function AdminDashboard() {
                     onClick={() => {
                       setReplyLienHeModal(prev => ({
                         ...prev,
-                        noi_dung_tra_loi: `Chào bạn ${prev.data?.ho_ten},\n\nCảm ơn bạn đã quan tâm. Về bảng giá thuê sân theo tháng và các ưu đãi giờ vàng, Soccer247 đang có chính sách giảm 20% cho hợp đồng định kỳ. Bạn có thể kiểm tra lịch trống trực tiếp trên trang chủ hoặc liên hệ Hotline để làm hợp đồng giữ sân nhé!\n\nTrân trọng,\nBan Quản Lý Soccer247.`
+                        noi_dung_tra_loi: `Chào bạn ${prev.data?.ho_ten},\n\nCảm ơn bạn đã quan tâm. Về bảng giá thuê sân theo tháng và các ưu đãi giờ vàng, Sport247 đang có chính sách giảm 20% cho hợp đồng định kỳ. Bạn có thể kiểm tra lịch trống trực tiếp trên trang chủ hoặc liên hệ Hotline để làm hợp đồng giữ sân nhé!\n\nTrân trọng,\nBan Quản Lý Sport247.`
                       }));
                     }}
                     className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-blue-100 dark:bg-slate-800 dark:hover:bg-blue-950/60 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
@@ -6936,7 +6936,7 @@ export default function AdminDashboard() {
                     onClick={() => {
                       setReplyLienHeModal(prev => ({
                         ...prev,
-                        noi_dung_tra_loi: `Chào bạn ${prev.data?.ho_ten},\n\nSoccer247 chân thành cảm ơn ý kiến đóng góp quý báu của bạn để nâng cao chất lượng dịch vụ cụm sân. Ban quản lý đã ghi nhận và sẽ kiểm tra, cải thiện ngay trong tuần này.\n\nChúc bạn có những phút giây thi đấu tuyệt vời cùng Soccer247!`
+                        noi_dung_tra_loi: `Chào bạn ${prev.data?.ho_ten},\n\nSport247 chân thành cảm ơn ý kiến đóng góp quý báu của bạn để nâng cao chất lượng dịch vụ cụm sân. Ban quản lý đã ghi nhận và sẽ kiểm tra, cải thiện ngay trong tuần này.\n\nChúc bạn có những phút giây thi đấu tuyệt vời cùng Sport247!`
                       }));
                     }}
                     className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-purple-100 dark:bg-slate-800 dark:hover:bg-purple-950/60 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"

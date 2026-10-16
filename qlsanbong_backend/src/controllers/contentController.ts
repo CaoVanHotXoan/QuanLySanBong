@@ -323,7 +323,7 @@ export const capNhatAboutUs = async (req: AuthRequest, res: Response) => {
 
         const pool = await poolPromise;
         await pool.request()
-            .input('ten_trung_tam', sql.NVarChar(150), ten_trung_tam || 'Trung Tâm Thể Thao Soccer247')
+            .input('ten_trung_tam', sql.NVarChar(150), ten_trung_tam || 'Trung Tâm Thể Thao Sport247')
             .input('hotline', sql.VarChar(20), hotline || '0816344504')
             .input('email', sql.VarChar(255), email || null)
             .input('dia_chi', sql.NVarChar(255), dia_chi || 'Biên Hòa - Đồng Nai')
@@ -376,7 +376,7 @@ export const guiLienHe = async (req: Request, res: Response) => {
 
         return res.status(201).json({ 
             success: true, 
-            message: 'Cảm ơn bạn đã liên hệ! Thông tin đã được lưu vào hệ thống và gửi thông báo trực tiếp đến ban quản lý Soccer247.',
+            message: 'Cảm ơn bạn đã liên hệ! Thông tin đã được lưu vào hệ thống và gửi thông báo trực tiếp đến ban quản lý Sport247.',
             data: result.recordset ? result.recordset[0] : null
         });
     } catch (error: any) {
@@ -459,7 +459,7 @@ export const traLoiLienHe = async (req: AuthRequest, res: Response) => {
             customerPhone: contact.so_dien_thoai,
             originalSubject: contact.tieu_de,
             originalMessage: contact.noi_dung,
-            replySubject: tieu_de_tra_loi || `⚽ [Soccer247] Phản hồi yêu cầu: ${contact.tieu_de || 'Đặt sân thể thao'}`,
+            replySubject: tieu_de_tra_loi || `⚽ [Sport247] Phản hồi yêu cầu: ${contact.tieu_de || 'Đặt sân thể thao'}`,
             replyMessage: noi_dung_tra_loi.trim(),
         });
 

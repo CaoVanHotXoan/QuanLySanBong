@@ -826,8 +826,8 @@ export default function HomePage() {
       setIsCheckingPayOS(true);
       setQrModalAlert({
         type: 'info',
-        title: 'Đang kiểm tra giao dịch với Soccer247...',
-        message: 'Hệ thống đang kết nối trực tiếp với Soccer247 để đối soát giao dịch.',
+        title: 'Đang kiểm tra giao dịch với Sport247...',
+        message: 'Hệ thống đang kết nối trực tiếp với Sport247 để đối soát giao dịch.',
       });
     }
     try {
@@ -863,7 +863,7 @@ export default function HomePage() {
         setQrModalAlert({
           type: 'error',
           title: 'Chưa Nhận Được Tiền Chuyển Khoản!',
-          message: 'Soccer 247 chưa nhận được tiền chuyển khoản! Quý khách vui lòng quét mã chuyển tiền hoặc thử lại sau vài giây.',
+          message: 'Sport 247 chưa nhận được tiền chuyển khoản! Quý khách vui lòng quét mã chuyển tiền hoặc thử lại sau vài giây.',
         });
       }
     } catch (err) {
@@ -1334,7 +1334,7 @@ export default function HomePage() {
     <div suppressHydrationWarning className={`min-h-screen transition-colors duration-300 font-sans selection:bg-emerald-500 selection:text-white ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
       }`}>
       <Head>
-        <title>Soccer247 - Hệ Thống Đặt Sân Thể Thao Trực Tuyến 24/7</title>
+        <title>Sport247 - Hệ Thống Đặt Sân Thể Thao Trực Tuyến 24/7</title>
         <meta
           name="description"
           content="Đặt sân bóng đá cỏ nhân tạo 5 người, 7 người, Pickleball và Cầu lông trực tuyến kết nối CSDL SQL Server thời gian thực."
@@ -1389,7 +1389,7 @@ export default function HomePage() {
               </div>
               <div className="hidden sm:block">
                 <div className="flex items-center gap-1">
-                  <span className={`text-xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>SOCCER</span>
+                  <span className={`text-xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>SPORT</span>
                   <span className="text-xl font-black tracking-tight text-emerald-500">247</span>
                 </div>
                 <p className="text-[9px] uppercase font-bold tracking-widest text-emerald-600 dark:text-emerald-500/80 -mt-1">Sân Thể Thao 24/7</p>
@@ -1673,7 +1673,7 @@ export default function HomePage() {
             </div>
             <div>
               <div className="flex items-center gap-1">
-                <span className={`text-base font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>SOCCER</span>
+                <span className={`text-base font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>SPORT</span>
                 <span className="text-base font-black tracking-tight text-emerald-500">247</span>
               </div>
               <p className="text-[9px] uppercase font-bold tracking-widest text-emerald-500 -mt-0.5">Menu Điều Hướng</p>
@@ -3080,7 +3080,7 @@ export default function HomePage() {
                     <div className="text-center space-y-1.5">
                       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/30">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                        <span>Soccer247 VietQR • Tự Động Duyệt 3-5 Giây</span>
+                        <span>Sport247 VietQR • Tự Động Duyệt 3-5 Giây</span>
                       </div>
                       <h3 className={`text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                         Quét Mã QR MB Bank Để Thanh Toán
@@ -3243,7 +3243,7 @@ export default function HomePage() {
                     <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-500 dark:text-amber-400 flex items-start gap-2">
                       <Info className="w-4 h-4 shrink-0 mt-0.5" />
                       <span>
-                        <strong>Lưu ý:</strong> Vui lòng điền <strong>chính xác nội dung chuyển khoản</strong> để Soccer247 tự động kích hoạt lịch sân của bạn ngay lập tức mà không cần xác nhận thủ công.
+                        <strong>Lưu ý:</strong> Vui lòng điền <strong>chính xác nội dung chuyển khoản</strong> để Sport247 tự động kích hoạt lịch sân của bạn ngay lập tức mà không cần xác nhận thủ công.
                       </span>
                     </div>
 

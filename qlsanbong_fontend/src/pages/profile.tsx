@@ -21,6 +21,7 @@ import {
   EyeOff,
   Sparkles,
 } from "lucide-react";
+import authService from "../services/authService";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
@@ -98,6 +99,29 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
     type: "success" | "error" | "";
     text: string;
   }>({ type: "", text: "" });
+
+  // 7. STATE MÃ OTP XÁC THỰC QUA GMAIL (ĐỔI MẬT KHẨU & CẬP NHẬT GMAIL)
+  const [passwordOtp, setPasswordOtp] = useState<string>("");
+  const [isSendingPasswordOtp, setIsSendingPasswordOtp] = useState<boolean>(false);
+  const [passwordOtpCountdown, setPasswordOtpCountdown] = useState<number>(0);
+
+  const [emailOtp, setEmailOtp] = useState<string>("");
+  const [isSendingEmailOtp, setIsSendingEmailOtp] = useState<boolean>(false);
+  const [emailOtpCountdown, setEmailOtpCountdown] = useState<number>(0);
+
+  // Đếm ngược OTP Đổi mật khẩu
+  useEffect(() => {
+    if (passwordOtpCountdown <= 0) return;
+    const t = setInterval(() => setPasswordOtpCountdown((p) => (p > 0 ? p - 1 : 0)), 1000);
+    return () => clearInterval(t);
+  }, [passwordOtpCountdown]);
+
+  // Đếm ngược OTP Cập nhật Gmail
+  useEffect(() => {
+    if (emailOtpCountdown <= 0) return;
+    const t = setInterval(() => setEmailOtpCountdown((p) => (p > 0 ? p - 1 : 0)), 1000);
+    return () => clearInterval(t);
+  }, [emailOtpCountdown]);
 
   // Tự động load thông tin đã đăng nhập từ localStorage (nếu có)
   useEffect(() => {
@@ -203,6 +227,7 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
   const handleOpenModal = () => {
     setEditForm({ ...userData });
     setModalSuccessMsg("");
+    setEmailOtp("");
     setIsModalOpen(true);
   };
 
@@ -210,6 +235,53 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setModalSuccessMsg("");
+    setEmailOtp("");
+  };
+
+  // Gửi mã OTP xác thực tới Email mới khi đổi Gmail
+  const handleSendEmailOtp = async () => {
+    const newEmail = editForm.email.toLowerCase().trim();
+    if (!newEmail || !newEmail.includes("@")) {
+      showToast("Vui lòng nhập địa chỉ Gmail hợp lệ!", "error");
+      return;
+    }
+    setIsSendingEmailOtp(true);
+    try {
+      const res = await authService.sendOtp(newEmail, "CAP_NHAT_EMAIL", editForm.hoTen);
+      if (res?.success) {
+        showToast(`📩 ${res.message || "Đã gửi mã OTP về Gmail mới!"}`, "success");
+        setEmailOtpCountdown(60);
+      } else {
+        showToast(res?.message || "Không thể gửi mã OTP!", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Lỗi khi gửi mã OTP!", "error");
+    } finally {
+      setIsSendingEmailOtp(false);
+    }
+  };
+
+  // Gửi mã OTP xác thực tới Gmail hiện tại khi đổi mật khẩu
+  const handleSendPasswordOtp = async () => {
+    if (!userData.email) {
+      setPasswordMsg({ type: "error", text: "Không tìm thấy địa chỉ email tài khoản!" });
+      return;
+    }
+    setIsSendingPasswordOtp(true);
+    setPasswordMsg({ type: "", text: "" });
+    try {
+      const res = await authService.sendOtp(userData.email, "DOI_MAT_KHAU", userData.hoTen);
+      if (res?.success) {
+        setPasswordMsg({ type: "success", text: res.message || "Đã gửi mã OTP về Gmail của bạn!" });
+        setPasswordOtpCountdown(60);
+      } else {
+        setPasswordMsg({ type: "error", text: res?.message || "Không thể gửi mã OTP lúc này!" });
+      }
+    } catch (err: any) {
+      setPasswordMsg({ type: "error", text: err.message || "Lỗi kết nối khi gửi mã OTP!" });
+    } finally {
+      setIsSendingPasswordOtp(false);
+    }
   };
 
   // Lưu thông tin từ Modal
@@ -224,6 +296,29 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
     if (!editForm.email.trim()) {
       showToast("Email (Gmail) không được để trống!", "error");
       return;
+    }
+
+    const currentEmail = (userData.email || "").toLowerCase().trim();
+    const newEmail = editForm.email.toLowerCase().trim();
+    const isEmailChanged = newEmail !== currentEmail && currentEmail !== "";
+
+    // Nếu người dùng thay đổi Email -> Bắt buộc xác thực bằng mã OTP gửi về Email mới
+    if (isEmailChanged) {
+      if (!emailOtp.trim() || emailOtp.trim().length !== 6) {
+        showToast("⚠️ Bạn đang thay đổi Gmail! Vui lòng nhập mã OTP 6 số xác thực gửi về hộp thư mới.", "error");
+        return;
+      }
+
+      try {
+        const updateRes = await authService.updateEmail(newEmail, emailOtp.trim());
+        if (!updateRes?.success) {
+          showToast(updateRes?.message || "Xác thực mã OTP Gmail mới không thành công!", "error");
+          return;
+        }
+      } catch (err: any) {
+        showToast(err.message || "Lỗi xác thực Gmail mới!", "error");
+        return;
+      }
     }
 
     setUserData(editForm);
@@ -278,15 +373,7 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
     e.preventDefault();
     setPasswordMsg({ type: "", text: "" });
 
-    if (!currentPassword) {
-      setPasswordMsg({
-        type: "error",
-        text: "Vui lòng nhập mật khẩu hiện tại!",
-      });
-      return;
-    }
-
-    if (newPassword.length < 6) {
+    if (!newPassword || newPassword.length < 6) {
       setPasswordMsg({
         type: "error",
         text: "Mật khẩu mới phải có tối thiểu 6 ký tự!",
@@ -302,14 +389,44 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
       return;
     }
 
-    setPasswordMsg({
-      type: "success",
-      text: "Đổi mật khẩu thành công!",
-    });
+    if (!passwordOtp.trim() || passwordOtp.trim().length !== 6) {
+      setPasswordMsg({
+        type: "error",
+        text: "Vui lòng nhập đúng 6 chữ số mã OTP xác thực gửi về Gmail của bạn!",
+      });
+      return;
+    }
 
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
+    try {
+      const res = await authService.changePassword({
+        email: userData.email,
+        ma_otp: passwordOtp.trim(),
+        mat_khau_cu: currentPassword.trim() || undefined,
+        mat_khau_moi: newPassword.trim(),
+      });
+
+      if (res?.success) {
+        setPasswordMsg({
+          type: "success",
+          text: res.message || "Đổi mật khẩu thành công! Bạn có thể dùng mật khẩu mới này.",
+        });
+        showToast("🎉 Đổi mật khẩu tài khoản thành công!", "success");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        setPasswordOtp("");
+      } else {
+        setPasswordMsg({
+          type: "error",
+          text: res?.message || "Đổi mật khẩu thất bại. Vui lòng kiểm tra lại thông tin!",
+        });
+      }
+    } catch (err: any) {
+      setPasswordMsg({
+        type: "error",
+        text: err.message || "Lỗi máy chủ khi đổi mật khẩu!",
+      });
+    }
   };
 
   // Xử lý Đăng xuất
@@ -458,7 +575,7 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
             </div>
 
             <div className="pt-3 border-t border-slate-800/80 text-[10px] text-slate-500 hidden md:block">
-              <p>Soccer247 Pro</p>
+              <p>Sport247 Pro</p>
             </div>
           </div>
 
@@ -676,6 +793,47 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                     </div>
                   </div>
 
+                  {/* Trường Mã xác thực OTP qua Gmail khi Đổi mật khẩu */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                      Mã xác thực OTP qua Gmail <span className="text-rose-400">*</span>
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={passwordOtp}
+                        onChange={(e) => setPasswordOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="6 chữ số OTP"
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-emerald-400 placeholder-slate-500 text-xs font-mono tracking-widest font-bold text-center focus:outline-none focus:border-emerald-500"
+                        required
+                      />
+                      <button
+                        type="button"
+                        disabled={isSendingPasswordOtp || passwordOtpCountdown > 0}
+                        onClick={handleSendPasswordOtp}
+                        className="px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-emerald-500/20 active:scale-95 flex items-center gap-1.5 cursor-pointer shrink-0"
+                      >
+                        {isSendingPasswordOtp ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Đang gửi...</span>
+                          </>
+                        ) : passwordOtpCountdown > 0 ? (
+                          <span>Gửi lại ({passwordOtpCountdown}s)</span>
+                        ) : (
+                          <>
+                            <Mail className="w-3.5 h-3.5" />
+                            <span>Gửi mã OTP</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Bấm <strong>"Gửi mã OTP"</strong> để nhận mã bảo mật gửi tới Gmail tài khoản của bạn ({userData.email}).
+                    </p>
+                  </div>
+
                   <div className="pt-2">
                     <button
                       type="submit"
@@ -735,10 +893,50 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                     type="email"
                     value={editForm.email}
                     onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                    placeholder="admin@gmail.com"
+                    placeholder="user@gmail.com"
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:border-emerald-500 focus:outline-none"
                     required
                   />
+
+                  {/* Phần xác thực mã OTP khi người dùng thay đổi Email */}
+                  {editForm.email.toLowerCase().trim() !== (userData.email || "").toLowerCase().trim() && editForm.email.trim() !== "" && (
+                    <div className="mt-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                      <p className="text-[11px] font-semibold mb-2 flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>Bạn đang thay đổi địa chỉ Gmail. Vui lòng xác thực mã OTP gửi tới email mới!</span>
+                      </p>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          maxLength={6}
+                          value={emailOtp}
+                          onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          placeholder="6 số OTP mới"
+                          className="w-full px-3 py-1.5 bg-slate-950 border border-amber-500/50 rounded-xl text-emerald-400 placeholder-slate-500 text-xs font-mono tracking-widest font-bold text-center focus:outline-none focus:border-emerald-500"
+                        />
+                        <button
+                          type="button"
+                          disabled={isSendingEmailOtp || emailOtpCountdown > 0}
+                          onClick={handleSendEmailOtp}
+                          className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow active:scale-95 flex items-center gap-1 cursor-pointer shrink-0"
+                        >
+                          {isSendingEmailOtp ? (
+                            <>
+                              <span className="w-3 h-3 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
+                              <span>Đang gửi...</span>
+                            </>
+                          ) : emailOtpCountdown > 0 ? (
+                            <span>Gửi lại ({emailOtpCountdown}s)</span>
+                          ) : (
+                            <>
+                              <Mail className="w-3 h-3" />
+                              <span>Gửi OTP</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>

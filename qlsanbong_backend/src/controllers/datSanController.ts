@@ -617,7 +617,7 @@ export const datSan = async (req: AuthRequest, res: Response) => {
             // Nếu vẫn chưa có, tạo mới bản ghi khách hàng chuẩn
             if (!ma_nd) {
                 const cleanPhone = sdt_khach || `09${Math.floor(10000000 + Math.random() * 90000000)}`;
-                const uniqueEmail = `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@soccer247.vn`;
+                const uniqueEmail = `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@sport247.vn`;
                 const insU = await pool.request()
                     .input('ho_ten', sql.NVarChar(100), ten_khach || 'Khách Đặt Sân')
                     .input('email', sql.VarChar(255), uniqueEmail)

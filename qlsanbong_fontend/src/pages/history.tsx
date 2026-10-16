@@ -401,7 +401,7 @@ export default function History() {
         showToast('🎉 MB Bank đã ghi nhận thanh toán thành công! Đơn hàng đã được thanh toán hoàn tất.', 'success');
         await fetchBookingHistory(currentUser);
       } else if (manual) {
-        setPayOSAlertMessage('Soccer 247 chưa nhận được tiền chuyển khoản! Quý khách vui lòng quét mã chuyển tiền hoặc thử lại sau vài giây.');
+        setPayOSAlertMessage('Sport 247 chưa nhận được tiền chuyển khoản! Quý khách vui lòng quét mã chuyển tiền hoặc thử lại sau vài giây.');
       }
     } catch (err) {
       console.error('Lỗi khi kiểm tra PayOS status:', err);
@@ -503,7 +503,7 @@ export default function History() {
   return (
     <>
       <Head>
-        <title>Lịch Sử Đặt Sân | Soccer247</title>
+        <title>Lịch Sử Đặt Sân | Sport247</title>
         <meta name="description" content="Xem chi tiết lịch sử đặt sân bóng và trạng thái thanh toán" />
       </Head>
       <div className={`min-h-screen transition-colors duration-300 py-8 px-4 sm:px-6 lg:px-8 font-sans selection:bg-emerald-500 selection:text-white relative ${
@@ -1261,7 +1261,7 @@ export default function History() {
                     </div>
                   </div>
 
-                  {/* Cảnh báo khi Soccer 247 chưa nhận được tiền */}
+                  {/* Cảnh báo khi Sport 247 chưa nhận được tiền */}
                   {payOSAlertMessage && (
                     <div className="p-3 bg-rose-500/15 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-start gap-2.5 shadow-md animate-fade-in">
                       <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />

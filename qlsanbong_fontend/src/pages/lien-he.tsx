@@ -132,7 +132,7 @@ export default function LienHePage() {
       if (res?.success) {
         setSubmitStatus({
           type: 'success',
-          message: res.message || 'Gửi liên hệ thành công! Ban quản lý Soccer247 sẽ liên hệ lại với bạn trong thời gian sớm nhất.',
+          message: res.message || 'Gửi liên hệ thành công! Ban quản lý Sport247 sẽ liên hệ lại với bạn trong thời gian sớm nhất.',
         });
         setUseAccountInfo(false);
         setFormData({
@@ -164,8 +164,8 @@ export default function LienHePage() {
       isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
     }`}>
       <Head>
-        <title>Liên Hệ & Góp Ý | Soccer247</title>
-        <meta name="description" content="Liên hệ với ban quản trị sân thể thao Soccer247 để đặt lịch giải đấu, sự kiện hoặc gửi ý kiến đóng góp." />
+        <title>Liên Hệ & Góp Ý | Sport247</title>
+        <meta name="description" content="Liên hệ với ban quản trị sân thể thao Sport247 để đặt lịch giải đấu, sự kiện hoặc gửi ý kiến đóng góp." />
       </Head>
 
       <HeaderNav activeTab="contact" />
@@ -179,7 +179,7 @@ export default function LienHePage() {
             Hỗ Trợ & Chăm Sóc Khách Hàng 24/7
           </div>
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight mb-4">
-            Liên Hệ Với <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">Soccer247</span>
+            Liên Hệ Với <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">Sport247</span>
           </h1>
           <p className={`text-sm sm:text-base leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
             Bạn có câu hỏi về việc đặt sân, tổ chức giải bóng đá doanh nghiệp hay muốn đóng góp ý kiến để hoàn thiện chất lượng dịch vụ? Hãy gửi tin nhắn cho chúng tôi ngay bên dưới.
@@ -346,7 +346,7 @@ export default function LienHePage() {
                   rows={4}
                   value={formData.noi_dung}
                   onChange={(e) => setFormData({ ...formData, noi_dung: e.target.value })}
-                  placeholder="Vui lòng nhập chi tiết thông tin bạn muốn trao đổi cùng Soccer247..."
+                  placeholder="Vui lòng nhập chi tiết thông tin bạn muốn trao đổi cùng Sport247..."
                   className={`w-full px-4 py-3 rounded-xl text-xs sm:text-sm outline-none border transition-all resize-none ${
                     isDarkMode 
                       ? 'bg-slate-950 border-slate-800 text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50' 

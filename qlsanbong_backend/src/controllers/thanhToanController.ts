@@ -172,7 +172,7 @@ export const taoThanhToanPayOS = async (req: AuthRequest, res: Response) => {
                 ma_nd = userCheck.recordset[0].id;
             } else {
                 // Tạo người dùng mới qua Stored Procedure sp_ThemNguoiDung
-                const uniqueEmail = `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@soccer247.vn`;
+                const uniqueEmail = `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@sport247.vn`;
                 const newUserRes = await pool.request()
                     .input('ho_ten', sql.NVarChar(100), ten_khach)
                     .input('email', sql.VarChar(255), uniqueEmail)

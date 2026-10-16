@@ -144,7 +144,7 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
               </div>
               <div className="flex flex-col">
                 <span className={`text-xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>
-                  SOCCER<span className="text-emerald-500">247</span>
+                  SPORT<span className="text-emerald-500">247</span>
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-500 -mt-1">
                   Sân Thể Thao 24/7
@@ -415,7 +415,7 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
                 <SoccerBallIcon className="w-5 h-5" />
               </div>
               <span className={`font-black text-base tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                SOCCER<span className="text-emerald-500">247</span>
+                SPORT<span className="text-emerald-500">247</span>
               </span>
             </div>
             <button

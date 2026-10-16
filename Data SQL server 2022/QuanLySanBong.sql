@@ -1,6 +1,6 @@
 -- =====================================================================
 -- FILE 1: CẤU TRÚC CƠ SỞ DỮ LIỆU & BẢNG (DATABASE & TABLES SCHEMA)
--- Project: Hệ Thống Quản Lý Và Đặt Sân Thể Thao (Soccer247)
+-- Project: Hệ Thống Quản Lý Và Đặt Sân Thể Thao (Sport247)
 -- Tương thích: SQL Server 2016, 2017, 2019, 2022+
 -- =====================================================================
 
@@ -29,6 +29,7 @@ IF OBJECT_ID('Loai_Tin_Tuc', 'U') IS NOT NULL DROP TABLE Loai_Tin_Tuc;
 IF OBJECT_ID('Banner', 'U') IS NOT NULL DROP TABLE Banner;
 IF OBJECT_ID('Lien_He', 'U') IS NOT NULL DROP TABLE Lien_He;
 IF OBJECT_ID('About_Us', 'U') IS NOT NULL DROP TABLE About_Us;
+IF OBJECT_ID('Xac_Thuc_OTP', 'U') IS NOT NULL DROP TABLE Xac_Thuc_OTP;
 GO
 
 -- =====================================================================
@@ -235,6 +236,18 @@ CREATE TABLE About_Us (
 );
 GO
 
+-- 4.15. Bảng Xac_Thuc_OTP (Lưu trữ và xác thực mã OTP qua Gmail cho Đăng ký, Đổi mật khẩu, Cập nhật Email)
+CREATE TABLE Xac_Thuc_OTP (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    ma_otp VARCHAR(10) NOT NULL,
+    loai_otp VARCHAR(50) NOT NULL, -- DANG_KY, DOI_MAT_KHAU, CAP_NHAT_EMAIL
+    het_han_luc DATETIME NOT NULL,
+    da_xac_thuc BIT DEFAULT 0,
+    ngay_tao DATETIME DEFAULT GETDATE()
+);
+GO
+
 -- =====================================================================
 -- 5. CHỈ MỤC TỐI ƯU HIỆU NĂNG TRUY VẤN (PERFORMANCE INDEXES)
 -- =====================================================================
@@ -244,6 +257,7 @@ CREATE NONCLUSTERED INDEX IX_DonDatSan_MaSan ON Don_Dat_San(ma_san);
 CREATE NONCLUSTERED INDEX IX_ThanhToan_MaDonDat ON Thanh_Toan(ma_don_dat);
 CREATE NONCLUSTERED INDEX IX_TinTuc_MaLoaiTin_TrangThai ON Tin_Tuc(ma_loai_tin, trang_thai) INCLUDE (tieu_de, ngay_dang, luot_xem);
 CREATE NONCLUSTERED INDEX IX_LienHe_TrangThai ON Lien_He(trang_thai_xu_ly);
+CREATE NONCLUSTERED INDEX IX_XacThucOTP_Email_Loai ON Xac_Thuc_OTP(email, loai_otp, da_xac_thuc, het_han_luc);
 GO
 
 PRINT N'✅ ĐÃ KHỞI TẠO XONG CƠ SỞ DỮ LIỆU VÀ TOÀN BỘ BẢNG CHO QuanLySanBong!';

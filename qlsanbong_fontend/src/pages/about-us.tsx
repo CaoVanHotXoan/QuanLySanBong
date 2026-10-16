@@ -43,14 +43,14 @@ export default function AboutUsPage() {
         setAboutData(res.data);
       } else {
         setAboutData({
-          ten_trung_tam: 'Trung Tâm Thể Thao Soccer247',
+          ten_trung_tam: 'Trung Tâm Thể Thao Sport247',
           hotline: '0816344504',
           email: 'sinhvienxoan@gmail.com',
           dia_chi: 'Biên Hòa - Đồng Nai',
           link_map: 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3917.142700043094!2d106.80276227210824!3d10.952591473731976!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95970202f3f%3A0x679e7fa6d33f74e5!2zVHLGsOG7nW5nIMSR4bqhaSBo4buNYyBM4bqhYyBI4buTbmc!5e0!3m2!1svi!2s!4v1791345127082!5m2!1svi!2s',
           gioi_thieu_ngan: 'Trung tâm thể thao đa năng hiện đại hàng đầu khu vực với hệ thống sân bóng cỏ nhân tạo đạt chuẩn FIFA, hệ thống chiếu sáng LED chống lóa và dịch vụ tiện ích khép kín.',
-          bai_viet_about_us: 'Soccer247 ra đời với sứ mệnh mang đến không gian thể thao chuyên nghiệp, hiện đại và tiện lợi nhất cho cộng đồng yêu bóng đá. Chúng tôi trang bị mặt cỏ sợi kim cương cao cấp nhập khẩu, hệ thống thoát nước ngầm tiêu chuẩn, giàn đèn LED công suất cao cùng khu vực căn tin phục vụ giải khát tiện nghi. Hệ thống đặt sân trực tuyến 24/7 giúp khách hàng chủ động chọn sân, giờ đá và thanh toán tự động qua mã QR chỉ trong vài giây.',
-          link_facebook: 'https://facebook.com/soccer247',
+          bai_viet_about_us: 'Sport247 ra đời với sứ mệnh mang đến không gian thể thao chuyên nghiệp, hiện đại và tiện lợi nhất cho cộng đồng yêu bóng đá. Chúng tôi trang bị mặt cỏ sợi kim cương cao cấp nhập khẩu, hệ thống thoát nước ngầm tiêu chuẩn, giàn đèn LED công suất cao cùng khu vực căn tin phục vụ giải khát tiện nghi. Hệ thống đặt sân trực tuyến 24/7 giúp khách hàng chủ động chọn sân, giờ đá và thanh toán tự động qua mã QR chỉ trong vài giây.',
+          link_facebook: 'https://facebook.com/sport247',
           link_zalo: 'https://zalo.me/0816344504'
         });
       }
@@ -89,8 +89,8 @@ export default function AboutUsPage() {
       isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
     }`}>
       <Head>
-        <title>Về Chúng Tôi | About Us - Soccer247</title>
-        <meta name="description" content="Giới thiệu về Trung tâm thể thao Soccer247 - Hệ thống sân bóng đá cỏ nhân tạo hiện đại" />
+        <title>Về Chúng Tôi | About Us - Sport247</title>
+        <meta name="description" content="Giới thiệu về Trung tâm thể thao Sport247 - Hệ thống sân bóng đá cỏ nhân tạo hiện đại" />
       </Head>
 
       <HeaderNav activeTab="about" />
@@ -108,7 +108,7 @@ export default function AboutUsPage() {
                 Về Chúng Tôi
               </div>
               <h2 className="text-2xl sm:text-4xl font-black leading-tight">
-                {aboutData?.ten_trung_tam || 'Trung Tâm Thể Thao Soccer247'}
+                {aboutData?.ten_trung_tam || 'Trung Tâm Thể Thao Sport247'}
               </h2>
               <div className={`text-sm sm:text-base leading-relaxed space-y-4 whitespace-pre-line ${
                 isDarkMode ? 'text-slate-300' : 'text-slate-700'
@@ -163,7 +163,7 @@ export default function AboutUsPage() {
                 <div className="h-48 sm:h-64 rounded-3xl overflow-hidden shadow-xl">
                   <img
                     src="https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=800&q=80"
-                    alt="Sân bóng Soccer247"
+                    alt="Sân bóng Sport247"
                     className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
                   />
                 </div>
@@ -189,13 +189,13 @@ export default function AboutUsPage() {
           </div>
         </section>
 
-        {/* TẠI SAO CHỌN SOCCER247 */}
+        {/* TẠI SAO CHỌN SPORT247 */}
         <section className={`py-16 border-t ${
           isDarkMode ? 'bg-slate-900/40 border-slate-800/80' : 'bg-slate-100/70 border-slate-200'
         }`}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-2xl mx-auto mb-12">
-              <h3 className="text-2xl sm:text-3xl font-black mb-3">Ưu Điểm Vượt Trội Của Soccer247</h3>
+              <h3 className="text-2xl sm:text-3xl font-black mb-3">Ưu Điểm Vượt Trội Của Sport247</h3>
               <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                 Mang đến trải nghiệm đặt sân mượt mà và không gian thi đấu bùng nổ năng lượng thể thao.
               </p>

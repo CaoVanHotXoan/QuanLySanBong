@@ -248,6 +248,22 @@ BEGIN
 END;
 GO
 
+-- 3.15. Bảng Xac_Thuc_OTP (Lưu trữ và xác thực mã OTP qua Gmail)
+IF OBJECT_ID('Xac_Thuc_OTP', 'U') IS NULL
+BEGIN
+    CREATE TABLE Xac_Thuc_OTP (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        email VARCHAR(255) NOT NULL,
+        ma_otp VARCHAR(10) NOT NULL,
+        loai_otp VARCHAR(50) NOT NULL,
+        het_han_luc DATETIME NOT NULL,
+        da_xac_thuc BIT DEFAULT 0,
+        ngay_tao DATETIME DEFAULT GETDATE()
+    );
+    CREATE NONCLUSTERED INDEX IX_XacThucOTP_Email_Loai ON Xac_Thuc_OTP(email, loai_otp, da_xac_thuc, het_han_luc);
+END;
+GO
+
 -- =====================================================================
 -- 4. ĐỊNH NGHĨA CÁC THỦ TỤC LƯU TRỮ (STORED PROCEDURES)
 -- =====================================================================
@@ -3994,11 +4010,11 @@ BEGIN
     BEGIN
         INSERT INTO About_Us (ten_trung_tam, hotline, email, dia_chi, link_map, gioi_thieu_ngan, bai_viet_about_us, link_facebook, link_zalo)
         VALUES (
-            N'Trung Tâm Thể Thao Soccer247', '0816344504', 'sinhvienxoan@gmail.com', N'Biên Hòa - Đồng Nai', 
+            N'Trung Tâm Thể Thao Sport247', '0816344504', 'sinhvienxoan@gmail.com', N'Biên Hòa - Đồng Nai', 
             'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3917.142700043094!2d106.80276227210824!3d10.952591473731976!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3174d95970202f3f%3A0x679e7fa6d33f74e5!2zVHLGsOG7nW5nIMSR4bqhaSBo4buNYyBM4bqhYyBI4buTbmc!5e0!3m2!1svi!2s!4v1791345127082!5m2!1svi!2s',
             N'Trung tâm thể thao đa năng hiện đại hàng đầu khu vực với hệ thống sân bóng cỏ nhân tạo đạt chuẩn FIFA, hệ thống chiếu sáng LED chống lóa và dịch vụ tiện ích khép kín.',
-            N'Soccer247 ra đời với sứ mệnh mang đến không gian thể thao chuyên nghiệp, hiện đại và tiện lợi nhất cho cộng đồng yêu bóng đá. Chúng tôi trang bị mặt cỏ sợi kim cương cao cấp nhập khẩu, hệ thống thoát nước ngầm tiêu chuẩn, giàn đèn LED công suất cao cùng khu vực căn tin phục vụ giải khát tiện nghi. Hệ thống đặt sân trực tuyến 24/7 giúp khách hàng chủ động chọn sân, giờ đá và thanh toán tự động qua mã QR chỉ trong vài giây.',
-            'https://facebook.com/soccer247', 'https://zalo.me/0816344504'
+            N'Sport247 ra đời với sứ mệnh mang đến không gian thể thao chuyên nghiệp, hiện đại và tiện lợi nhất cho cộng đồng yêu bóng đá. Chúng tôi trang bị mặt cỏ sợi kim cương cao cấp nhập khẩu, hệ thống thoát nước ngầm tiêu chuẩn, giàn đèn LED công suất cao cùng khu vực căn tin phục vụ giải khát tiện nghi. Hệ thống đặt sân trực tuyến 24/7 giúp khách hàng chủ động chọn sân, giờ đá và thanh toán tự động qua mã QR chỉ trong vài giây.',
+            'https://facebook.com/sport247', 'https://zalo.me/0816344504'
         );
     END;
 
@@ -4695,6 +4711,199 @@ BEGIN
         CONVERT(VARCHAR(5), gio_vao_san, 108) AS gio_vao_san
     FROM Don_Dat_San
     WHERE id = @id;
+END;
+GO
+
+-- =====================================================================
+-- 36. CÁC THỦ TỤC QUẢN LÝ VÀ XÁC THỰC MÃ OTP QUA GMAIL (XAC_THUC_OTP)
+-- =====================================================================
+
+-- 36.1. Thủ tục Lưu mã OTP gửi về Gmail (Thời hạn mặc định 5 phút)
+CREATE OR ALTER PROCEDURE sp_LuuMaOTP
+    @email VARCHAR(255),
+    @ma_otp VARCHAR(10),
+    @loai_otp VARCHAR(50),
+    @thoi_gian_phut INT = 5
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        -- Hủy bỏ các OTP cũ của email cho loại nghiệp vụ này
+        UPDATE Xac_Thuc_OTP 
+        SET da_xac_thuc = 1 
+        WHERE email = @email AND loai_otp = @loai_otp AND da_xac_thuc = 0;
+
+        -- Tạo bản ghi OTP mới
+        INSERT INTO Xac_Thuc_OTP (email, ma_otp, loai_otp, het_han_luc, da_xac_thuc, ngay_tao)
+        VALUES (
+            @email, 
+            @ma_otp, 
+            @loai_otp, 
+            DATEADD(MINUTE, ISNULL(@thoi_gian_phut, 5), GETDATE()), 
+            0, 
+            GETDATE()
+        );
+
+        SELECT 
+            SCOPE_IDENTITY() AS id,
+            @email AS email,
+            @ma_otp AS ma_otp,
+            @loai_otp AS loai_otp,
+            DATEADD(MINUTE, ISNULL(@thoi_gian_phut, 5), GETDATE()) AS het_han_luc,
+            N'Tạo mã OTP thành công' AS thong_bao;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 36.2. Thủ tục Kiểm tra & Xác thực mã OTP
+CREATE OR ALTER PROCEDURE sp_KiemTraOTP
+    @email VARCHAR(255),
+    @ma_otp VARCHAR(10),
+    @loai_otp VARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @id INT, @het_han_luc DATETIME, @da_xac_thuc BIT;
+
+    SELECT TOP 1 
+        @id = id, 
+        @het_han_luc = het_han_luc, 
+        @da_xac_thuc = da_xac_thuc
+    FROM Xac_Thuc_OTP
+    WHERE email = @email AND loai_otp = @loai_otp AND ma_otp = @ma_otp
+    ORDER BY id DESC;
+
+    IF @id IS NULL
+    BEGIN
+        SELECT 0 AS hop_le, N'Mã OTP không chính xác!' AS thong_bao;
+        RETURN;
+    END;
+
+    IF @het_han_luc < GETDATE()
+    BEGIN
+        SELECT 0 AS hop_le, N'Mã OTP đã hết hiệu lực (quá hạn)! Vui lòng lấy mã mới.' AS thong_bao;
+        RETURN;
+    END;
+
+    IF @da_xac_thuc = 1
+    BEGIN
+        SELECT 0 AS hop_le, N'Mã OTP này đã được sử dụng trước đó!' AS thong_bao;
+        RETURN;
+    END;
+
+    -- Đánh dấu đã xác thực thành công
+    UPDATE Xac_Thuc_OTP
+    SET da_xac_thuc = 1
+    WHERE id = @id;
+
+    SELECT 1 AS hop_le, N'Xác thực mã OTP thành công!' AS thong_bao;
+END;
+GO
+
+-- 36.3. Thủ tục Đổi Mật Khẩu Người Dùng
+CREATE OR ALTER PROCEDURE sp_DoiMatKhau
+    @email VARCHAR(255),
+    @mat_khau_moi VARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Nguoi_Dung WHERE email = @email)
+        BEGIN
+            ;THROW 50006, N'Không tìm thấy tài khoản với email này trong hệ thống!', 1;
+        END;
+
+        UPDATE Nguoi_Dung
+        SET mat_khau = @mat_khau_moi
+        WHERE email = @email;
+
+        SELECT 1 AS thanh_cong, N'Đổi mật khẩu thành công!' AS thong_bao;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 36.4. Thủ tục Cập Nhật Email Người Dùng
+CREATE OR ALTER PROCEDURE sp_CapNhatEmailNguoiDung
+    @id INT,
+    @email_moi VARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Nguoi_Dung WHERE id = @id)
+        BEGIN
+            ;THROW 50007, N'Người dùng không tồn tại!', 1;
+        END;
+
+        IF EXISTS (SELECT 1 FROM Nguoi_Dung WHERE email = @email_moi AND id <> @id)
+        BEGIN
+            ;THROW 50008, N'Địa chỉ Gmail này đã được đăng ký bởi tài khoản khác!', 1;
+        END;
+
+        UPDATE Nguoi_Dung
+        SET email = @email_moi
+        WHERE id = @id;
+
+        SELECT 
+            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, 
+            nd.MaVaiTro, vt.TenVaiTro AS vai_tro, nd.anh_dai_dien
+        FROM Nguoi_Dung nd
+        LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+        WHERE nd.id = @id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 37. THỦ TỤC ĐỒNG BỘ THƯƠNG HIỆU SPORT247 TRONG TOÀN BỘ CƠ SỞ DỮ LIỆU
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_CapNhatTenThuongHieuSport247
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        -- 1. Cập nhật bảng About_Us
+        IF OBJECT_ID('About_Us', 'U') IS NOT NULL
+        BEGIN
+            UPDATE About_Us
+            SET ten_trung_tam = REPLACE(REPLACE(ten_trung_tam, 'Soccer247', 'Sport247'), 'SOCCER247', 'SPORT247'),
+                gioi_thieu_ngan = REPLACE(REPLACE(gioi_thieu_ngan, 'Soccer247', 'Sport247'), 'SOCCER247', 'SPORT247'),
+                bai_viet_about_us = REPLACE(REPLACE(bai_viet_about_us, 'Soccer247', 'Sport247'), 'SOCCER247', 'SPORT247'),
+                link_facebook = REPLACE(link_facebook, 'soccer247', 'sport247');
+        END;
+
+        -- 2. Cập nhật bảng Lien_He
+        IF OBJECT_ID('Lien_He', 'U') IS NOT NULL
+        BEGIN
+            UPDATE Lien_He
+            SET tieu_de = REPLACE(REPLACE(tieu_de, 'Soccer247', 'Sport247'), 'Soccer 247', 'Sport 247'),
+                noi_dung = REPLACE(REPLACE(noi_dung, 'Soccer247', 'Sport247'), 'Soccer 247', 'Sport 247'),
+                noi_dung_tra_loi = REPLACE(REPLACE(noi_dung_tra_loi, 'Soccer247', 'Sport247'), 'Soccer 247', 'Sport 247');
+        END;
+
+        -- 3. Cập nhật bảng Tin_Tuc
+        IF OBJECT_ID('Tin_Tuc', 'U') IS NOT NULL
+        BEGIN
+            UPDATE Tin_Tuc
+            SET tieu_de = REPLACE(REPLACE(tieu_de, 'Soccer247', 'Sport247'), 'Soccer 247', 'Sport 247'),
+                tom_tat = REPLACE(REPLACE(tom_tat, 'Soccer247', 'Sport247'), 'Soccer 247', 'Sport 247'),
+                noi_dung = REPLACE(REPLACE(noi_dung, 'Soccer247', 'Sport247'), 'Soccer 247', 'Sport 247');
+        END;
+
+        SELECT 1 AS thanh_cong, N'Đã đồng bộ thương hiệu Sport247 trên toàn bộ CSDL thành công!' AS thong_bao;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
 END;
 GO
 

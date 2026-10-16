@@ -67,8 +67,8 @@ export default function Footer() {
     };
   }, []);
 
-  const tenTrungTam = aboutData?.ten_trung_tam || 'SOCCER247';
-  const gioiThieu = aboutData?.gioi_thieu_ngan || 'Trung tâm thể thao đa năng hiện đại. Toàn bộ quy trình đặt sân, tính giá và thanh toán được quản lý tự động bởi hệ thống Soccer247.';
+  const tenTrungTam = aboutData?.ten_trung_tam || 'SPORT247';
+  const gioiThieu = aboutData?.gioi_thieu_ngan || 'Trung tâm thể thao đa năng hiện đại. Toàn bộ quy trình đặt sân, tính giá và thanh toán được quản lý tự động bởi hệ thống Sport247.';
   const hotline = aboutData?.hotline || '0816344504';
   const email = aboutData?.email || 'sinhvienxoan@gmail.com';
   const diaChi = aboutData?.dia_chi || 'Biên Hòa - Đồng Nai';
@@ -92,7 +92,7 @@ export default function Footer() {
                 <SoccerBallIcon className="w-6 h-6" />
               </div>
               <span className={`text-2xl font-black tracking-wide ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                {tenTrungTam.toUpperCase().includes('SOCCER') ? (
+                {tenTrungTam.includes('247') ? (
                   <>
                     {tenTrungTam.split(/(247)/i)[0]}
                     <span className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}>247</span>
