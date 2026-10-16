@@ -772,7 +772,14 @@ export default function HomePage() {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  // Xử lý khi thanh toán MB Bank PayOS thành công
+  // ===================================================================================
+  // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 6A]: XỬ LÝ KHI THANH TOÁN THÀNH CÔNG (MB BANK -> PAYOS)
+  // - Kích hoạt khi Socket.io nhận sự kiện 'payment_success' từ Webhook Backend
+  //   hoặc khi Polling checkPayOSStatus phát hiện trạng thái 'PAID'
+  // - Cập nhật giao diện: Tải lại ma trận lịch sân (chuyển sang màu VÀNG/ĐỎ cho toàn bộ người dùng)
+  // - Phát sự kiện 'unlock_all' giải phóng cờ giữ chỗ tạm thời trên RAM
+  // - Bật màn hình thông báo Đặt sân & Thanh toán thành công, đếm ngược 10 giây tự đóng
+  // ===================================================================================
   const handlePaymentSuccessAction = (info?: any) => {
     setIsPaymentSuccess(true);
     setSuccessCountdown(10);
@@ -819,7 +826,12 @@ export default function HomePage() {
     setIsPaymentSuccess(false);
   };
 
-  // Kiểm tra trạng thái giao dịch PayOS
+  // ===================================================================================
+  // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 6B]: POLLING KIỂM TRA ĐỐI SOÁT TRẠNG THÁI PAYOS (DỰ PHÒNG)
+  // - Định kỳ gọi GET /api/thanh-toan/payos/trang-thai/:orderCode
+  // - Backend kiểm tra với PayOS API, đối soát nội dung sao kê (DS<ma_don>),
+  //   gọi Stored Procedure sp_ThanhToanDon và bắn tín hiệu Socket.io
+  // ===================================================================================
   const checkPayOSStatus = async (orderCode: number, manual: boolean = false) => {
     if (!orderCode) return;
     if (manual) {
@@ -880,7 +892,12 @@ export default function HomePage() {
     }
   };
 
-  // Hàm đóng Modal đặt sân và giải phóng ô đang giữ chỗ Real-time & hủy đơn tạm nếu chưa thanh toán
+  // ===================================================================================
+  // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 7]: KHÁCH HÀNG ĐÓNG MODAL / HỦY ĐẶT SÂN
+  // - Phát tín hiệu Socket.io 'unlock_all' để nhả ngay các ô slot bị giữ trên RAM cho khách khác
+  // - Gửi POST /api/thanh-toan/payos/huy-don-tam để xóa/hủy đơn tạm thời trong CSDL SQL Server
+  // - Reset các state liên quan để màn hình sẵn sàng cho lần đặt kế tiếp
+  // ===================================================================================
   const handleCloseBookingModal = () => {
     if (successTimerRef.current) clearTimeout(successTimerRef.current);
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
@@ -1011,7 +1028,12 @@ export default function HomePage() {
     }
   };
 
-  // Mở Modal đặt sân khi click vào ô Slot Sân Trống (Kèm Khóa Real-time)
+  // ===================================================================================
+  // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 1]: KHÁCH HÀNG CHỌN Ô SLOT TRÊN MA TRẬN LỊCH SÂN
+  // - Kiểm tra đăng nhập, kiểm tra slot quá khứ, kiểm tra xung đột với đơn đã đặt
+  // - Phát sự kiện Socket.io 'lock_slots' để khóa ô thời gian thực, chống xung đột (race condition)
+  // - Mở Modal Đặt Sân ở bước chọn thời lượng ('DURATION')
+  // ===================================================================================
   const handleSlotClick = (san: SanBong, slot: { start: string; end: string; label: string }) => {
     // 0. Kiểm tra nếu khung giờ đã trôi qua -> Không cho chọn
     if (isSlotInThePast(slot.start)) {
@@ -1097,11 +1119,11 @@ export default function HomePage() {
     }));
   };
 
-  /**
-   * Chọn thời lượng đặt sân (1 Tiếng, 1 Tiếng 30 Phút, 2 Tiếng)
-   * Tự động tính toán lại tất cả các ô slot cần khóa và phát tín hiệu Socket.IO
-   * để Khách hàng 2 nhìn thấy các ô chuyển sang MÀU CAM Real-time
-   */
+  // ===================================================================================
+  // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 2]: CHỌN THỜI LƯỢNG ĐÁ (60p, 90p, 120p,...)
+  // - Tính toán lại các ô slot 30 phút tương ứng
+  // - Phát tín hiệu Socket.io 'lock_slots' để khóa đồng loạt các ô này trên màn hình các khách khác
+  // ===================================================================================
   const handleSelectDuration = (durationMin: number) => {
     if (!selectedSlot) return;
     const newEndTime = addMinutesToTime(selectedSlot.slot.start, durationMin);
@@ -1129,7 +1151,11 @@ export default function HomePage() {
     });
   };
 
-  // Thay đổi số lượng dịch vụ chọn thêm
+  // ===================================================================================
+  // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 3]: CHỌN DỊCH VỤ ĐI KÈM & TỰ ĐỘNG TÍNH TIỀN
+  // - Cho phép chọn nước uống, áo bib, trọng tài, bóng thi đấu
+  // - Tự động tính: Tổng tiền = Tiền sân + Tiền dịch vụ; Tiền thanh toán = 30% (Cọc) hoặc 100%
+  // ===================================================================================
   const handleQuantityChange = (dichVuId: number, delta: number) => {
     setBookingForm((prev) => {
       const current = prev.dich_vu_chon[dichVuId] || 0;
@@ -1167,7 +1193,11 @@ export default function HomePage() {
     };
   }, [selectedSlot, bookingForm.dich_vu_chon, bookingForm.loai_thanh_toan, dichVuList]);
 
-  // Chuyển từ Bước 1 (DURATION) sang Bước 2 (INFO)
+  // ===================================================================================
+  // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 4]: XÁC NHẬN THỜI LƯỢNG & CHUYỂN SANG NHẬP THÔNG TIN KHÁCH
+  // - Kiểm tra lại xung đột khung giờ đá với các đơn khác trong ngày
+  // - Chuyển sang Bước 2 ('INFO') để điền họ tên, số điện thoại, ghi chú, hình thức thanh toán
+  // ===================================================================================
   const handleProceedToInfo = () => {
     if (!selectedSlot) return;
     if (checkConflictForSan(selectedSlot.san.id, selectedSlot.slot.start, selectedSlot.durationMin)) {
@@ -1180,7 +1210,13 @@ export default function HomePage() {
     setBookingStep('INFO');
   };
 
-  // Chuyển sang màn hình Quét mã QR thanh toán PayOS VietQR MB Bank (Bước 3: QR)
+  // ===================================================================================
+  // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 5]: TẠO ĐƠN TẠM THỜI VÀ SINH MÃ THANH TOÁN VIETQR PAYOS (MB BANK)
+  // - Gửi POST /api/thanh-toan/payos/tao-link kèm dữ liệu đặt sân và số tiền thanh toán (cọc 30% hoặc 100%)
+  // - Backend chạy Stored Procedure sp_DatSan lưu đơn tạm trạng thái 'CHO_THANH_TOAN'
+  // - Backend gọi PayOS SDK sinh mã VietQR động chứa số tài khoản MB Bank + số tiền chuẩn xác
+  // - Frontend chuyển sang Bước 3 ('QR') hiển thị mã VietQR kèm đếm ngược 10 phút
+  // ===================================================================================
   const handleProceedToQR = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSlot) return;

@@ -44,6 +44,19 @@ export const cleanTimeForSql = (val: any, fallback: string = '00:00:00'): string
     return fallback;
 };
 
+export const cleanDateForSql = (val: any): string => {
+    if (!val) return new Date().toISOString().substring(0, 10);
+    const s = String(val).trim().split('T')[0];
+    if (s.includes('/')) {
+        const parts = s.split('/');
+        if (parts.length === 3) {
+            if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+    }
+    return s.substring(0, 10);
+};
+
 /**
  * 1. Lấy danh sách tất cả các sân bóng
  * Method: GET /api/dat-san/danh-sach-san
@@ -1391,7 +1404,7 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
             so_tien_val = 0;
         }
 
-        const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
+        const ngay_da_clean = cleanDateForSql(ngay_da);
         const gio_bd_clean = cleanTimeForSql(gio_bat_dau, '17:00:00');
         const gio_kt_clean = cleanTimeForSql(gio_ket_thuc, '18:30:00');
 
@@ -1413,7 +1426,7 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
             .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
             .input('loai_thanh_toan', sql.VarChar(20), loai_tt_val)
             .input('so_tien', sql.Decimal(10, 2), so_tien_val)
-            .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || (trang_thai_chuan === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'))
+            .input('trang_thai_gd', sql.VarChar(20), (trang_thai_chuan === 'DA_THANH_TOAN' || trang_thai_chuan === 'DA_COC') ? 'THANH_CONG' : (trang_thai_gd === 'CHO_XU_LY' ? 'DANG_CHO' : (trang_thai_gd || 'DANG_CHO')))
             .input('ten_khach_hang', sql.NVarChar(100), tenKhach || null)
             .input('so_dien_thoai', sql.VarChar(20), sdtKhach || null)
             .execute('sp_ThemDonDatVaThanhToan');
@@ -1495,7 +1508,7 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
             so_tien_val = 0;
         }
 
-        const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
+        const ngay_da_clean = cleanDateForSql(ngay_da);
         const gio_bd_clean = cleanTimeForSql(gio_bat_dau, '17:00:00');
         const gio_kt_clean = cleanTimeForSql(gio_ket_thuc, '18:30:00');
 
@@ -1516,7 +1529,7 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
             .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
             .input('loai_thanh_toan', sql.VarChar(20), loai_tt_val)
             .input('so_tien', sql.Decimal(10, 2), so_tien_val)
-            .input('trang_thai_gd', sql.VarChar(20), trang_thai_gd || (trang_thai_chuan === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'))
+            .input('trang_thai_gd', sql.VarChar(20), (trang_thai_chuan === 'DA_THANH_TOAN' || trang_thai_chuan === 'DA_COC') ? 'THANH_CONG' : (trang_thai_gd === 'CHO_XU_LY' ? 'DANG_CHO' : (trang_thai_gd || 'DANG_CHO')))
             .input('ten_khach_hang', sql.NVarChar(100), tenKhach || null)
             .input('so_dien_thoai', sql.VarChar(20), sdtKhach || null)
             .execute('sp_SuaDonDatVaThanhToan');

@@ -15,11 +15,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.xoaVaiTro = exports.suaVaiTro = exports.themVaiTro = exports.layDanhSachVaiTro = exports.xoaNguoiDung = exports.suaNguoiDung = exports.layDanhSachNguoiDung = exports.layThongTinCaNhan = exports.dangNhap = exports.dangKy = void 0;
+exports.capNhatEmail = exports.doiMatKhau = exports.xacThucOTP = exports.guiMaOTP = exports.xoaVaiTro = exports.suaVaiTro = exports.themVaiTro = exports.layDanhSachVaiTro = exports.xoaNguoiDung = exports.suaNguoiDung = exports.layDanhSachNguoiDung = exports.layThongTinCaNhan = exports.dangNhap = exports.dangKy = void 0;
 const db_1 = require("../config/db");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const emailService_1 = require("../services/emailService");
 dotenv_1.default.config();
 /**
  * 1. Đăng ký tài khoản người dùng mới (Lưu trực tiếp vào CSDL SQL Server)
@@ -28,7 +29,7 @@ dotenv_1.default.config();
  */
 const dangKy = async (req, res) => {
     try {
-        const { ho_ten, email, so_dien_thoai, mat_khau, vai_tro, anh_dai_dien } = req.body;
+        const { ho_ten, email, so_dien_thoai, mat_khau, vai_tro, anh_dai_dien, ma_otp } = req.body;
         // Kiểm tra dữ liệu đầu vào bắt buộc
         if (!ho_ten || !email || !mat_khau) {
             return res.status(400).json({
@@ -45,11 +46,31 @@ const dangKy = async (req, res) => {
         }
         // Chuẩn hóa định dạng email (viết thường và xóa khoảng trắng thừa)
         const normalizedEmail = email.toLowerCase().trim();
+        const pool = await db_1.poolPromise;
+        // Nếu client truyền mã OTP (ví dụ từ form Đăng ký trên web), kiểm tra tính hợp lệ qua sp_KiemTraOTP
+        if (ma_otp) {
+            try {
+                const otpCheck = await pool.request()
+                    .input('email', db_1.sql.VarChar(255), normalizedEmail)
+                    .input('ma_otp', db_1.sql.VarChar(10), String(ma_otp).trim())
+                    .input('loai_otp', db_1.sql.VarChar(50), 'DANG_KY')
+                    .execute('sp_KiemTraOTP');
+                const checkRes = otpCheck.recordset && otpCheck.recordset[0];
+                if (!checkRes || checkRes.hop_le !== 1) {
+                    return res.status(400).json({
+                        success: false,
+                        message: checkRes?.thong_bao || 'Mã OTP không hợp lệ hoặc đã hết hạn!'
+                    });
+                }
+            }
+            catch (otpErr) {
+                console.warn('Lỗi kiểm tra OTP sp_KiemTraOTP:', otpErr.message);
+            }
+        }
         // Mã hóa mật khẩu bảo mật bằng bcryptjs trước khi lưu vào SQL Server
         const salt = await bcryptjs_1.default.genSalt(10);
         const hashedPassword = await bcryptjs_1.default.hash(mat_khau, salt);
         // Gọi Stored Procedure sp_ThemNguoiDung để lưu vào CSDL SQL Server
-        const pool = await db_1.poolPromise;
         try {
             const result = await pool.request()
                 .input('ho_ten', db_1.sql.NVarChar(100), ho_ten.trim())
@@ -586,3 +607,292 @@ const xoaVaiTro = async (req, res) => {
     }
 };
 exports.xoaVaiTro = xoaVaiTro;
+/**
+ * 11. Gửi mã OTP xác thực qua Gmail (Đăng ký, Đổi mật khẩu, Cập nhật Email)
+ * Method: POST /api/auth/send-otp
+ * Procedure: sp_LuuMaOTP
+ */
+const guiMaOTP = async (req, res) => {
+    try {
+        const { email, loai_otp, ho_ten } = req.body;
+        if (!email || !email.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp địa chỉ Email!'
+            });
+        }
+        const validTypes = ['DANG_KY', 'DOI_MAT_KHAU', 'CAP_NHAT_EMAIL'];
+        if (!loai_otp || !validTypes.includes(loai_otp)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Loại mã OTP không hợp lệ (DANG_KY, DOI_MAT_KHAU, CAP_NHAT_EMAIL)!'
+            });
+        }
+        const normalizedEmail = email.toLowerCase().trim();
+        const pool = await db_1.poolPromise;
+        // Kiểm tra nghiệp vụ theo từng loại OTP
+        if (loai_otp === 'DANG_KY') {
+            const checkUser = await pool.request()
+                .input('email', db_1.sql.VarChar(255), normalizedEmail)
+                .query('SELECT TOP 1 id FROM Nguoi_Dung WHERE email = @email');
+            if (checkUser.recordset && checkUser.recordset.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Địa chỉ Email này đã được đăng ký! Vui lòng chọn đăng nhập hoặc dùng email khác.'
+                });
+            }
+        }
+        else if (loai_otp === 'DOI_MAT_KHAU') {
+            const checkUser = await pool.request()
+                .input('email', db_1.sql.VarChar(255), normalizedEmail)
+                .query('SELECT TOP 1 id, ho_ten FROM Nguoi_Dung WHERE email = @email');
+            if (!checkUser.recordset || checkUser.recordset.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Không tìm thấy tài khoản nào khớp với địa chỉ Email này!'
+                });
+            }
+        }
+        else if (loai_otp === 'CAP_NHAT_EMAIL') {
+            const currentUserId = req.user?.id;
+            const checkUser = await pool.request()
+                .input('email', db_1.sql.VarChar(255), normalizedEmail)
+                .query('SELECT TOP 1 id FROM Nguoi_Dung WHERE email = @email');
+            if (checkUser.recordset && checkUser.recordset.length > 0) {
+                if (!currentUserId || checkUser.recordset[0].id !== currentUserId) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Địa chỉ Email này đã được sử dụng bởi một tài khoản khác!'
+                    });
+                }
+            }
+        }
+        // Sinh mã OTP 6 số ngẫu nhiên
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        // Lưu vào CSDL SQL Server qua Stored Procedure sp_LuuMaOTP
+        await pool.request()
+            .input('email', db_1.sql.VarChar(255), normalizedEmail)
+            .input('ma_otp', db_1.sql.VarChar(10), otpCode)
+            .input('loai_otp', db_1.sql.VarChar(50), loai_otp)
+            .input('thoi_gian_phut', db_1.sql.Int, 5)
+            .execute('sp_LuuMaOTP');
+        // Gửi mã OTP về Gmail người dùng qua nodemailer
+        const sent = await (0, emailService_1.sendOtpEmail)({
+            toEmail: normalizedEmail,
+            otpCode,
+            purpose: loai_otp,
+            userName: ho_ten || req.user?.ho_ten || 'Quý khách'
+        });
+        if (!sent) {
+            return res.status(500).json({
+                success: false,
+                message: 'Không thể gửi email OTP lúc này. Vui lòng kiểm tra lại địa chỉ email hoặc kết nối mạng!'
+            });
+        }
+        return res.status(200).json({
+            success: true,
+            message: `Mã OTP xác thực gồm 6 chữ số đã được gửi tới Gmail: ${normalizedEmail}. Mã có hiệu lực trong 5 phút!`
+        });
+    }
+    catch (error) {
+        console.error('Lỗi guiMaOTP:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Lỗi xử lý gửi mã OTP'
+        });
+    }
+};
+exports.guiMaOTP = guiMaOTP;
+/**
+ * 12. Xác thực mã OTP
+ * Method: POST /api/auth/verify-otp
+ * Procedure: sp_KiemTraOTP
+ */
+const xacThucOTP = async (req, res) => {
+    try {
+        const { email, ma_otp, loai_otp } = req.body;
+        if (!email || !ma_otp || !loai_otp) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ: Email, Mã OTP và Loại xác thực!'
+            });
+        }
+        const normalizedEmail = email.toLowerCase().trim();
+        const pool = await db_1.poolPromise;
+        const result = await pool.request()
+            .input('email', db_1.sql.VarChar(255), normalizedEmail)
+            .input('ma_otp', db_1.sql.VarChar(10), String(ma_otp).trim())
+            .input('loai_otp', db_1.sql.VarChar(50), loai_otp)
+            .execute('sp_KiemTraOTP');
+        const row = result.recordset && result.recordset[0];
+        if (!row || row.hop_le !== 1) {
+            return res.status(400).json({
+                success: false,
+                message: row?.thong_bao || 'Mã OTP không chính xác hoặc đã hết hiệu lực!'
+            });
+        }
+        return res.status(200).json({
+            success: true,
+            message: row.thong_bao || 'Xác thực mã OTP thành công!'
+        });
+    }
+    catch (error) {
+        console.error('Lỗi xacThucOTP:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Lỗi xác thực mã OTP'
+        });
+    }
+};
+exports.xacThucOTP = xacThucOTP;
+/**
+ * 13. Đổi mật khẩu tài khoản (Hỗ trợ xác thực mã OTP qua Gmail hoặc Mật khẩu cũ)
+ * Method: POST /api/auth/change-password
+ * Procedure: sp_DoiMatKhau
+ */
+const doiMatKhau = async (req, res) => {
+    try {
+        const { email, ma_otp, mat_khau_cu, mat_khau_moi } = req.body;
+        const targetEmail = (email || req.user?.email || '').toLowerCase().trim();
+        if (!targetEmail) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp địa chỉ Email cần đổi mật khẩu!'
+            });
+        }
+        if (!mat_khau_moi || mat_khau_moi.trim().length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mật khẩu mới phải có tối thiểu 6 ký tự!'
+            });
+        }
+        const pool = await db_1.poolPromise;
+        // Nếu có mã OTP -> Xác thực bằng OTP qua sp_KiemTraOTP
+        if (ma_otp) {
+            const otpRes = await pool.request()
+                .input('email', db_1.sql.VarChar(255), targetEmail)
+                .input('ma_otp', db_1.sql.VarChar(10), String(ma_otp).trim())
+                .input('loai_otp', db_1.sql.VarChar(50), 'DOI_MAT_KHAU')
+                .execute('sp_KiemTraOTP');
+            const check = otpRes.recordset && otpRes.recordset[0];
+            if (!check || check.hop_le !== 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: check?.thong_bao || 'Mã OTP xác thực không hợp lệ hoặc đã hết hạn!'
+                });
+            }
+        }
+        else if (mat_khau_cu) {
+            // Xác thực bằng mật khẩu cũ nếu không có OTP
+            const userRes = await pool.request()
+                .input('email', db_1.sql.VarChar(255), targetEmail)
+                .query('SELECT TOP 1 id, mat_khau FROM Nguoi_Dung WHERE email = @email');
+            if (!userRes.recordset || userRes.recordset.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Không tìm thấy tài khoản!'
+                });
+            }
+            const currentDbPass = userRes.recordset[0].mat_khau;
+            let isOldMatch = false;
+            try {
+                isOldMatch = await bcryptjs_1.default.compare(mat_khau_cu, currentDbPass);
+            }
+            catch {
+                isOldMatch = false;
+            }
+            if (!isOldMatch && currentDbPass === mat_khau_cu) {
+                isOldMatch = true;
+            }
+            if (!isOldMatch) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Mật khẩu hiện tại không chính xác!'
+                });
+            }
+        }
+        else {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp Mã OTP gửi qua Gmail hoặc Mật khẩu hiện tại!'
+            });
+        }
+        // Mã hóa mật khẩu mới bằng bcrypt
+        const salt = await bcryptjs_1.default.genSalt(10);
+        const hashedPassword = await bcryptjs_1.default.hash(mat_khau_moi.trim(), salt);
+        // Cập nhật qua Stored Procedure sp_DoiMatKhau
+        await pool.request()
+            .input('email', db_1.sql.VarChar(255), targetEmail)
+            .input('mat_khau_moi', db_1.sql.VarChar(255), hashedPassword)
+            .execute('sp_DoiMatKhau');
+        return res.status(200).json({
+            success: true,
+            message: 'Đổi mật khẩu thành công! Bạn có thể sử dụng mật khẩu mới để đăng nhập.'
+        });
+    }
+    catch (error) {
+        console.error('Lỗi doiMatKhau:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Lỗi khi đổi mật khẩu'
+        });
+    }
+};
+exports.doiMatKhau = doiMatKhau;
+/**
+ * 14. Cập nhật địa chỉ Gmail mới kèm xác thực OTP
+ * Method: POST /api/auth/update-email
+ * Procedure: sp_CapNhatEmailNguoiDung
+ */
+const capNhatEmail = async (req, res) => {
+    try {
+        const { email_moi, ma_otp } = req.body;
+        const userId = req.user?.id;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: 'Vui lòng đăng nhập để thực hiện thao tác này!'
+            });
+        }
+        if (!email_moi || !email_moi.trim() || !ma_otp) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp địa chỉ Gmail mới và Mã OTP xác thực!'
+            });
+        }
+        const cleanEmail = email_moi.toLowerCase().trim();
+        const pool = await db_1.poolPromise;
+        // Xác thực mã OTP qua Stored Procedure sp_KiemTraOTP
+        const otpCheck = await pool.request()
+            .input('email', db_1.sql.VarChar(255), cleanEmail)
+            .input('ma_otp', db_1.sql.VarChar(10), String(ma_otp).trim())
+            .input('loai_otp', db_1.sql.VarChar(50), 'CAP_NHAT_EMAIL')
+            .execute('sp_KiemTraOTP');
+        const row = otpCheck.recordset && otpCheck.recordset[0];
+        if (!row || row.hop_le !== 1) {
+            return res.status(400).json({
+                success: false,
+                message: row?.thong_bao || 'Mã OTP không chính xác hoặc đã hết hiệu lực!'
+            });
+        }
+        // Cập nhật email trong SQL Server qua Stored Procedure sp_CapNhatEmailNguoiDung
+        const updateRes = await pool.request()
+            .input('id', db_1.sql.Int, userId)
+            .input('email_moi', db_1.sql.VarChar(255), cleanEmail)
+            .execute('sp_CapNhatEmailNguoiDung');
+        const updatedUser = updateRes.recordset && updateRes.recordset[0];
+        return res.status(200).json({
+            success: true,
+            message: `Cập nhật địa chỉ Gmail thành công thành: ${cleanEmail}!`,
+            data: updatedUser
+        });
+    }
+    catch (error) {
+        console.error('Lỗi capNhatEmail:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi cập nhật Gmail'
+        });
+    }
+};
+exports.capNhatEmail = capNhatEmail;

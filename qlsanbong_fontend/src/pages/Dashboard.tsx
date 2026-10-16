@@ -2422,18 +2422,22 @@ export default function AdminDashboard() {
 
     let finalLoaiTT = loai_thanh_toan;
     let finalSoTien = (so_tien !== undefined && so_tien !== null) ? Number(so_tien) : undefined;
+    let finalTrangThaiGd = 'DANG_CHO';
 
     if (statusVal === 'DA_THANH_TOAN') {
       finalLoaiTT = 'TRA_HET';
       if (finalSoTien === undefined) finalSoTien = totalTongTien;
+      finalTrangThaiGd = 'THANH_CONG';
     } else if (statusVal === 'DA_COC') {
       finalLoaiTT = 'DAT_COC';
       if (finalSoTien === undefined || finalSoTien === 0) {
         finalSoTien = Math.round(totalTongTien * 0.3);
       }
+      finalTrangThaiGd = 'THANH_CONG';
     } else {
       finalLoaiTT = null as any;
       finalSoTien = 0;
+      finalTrangThaiGd = (trang_thai_gd && trang_thai_gd !== 'CHO_XU_LY') ? trang_thai_gd : 'DANG_CHO';
     }
 
     try {
@@ -2454,7 +2458,7 @@ export default function AdminDashboard() {
             phuong_thuc: phuong_thuc || 'TIEN_MAT',
             loai_thanh_toan: finalLoaiTT,
             so_tien: finalSoTien,
-            trang_thai_gd: trang_thai_gd || (statusVal === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'),
+            trang_thai_gd: finalTrangThaiGd,
             dich_vu_list: dich_vu_list || []
           })
         });
@@ -2485,7 +2489,7 @@ export default function AdminDashboard() {
             phuong_thuc: phuong_thuc || 'TIEN_MAT',
             loai_thanh_toan: finalLoaiTT,
             so_tien: finalSoTien,
-            trang_thai_gd: trang_thai_gd || (statusVal === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'),
+            trang_thai_gd: finalTrangThaiGd,
             dich_vu_list: dich_vu_list || []
           })
         });
@@ -4058,7 +4062,7 @@ export default function AdminDashboard() {
                             phuong_thuc: 'TIEN_MAT',
                             loai_thanh_toan: '',
                             so_tien: 0,
-                            trang_thai_gd: 'CHO_XU_LY',
+                            trang_thai_gd: 'DANG_CHO',
                             ghi_chu: 'Đặt trực tiếp tại quầy',
                             dich_vu_list: []
                           }
@@ -5592,15 +5596,26 @@ export default function AdminDashboard() {
                       </div>
                       <div>
                         <label className="block font-black uppercase mb-1 text-[10px] text-slate-700 dark:text-slate-400 font-medium">Ngày Nhập Kho *</label>
-                        <input
-                          type="date"
-                          value={serviceModal.data.ngay_nhap || new Date().toISOString().split('T')[0]}
-                          onChange={(e) => setServiceModal({
-                            ...serviceModal,
-                            data: { ...serviceModal.data, ngay_nhap: e.target.value }
-                          })}
-                          className={`w-full p-2 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                        />
+                        <div className={`relative flex items-center justify-between p-2 rounded-xl border font-bold cursor-pointer transition-colors ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white hover:border-emerald-500' : 'bg-white border-slate-300 text-[#0f172a] hover:border-emerald-600'}`}>
+                          <span className="font-bold text-xs tracking-wide">
+                            {formatVNDate(serviceModal.data.ngay_nhap || new Date().toISOString().split('T')[0])}
+                          </span>
+                          <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 pointer-events-none" />
+                          <input
+                            type="date"
+                            value={serviceModal.data.ngay_nhap || new Date().toISOString().split('T')[0]}
+                            onClick={(e) => {
+                              try {
+                                (e.target as any).showPicker?.();
+                              } catch (_) { }
+                            }}
+                            onChange={(e) => setServiceModal({
+                              ...serviceModal,
+                              data: { ...serviceModal.data, ngay_nhap: e.target.value }
+                            })}
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          />
+                        </div>
                       </div>
                     </div>
                   )}
@@ -5725,13 +5740,24 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block font-black uppercase mb-1">Ngày Đá *</label>
-                  <input
-                    type="date"
-                    required
-                    value={bookingModal.data.ngay_da ? bookingModal.data.ngay_da.split('T')[0] : new Date().toISOString().split('T')[0]}
-                    onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ngay_da: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  />
+                  <div className={`relative flex items-center justify-between p-2.5 rounded-xl border font-bold cursor-pointer transition-colors ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white hover:border-emerald-500' : 'bg-white border-slate-300 text-[#0f172a] hover:border-emerald-600'}`}>
+                    <span className="font-bold tracking-wide">
+                      {formatVNDate(bookingModal.data.ngay_da ? String(bookingModal.data.ngay_da).split('T')[0] : new Date().toISOString().split('T')[0])}
+                    </span>
+                    <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 pointer-events-none" />
+                    <input
+                      type="date"
+                      required
+                      value={bookingModal.data.ngay_da ? String(bookingModal.data.ngay_da).split('T')[0] : new Date().toISOString().split('T')[0]}
+                      onClick={(e) => {
+                        try {
+                          (e.target as any).showPicker?.();
+                        } catch (_) { }
+                      }}
+                      onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ngay_da: e.target.value } })}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block font-black uppercase mb-1 flex items-center gap-1">
@@ -6054,15 +6080,19 @@ export default function AdminDashboard() {
                     const curTotal = Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0);
                     let nextLoaiTT = '';
                     let nextSoTien = 0;
+                    let nextTrangThaiGd = 'DANG_CHO';
                     if (nextStatus === 'DA_THANH_TOAN') {
                       nextLoaiTT = 'TRA_HET';
                       nextSoTien = curTotal;
+                      nextTrangThaiGd = 'THANH_CONG';
                     } else if (nextStatus === 'DA_COC') {
                       nextLoaiTT = 'DAT_COC';
                       nextSoTien = Math.round(curTotal * 0.3);
+                      nextTrangThaiGd = 'THANH_CONG';
                     } else {
                       nextLoaiTT = '';
                       nextSoTien = 0;
+                      nextTrangThaiGd = 'DANG_CHO';
                     }
                     setBookingModal({
                       ...bookingModal,
@@ -6070,7 +6100,8 @@ export default function AdminDashboard() {
                         ...bookingModal.data,
                         trang_thai: nextStatus,
                         loai_thanh_toan: nextLoaiTT,
-                        so_tien: nextSoTien
+                        so_tien: nextSoTien,
+                        trang_thai_gd: nextTrangThaiGd
                       }
                     });
                   }}

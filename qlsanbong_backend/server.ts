@@ -96,10 +96,14 @@ app.set('io', io);
 
 /**
  * =====================================================================
+ * [LUỒNG ĐẶT LỊCH ONLINE - KHÓA SLOT REAL-TIME CHỐNG XUNG ĐỘT TRÙNG GIỜ]
  * SOCKET.IO: HỆ THỐNG GIỮ CHỖ THỜI GIAN THỰC (REAL-TIME COURT LOCKING)
- * In-memory Map lưu danh sách các ô slot đang bị giữ chỗ tạm thời
- * Key: slotId (Ví dụ: "2026-10-02_1_06:30")
+ * In-memory Map lưu danh sách các ô slot đang bị giữ chỗ tạm thời trên RAM
+ * Key: slotId (Ví dụ: "2026-10-16_1_17:30")
  * Value: socket.id của khách hàng đang thao tác
+ * - Khách click chọn sân -> emit('lock_slots') -> Server broadcast 'slots_updated'
+ *   -> Khách khác nhìn thấy ô slot chuyển sang màu TÍM/CAM và bị khóa, không thể click.
+ * - Khách hủy / ngắt kết nối -> Tự động xóa khỏi Map và broadcast nhả slot ngay lập tức!
  * =====================================================================
  */
 const lockedSlots = new Map<string, string>();

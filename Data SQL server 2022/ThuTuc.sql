@@ -1046,6 +1046,7 @@ BEGIN
             ISNULL(nd.ho_ten, N'Khách vãng lai') AS ten_khach_hang,
             nd.so_dien_thoai,
             d.ngay_da,
+            CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da_dmy,
             CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
             CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
             d.tien_san,
@@ -1100,6 +1101,7 @@ BEGIN
             nd.ho_ten AS ten_khach_hang,
             nd.so_dien_thoai,
             d.ngay_da,
+            CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da_dmy,
             CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
             CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
             d.tien_san,
@@ -1156,6 +1158,7 @@ BEGIN
             sb.ten_san,
             ls.ten_loai,
             CONVERT(VARCHAR(10), d.ngay_da, 120) AS ngay_da,
+            CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da_dmy,
             CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
             CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
             d.tien_san,
@@ -2017,6 +2020,7 @@ BEGIN
             nd.so_dien_thoai,
             sb.ten_san,
             d.ngay_da,
+            CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da_dmy,
             tt.so_tien,
             tt.phuong_thuc,
             tt.loai_thanh_toan,
@@ -2049,6 +2053,7 @@ BEGIN
             nd.so_dien_thoai,
             sb.ten_san,
             d.ngay_da,
+            CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da_dmy,
             ht.so_tien_hoan,
             ht.ty_le_hoan,
             ht.ly_do_huy,
@@ -2370,6 +2375,20 @@ BEGIN
         BEGIN
             SET @so_tien = @tong_tien_val;
         END;
+        ELSE IF @trang_thai_chuan = 'DA_COC' AND (@so_tien IS NULL OR @so_tien = 0)
+        BEGIN
+            SET @so_tien = ROUND(@tong_tien_val * 0.3, 0);
+        END;
+
+        DECLARE @tt_gd_chuan VARCHAR(20) = 'THANH_CONG';
+        IF @trang_thai_chuan IN ('DA_THANH_TOAN', 'DA_COC', 'DANG_DA')
+        BEGIN
+            SET @tt_gd_chuan = 'THANH_CONG';
+        END
+        ELSE IF @trang_thai_gd IN ('THANH_CONG', 'DANG_CHO', 'CHO_XU_LY', 'THAT_BAI', 'HOAN_TIEN')
+        BEGIN
+            SET @tt_gd_chuan = CASE WHEN @trang_thai_gd = 'CHO_XU_LY' THEN 'DANG_CHO' ELSE @trang_thai_gd END;
+        END;
 
         IF @trang_thai_chuan NOT IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND @so_tien IS NOT NULL AND @so_tien > 0
         BEGIN
@@ -2377,7 +2396,7 @@ BEGIN
                 ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, trang_thai_gd, ngay_thanh_toan
             )
             VALUES (
-                @newId, @phuong_thuc, CASE WHEN @trang_thai_chuan = 'DA_THANH_TOAN' THEN 'TRA_HET' ELSE ISNULL(@loai_thanh_toan, 'DAT_COC') END, @so_tien, CONCAT('GD_', @newId, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @trang_thai_gd, GETDATE()
+                @newId, @phuong_thuc, CASE WHEN @trang_thai_chuan = 'DA_THANH_TOAN' THEN 'TRA_HET' ELSE ISNULL(@loai_thanh_toan, 'DAT_COC') END, @so_tien, CONCAT('GD_', @newId, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE())), @tt_gd_chuan, GETDATE()
             );
         END;
 

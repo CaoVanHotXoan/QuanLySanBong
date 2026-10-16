@@ -161,6 +161,7 @@ export interface DonDatSanPOS {
   gio_bat_dau: string;
   gio_ket_thuc: string;
   ngay_da: string;
+  ngay_da_dmy?: string;
   tien_san: number;
   dich_vu: ServiceItemOrder[];
   tong_tien: number;
@@ -238,6 +239,19 @@ function parseBookingDateISO(rawDate: any): string {
     return `${slashMatch[3]}-${slashMatch[2].padStart(2, '0')}-${slashMatch[1].padStart(2, '0')}`;
   }
   return str.substring(0, 10);
+}
+
+// Helper định dạng ngày YYYY-MM-DD sang DD/MM/YYYY (Ngày/Tháng/Năm chuẩn Việt Nam)
+function formatDateDMY(dateVal?: string | Date | null): string {
+  if (!dateVal) return '';
+  const dateStr = typeof dateVal === 'string' ? dateVal.trim() : (dateVal instanceof Date ? dateVal.toISOString() : String(dateVal).trim());
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateStr)) return dateStr;
+  const raw = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  const parts = raw.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+  }
+  return raw.substring(0, 10);
 }
 
 function isWaitingBookingExpired(order: any, now: Date = new Date()): boolean {
@@ -4834,6 +4848,9 @@ export default function ManagementSystem() {
                         className="bg-transparent font-bold text-emerald-400 focus:outline-none cursor-pointer text-xs"
                       />
                       {historyFilterDate && (
+                        <span className="text-emerald-400 font-bold font-mono text-xs">({formatDateDMY(historyFilterDate)})</span>
+                      )}
+                      {historyFilterDate && (
                         <button type="button" onClick={() => setHistoryFilterDate('')} className="text-slate-400 hover:text-rose-400 cursor-pointer">
                           <X className="w-3 h-3" />
                         </button>
@@ -4955,7 +4972,7 @@ export default function ManagementSystem() {
                                   </div>
                                   <div className={`text-[11px] font-medium mt-0.5 flex items-center gap-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>
                                     <CalendarCheck className="w-2.5 h-2.5 text-slate-400" />
-                                    <span>{(item.ngay_da || '').substring(0, 10)}</span>
+                                    <span>{formatDateDMY(item.ngay_da_dmy || item.ngay_da)}</span>
                                   </div>
                                 </td>
 
@@ -6352,7 +6369,7 @@ export default function ManagementSystem() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Khung giờ đá:</span>
-                      <strong className="text-amber-400 font-mono">{selectedInvoiceDetail.gio_bat_dau} - {selectedInvoiceDetail.gio_ket_thuc} ({selectedInvoiceDetail.ngay_da})</strong>
+                      <strong className="text-amber-400 font-mono">{selectedInvoiceDetail.gio_bat_dau} - {selectedInvoiceDetail.gio_ket_thuc} ({formatDateDMY(selectedInvoiceDetail.ngay_da_dmy || selectedInvoiceDetail.ngay_da)})</strong>
                     </div>
                   </div>
 
@@ -6500,7 +6517,7 @@ export default function ManagementSystem() {
                         <CalendarCheck className="w-3.5 h-3.5 text-emerald-400" /> Ngày đá:
                       </span>
                       <strong className="text-slate-200 font-mono">
-                        {selectedHistoryOrder.ngay_da?.substring(0, 10) || formattedDateISO}
+                        {formatDateDMY(selectedHistoryOrder.ngay_da_dmy || selectedHistoryOrder.ngay_da) || formatDateDMY(formattedDateISO)}
                       </strong>
                     </div>
                   </div>
@@ -6738,7 +6755,7 @@ export default function ManagementSystem() {
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
                               <span className={`flex items-center gap-1 font-mono ${isExpired ? 'text-slate-500 line-through' : 'text-slate-300'}`}>
                                 <CalendarIcon className="w-3 h-3 text-emerald-400" />
-                                {item.ngay_da ? String(item.ngay_da).substring(0, 10) : formattedDateISO}
+                                {formatDateDMY(item.ngay_da_dmy || item.ngay_da) || formatDateDMY(formattedDateISO)}
                               </span>
                               <span className={`flex items-center gap-1 font-mono font-bold ${isExpired ? 'text-slate-500 line-through' : 'text-emerald-400'}`}>
                                 <Clock className="w-3 h-3" />

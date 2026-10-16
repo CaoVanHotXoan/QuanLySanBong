@@ -114,8 +114,16 @@ export const thanhToanDon = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * 2. Tạo link và mã VietQR PayOS MB Bank (Stored Procedure: sp_DatSan & sp_ThemNguoiDung)
- * Method: POST /api/thanh-toan/payos/tao-link
+ * ===================================================================================
+ * [BACKEND LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 1]: TẠO ĐƠN TẠM THỜI & SINH LINK VIETQR PAYOS
+ * API: POST /api/thanh-toan/payos/tao-link
+ * Quy trình:
+ * 1. Kiểm tra tài khoản khách (tìm theo SĐT hoặc gọi sp_ThemNguoiDung nếu là khách mới).
+ * 2. Thực thi Stored Procedure sp_DatSan tạo đơn tạm thời với trạng thái 'CHO_THANH_TOAN'.
+ * 3. Sinh mã giao dịch độc nhất 'orderCode' và nội dung chuyển khoản bắt buộc 'DS<ma_don_dat>'.
+ * 4. Gọi PayOS SDK (payOS.createPaymentLink) kết nối Open Banking sinh mã VietQR MB Bank.
+ * 5. Trả về cho Frontend: qrCode, orderCode, accountNumber, amount, checkoutUrl.
+ * ===================================================================================
  */
 export const taoThanhToanPayOS = async (req: AuthRequest, res: Response) => {
     try {
@@ -286,8 +294,16 @@ export const taoThanhToanPayOS = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * 3. Kiểm tra trạng thái thanh toán PayOS (Stored Procedure: sp_ThanhToanDon)
- * Method: GET /api/thanh-toan/payos/trang-thai/:orderCode
+ * ===================================================================================
+ * [BACKEND LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 2A]: POLLING KIỂM TRA & ĐỐI SOÁT THANH TOÁN
+ * API: GET /api/thanh-toan/payos/trang-thai/:orderCode
+ * Quy trình:
+ * 1. Gọi payOS.getPaymentLinkInformation(orderCode) để tra cứu trạng thái giao dịch từ MB Bank.
+ * 2. Nếu đã trả tiền (isPaid): Đối soát nội dung sao kê xem có chứa đúng cú pháp 'DS<ma_don_dat>'.
+ *    - Nếu sai nội dung: Ghi nhận cảnh báo qua Stored Procedure sp_GhiNhanChuyenKhoanSaiNoiDung.
+ *    - Nếu đúng nội dung: Thực thi Stored Procedure sp_ThanhToanDon cập nhật DA_COC/DA_THANH_TOAN.
+ * 3. Bắn sự kiện Socket.io: 'payment_success' (báo khách thanh toán xong) & 'booking_updated' (báo cập nhật ma trận lịch).
+ * ===================================================================================
  */
 export const kiemTraTrangThaiPayOS = async (req: AuthRequest, res: Response) => {
     try {
@@ -459,8 +475,17 @@ export const kiemTraTrangThaiPayOS = async (req: AuthRequest, res: Response) => 
 };
 
 /**
- * 4. Xử lý Webhook PayOS (Stored Procedure: sp_ThanhToanDon)
- * Method: POST /api/thanh-toan/payos/webhook
+ * ===================================================================================
+ * [BACKEND LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 2B]: TỰ ĐỘNG NHẬN WEBHOOK TỪ PAYOS (MB BANK BÁO CÓ TIỀN)
+ * API: POST /api/thanh-toan/payos/webhook
+ * Quy trình:
+ * 1. Xác thực chữ ký dữ liệu (payOS.verifyPaymentWebhookData) đảm bảo an toàn tuyệt đối.
+ * 2. Trích xuất mã đơn đặt sân từ trường description ('DS<ma_don_dat>').
+ * 3. Đối soát cú pháp chuyển khoản -> Nếu hợp lệ, thực thi sp_ThanhToanDon chốt đơn thành công.
+ * 4. Phát tín hiệu Real-time qua Socket.IO lập tức:
+ *    - 'payment_success': Báo cho trình duyệt của khách hàng tự động đóng QR và hiển thị thành công.
+ *    - 'booking_updated': Báo cho tất cả khách khác và Dashboard nhân viên cập nhật lịch sang màu đỏ/vàng.
+ * ===================================================================================
  */
 export const xuLyWebhookPayOS = async (req: AuthRequest, res: Response) => {
     try {
@@ -767,8 +792,14 @@ export const xoaHoanTien = async (req: AuthRequest, res: Response) => {
 };
 
 /**
- * 9. Hủy đơn đặt sân tạm thời khi khách đóng Modal hoặc nhấn Quay lại
- * Method: POST /api/thanh-toan/payos/huy-don-tam
+ * ===================================================================================
+ * [BACKEND LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 3]: HỦY ĐƠN TẠM THỜI KHI KHÁCH THOÁT / HỦY GIAO DỊCH
+ * API: POST /api/thanh-toan/payos/huy-don-tam
+ * Quy trình:
+ * 1. Nhận ma_don_dat hoặc orderCode từ Client (qua fetch hoặc navigator.sendBeacon).
+ * 2. Thực thi Stored Procedure sp_HuyDonTam để xóa đơn tạm 'CHO_THANH_TOAN' khỏi CSDL.
+ * 3. Phát tín hiệu Socket.io 'booking_updated' để giải phóng slot về màu xanh TRỐNG cho mọi khách.
+ * ===================================================================================
  */
 export const huyDonTamPayOS = async (req: AuthRequest, res: Response) => {
     try {

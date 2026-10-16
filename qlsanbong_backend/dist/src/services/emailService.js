@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendContactReplyEmail = exports.sendContactEmailToAdmin = void 0;
+exports.sendOtpEmail = exports.sendContactReplyEmail = exports.sendContactEmailToAdmin = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 /**
  * Khởi tạo Transporter gửi mail qua SMTP Gmail
@@ -35,7 +35,7 @@ const createTransporter = () => {
 const sendContactEmailToAdmin = async (payload) => {
     try {
         const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.MAIL_USER || 'xoancao2.0@gmail.com';
-        const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Soccer247 <no-reply@soccer247.vn>';
+        const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Sport247 <no-reply@sport247.vn>';
         const transporter = createTransporter();
         const formattedTime = new Date().toLocaleString('vi-VN', {
             timeZone: 'Asia/Ho_Chi_Minh',
@@ -47,7 +47,7 @@ const sendContactEmailToAdmin = async (payload) => {
             minute: '2-digit',
             second: '2-digit'
         });
-        const subject = `⚽ [Soccer247] Liên hệ mới từ: ${payload.ho_ten} - ${payload.tieu_de || 'Đặt sân / Góp ý'}`;
+        const subject = `⚽ [Sport247] Liên hệ mới từ: ${payload.ho_ten} - ${payload.tieu_de || 'Đặt sân / Góp ý'}`;
         const htmlContent = `
       <!DOCTYPE html>
       <html lang="vi">
@@ -74,7 +74,7 @@ const sendContactEmailToAdmin = async (payload) => {
       <body>
         <div class="container">
           <div class="header">
-            <div class="logo">SOCCER<span>247</span></div>
+            <div class="logo">SPORT<span>247</span></div>
             <div class="subtitle">Hệ Thống Quản Lý Đặt Sân Thể Thao</div>
           </div>
           <div class="body">
@@ -114,7 +114,7 @@ const sendContactEmailToAdmin = async (payload) => {
             </div>
           </div>
           <div class="footer">
-            Email tự động được gửi từ hệ thống Soccer247 • Biên Hòa - Đồng Nai<br/>
+            Email tự động được gửi từ hệ thống Sport247 • Biên Hòa - Đồng Nai<br/>
             Vui lòng đăng nhập trang Dashboard Quản trị để theo dõi & cập nhật trạng thái xử lý.
           </div>
         </div>
@@ -141,7 +141,7 @@ exports.sendContactEmailToAdmin = sendContactEmailToAdmin;
  */
 const sendContactReplyEmail = async (payload) => {
     const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.MAIL_USER || 'xoancao2.0@gmail.com';
-    const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Soccer247 <no-reply@soccer247.vn>';
+    const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Sport247 <no-reply@sport247.vn>';
     const transporter = createTransporter();
     const formattedTime = new Date().toLocaleString('vi-VN', {
         timeZone: 'Asia/Ho_Chi_Minh',
@@ -152,7 +152,7 @@ const sendContactReplyEmail = async (payload) => {
         hour: '2-digit',
         minute: '2-digit'
     });
-    const subject = payload.replySubject || `⚽ [Soccer247] Phản hồi yêu cầu: ${payload.originalSubject || 'Liên hệ tư vấn đặt sân'}`;
+    const subject = payload.replySubject || `⚽ [Sport247] Phản hồi yêu cầu: ${payload.originalSubject || 'Liên hệ tư vấn đặt sân'}`;
     // Kiểm tra nếu khách hàng có email hợp lệ
     const customerEmail = payload.toEmail ? payload.toEmail.trim() : '';
     const hasValidEmailFormat = customerEmail && customerEmail.includes('@') && customerEmail.includes('.');
@@ -181,13 +181,13 @@ const sendContactReplyEmail = async (payload) => {
         <body>
           <div class="container">
             <div class="header">
-              <div class="logo">SOCCER<span>247</span></div>
-              <div class="subtitle">Ban Quản Lý Trung Tâm Thể Thao Soccer247</div>
+              <div class="logo">SPORT<span>247</span></div>
+              <div class="subtitle">Ban Quản Lý Trung Tâm Thể Thao Sport247</div>
             </div>
             <div class="body">
               <div class="greeting">Kính gửi quý khách ${payload.customerName},</div>
               <p style="font-size: 14px; color: #334155; line-height: 1.6;">
-                Cảm ơn quý khách đã gửi thông tin liên hệ và quan tâm đến dịch vụ sân bóng của Soccer247. Ban quản lý xin gửi phản hồi giải đáp yêu cầu của quý khách như sau:
+                Cảm ơn quý khách đã gửi thông tin liên hệ và quan tâm đến dịch vụ sân bóng của Sport247. Ban quản lý xin gửi phản hồi giải đáp yêu cầu của quý khách như sau:
               </p>
 
               <div class="reply-box">
@@ -195,11 +195,11 @@ const sendContactReplyEmail = async (payload) => {
               </div>
 
               <p style="font-size: 14px; color: #334155; line-height: 1.6;">
-                Nếu quý khách cần hỗ trợ thêm thông tin hoặc muốn giữ sân thi đấu trực tiếp, vui lòng liên hệ trực tiếp với chúng tôi qua Hotline hoặc truy cập website Soccer247.
+                Nếu quý khách cần hỗ trợ thêm thông tin hoặc muốn giữ sân thi đấu trực tiếp, vui lòng liên hệ trực tiếp với chúng tôi qua Hotline hoặc truy cập website Sport247.
               </p>
 
               <div style="text-align: center;">
-                <a href="https://soccer247.vn" class="action-btn">⚽ Truy Cập Đặt Sân Online</a>
+                <a href="https://sport247.vn" class="action-btn">⚽ Truy Cập Đặt Sân Online</a>
               </div>
 
               <div class="quote-box">
@@ -208,7 +208,7 @@ const sendContactReplyEmail = async (payload) => {
               </div>
             </div>
             <div class="footer">
-              <strong>Trung Tâm Thể Thao Soccer247</strong><br/>
+              <strong>Trung Tâm Thể Thao Sport247</strong><br/>
               📍 Địa chỉ: Biên Hòa - Đồng Nai • 📞 Hotline: 0816344504 • ✉️ Email: sinhvienxoan@gmail.com<br/>
               Hệ thống quản lý đặt sân thể thao tự động 24/7
             </div>
@@ -236,7 +236,7 @@ const sendContactReplyEmail = async (payload) => {
     }
     // --- TRƯỜNG HỢP GỬI CHO KHÁCH THẤT BẠI HOẶC KHÔNG CÓ EMAIL: GỬI VỀ CHO ADMIN ---
     try {
-        const adminFallbackSubject = `⚠️ [Soccer247 - Bản sao phản hồi] Không gửi được đến khách: ${payload.customerName} (${payload.toEmail || 'Không có email'})`;
+        const adminFallbackSubject = `⚠️ [Sport247 - Bản sao phản hồi] Không gửi được đến khách: ${payload.customerName} (${payload.toEmail || 'Không có email'})`;
         const adminFallbackHtml = `
       <!DOCTYPE html>
       <html lang="vi">
@@ -262,7 +262,7 @@ const sendContactReplyEmail = async (payload) => {
         <div class="container">
           <div class="header">
             <h2>⚠️ THÔNG BÁO GỬI PHẢN HỒI THẤT BẠI</h2>
-            <div style="font-size: 13px; opacity: 0.9; margin-top: 4px;">Hệ Thống Quản Trị Soccer247</div>
+            <div style="font-size: 13px; opacity: 0.9; margin-top: 4px;">Hệ Thống Quản Trị Sport247</div>
           </div>
           <div class="body">
             <div class="alert-box">
@@ -341,3 +341,97 @@ const sendContactReplyEmail = async (payload) => {
     }
 };
 exports.sendContactReplyEmail = sendContactReplyEmail;
+const sendOtpEmail = async (payload) => {
+    try {
+        const transporter = createTransporter();
+        const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Sport247 <no-reply@sport247.vn>';
+        let purposeTitle = 'Xác thực tài khoản';
+        let purposeDesc = 'xác thực tài khoản tại hệ thống đặt sân Sport247';
+        let actionName = 'xác nhận đăng ký tài khoản mới';
+        if (payload.purpose === 'DANG_KY') {
+            purposeTitle = 'Xác Thực Đăng Ký Tài Khoản';
+            purposeDesc = 'hoàn tất quá trình tạo tài khoản thành viên mới tại Sport247';
+            actionName = 'đăng ký tài khoản';
+        }
+        else if (payload.purpose === 'DOI_MAT_KHAU') {
+            purposeTitle = 'Xác Thực Đổi Mật Khẩu';
+            purposeDesc = 'yêu cầu thay đổi mật khẩu bảo mật tài khoản tại Sport247';
+            actionName = 'đổi mật khẩu';
+        }
+        else if (payload.purpose === 'CAP_NHAT_EMAIL') {
+            purposeTitle = 'Xác Thực Cập Nhật Gmail';
+            purposeDesc = 'xác thực địa chỉ hòm thư Gmail mới cho tài khoản của bạn tại Sport247';
+            actionName = 'cập nhật Gmail';
+        }
+        const subject = `⚽ [Sport247] ${payload.otpCode} là mã OTP ${purposeTitle} của bạn`;
+        const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
+          .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+          .header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 30px 24px; text-align: center; border-bottom: 4px solid #10b981; }
+          .logo { font-size: 26px; font-weight: 900; color: #ffffff; letter-spacing: 1px; }
+          .logo span { color: #10b981; }
+          .subtitle { color: #94a3b8; font-size: 13px; margin-top: 6px; text-transform: uppercase; letter-spacing: 1.5px; }
+          .body { padding: 32px 28px; text-align: center; }
+          .greeting { font-size: 18px; font-weight: bold; color: #0f172a; margin-bottom: 12px; }
+          .desc { font-size: 14px; color: #475569; line-height: 1.6; margin-bottom: 24px; }
+          .otp-badge-box { background: #f0fdf4; border: 2px dashed #10b981; border-radius: 12px; padding: 20px 10px; margin: 20px auto; max-width: 360px; }
+          .otp-label { font-size: 13px; font-weight: bold; color: #047857; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+          .otp-code { font-size: 34px; font-weight: 900; color: #065f46; letter-spacing: 8px; font-family: 'Courier New', monospace; }
+          .expiry-note { font-size: 13px; color: #e11d48; margin-top: 14px; font-weight: 600; }
+          .warning-box { background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 14px; font-size: 13px; color: #92400e; text-align: left; margin-top: 24px; line-height: 1.5; }
+          .footer { background: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; line-height: 1.6; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="logo">SPORT<span>247</span></div>
+            <div class="subtitle">Bảo Mật Hệ Thống & Quản Lý Đặt Sân Thể Thao</div>
+          </div>
+          <div class="body">
+            <div class="greeting">Xin chào ${payload.userName || 'Quý khách'},</div>
+            <div class="desc">
+              Bạn hoặc ai đó vừa gửi yêu cầu <strong>${actionName}</strong> trên hệ thống của <strong>Sport247</strong>. Dưới đây là mã xác thực OTP dùng một lần của bạn:
+            </div>
+
+            <div class="otp-badge-box">
+              <div class="otp-label">MÃ XÁC THỰC OTP CỦA BẠN</div>
+              <div class="otp-code">${payload.otpCode}</div>
+            </div>
+
+            <div class="expiry-note">
+              ⏰ Mã OTP này có hiệu lực trong vòng <strong>5 phút</strong> kể từ thời điểm gửi.
+            </div>
+
+            <div class="warning-box">
+              🛡️ <strong>Lưu ý bảo mật:</strong> Tuyệt đối không chia sẻ mã OTP này cho bất kỳ ai, kể cả nhân viên tự xưng là ban quản lý Sport247. Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.
+            </div>
+          </div>
+          <div class="footer">
+            Email tự động được gửi từ hệ thống Sport247 • Bảo vệ quyền riêng tư & bảo mật khách hàng.<br/>
+            Hotline hỗ trợ kỹ thuật: <strong>0816.344.504</strong>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+        const info = await transporter.sendMail({
+            from: mailFrom,
+            to: payload.toEmail,
+            subject,
+            html: htmlContent,
+        });
+        console.log(`✅ [OTP Gmail] Đã gửi mã OTP (${payload.otpCode}) tới: ${payload.toEmail} (messageId: ${info.messageId})`);
+        return true;
+    }
+    catch (error) {
+        console.error(`❌ [OTP Gmail] Lỗi gửi mã OTP tới ${payload.toEmail}:`, error.message);
+        return false;
+    }
+};
+exports.sendOtpEmail = sendOtpEmail;

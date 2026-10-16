@@ -22,7 +22,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanTimeForSql = void 0;
+exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanDateForSql = exports.cleanTimeForSql = void 0;
 const db_1 = require("../config/db");
 const cacheService_1 = __importDefault(require("../services/cacheService"));
 const cleanTimeForSql = (val, fallback = '00:00:00') => {
@@ -50,6 +50,22 @@ const cleanTimeForSql = (val, fallback = '00:00:00') => {
     return fallback;
 };
 exports.cleanTimeForSql = cleanTimeForSql;
+const cleanDateForSql = (val) => {
+    if (!val)
+        return new Date().toISOString().substring(0, 10);
+    const s = String(val).trim().split('T')[0];
+    if (s.includes('/')) {
+        const parts = s.split('/');
+        if (parts.length === 3) {
+            if (parts[2].length === 4)
+                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            if (parts[0].length === 4)
+                return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+    }
+    return s.substring(0, 10);
+};
+exports.cleanDateForSql = cleanDateForSql;
 /**
  * 1. Lấy danh sách tất cả các sân bóng
  * Method: GET /api/dat-san/danh-sach-san
@@ -598,7 +614,7 @@ const datSan = async (req, res) => {
             // Nếu vẫn chưa có, tạo mới bản ghi khách hàng chuẩn
             if (!ma_nd) {
                 const cleanPhone = sdt_khach || `09${Math.floor(10000000 + Math.random() * 90000000)}`;
-                const uniqueEmail = `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@soccer247.vn`;
+                const uniqueEmail = `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@sport247.vn`;
                 const insU = await pool.request()
                     .input('ho_ten', db_1.sql.NVarChar(100), ten_khach || 'Khách Đặt Sân')
                     .input('email', db_1.sql.VarChar(255), uniqueEmail)
@@ -1338,7 +1354,7 @@ const themDonDatVaThanhToan = async (req, res) => {
             loai_tt_val = null;
             so_tien_val = 0;
         }
-        const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
+        const ngay_da_clean = (0, exports.cleanDateForSql)(ngay_da);
         const gio_bd_clean = (0, exports.cleanTimeForSql)(gio_bat_dau, '17:00:00');
         const gio_kt_clean = (0, exports.cleanTimeForSql)(gio_ket_thuc, '18:30:00');
         // Phân giải mã người dùng: Nếu có điền tên/SĐT khách -> Lưu theo khách đó. Nếu không điền -> Lưu theo tài khoản đang đăng nhập
@@ -1358,7 +1374,7 @@ const themDonDatVaThanhToan = async (req, res) => {
             .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || null)
             .input('loai_thanh_toan', db_1.sql.VarChar(20), loai_tt_val)
             .input('so_tien', db_1.sql.Decimal(10, 2), so_tien_val)
-            .input('trang_thai_gd', db_1.sql.VarChar(20), trang_thai_gd || (trang_thai_chuan === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'))
+            .input('trang_thai_gd', db_1.sql.VarChar(20), (trang_thai_chuan === 'DA_THANH_TOAN' || trang_thai_chuan === 'DA_COC') ? 'THANH_CONG' : (trang_thai_gd === 'CHO_XU_LY' ? 'DANG_CHO' : (trang_thai_gd || 'DANG_CHO')))
             .input('ten_khach_hang', db_1.sql.NVarChar(100), tenKhach || null)
             .input('so_dien_thoai', db_1.sql.VarChar(20), sdtKhach || null)
             .execute('sp_ThemDonDatVaThanhToan');
@@ -1439,7 +1455,7 @@ const suaDonDatVaThanhToan = async (req, res) => {
             loai_tt_val = null;
             so_tien_val = 0;
         }
-        const ngay_da_clean = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
+        const ngay_da_clean = (0, exports.cleanDateForSql)(ngay_da);
         const gio_bd_clean = (0, exports.cleanTimeForSql)(gio_bat_dau, '17:00:00');
         const gio_kt_clean = (0, exports.cleanTimeForSql)(gio_ket_thuc, '18:30:00');
         const tenKhach = ten_khach_hang || (ghi_chu?.includes('Khách:') ? ghi_chu.replace('Khách:', '').split('-')[0].trim() : '');
@@ -1458,7 +1474,7 @@ const suaDonDatVaThanhToan = async (req, res) => {
             .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || null)
             .input('loai_thanh_toan', db_1.sql.VarChar(20), loai_tt_val)
             .input('so_tien', db_1.sql.Decimal(10, 2), so_tien_val)
-            .input('trang_thai_gd', db_1.sql.VarChar(20), trang_thai_gd || (trang_thai_chuan === 'CHO_THANH_TOAN' ? 'CHO_XU_LY' : 'THANH_CONG'))
+            .input('trang_thai_gd', db_1.sql.VarChar(20), (trang_thai_chuan === 'DA_THANH_TOAN' || trang_thai_chuan === 'DA_COC') ? 'THANH_CONG' : (trang_thai_gd === 'CHO_XU_LY' ? 'DANG_CHO' : (trang_thai_gd || 'DANG_CHO')))
             .input('ten_khach_hang', db_1.sql.NVarChar(100), tenKhach || null)
             .input('so_dien_thoai', db_1.sql.VarChar(20), sdtKhach || null)
             .execute('sp_SuaDonDatVaThanhToan');
