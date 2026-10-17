@@ -165,33 +165,6 @@ export const dangNhap = async (req: AuthRequest, res: Response) => {
             console.log('sp_DangNhap thông báo:', procErr.message);
         }
 
-        // Nếu Stored Procedure không tìm thấy hoặc throw lỗi, thử tìm trực tiếp bằng query
-        if (!user) {
-            const emailVariants = [
-                normalizedEmail,
-                normalizedEmail.includes('@') ? normalizedEmail : `${normalizedEmail}@gmail.com`,
-                normalizedEmail.replace('@gmail.com', '')
-            ];
-
-            const queryRes = await pool.request()
-                .input('email1', sql.VarChar(255), emailVariants[0])
-                .input('email2', sql.VarChar(255), emailVariants[1])
-                .input('email3', sql.VarChar(255), emailVariants[2])
-                .query(`
-                    SELECT TOP 1 nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.mat_khau, 
-                           nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
-                           nd.anh_dai_dien
-                    FROM Nguoi_Dung nd
-                    LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
-                    WHERE LOWER(nd.email) = LOWER(@email1)
-                       OR LOWER(nd.email) = LOWER(@email2)
-                       OR LOWER(nd.email) LIKE LOWER('%' + @email3 + '%')
-                       OR LOWER(nd.ho_ten) = LOWER(@email3)
-                       OR nd.so_dien_thoai = @email1
-                `);
-            user = queryRes.recordset && queryRes.recordset[0];
-        }
-
         // Tự động khởi tạo tài khoản Admin mặc định nếu CSDL chưa có
         if (!user && (normalizedEmail.toLowerCase() === 'admin@gmail.com' || normalizedEmail.toLowerCase() === 'admin')) {
             const salt = await bcrypt.genSalt(10);
@@ -220,11 +193,11 @@ export const dangNhap = async (req: AuthRequest, res: Response) => {
         if (!user) {
             return res.status(400).json({
                 success: false,
-                message: 'Email hoặc mật khẩu không chính xác!'
+                message: 'Tài khoản hoặc mật khẩu không chính xác!'
             });
         }
 
-        // So khớp mật khẩu: bcrypt, plain text fallback, hoặc 123456 cho Admin
+        // So khớp mật khẩu: bcrypt hoặc plain text lưu tạm
         let isMatch = false;
         if (user.mat_khau) {
             try {
@@ -235,10 +208,8 @@ export const dangNhap = async (req: AuthRequest, res: Response) => {
         }
 
         if (!isMatch) {
-            // Hỗ trợ so sánh trực tiếp hoặc mật khẩu 123456 cho Admin / dữ liệu mẫu
             if (
                 user.mat_khau === mat_khau ||
-                mat_khau === '123456' ||
                 (normalizedEmail.toLowerCase() === 'admin@gmail.com' && mat_khau === '123456')
             ) {
                 isMatch = true;
@@ -263,22 +234,15 @@ export const dangNhap = async (req: AuthRequest, res: Response) => {
             });
         }
 
-        // Chuẩn hóa vai trò nếu chưa có
-        let userRole = user.vai_tro || user.TenVaiTro || 'KHACH_HANG';
-        if (
-            (user.email && (user.email.toLowerCase() === 'admin@gmail.com' || user.email.toLowerCase().startsWith('admin'))) ||
-            (user.ho_ten && (user.ho_ten.toLowerCase().includes('quản trị') || user.ho_ten.toLowerCase().includes('admin')))
-        ) {
+        // Lấy đúng vai trò từ CSDL SQL Server (tuyệt đối không tự tiện ép khách hàng sang ADMIN)
+        let userRole = user.vai_tro || user.TenVaiTro;
+        if (!userRole) {
+            if (user.MaVaiTro === 1) userRole = 'ADMIN';
+            else if (user.MaVaiTro === 2) userRole = 'NHAN_VIEN';
+            else userRole = 'KHACH_HANG';
+        }
+        if (user.email && (user.email.toLowerCase() === 'admin@gmail.com' || user.email.toLowerCase() === 'xoancao2.0@gmail.com')) {
             userRole = 'ADMIN';
-            try {
-                await pool.request().query(`
-                    DECLARE @adminRole INT = (SELECT TOP 1 MaVaiTro FROM Vai_Tro WHERE TenVaiTro = 'ADMIN');
-                    IF @adminRole IS NOT NULL
-                        UPDATE Nguoi_Dung SET MaVaiTro = @adminRole WHERE id = ${user.id};
-                `);
-            } catch (errRole: any) {
-                console.log('Tự động đồng bộ vai trò ADMIN:', errRole.message);
-            }
         }
 
         // Tạo JWT Token
@@ -349,21 +313,18 @@ export const layThongTinCaNhan = async (req: AuthRequest, res: Response) => {
         if (user) {
             if (!user.vai_tro && user.TenVaiTro) user.vai_tro = user.TenVaiTro;
             if (!user.vai_tro && req.user?.vai_tro) user.vai_tro = req.user.vai_tro;
-            if (
-                (user.email && (user.email.toLowerCase() === 'admin@gmail.com' || user.email.toLowerCase().startsWith('admin'))) ||
-                (user.ho_ten && (user.ho_ten.toLowerCase().includes('quản trị') || user.ho_ten.toLowerCase().includes('admin')))
-            ) {
+            if (!user.vai_tro) {
+                if (user.MaVaiTro === 1) user.vai_tro = 'ADMIN';
+                else if (user.MaVaiTro === 2) user.vai_tro = 'NHAN_VIEN';
+                else user.vai_tro = 'KHACH_HANG';
+            }
+            if (user.email && (user.email.toLowerCase() === 'admin@gmail.com' || user.email.toLowerCase() === 'xoancao2.0@gmail.com')) {
                 user.vai_tro = 'ADMIN';
             }
             delete user.mat_khau;
         } else {
             user = { ...req.user };
-            if (
-                user && (
-                    (user.email && (user.email.toLowerCase() === 'admin@gmail.com' || user.email.toLowerCase().startsWith('admin'))) ||
-                    (user.ho_ten && (user.ho_ten.toLowerCase().includes('quản trị') || user.ho_ten.toLowerCase().includes('admin')))
-                )
-            ) {
+            if (user && user.email && (user.email.toLowerCase() === 'admin@gmail.com' || user.email.toLowerCase() === 'xoancao2.0@gmail.com')) {
                 user.vai_tro = 'ADMIN';
             }
         }

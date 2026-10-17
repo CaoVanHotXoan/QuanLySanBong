@@ -45,8 +45,6 @@ import {
   Building2,
   Sparkles,
   LandPlot,
-  Volume2,
-  VolumeX,
   Play,
   Pause,
   ImageIcon,
@@ -293,14 +291,14 @@ export default function HomePage() {
   // State tìm kiếm nhanh tên sân tại Navbar
   const [searchCourtName, setSearchCourtName] = useState<string>('');
 
-  // Kiểm tra quyền Admin cho người dùng hiện tại
+  // Kiểm tra quyền Admin cho người dùng hiện tại (Chuẩn hóa dựa trên vai trò CSDL)
   const isUserAdmin = Boolean(
     currentUser && (
       (currentUser.vai_tro || '').trim().toUpperCase() === 'ADMIN' ||
       (currentUser.vai_tro || '').trim().toUpperCase() === 'QUAN_TRI_VIEN' ||
-      (currentUser.vai_tro || '').toLowerCase().includes('admin') ||
-      (currentUser.vai_tro || '').toLowerCase().includes('quản trị') ||
-      (currentUser.email || '').toLowerCase().includes('admin')
+      (currentUser as any).MaVaiTro === 1 ||
+      (currentUser.email || '').toLowerCase() === 'admin@gmail.com' ||
+      (currentUser.email || '').toLowerCase() === 'xoancao2.0@gmail.com'
     )
   );
 
@@ -310,8 +308,8 @@ export default function HomePage() {
       isUserAdmin ||
       (currentUser.vai_tro || '').trim().toUpperCase() === 'NHAN_VIEN' ||
       (currentUser.vai_tro || '').trim().toUpperCase() === 'NHANVIEN' ||
-      (currentUser.vai_tro || '').toLowerCase().includes('nhân viên') ||
-      (currentUser.vai_tro || '').toLowerCase().includes('nhan vien')
+      (currentUser.vai_tro || '').trim().toUpperCase() === 'STAFF' ||
+      (currentUser as any).MaVaiTro === 2
     )
   );
 
@@ -1000,18 +998,56 @@ export default function HomePage() {
     return activeSlots.filter((s) => s.start === filterKhungGio);
   }, [filterKhungGio, timeSlotsList, isSlotInThePast]);
 
-  // Kiểm tra xung đột thời lượng đặt (30p, 60p, 90p, 120p) với các đơn đặt đã có trong CSDL
+  // Kiểm tra xung đột thời lượng đặt (30p, 60p, 90p, 120p) với các đơn đặt đã có trong CSDL và các ô đang GIỮ CHỖ Real-time
   const checkConflictForSan = useCallback((sanId: number, start: string, durationMin: number) => {
     const end = addMinutesToTime(start, durationMin);
-    return rawBookings.some((b) => {
+
+    // 1. Kiểm tra từng slot 30 phút trong khoảng [start, end)
+    const totalSlots = Math.ceil(durationMin / 30);
+    for (let i = 0; i < totalSlots; i++) {
+      const curStart = addMinutesToTime(start, i * 30);
+      const slotKeyRealtime = `${filterNgayDa}_${sanId}_${curStart}`;
+      const gridKey = `${sanId}_${curStart}`;
+
+      // a. Khách hàng khác đang GIỮ CHỖ thời gian thực (Socket.IO lockedSlots)
+      if (lockedSlots.includes(slotKeyRealtime) && !myLockedSlotIds.includes(slotKeyRealtime)) {
+        return true;
+      }
+
+      // b. Ô trên ma trận gridSlots không trống (đã chốt hoặc đang có đơn)
+      const slotData = gridSlots[gridKey];
+      if (slotData && slotData.trang_thai !== 'TRONG') {
+        return true;
+      }
+    }
+
+    // 2. Kiểm tra xung đột với toàn bộ các đơn đặt đã có trong CSDL (rawBookings)
+    const hasDbConflict = rawBookings.some((b) => {
       if (b.ma_san !== sanId) return false;
-      const validStatus = ['DA_THANH_TOAN', 'DA_COC', 'DANG_DA', 'DA_CHOT', 'Da Thanh Toan', 'DA_DAT'];
-      if (!validStatus.includes(b.trang_thai)) return false;
+      const st = (b.trang_thai || '').toUpperCase();
+      if (st === 'DA_HUY' || st === 'HUY' || st === 'ĐÃ HỦY') return false;
       const bStart = (b.gio_bat_dau || '').substring(0, 5);
       const bEnd = (b.gio_ket_thuc || '').substring(0, 5);
       return isTimeOverlapping(start, end, bStart, bEnd);
     });
-  }, [rawBookings]);
+    if (hasDbConflict) return true;
+
+    // 3. Kiểm tra xung đột với các đơn đồng bộ từ Management System (syncOrders)
+    const hasSyncConflict = syncOrders.some((order) => {
+      if ((order.ngay_da || '').substring(0, 10) !== filterNgayDa) return false;
+      const st = (order.trang_thai || '').toUpperCase();
+      if (st === 'ĐÃ HỦY' || st === 'DA_HUY' || st === 'HUY') return false;
+      const matchSan = (order.ma_san && order.ma_san === sanId) ||
+        (order.ten_san && sanBongList.some(s => s.id === sanId && (order.ten_san.includes(s.ten_san) || s.ten_san.includes(order.ten_san))));
+      if (!matchSan) return false;
+      const oStart = (order.gio_bat_dau || '').substring(0, 5);
+      const oEnd = (order.gio_ket_thuc || '').substring(0, 5);
+      return isTimeOverlapping(start, end, oStart, oEnd);
+    });
+    if (hasSyncConflict) return true;
+
+    return false;
+  }, [filterNgayDa, lockedSlots, myLockedSlotIds, gridSlots, rawBookings, syncOrders, sanBongList]);
 
   // Xử lý khi bấm nút "🔍 TÌM SÂN TRỐNG" tại Hero Section
   const handleSearchAvailableSlots = (e: React.FormEvent) => {
@@ -1057,35 +1093,12 @@ export default function HomePage() {
 
     const slotData = gridSlots[`${san.id}_${slot.start}`];
 
-    // -------------------------------------------------------------
-    // TÍNH TOÁN DANH SÁCH CÁC Ô SLOT THUỘC THỜI LƯỢNG ĐẶT SÂN
-    // -------------------------------------------------------------
-    // Mặc định chọn 1 tiếng 30 phút (90 phút) nếu không trùng, hoặc chọn 60 phút / 30 phút
-    const canDo90 = !checkConflictForSan(san.id, slot.start, 90);
-    const canDo60 = !checkConflictForSan(san.id, slot.start, 60);
-    const canDo30 = !checkConflictForSan(san.id, slot.start, 30);
-    const initialDuration = canDo90 ? 90 : canDo60 ? 60 : canDo30 ? 30 : 120;
-    const initialEndTime = addMinutesToTime(slot.start, initialDuration);
-    const donGiaPhut = Number(san.don_gia_phut) || 5000;
-    const giaTien = initialDuration * donGiaPhut;
-
-    // Tính toàn bộ các ô 30 phút mà khách 1 sẽ chiếm giữ
-    const totalSlots = Math.ceil(initialDuration / 30);
-    const initialSlotKeys: string[] = [];
-    let curTime = slot.start;
-    for (let i = 0; i < totalSlots; i++) {
-      initialSlotKeys.push(`${filterNgayDa}_${san.id}_${curTime}`);
-      curTime = addMinutesToTime(curTime, 30);
-    }
-
-    // 1. Kiểm tra nếu bất kỳ ô nào trong khoảng này đang bị khách khác giữ
-    const isAnySlotLockedByOther = initialSlotKeys.some(
-      (k) => lockedSlots.includes(k) && !myLockedSlotIds.includes(k)
-    );
-    if (isAnySlotLockedByOther) {
+    // 1. Kiểm tra nếu chính ô này đang bị khách khác giữ chỗ Real-time
+    const currentSlotKey = `${filterNgayDa}_${san.id}_${slot.start}`;
+    if (lockedSlots.includes(currentSlotKey) && !myLockedSlotIds.includes(currentSlotKey)) {
       triggerToast({
         type: 'info',
-        message: `Khung giờ ${slot.label} (${slot.start} - ${initialEndTime}) của ${san.ten_san} đang có khách hàng khác chọn giữ chỗ!`,
+        message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang có khách hàng khác chọn giữ chỗ! Vui lòng chọn khung giờ khác.`,
       });
       return;
     }
@@ -1094,14 +1107,43 @@ export default function HomePage() {
     if (slotData && slotData.trang_thai !== 'TRONG') {
       triggerToast({
         type: 'error',
-        message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đã được đặt (${slotData.gio_bat_dau_don} - ${slotData.gio_ket_thuc_don}). Vui lòng chọn ô trống khác!`,
+        message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đã được đặt (${slotData.gio_bat_dau_don || slot.start} - ${slotData.gio_ket_thuc_don || slot.end}). Vui lòng chọn ô trống khác!`,
       });
       return;
     }
 
-    // 3. Khóa toàn bộ các ô thuộc khoảng thời gian đã chọn trên Socket.IO Real-time
-    socketRef.current?.emit('lock_slots', initialSlotKeys);
-    setMyLockedSlotIds(initialSlotKeys);
+    // -------------------------------------------------------------
+    // TÍNH TOÁN THỜI LƯỢNG TỐI ĐA ĐỂ GIỮ CHỖ Ở NGOÀI MA TRẬN
+    // -------------------------------------------------------------
+    // Nếu những ô sau đó chưa có ai chọn thì ở ngoài sẽ giữ chỗ cho thời gian tối đa của lựa chọn (120p, 90p, 60p, 30p)
+    let maxHoldDuration = 30;
+    if (!checkConflictForSan(san.id, slot.start, 120)) {
+      maxHoldDuration = 120;
+    } else if (!checkConflictForSan(san.id, slot.start, 90)) {
+      maxHoldDuration = 90;
+    } else if (!checkConflictForSan(san.id, slot.start, 60)) {
+      maxHoldDuration = 60;
+    } else {
+      maxHoldDuration = 30;
+    }
+
+    // Khóa toàn bộ các ô thuộc khoảng thời gian tối đa này trên Socket.IO Real-time
+    const holdTotalSlots = Math.ceil(maxHoldDuration / 30);
+    const holdSlotKeys: string[] = [];
+    let curHoldTime = slot.start;
+    for (let i = 0; i < holdTotalSlots; i++) {
+      holdSlotKeys.push(`${filterNgayDa}_${san.id}_${curHoldTime}`);
+      curHoldTime = addMinutesToTime(curHoldTime, 30);
+    }
+
+    socketRef.current?.emit('lock_slots', holdSlotKeys);
+    setMyLockedSlotIds(holdSlotKeys);
+
+    // Mặc định trong Modal: Nhảy vào ô 30 phút theo đúng yêu cầu
+    const initialDuration = 30;
+    const initialEndTime = addMinutesToTime(slot.start, initialDuration);
+    const donGiaPhut = Number(san.don_gia_phut) || 5000;
+    const giaTien = initialDuration * donGiaPhut;
 
     setSelectedSlot({
       san,
@@ -1126,6 +1168,13 @@ export default function HomePage() {
   // ===================================================================================
   const handleSelectDuration = (durationMin: number) => {
     if (!selectedSlot) return;
+    if (checkConflictForSan(selectedSlot.san.id, selectedSlot.slot.start, durationMin)) {
+      triggerToast({
+        type: 'error',
+        message: `Khung giờ ${selectedSlot.slot.start} với thời lượng ${durationMin} phút bị trùng với lịch đã đặt hoặc khung giờ đang có khách giữ chỗ! Vui lòng chọn thời lượng khác.`,
+      });
+      return;
+    }
     const newEndTime = addMinutesToTime(selectedSlot.slot.start, durationMin);
     const donGiaPhut = Number(selectedSlot.san.don_gia_phut) || 5000;
     const newGiaTien = durationMin * donGiaPhut;
@@ -1203,10 +1252,23 @@ export default function HomePage() {
     if (checkConflictForSan(selectedSlot.san.id, selectedSlot.slot.start, selectedSlot.durationMin)) {
       triggerToast({
         type: 'error',
-        message: 'Khung giờ bạn chọn bị trùng với lịch đã đặt. Vui lòng chọn thời lượng khác!',
+        message: 'Khung giờ bạn chọn bị trùng với lịch đã đặt hoặc có khách giữ chỗ. Vui lòng chọn thời lượng khác!',
       });
       return;
     }
+
+    // Khi người dùng chốt thời lượng và sang bước điền thông tin:
+    // Cập nhật lại Socket.IO chỉ khóa đúng các ô thuộc thời lượng đã chọn, nhả các ô thừa ra cho khách khác
+    const chosenSlots = Math.ceil(selectedSlot.durationMin / 30);
+    const finalSlotKeys: string[] = [];
+    let curTime = selectedSlot.slot.start;
+    for (let i = 0; i < chosenSlots; i++) {
+      finalSlotKeys.push(`${filterNgayDa}_${selectedSlot.san.id}_${curTime}`);
+      curTime = addMinutesToTime(curTime, 30);
+    }
+    socketRef.current?.emit('lock_slots', finalSlotKeys);
+    setMyLockedSlotIds(finalSlotKeys);
+
     setBookingStep('INFO');
   };
 
@@ -1921,24 +1983,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* NÚT BẬT / TẮT ÂM THANH KHI ĐANG PHÁT VIDEO NỀN */}
-          {banners[currentBannerIndex]?.loai_banner === 'VIDEO' && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsBannerMuted(!isBannerMuted);
-                if (bannerVideoRef.current) {
-                  bannerVideoRef.current.muted = !isBannerMuted;
-                }
-              }}
-              className="absolute top-3 right-3 md:top-6 md:right-6 z-20 p-2 md:p-3 rounded-full bg-black/40 hover:bg-black/70 text-white backdrop-blur-sm border border-white/20 transition-all cursor-pointer shadow-xl flex items-center gap-1.5 md:gap-2 text-[10px] md:text-xs font-bold"
-              title={isBannerMuted ? 'Bật âm thanh video' : 'Tắt âm thanh'}
-            >
-              {isBannerMuted ? <VolumeX className="w-3.5 h-3.5 md:w-4 md:h-4" /> : <Volume2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-400 animate-pulse" />}
-              <span className="hidden sm:inline">{isBannerMuted ? 'Bật âm thanh' : 'Đang phát âm thanh'}</span>
-            </button>
-          )}
+
 
           {/* NÚT MŨI TÊN CHUYỂN BANNER TRÁI / PHẢI */}
           {banners.length > 1 && (
@@ -2598,7 +2643,7 @@ export default function HomePage() {
 
                           {isConflict && (
                             <div className="mt-2 text-[10px] font-bold text-rose-400 flex items-center gap-1">
-                              <XCircle className="w-3 h-3" /> Trùng lịch đã đặt
+                              <XCircle className="w-3 h-3" /> Trùng lịch / Đang giữ chỗ
                             </div>
                           )}
                         </button>
@@ -2647,14 +2692,14 @@ export default function HomePage() {
 
                           {isConflict && (
                             <div className="mt-2 text-[10px] font-bold text-rose-400 flex items-center gap-1">
-                              <XCircle className="w-3 h-3" /> Trùng lịch đã đặt
+                              <XCircle className="w-3 h-3" /> Trùng lịch / Đang giữ chỗ
                             </div>
                           )}
                         </button>
                       );
                     })()}
 
-                    {/* NÚT 3: 1 TIẾNG 30 PHÚT (90 PHÚT) - PHỔ BIẾN */}
+                    {/* NÚT 3: 1 TIẾNG 30 PHÚT (90 PHÚT) */}
                     {(() => {
                       const dur = 90;
                       const endTime = addMinutesToTime(selectedSlot.slot.start, dur);
@@ -2677,10 +2722,6 @@ export default function HomePage() {
                                 : 'bg-slate-50 border-slate-200 hover:border-emerald-500/50 hover:bg-slate-100'
                             }`}
                         >
-                          <div className="absolute -top-2.5 right-3 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500 text-slate-950 shadow-sm">
-                            ⭐ Phổ Biến Nhất
-                          </div>
-
                           <div className="flex items-center justify-between mb-2">
                             <span className={`text-base font-black ${isSelected ? 'text-emerald-600 dark:text-emerald-400' : isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                               1 Tiếng 30 Phút
@@ -2700,7 +2741,7 @@ export default function HomePage() {
 
                           {isConflict && (
                             <div className="mt-2 text-[10px] font-bold text-rose-400 flex items-center gap-1">
-                              <XCircle className="w-3 h-3" /> Trùng lịch đã đặt
+                              <XCircle className="w-3 h-3" /> Trùng lịch / Đang giữ chỗ
                             </div>
                           )}
                         </button>
@@ -2749,7 +2790,7 @@ export default function HomePage() {
 
                           {isConflict && (
                             <div className="mt-2 text-[10px] font-bold text-rose-400 flex items-center gap-1">
-                              <XCircle className="w-3 h-3" /> Trùng lịch đã đặt
+                              <XCircle className="w-3 h-3" /> Trùng lịch / Đang giữ chỗ
                             </div>
                           )}
                         </button>

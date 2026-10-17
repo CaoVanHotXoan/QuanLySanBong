@@ -66,10 +66,15 @@ app.use('/api', contentRoutes);
 
 // Cung cấp tài liệu OpenAPI Specification (Swagger)
 app.get(['/OpenAPI.yaml', '/openapi.yaml'], (req: Request, res: Response) => {
-    const yamlPath = path.join(__dirname, 'OpenAPI.yaml');
-    if (fs.existsSync(yamlPath)) {
+    const candidates = [
+        path.join(__dirname, 'OpenAPI.yaml'),
+        path.join(__dirname, '..', 'OpenAPI.yaml'),
+        path.join(process.cwd(), 'OpenAPI.yaml')
+    ];
+    const yamlPath = candidates.find(p => fs.existsSync(p));
+    if (yamlPath) {
         res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
-        return res.sendFile(yamlPath);
+        return res.sendFile(path.resolve(yamlPath));
     }
     return res.status(404).send('OpenAPI.yaml not found');
 });

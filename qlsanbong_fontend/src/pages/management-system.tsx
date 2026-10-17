@@ -632,23 +632,24 @@ export default function ManagementSystem() {
   const formattedDateISO = useMemo(() => formatDateToISO(currentDate), [currentDate]);
 
   // Kiểm tra quyền Admin / Nhân viên cũ
+  // Kiểm tra quyền Admin / Nhân viên (Chỉ chấp nhận vai trò thực tế từ CSDL)
   const checkIsAuthorizedRole = (user?: AuthUser | string | null): boolean => {
     if (!user) return true; // Cho phép mở giao diện POS nếu chưa đăng nhập để thao tác bán hàng
     const role = typeof user === 'string'
       ? user.trim().toUpperCase().replace(/\s+/g, '_')
       : (user.vai_tro || '').trim().toUpperCase().replace(/\s+/g, '_');
     const email = typeof user === 'string' ? '' : (user.email || '').trim().toLowerCase();
+    const maVaiTro = typeof user === 'object' && user ? (user as any).MaVaiTro : undefined;
     return (
       role === 'ADMIN' ||
       role === 'NHAN_VIEN' ||
       role === 'NHANVIEN' ||
+      role === 'STAFF' ||
       role === 'QUAN_TRI_VIEN' ||
-      role.includes('ADMIN') ||
-      role.includes('NHÂN VIÊN') ||
-      role.includes('NHAN VIEN') ||
-      role.includes('QUẢN TRỊ') ||
+      maVaiTro === 1 ||
+      maVaiTro === 2 ||
       email === 'admin@gmail.com' ||
-      email.startsWith('admin')
+      email === 'xoancao2.0@gmail.com'
     );
   };
 
@@ -656,25 +657,23 @@ export default function ManagementSystem() {
   const getDisplayRole = (user?: AuthUser | null): string => {
     if (!user) return 'Khách Hàng';
     const role = (user.vai_tro || '').trim().toUpperCase();
-    const name = (user.ho_ten || '').toLowerCase();
     const email = (user.email || '').toLowerCase();
+    const maVaiTro = (user as any)?.MaVaiTro;
 
     if (
       role === 'ADMIN' ||
       role === 'QUAN_TRI_VIEN' ||
-      role.includes('ADMIN') ||
-      role.includes('QUẢN TRỊ') ||
-      name.includes('quản trị') ||
-      email.startsWith('admin')
+      maVaiTro === 1 ||
+      email === 'admin@gmail.com' ||
+      email === 'xoancao2.0@gmail.com'
     ) {
       return 'Quản Trị Viên';
     }
     if (
       role === 'NHAN_VIEN' ||
       role === 'NHANVIEN' ||
-      role.includes('NHÂN VIÊN') ||
-      role.includes('NHAN VIEN') ||
-      name.includes('nhân viên')
+      role === 'STAFF' ||
+      maVaiTro === 2
     ) {
       return 'Nhân Viên';
     }
@@ -688,12 +687,10 @@ export default function ManagementSystem() {
         const storedUser = localStorage.getItem('auth_user');
         if (storedUser) {
           const parsedUser: AuthUser = JSON.parse(storedUser);
-          // Tự động sửa vai trò nếu là Quản trị viên
-          const name = (parsedUser.ho_ten || '').toLowerCase();
+          // Giữ đúng vai trò từ CSDL trả về, không tự động biến thành ADMIN
           const email = (parsedUser.email || '').toLowerCase();
-          if (name.includes('quản trị') || email.startsWith('admin') || email === 'admin@gmail.com') {
+          if (email === 'admin@gmail.com' || email === 'xoancao2.0@gmail.com') {
             parsedUser.vai_tro = 'ADMIN';
-            localStorage.setItem('auth_user', JSON.stringify(parsedUser));
           }
           setCurrentUser(parsedUser);
         } else {

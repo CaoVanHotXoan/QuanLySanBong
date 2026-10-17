@@ -6,7 +6,7 @@
  * =====================================================================
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.layTrangThaiSanTrucQuan = exports.layDonDatMoiNhat = exports.topDichVuBanChay = exports.baoCaoDoanhThuBieuDo = exports.baoCaoDoanhThu = void 0;
+exports.layDoanhThuNgay = exports.layTrangThaiSanTrucQuan = exports.layDonDatMoiNhat = exports.topDichVuBanChay = exports.baoCaoDoanhThuBieuDo = exports.baoCaoDoanhThu = void 0;
 const db_1 = require("../config/db");
 /**
  * 1. Thống kê báo cáo doanh thu theo khoảng thời gian
@@ -148,3 +148,35 @@ const layTrangThaiSanTrucQuan = async (req, res) => {
     }
 };
 exports.layTrangThaiSanTrucQuan = layTrangThaiSanTrucQuan;
+/**
+ * 6. Lấy tổng doanh thu của ngày (hôm nay hoặc ngày chỉ định)
+ * Method: GET /api/bao-cao/doanh-thu-ngay?ngay=YYYY-MM-DD
+ * Procedure: sp_LayDoanhThuNgay
+ */
+const layDoanhThuNgay = async (req, res) => {
+    try {
+        const ngay = req.query.ngay || null;
+        const pool = await db_1.poolPromise;
+        const result = await pool.request()
+            .input('ngay_da', db_1.sql.Date, ngay)
+            .execute('sp_LayDoanhThuNgay');
+        return res.status(200).json({
+            success: true,
+            data: result.recordset?.[0] || {
+                ngay_da: ngay,
+                tong_doanh_thu: 0,
+                tong_so_don: 0,
+                tien_san: 0,
+                tien_dich_vu: 0
+            }
+        });
+    }
+    catch (error) {
+        console.error('Lỗi sp_LayDoanhThuNgay:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy doanh thu ngày'
+        });
+    }
+};
+exports.layDoanhThuNgay = layDoanhThuNgay;

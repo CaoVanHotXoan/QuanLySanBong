@@ -54,4 +54,6 @@ router.get('/top-dich-vu', baoCaoController.topDichVuBanChay);
 router.get('/don-moi-nhat', baoCaoController.layDonDatMoiNhat);
 // 5. Trạng thái sân trực quan
 router.get('/trang-thai-san', baoCaoController.layTrangThaiSanTrucQuan);
+// 6. Lấy tổng doanh thu của ngày (hôm nay hoặc ngày chỉ định)
+router.get('/doanh-thu-ngay', baoCaoController.layDoanhThuNgay);
 exports.default = router;

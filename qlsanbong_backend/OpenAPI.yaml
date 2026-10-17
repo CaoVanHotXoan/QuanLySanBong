@@ -359,8 +359,35 @@ paths:
         - in: path
           name: id
           required: true
+          description: "Mã ID sân bóng cần sửa (ví dụ: 1)"
           schema:
             type: integer
+            default: 1
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ten_san, ma_loai_san]
+              properties:
+                ten_san:
+                  type: string
+                  example: Sân A5 (5 người)
+                ma_loai_san:
+                  type: integer
+                  example: 1
+                hinh_anh:
+                  type: string
+                  example: https://res.cloudinary.com/hpa8esqe/image/upload/v1790842122/quanlysanbong/edo8kzixwfki8iwut2tr.webp
+                don_gia_phut:
+                  type: number
+                  example: 300
+                trang_thai:
+                  type: string
+                  enum: [SAN_SANG, BAO_TRI]
+                  example: SAN_SANG
       responses:
         '200':
           description: Cập nhật sân thành công

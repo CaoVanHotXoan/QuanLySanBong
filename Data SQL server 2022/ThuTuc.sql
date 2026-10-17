@@ -289,11 +289,20 @@ BEGIN
             ;THROW 50001, N'Email này đã được đăng ký trong hệ thống.', 1;
         END;
 
-        -- Xác định MaVaiTro phù hợp
+        -- Xác định MaVaiTro phù hợp (Tuyệt đối không gán nhầm sang ADMIN)
         DECLARE @v_MaVaiTro INT = @MaVaiTro;
         IF @v_MaVaiTro IS NULL
         BEGIN
-            SELECT @v_MaVaiTro = MaVaiTro FROM Vai_Tro WHERE TenVaiTro = @vai_tro;
+            SELECT TOP 1 @v_MaVaiTro = MaVaiTro 
+            FROM Vai_Tro 
+            WHERE TenVaiTro = @vai_tro 
+               OR UPPER(REPLACE(TenVaiTro, ' ', '_')) = UPPER(REPLACE(@vai_tro, ' ', '_'));
+
+            IF @v_MaVaiTro IS NULL
+            BEGIN
+                SELECT TOP 1 @v_MaVaiTro = MaVaiTro FROM Vai_Tro WHERE TenVaiTro = 'KHACH_HANG';
+            END;
+
             IF @v_MaVaiTro IS NULL SET @v_MaVaiTro = 3; -- Mặc định là Khách hàng
         END;
 
@@ -314,25 +323,50 @@ BEGIN
 END;
 GO
 
--- Thủ tục Đăng nhập người dùng
+-- Thủ tục Đăng nhập người dùng (Hỗ trợ đăng nhập bằng Email, Tên tài khoản, Số điện thoại)
 CREATE OR ALTER PROCEDURE sp_DangNhap
     @email VARCHAR(255)
 AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
-        IF NOT EXISTS (SELECT 1 FROM Nguoi_Dung WHERE email = @email)
-        BEGIN
-            ;THROW 50002, N'Tài khoản email không tồn tại trong hệ thống.', 1;
-        END;
+        DECLARE @cleanIden VARCHAR(255) = LTRIM(RTRIM(@email));
+        DECLARE @cleanName NVARCHAR(100) = LTRIM(RTRIM(@email));
 
-        SELECT 
+        DECLARE @emailWithDomain VARCHAR(255) = @cleanIden;
+        IF CHARINDEX('@', @cleanIden) = 0
+            SET @emailWithDomain = @cleanIden + '@gmail.com';
+
+        DECLARE @usernameOnly VARCHAR(255) = @cleanIden;
+        IF CHARINDEX('@', @cleanIden) > 0
+            SET @usernameOnly = SUBSTRING(@cleanIden, 1, CHARINDEX('@', @cleanIden) - 1);
+
+        SELECT TOP 1 
             nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.mat_khau, 
             nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
             nd.anh_dai_dien, CAST(GETDATE() AS DATETIME) AS ngay_tao
         FROM Nguoi_Dung nd
         LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
-        WHERE nd.email = @email;
+        WHERE LOWER(nd.email) = LOWER(@cleanIden)
+           OR LOWER(nd.ho_ten) = LOWER(@cleanName)
+           OR nd.so_dien_thoai = @cleanIden
+           OR LOWER(nd.email) = LOWER(@emailWithDomain)
+           OR (CHARINDEX('@', nd.email) > 0 AND LOWER(SUBSTRING(nd.email, 1, CHARINDEX('@', nd.email) - 1)) = LOWER(@usernameOnly))
+           OR LOWER(nd.ho_ten) = LOWER(@usernameOnly)
+        ORDER BY 
+            CASE 
+                WHEN LOWER(nd.email) = LOWER(@cleanIden) THEN 1
+                WHEN LOWER(nd.ho_ten) = LOWER(@cleanName) THEN 2
+                WHEN LOWER(nd.email) = LOWER(@emailWithDomain) THEN 3
+                WHEN LOWER(nd.ho_ten) = LOWER(@usernameOnly) THEN 4
+                WHEN nd.so_dien_thoai = @cleanIden THEN 5
+                ELSE 6
+            END ASC;
+
+        IF @@ROWCOUNT = 0
+        BEGIN
+            ;THROW 50002, N'Tài khoản email hoặc tên đăng nhập không tồn tại trong hệ thống.', 1;
+        END;
     END TRY
     BEGIN CATCH
         ;THROW;
@@ -413,7 +447,10 @@ BEGIN
         DECLARE @v_MaVaiTro INT = @MaVaiTro;
         IF @v_MaVaiTro IS NULL AND @vai_tro IS NOT NULL
         BEGIN
-            SELECT @v_MaVaiTro = MaVaiTro FROM Vai_Tro WHERE TenVaiTro = @vai_tro;
+            SELECT TOP 1 @v_MaVaiTro = MaVaiTro 
+            FROM Vai_Tro 
+            WHERE TenVaiTro = @vai_tro 
+               OR UPPER(REPLACE(TenVaiTro, ' ', '_')) = UPPER(REPLACE(@vai_tro, ' ', '_'));
         END;
 
         UPDATE Nguoi_Dung

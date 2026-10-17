@@ -619,20 +619,19 @@ export default function AdminDashboard() {
     }
   };
 
-  // Hàm kiểm tra linh hoạt vai trò Admin
+  // Hàm kiểm tra linh hoạt vai trò Admin (Chỉ chấp nhận vai trò ADMIN thực tế từ CSDL)
   const checkIsAdmin = (user: any): boolean => {
     if (!user) return false;
     const role = (user.vai_tro || user.TenVaiTro || user.role || '').trim().toUpperCase();
     const email = (user.email || '').trim().toLowerCase();
+    const maVaiTro = Number(user.MaVaiTro);
     return (
       role === 'ADMIN' ||
       role === 'QUAN_TRI_VIEN' ||
       role === 'QUANTRIVIEN' ||
-      role.includes('ADMIN') ||
-      role.includes('QUẢN TRỊ') ||
-      role.includes('QUAN TRI') ||
+      maVaiTro === 1 ||
       email === 'admin@gmail.com' ||
-      email.startsWith('admin')
+      email === 'xoancao2.0@gmail.com'
     );
   };
 

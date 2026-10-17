@@ -37,6 +37,14 @@ const nextConfig: NextConfig = {
         source: '/History/:path*',
         destination: '/history/:path*',
       },
+      {
+        source: '/OpenAPI.yaml',
+        destination: '/api/openapi-spec',
+      },
+      {
+        source: '/openapi.yaml',
+        destination: '/api/openapi-spec',
+      },
     ];
   },
 };

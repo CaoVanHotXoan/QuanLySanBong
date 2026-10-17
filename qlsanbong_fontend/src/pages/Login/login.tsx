@@ -323,6 +323,12 @@ export default function Login({
           return;
         }
 
+        // Xóa sạch phiên đăng nhập cũ trong localStorage để tránh dính quyền tài khoản trước
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("token");
+        localStorage.removeItem("auth_user");
+        localStorage.removeItem("soccer_current_user");
+
         // Lưu JWT Token và thông tin người dùng từ SQL Server vào LocalStorage
         if (data.token) {
           localStorage.setItem("auth_token", data.token);
@@ -532,7 +538,7 @@ export default function Login({
                     }}
                     required
                   />
-                  {!emailInput.includes("@") && emailInput.trim().length > 0 && (
+                  {isRegister && !emailInput.includes("@") && emailInput.trim().length > 0 && (
                     <span className="login-email-addon">@gmail.com</span>
                   )}
                 </div>

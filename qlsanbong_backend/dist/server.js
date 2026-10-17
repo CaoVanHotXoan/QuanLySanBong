@@ -14,6 +14,8 @@ const socket_io_1 = require("socket.io");
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const compression_1 = __importDefault(require("compression"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 dotenv_1.default.config();
 // Khởi chạy kết nối CSDL
 require("./src/config/db");
@@ -58,6 +60,20 @@ app.use('/api/thanh-toan', thanhToanRoutes_1.default);
 app.use('/api/bao-cao', baoCaoRoutes_1.default);
 app.use('/api/upload', uploadRoutes_1.default);
 app.use('/api', contentRoutes_1.default);
+// Cung cấp tài liệu OpenAPI Specification (Swagger)
+app.get(['/OpenAPI.yaml', '/openapi.yaml'], (req, res) => {
+    const candidates = [
+        path_1.default.join(__dirname, 'OpenAPI.yaml'),
+        path_1.default.join(__dirname, '..', 'OpenAPI.yaml'),
+        path_1.default.join(process.cwd(), 'OpenAPI.yaml')
+    ];
+    const yamlPath = candidates.find(p => fs_1.default.existsSync(p));
+    if (yamlPath) {
+        res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
+        return res.sendFile(path_1.default.resolve(yamlPath));
+    }
+    return res.status(404).send('OpenAPI.yaml not found');
+});
 // Middleware xử lý 404 - Không tìm thấy Endpoint
 app.use((req, res, next) => {
     res.status(404).json({
