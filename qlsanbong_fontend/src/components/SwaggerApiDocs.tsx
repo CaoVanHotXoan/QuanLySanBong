@@ -118,43 +118,309 @@ const METHOD_CONFIG: Record<string, {
   badgeBg: string;
   borderColor: string;
   accentBg: string;
+  darkBg: string;
+  darkTextColor: string;
+  darkSummaryColor: string;
 }> = {
   GET: {
     color: '#0d6efd',
     bgColor: '#ebf3fb',
     badgeBg: '#4990e2',
     borderColor: '#b4d5fe',
-    accentBg: 'rgba(73, 144, 226, 0.1)'
+    accentBg: 'rgba(73, 144, 226, 0.1)',
+    darkBg: 'rgba(73, 144, 226, 0.22)',
+    darkTextColor: '#93c5fd', // Xanh dương sáng đậm nét
+    darkSummaryColor: '#f1f5f9' // Trắng sáng đậm
   },
   POST: {
     color: '#198754',
     bgColor: '#eaf7f2',
     badgeBg: '#49cc90',
     borderColor: '#a3e9c9',
-    accentBg: 'rgba(73, 204, 144, 0.1)'
+    accentBg: 'rgba(73, 204, 144, 0.1)',
+    darkBg: 'rgba(73, 204, 144, 0.22)',
+    darkTextColor: '#6ee7b7', // Xanh lá ngọc sáng đậm nét
+    darkSummaryColor: '#f1f5f9'
   },
   PUT: {
     color: '#d97706',
     bgColor: '#fdf6ed',
     badgeBg: '#fca130',
     borderColor: '#fcd39c',
-    accentBg: 'rgba(252, 161, 48, 0.1)'
+    accentBg: 'rgba(252, 161, 48, 0.1)',
+    darkBg: 'rgba(252, 161, 48, 0.25)',
+    darkTextColor: '#fde047', // Vàng cam sáng đậm nét rực rỡ
+    darkSummaryColor: '#f8fafc'
   },
   DELETE: {
     color: '#dc3545',
     bgColor: '#faecec',
     badgeBg: '#f93e3e',
     borderColor: '#fca5a5',
-    accentBg: 'rgba(249, 62, 62, 0.1)'
+    accentBg: 'rgba(249, 62, 62, 0.1)',
+    darkBg: 'rgba(249, 62, 62, 0.25)',
+    darkTextColor: '#fca5a5', // Đỏ san hô sáng đậm nét
+    darkSummaryColor: '#f8fafc'
   },
   PATCH: {
     color: '#0d9488',
     bgColor: '#e6faf5',
     badgeBg: '#50e3c2',
     borderColor: '#99f6e4',
-    accentBg: 'rgba(80, 227, 194, 0.1)'
+    accentBg: 'rgba(80, 227, 194, 0.1)',
+    darkBg: 'rgba(80, 227, 194, 0.22)',
+    darkTextColor: '#5eead4', // Ngọc lam sáng đậm nét
+    darkSummaryColor: '#f1f5f9'
   }
 };
+
+// Helper: Tự động trích xuất JSON mẫu phong phú từ OpenAPI Schema
+function generateSampleFromSchema(schema: any, componentsSchemas?: Record<string, any>): any {
+  if (!schema) return {};
+
+  if (schema.$ref) {
+    const refKey = schema.$ref.replace('#/components/schemas/', '');
+    if (componentsSchemas && componentsSchemas[refKey]) {
+      return generateSampleFromSchema(componentsSchemas[refKey], componentsSchemas);
+    }
+  }
+
+  if (schema.example !== undefined) {
+    return schema.example;
+  }
+
+  if (schema.type === 'object' || schema.properties) {
+    const res: Record<string, any> = {};
+    const props = schema.properties || {};
+    Object.entries(props).forEach(([key, prop]: [string, any]) => {
+      if (prop.example !== undefined) {
+        res[key] = prop.example;
+      } else if (prop.default !== undefined) {
+        res[key] = prop.default;
+      } else if (prop.enum && prop.enum.length > 0) {
+        res[key] = prop.enum[0];
+      } else if (prop.$ref) {
+        res[key] = generateSampleFromSchema(prop, componentsSchemas);
+      } else if (prop.type === 'string') {
+        const k = key.toLowerCase();
+        if (k.includes('email')) res[key] = 'admin@gmail.com';
+        else if (k.includes('mat_khau') || k.includes('password')) res[key] = '123456';
+        else if (k.includes('dien_thoai') || k.includes('phone')) res[key] = '0909123456';
+        else if (k.includes('ho_ten') || k.includes('ten_nguoi_dung') || k.includes('name')) res[key] = 'Nguyễn Văn A';
+        else if (k.includes('ngay') || k.includes('date')) res[key] = '2026-10-17';
+        else if (k.includes('gio') || k.includes('time')) res[key] = '18:00';
+        else if (k.includes('anh') || k.includes('url') || k.includes('hinh')) res[key] = 'https://res.cloudinary.com/sport247/image/upload/sample.jpg';
+        else if (k.includes('video')) res[key] = 'https://res.cloudinary.com/sport247/video/upload/sample.mp4';
+        else if (k.includes('otp')) res[key] = '123456';
+        else if (k.includes('tieu_de') || k.includes('title')) res[key] = 'Tiêu đề bài viết mẫu';
+        else if (k.includes('noi_dung') || k.includes('content') || k.includes('ghi_chu') || k.includes('mo_ta')) res[key] = 'Nội dung chi tiết mẫu';
+        else if (k.includes('dia_chi') || k.includes('address')) res[key] = '123 Đường Số 1, Quận 1, TP.HCM';
+        else if (k.includes('trang_thai') || k.includes('status')) res[key] = 'DA_THANH_TOAN';
+        else res[key] = `Mau_${key}`;
+      } else if (prop.type === 'integer' || prop.type === 'number') {
+        const k = key.toLowerCase();
+        if (k.includes('gia') || k.includes('tien') || k.includes('amount')) res[key] = 100000;
+        else if (k.includes('so_luong') || k.includes('quantity')) res[key] = 1;
+        else if (k.includes('vaitro') || k.includes('vai_tro')) res[key] = 2;
+        else if (k.startsWith('ma_') || k.startsWith('ma') || k === 'id') res[key] = 1;
+        else res[key] = 1;
+      } else if (prop.type === 'boolean') {
+        res[key] = true;
+      } else if (prop.type === 'array') {
+        res[key] = prop.items ? [generateSampleFromSchema(prop.items, componentsSchemas)] : [];
+      } else {
+        res[key] = `Mau_${key}`;
+      }
+    });
+    return res;
+  }
+
+  if (schema.type === 'array') {
+    return schema.items ? [generateSampleFromSchema(schema.items, componentsSchemas)] : [];
+  }
+
+  return {};
+}
+
+// Helper: Lấy cấu trúc JSON mẫu cho Request Body của Endpoint
+function getSampleBody(ep: EndpointFlatItem, spec?: OpenAPISpec | null): any {
+  const jsonContent = ep.operation.requestBody?.content?.['application/json'];
+  if (jsonContent) {
+    if (jsonContent.example) return jsonContent.example;
+    if (jsonContent.schema) {
+      const generated = generateSampleFromSchema(jsonContent.schema, spec?.components?.schemas);
+      if (generated && Object.keys(generated).length > 0) return generated;
+    }
+  }
+  // Dự phòng thông minh cho các phương thức gửi body (POST, PUT, PATCH)
+  if (['POST', 'PUT', 'PATCH'].includes(ep.method)) {
+    if (ep.path.includes('auth/login')) {
+      return { email: 'admin@gmail.com', mat_khau: '123456' };
+    }
+    if (ep.path.includes('auth/register')) {
+      return { ho_ten: 'Nguyễn Văn A', email: 'nguyenvana@gmail.com', so_dien_thoai: '0909123456', mat_khau: '123456' };
+    }
+    if (ep.path.includes('send-otp')) {
+      return { email: 'admin@gmail.com', loai_otp: 'DOI_MAT_KHAU' };
+    }
+    if (ep.path.includes('verify-otp')) {
+      return { email: 'admin@gmail.com', ma_otp: '123456', loai_otp: 'DOI_MAT_KHAU' };
+    }
+    if (ep.path.includes('change-password')) {
+      return { email: 'admin@gmail.com', mat_khau_cu: '123456', mat_khau_moi: '654321' };
+    }
+    if (ep.path.includes('san-bong')) {
+      return {
+        ten_san: 'Sân A5 (5 người)',
+        ma_loai_san: 1,
+        hinh_anh: 'https://res.cloudinary.com/hpa8esqe/image/upload/v1790842122/quanlysanbong/edo8kzixwfki8iwut2tr.webp',
+        don_gia_phut: 300,
+        trang_thai: 'SAN_SANG'
+      };
+    }
+    if (ep.path.includes('loai-san')) {
+      return {
+        ten_loai: 'Sân 5 Người (Tiêu chuẩn)',
+        mo_ta: 'Mặt cỏ nhân tạo FIFA 2 sao, hệ thống đèn LED cao áp'
+      };
+    }
+    if (ep.path.includes('khung-gio')) {
+      return {
+        gio_bat_dau: '06:00',
+        gio_ket_thuc: '07:00',
+        he_so_gia: 1.0
+      };
+    }
+    if (ep.path.includes('vai-tro')) {
+      return {
+        ten_vai_tro: 'NhanVien',
+        mo_ta: 'Nhân viên quản lý sân bóng'
+      };
+    }
+    if (ep.path.includes('users')) {
+      return {
+        ho_ten: 'Nguyễn Văn B',
+        so_dien_thoai: '0909123456',
+        mat_khau: '123456',
+        MaVaiTro: 2,
+        anh_dai_dien: 'https://res.cloudinary.com/sport247/image/upload/avatar.jpg'
+      };
+    }
+    if (ep.path.includes('dich-vu')) {
+      return {
+        ten_dich_vu: 'Nước tăng lực RedBull',
+        don_gia: 20000,
+        so_luong_ton: 100,
+        don_vi_tinh: 'Lon',
+        hinh_anh: 'https://res.cloudinary.com/sport247/image/upload/redbull.jpg'
+      };
+    }
+    return { ten: 'Dữ liệu mẫu', trang_thai: 'HOAT_DONG' };
+  }
+  return null;
+}
+
+// Helper: Sinh mã nguồn gọi API chuẩn (cURL / Fetch / Axios) cho mọi method GET, POST, PUT, DELETE
+function getEndpointSnippet(
+  ep: EndpointFlatItem,
+  serverUrl: string,
+  params: Record<string, string> = {},
+  bodyText: string = '',
+  hasSecurity: boolean = false,
+  jwtToken: string = '',
+  lang: 'curl' | 'fetch' | 'axios' = 'curl'
+): string {
+  let url = `${serverUrl}${ep.path}`;
+  const queryParams = new URLSearchParams();
+
+  if (ep.operation.parameters) {
+    ep.operation.parameters.forEach(p => {
+      const val = params[p.name] !== undefined && params[p.name] !== '' 
+        ? params[p.name] 
+        : (p.schema?.default !== undefined ? String(p.schema.default) : p.schema?.example !== undefined ? String(p.schema.example) : '1');
+      if (p.in === 'path') {
+        url = url.replace(`{${p.name}}`, encodeURIComponent(val));
+      } else if (p.in === 'query') {
+        queryParams.append(p.name, val);
+      }
+    });
+  }
+
+  const queryString = queryParams.toString();
+  if (queryString) {
+    url += (url.includes('?') ? '&' : '?') + queryString;
+  }
+
+  const headers: Record<string, string> = {};
+  if (hasSecurity) {
+    headers['Authorization'] = `Bearer ${jwtToken || '<YOUR_JWT_TOKEN>'}`;
+  }
+  const hasBody = ['POST', 'PUT', 'PATCH'].includes(ep.method) && bodyText && bodyText.trim() !== '';
+  if (hasBody) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  if (lang === 'curl') {
+    let cmd = `curl -X ${ep.method} "${url}"`;
+    Object.entries(headers).forEach(([k, v]) => {
+      cmd += ` \\\n  -H "${k}: ${v}"`;
+    });
+    if (hasBody) {
+      cmd += ` \\\n  -d '${bodyText.trim()}'`;
+    }
+    return cmd;
+  }
+
+  if (lang === 'fetch') {
+    if (hasBody) {
+      return `// Gọi API bằng JavaScript Fetch (${ep.method})
+const response = await fetch("${url}", {
+  method: "${ep.method}",
+  headers: ${JSON.stringify(headers, null, 2).replace(/\n/g, '\n  ')},
+  body: JSON.stringify(${bodyText.trim() || '{}'})
+});
+const result = await response.json();
+console.log(result);`;
+    } else {
+      const hasHeaders = Object.keys(headers).length > 0;
+      if (ep.method === 'GET' && !hasHeaders) {
+        return `// Gọi API bằng JavaScript Fetch (GET)
+const response = await fetch("${url}");
+const result = await response.json();
+console.log(result);`;
+      }
+      return `// Gọi API bằng JavaScript Fetch (${ep.method})
+const response = await fetch("${url}", {
+  method: "${ep.method}"${hasHeaders ? `,\n  headers: ${JSON.stringify(headers, null, 2).replace(/\n/g, '\n  ')}` : ''}
+});
+const result = await response.json();
+console.log(result);`;
+    }
+  }
+
+  if (lang === 'axios') {
+    const hasHeaders = Object.keys(headers).length > 0;
+    const configStr = hasHeaders ? `, {\n  headers: ${JSON.stringify(headers, null, 2).replace(/\n/g, '\n  ')}\n}` : '';
+    if (hasBody) {
+      return `// Gọi API bằng Axios (${ep.method})
+import axios from 'axios';
+
+const response = await axios.${ep.method.toLowerCase()}(
+  "${url}",
+  ${bodyText.trim() || '{}'}${configStr}
+);
+console.log(response.data);`;
+    } else {
+      return `// Gọi API bằng Axios (${ep.method})
+import axios from 'axios';
+
+const response = await axios.${ep.method.toLowerCase()}("${url}"${configStr});
+console.log(response.data);`;
+    }
+  }
+
+  return '';
+}
 
 export interface SwaggerApiDocsProps {
   standalone?: boolean;
@@ -192,6 +458,8 @@ export default function SwaggerApiDocs({
   const [tryParams, setTryParams] = useState<Record<string, Record<string, string>>>({});
   const [tryBody, setTryBody] = useState<Record<string, string>>({});
   const [tryLoading, setTryLoading] = useState<Record<string, boolean>>({});
+  const [codeSnippetTab, setCodeSnippetTab] = useState<Record<string, 'curl' | 'fetch' | 'axios'>>({});
+  const [copiedSnippet, setCopiedSnippet] = useState<Record<string, boolean>>({});
   const [tryResponse, setTryResponse] = useState<Record<string, {
     status: number;
     statusText: string;
@@ -204,6 +472,24 @@ export default function SwaggerApiDocs({
   // Schemas accordion
   const [showSchemas, setShowSchemas] = useState(false);
   const [expandedSchemas, setExpandedSchemas] = useState<Record<string, boolean>>({});
+
+  // Realtime Dark Mode detection
+  const [internalDarkMode, setInternalDarkMode] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const checkDark = () => {
+        const isHtmlDark = document.documentElement.classList.contains('dark');
+        const isBodyDark = document.body.classList.contains('dark');
+        setInternalDarkMode(isHtmlDark || isBodyDark);
+      };
+      checkDark();
+      const observer = new MutationObserver(checkDark);
+      observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      return () => observer.disconnect();
+    }
+  }, []);
+
+  const isDark = typeof externalDarkMode === 'boolean' ? externalDarkMode : internalDarkMode;
 
   // Load token from localStorage on mount if exists
   useEffect(() => {
@@ -352,16 +638,17 @@ export default function SwaggerApiDocs({
               ? String(p.schema.default) 
               : p.schema?.example !== undefined 
               ? String(p.schema.example) 
-              : '';
+              : p.in === 'path' ? '1' : '';
           });
           setTryParams(p => ({ ...p, [id]: defaults }));
         }
-        // Body
-        if (ep.operation.requestBody && !tryBody[id]) {
-          const jsonContent = ep.operation.requestBody.content?.['application/json'];
-          if (jsonContent?.example) {
-            setTryBody(b => ({ ...b, [id]: JSON.stringify(jsonContent.example, null, 2) }));
-          } else if (jsonContent?.schema) {
+        // Body (tự động sinh JSON mẫu phong phú chuẩn 100% cho mọi method POST/PUT/PATCH)
+        const needsBody = ep.operation.requestBody || ['POST', 'PUT', 'PATCH'].includes(ep.method);
+        if (needsBody && !tryBody[id]) {
+          const sample = getSampleBody(ep, spec);
+          if (sample && Object.keys(sample).length > 0) {
+            setTryBody(b => ({ ...b, [id]: JSON.stringify(sample, null, 2) }));
+          } else {
             setTryBody(b => ({ ...b, [id]: '{\n  \n}' }));
           }
         }
@@ -375,7 +662,29 @@ export default function SwaggerApiDocs({
     const nextTagState: Record<string, boolean> = {};
     const nextEpState: Record<string, boolean> = {};
     tagList.forEach(t => { nextTagState[t.name] = expand; });
-    flatEndpoints.forEach(ep => { nextEpState[ep.id] = expand; });
+    flatEndpoints.forEach(ep => {
+      nextEpState[ep.id] = expand;
+      if (expand) {
+        if (ep.operation.parameters && !tryParams[ep.id]) {
+          const defaults: Record<string, string> = {};
+          ep.operation.parameters.forEach(p => {
+            defaults[p.name] = p.schema?.default !== undefined 
+              ? String(p.schema.default) 
+              : p.schema?.example !== undefined 
+              ? String(p.schema.example) 
+              : p.in === 'path' ? '1' : '';
+          });
+          setTryParams(p => ({ ...p, [ep.id]: defaults }));
+        }
+        const needsBody = ep.operation.requestBody || ['POST', 'PUT', 'PATCH'].includes(ep.method);
+        if (needsBody && !tryBody[ep.id]) {
+          const sample = getSampleBody(ep, spec);
+          if (sample && Object.keys(sample).length > 0) {
+            setTryBody(b => ({ ...b, [ep.id]: JSON.stringify(sample, null, 2) }));
+          }
+        }
+      }
+    });
     setExpandedTags(nextTagState);
     setExpandedEndpoints(nextEpState);
   };
@@ -390,7 +699,10 @@ export default function SwaggerApiDocs({
     if (ep.operation.parameters) {
       ep.operation.parameters.forEach(p => {
         if (p.in === 'path') {
-          const val = pVals[p.name] !== undefined ? pVals[p.name] : (p.schema?.default || p.schema?.example || '1');
+          const rawVal = pVals[p.name];
+          const val = (rawVal !== undefined && String(rawVal).trim() !== '') 
+            ? String(rawVal).trim() 
+            : (p.schema?.default !== undefined ? String(p.schema.default) : p.schema?.example !== undefined ? String(p.schema.example) : '1');
           finalUrl = finalUrl.replace(`{${p.name}}`, encodeURIComponent(val));
         }
       });
@@ -582,7 +894,7 @@ export default function SwaggerApiDocs({
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-[#49cc90] border border-[#49cc90]/40">
                   OAS 3.0
                 </span>
-                <span className="text-[11px] font-mono text-slate-400 hidden md:inline">OpenAPI.yaml</span>
+                <span className="text-[11px] font-mono text-slate-400 hidden md:inline">OpenAPI</span>
               </div>
             </div>
           </div>
@@ -746,20 +1058,20 @@ export default function SwaggerApiDocs({
           {/* Method Filter & Tag Filter */}
           <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
             {/* Method Pills */}
-            <div className="flex items-center bg-slate-100 dark:bg-slate-900 rounded-lg p-1 border border-slate-200 dark:border-slate-800 text-xs font-bold">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900 rounded-lg p-1 border border-slate-200 dark:border-slate-800 text-xs font-black">
               {['ALL', 'GET', 'POST', 'PUT', 'DELETE'].map(m => (
                 <button
                   key={m}
                   type="button"
                   onClick={() => setSelectedMethod(m)}
-                  className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                  className={`px-3 py-1 rounded-md transition-all cursor-pointer font-black ${
                     selectedMethod === m
                       ? m === 'GET' ? 'bg-[#4990e2] text-white shadow-sm'
                       : m === 'POST' ? 'bg-[#49cc90] text-black shadow-sm'
-                      : m === 'PUT' ? 'bg-[#fca130] text-white shadow-sm'
+                      : m === 'PUT' ? 'bg-[#fca130] text-black shadow-sm font-black'
                       : m === 'DELETE' ? 'bg-[#f93e3e] text-white shadow-sm'
                       : 'bg-emerald-600 text-white shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      : 'text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white font-extrabold'
                   }`}
                 >
                   {m}
@@ -876,24 +1188,39 @@ export default function SwaggerApiDocs({
                         const isExpanded = !!expandedEndpoints[epId];
                         const cfg = METHOD_CONFIG[ep.method] || METHOD_CONFIG.GET;
                         const hasSecurity = (ep.operation.security && ep.operation.security.length > 0) || 
-                          (spec.components?.securitySchemes && ep.path.startsWith('/api') && !['/api/auth/login', '/api/auth/register', '/api/tin-tuc', '/api/banner', '/api/about-us'].includes(ep.path));
+                          (spec?.components?.securitySchemes && ep.path.startsWith('/api') && !['/api/auth/login', '/api/auth/register', '/api/tin-tuc', '/api/banner', '/api/about-us'].includes(ep.path));
+                        const currentLang = codeSnippetTab[epId] || 'curl';
+                        const snippetText = getEndpointSnippet(
+                          ep,
+                          activeServer,
+                          tryParams[epId] || {},
+                          tryBody[epId] || '',
+                          !!hasSecurity,
+                          jwtToken,
+                          currentLang
+                        );
 
                         return (
                           <div
                             key={epId}
-                            className="rounded-xl border transition-all duration-200 overflow-hidden shadow-xs"
+                            className={`rounded-xl border transition-all duration-200 overflow-hidden shadow-xs ${
+                              isDark ? 'bg-[#18181b] border-slate-800' : 'bg-white border-slate-200'
+                            }`}
                             style={{
-                              borderColor: isExpanded ? cfg.badgeBg : 'rgba(156, 163, 175, 0.25)',
-                              backgroundColor: isExpanded ? 'rgba(255, 255, 255, 0.98)' : 'rgba(255, 255, 255, 0.6)'
+                              borderColor: isExpanded ? cfg.badgeBg : (isDark ? 'rgba(75, 85, 99, 0.4)' : 'rgba(156, 163, 175, 0.25)')
                             }}
                           >
                             {/* ENDPOINT SUMMARY STRIP */}
                             <div
                               onClick={() => toggleEndpoint(epId, ep)}
-                              className="p-3 flex items-center justify-between gap-3 cursor-pointer select-none dark:bg-[#1e1e1e] hover:opacity-95 transition-opacity"
+                              className={`p-3 flex items-center justify-between gap-3 cursor-pointer select-none transition-all ${
+                                isDark ? 'hover:bg-white/5' : 'hover:opacity-95'
+                              }`}
                               style={{
                                 borderLeft: `5px solid ${cfg.badgeBg}`,
-                                backgroundColor: isExpanded ? cfg.bgColor : undefined
+                                backgroundColor: isExpanded 
+                                  ? (isDark ? cfg.darkBg : cfg.bgColor) 
+                                  : (isDark ? '#1e1e1e' : undefined)
                               }}
                             >
                               <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -906,12 +1233,22 @@ export default function SwaggerApiDocs({
                                 </span>
 
                                 {/* Path */}
-                                <code className="font-mono text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
+                                <code
+                                  className={`font-mono text-xs sm:text-sm font-black tracking-wide truncate ${
+                                    isDark ? '' : 'text-slate-900'
+                                  }`}
+                                  style={{ color: isDark ? cfg.darkTextColor : undefined }}
+                                >
                                   {ep.path}
                                 </code>
 
                                 {/* Summary */}
-                                <span className="text-xs text-slate-500 dark:text-slate-400 truncate hidden md:inline">
+                                <span
+                                  className={`text-xs font-extrabold truncate hidden md:inline ${
+                                    isDark ? '' : 'text-slate-700'
+                                  }`}
+                                  style={{ color: isDark ? cfg.darkSummaryColor : undefined }}
+                                >
                                   — {ep.operation.summary || ep.operation.description || ''}
                                 </span>
                               </div>
@@ -922,7 +1259,7 @@ export default function SwaggerApiDocs({
                                     <Lock className="w-3.5 h-3.5 text-amber-500" />
                                   </span>
                                 )}
-                                <span className="text-slate-400">
+                                <span className={isDark ? 'text-slate-200' : 'text-slate-400'}>
                                   {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                 </span>
                               </div>
@@ -1011,43 +1348,123 @@ export default function SwaggerApiDocs({
                                 </div>
 
                                 {/* REQUEST BODY SECTION */}
-                                {ep.operation.requestBody && (
+                                {(ep.operation.requestBody || ['POST', 'PUT', 'PATCH'].includes(ep.method)) && (
                                   <div>
                                     <div className="flex items-center justify-between mb-2">
                                       <h4 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                                        Request Body {ep.operation.requestBody.required && <span className="text-rose-500">*</span>}
+                                        Request Body {(ep.operation.requestBody?.required ?? true) && <span className="text-rose-500">*</span>}
                                       </h4>
-                                      <span className="text-[11px] font-mono text-slate-400">application/json</span>
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const sample = getSampleBody(ep, spec);
+                                            if (sample) {
+                                              setTryBody(prev => ({ ...prev, [epId]: JSON.stringify(sample, null, 2) }));
+                                            }
+                                          }}
+                                          className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer flex items-center gap-1"
+                                          title="Nạp lại dữ liệu JSON mẫu chuẩn"
+                                        >
+                                          <RefreshCw className="w-3 h-3" />
+                                          <span>Nạp mẫu JSON chuẩn</span>
+                                        </button>
+                                        <span className="text-slate-300 dark:text-slate-700">|</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => copyToClipboard(tryBody[epId] || '')}
+                                          className="text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer flex items-center gap-1"
+                                          title="Sao chép JSON sang bộ nhớ tạm"
+                                        >
+                                          <Copy className="w-3 h-3" />
+                                          <span>Sao chép JSON</span>
+                                        </button>
+                                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                          application/json
+                                        </span>
+                                      </div>
                                     </div>
 
                                     <div className="relative">
                                       <textarea
-                                        rows={6}
+                                        rows={7}
                                         value={tryBody[epId] || ''}
                                         onChange={(e) => {
                                           const val = e.target.value;
                                           setTryBody(prev => ({ ...prev, [epId]: val }));
                                         }}
                                         placeholder="Nhập JSON Request Body..."
-                                        className="w-full p-2.5 font-mono text-xs bg-slate-900 text-emerald-300 rounded-xl border border-slate-700 focus:border-emerald-500 focus:outline-none leading-relaxed"
+                                        className="w-full p-3 font-mono text-xs bg-slate-950 text-emerald-300 rounded-xl border border-slate-700 focus:border-emerald-500 focus:outline-none leading-relaxed"
                                       />
-                                      {ep.operation.requestBody.content?.['application/json']?.example && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const ex = ep.operation.requestBody?.content?.['application/json']?.example;
-                                            if (ex) {
-                                              setTryBody(prev => ({ ...prev, [epId]: JSON.stringify(ex, null, 2) }));
-                                            }
-                                          }}
-                                          className="absolute right-3 top-3 px-2 py-1 text-[10px] font-bold rounded bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-600 cursor-pointer"
-                                        >
-                                          Mẫu mặc định
-                                        </button>
-                                      )}
                                     </div>
                                   </div>
                                 )}
+
+                                {/* DELETE METHOD NOTICE */}
+                                {ep.method === 'DELETE' && !ep.operation.requestBody && (
+                                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-700 dark:text-rose-300 flex items-start gap-2.5">
+                                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+                                    <div className="leading-relaxed">
+                                      <span className="font-bold">Phương thức DELETE:</span> Chuẩn RESTful dùng DELETE để xóa dữ liệu thông qua tham số trên URL (như <code>{`{id}`}</code>), không cần truyền Request Body. Bạn chỉ cần nhập ID cần xóa ở bảng Parameters phía trên rồi nhấn <span className="font-bold">"Execute"</span> hoặc sao chép mã nguồn mẫu bên dưới.
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* CODE SNIPPET SECTION (cURL / JavaScript Fetch / Axios) */}
+                                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 p-3 sm:p-3.5 space-y-2">
+                                  <div className="flex items-center justify-between flex-wrap gap-2">
+                                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                                      <Code2 className="w-4 h-4 text-emerald-500" />
+                                      <span>Mã nguồn mẫu ({currentLang === 'curl' ? 'cURL' : currentLang === 'fetch' ? 'JavaScript Fetch' : 'Axios'}):</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5">
+                                      {(['curl', 'fetch', 'axios'] as const).map(lang => (
+                                        <button
+                                          key={lang}
+                                          type="button"
+                                          onClick={() => setCodeSnippetTab(prev => ({ ...prev, [epId]: lang }))}
+                                          className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                                            currentLang === lang
+                                              ? 'bg-emerald-600 text-white shadow-xs'
+                                              : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700'
+                                          }`}
+                                        >
+                                          {lang === 'curl' ? 'cURL' : lang === 'fetch' ? 'Fetch JS' : 'Axios'}
+                                        </button>
+                                      ))}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          copyToClipboard(snippetText);
+                                          setCopiedSnippet(prev => ({ ...prev, [epId]: true }));
+                                          setTimeout(() => {
+                                            setCopiedSnippet(prev => ({ ...prev, [epId]: false }));
+                                          }, 2000);
+                                        }}
+                                        className="ml-1 flex items-center gap-1 px-2.5 py-1 rounded bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-mono font-bold transition-colors cursor-pointer"
+                                        title="Sao chép mã nguồn mẫu"
+                                      >
+                                        {copiedSnippet[epId] ? (
+                                          <>
+                                            <Check className="w-3 h-3 text-emerald-500" />
+                                            <span className="text-emerald-500">Đã chép</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Copy className="w-3 h-3" />
+                                            <span>Copy Code</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <pre className="p-3 bg-black/90 rounded-lg text-xs font-mono text-emerald-300 overflow-x-auto whitespace-pre-wrap leading-relaxed border border-slate-800 max-h-56">
+                                    {snippetText}
+                                  </pre>
+                                </div>
 
                                 {/* EXECUTE BUTTON BAR */}
                                 <div className="flex items-center gap-3 pt-1">

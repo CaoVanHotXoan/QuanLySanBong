@@ -380,7 +380,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     items: [
       { id: 'NGUOI_DUNG', label: 'Danh Sách Người Dùng', icon: User, tableHint: 'Nguoi_Dung' },
       { id: 'VAI_TRO', label: 'Phân Quyền & Vai Trò', icon: ShieldCheck, tableHint: 'Vai_Tro' },
-      { id: 'OPENAPI', label: 'OpenAPI.yaml (Swagger)', icon: Code2, badge: 'API' }
+      { id: 'OPENAPI', label: 'OpenAPI (Swagger)', icon: Code2, badge: 'API' }
     ]
   }
 ];
@@ -3134,16 +3134,16 @@ export default function AdminDashboard() {
                 {activeTab === 'KHUNG_GIO' && 'Bảng Khung Giờ Hoạt Động'}
                 {activeTab === 'NGUOI_DUNG' && 'Danh Sách Người Dùng'}
                 {activeTab === 'VAI_TRO' && 'Phân Quyền & Vai Trò'}
-                {activeTab === 'OPENAPI' && 'Tài Liệu API Toàn Bộ Dự Án (OpenAPI.yaml)'}
+                {activeTab === 'OPENAPI' && 'Tài Liệu API Toàn Bộ Dự Án'}
               </h2>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-              {/* Nút OpenAPI.yaml - Chuyển sang tab Swagger API trực tiếp trong Dashboard mà không nhảy sang tab trình duyệt khác */}
+              {/* Nút OpenAPI - Chuyển sang tab Swagger API trực tiếp trong Dashboard mà không nhảy sang tab trình duyệt khác */}
               <button
                 type="button"
                 onClick={() => setActiveTab(activeTab === 'OPENAPI' ? 'OVERVIEW' : 'OPENAPI')}
-                title={activeTab === 'OPENAPI' ? 'Quay lại Bảng điều khiển (Dashboard)' : 'Mở tab tài liệu OpenAPI.yaml (Swagger UI) ngay trong Dashboard'}
+                title={activeTab === 'OPENAPI' ? 'Quay lại Bảng điều khiển (Dashboard)' : 'Mở tab tài liệu OpenAPI (Swagger UI) ngay trong Dashboard'}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-black shadow-xs transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${
                   activeTab === 'OPENAPI'
                     ? 'bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-500/40'
@@ -3153,7 +3153,7 @@ export default function AdminDashboard() {
                 }`}
               >
                 <span className={`w-2 h-2 rounded-full ${activeTab === 'OPENAPI' ? 'bg-white' : 'bg-[#49cc90]'} animate-pulse`}></span>
-                <span className="font-mono tracking-tight font-extrabold">OpenAPI.yaml</span>
+                <span className="font-mono tracking-tight font-extrabold">OpenAPI</span>
                 <Code2 className="w-3.5 h-3.5" />
               </button>
 
