@@ -20,6 +20,7 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  HelpCircle,
 } from "lucide-react";
 import authService from "../services/authService";
 
@@ -37,7 +38,7 @@ export interface UserProfileData {
   avatarUrl?: string;
 }
 
-export type TabType = "account" | "notifications" | "password";
+export type TabType = "account" | "notifications" | "password" | "forgot_password";
 
 export interface ProfileProps {
   onLogout?: () => void;
@@ -122,6 +123,26 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
     const t = setInterval(() => setEmailOtpCountdown((p) => (p > 0 ? p - 1 : 0)), 1000);
     return () => clearInterval(t);
   }, [emailOtpCountdown]);
+
+  // 8. STATE QUẢN LÝ "QUÊN MẬT KHẨU"
+  const [forgotOtp, setForgotOtp] = useState<string>("");
+  const [forgotNewPassword, setForgotNewPassword] = useState<string>("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState<string>("");
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState<boolean>(false);
+  const [showForgotConfirmPassword, setShowForgotConfirmPassword] = useState<boolean>(false);
+  const [isSendingForgotOtp, setIsSendingForgotOtp] = useState<boolean>(false);
+  const [forgotOtpCountdown, setForgotOtpCountdown] = useState<number>(0);
+  const [forgotMsg, setForgotMsg] = useState<{
+    type: "success" | "error" | "";
+    text: string;
+  }>({ type: "", text: "" });
+
+  // Đếm ngược OTP Quên mật khẩu
+  useEffect(() => {
+    if (forgotOtpCountdown <= 0) return;
+    const t = setInterval(() => setForgotOtpCountdown((p) => (p > 0 ? p - 1 : 0)), 1000);
+    return () => clearInterval(t);
+  }, [forgotOtpCountdown]);
 
   // Tự động load thông tin đã đăng nhập từ localStorage (nếu có)
   useEffect(() => {
@@ -429,6 +450,90 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
     }
   };
 
+  // 9. XỬ LÝ GỬI MÃ OTP QUÊN MẬT KHẨU QUA GMAIL
+  const handleSendForgotOtp = async () => {
+    if (!userData.email) {
+      setForgotMsg({ type: "error", text: "Không tìm thấy địa chỉ Gmail của tài khoản!" });
+      return;
+    }
+    setIsSendingForgotOtp(true);
+    setForgotMsg({ type: "", text: "" });
+    try {
+      const res = await authService.sendOtp(userData.email, "QUEN_MAT_KHAU", userData.hoTen);
+      if (res?.success || (res as any)?.data?.success) {
+        setForgotOtpCountdown(60);
+        setForgotMsg({
+          type: "success",
+          text: `Mã OTP đã được gửi tới Gmail ${userData.email}. Vui lòng kiểm tra hộp thư!`,
+        });
+        showToast("📧 Đã gửi mã OTP khôi phục mật khẩu qua Gmail!", "info");
+      } else {
+        setForgotMsg({
+          type: "error",
+          text: res?.message || (res as any)?.data?.message || "Không thể gửi mã OTP qua Gmail. Vui lòng thử lại!",
+        });
+      }
+    } catch (err: any) {
+      setForgotMsg({
+        type: "error",
+        text: err.response?.data?.message || err.message || "Lỗi gửi mã OTP qua Gmail!",
+      });
+    } finally {
+      setIsSendingForgotOtp(false);
+    }
+  };
+
+  // 10. XỬ LÝ SUBMIT ĐẶT LẠI MẬT KHẨU MỚI BẰNG OTP
+  const handleResetForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotMsg({ type: "", text: "" });
+
+    if (!forgotOtp.trim() || forgotOtp.trim().length !== 6) {
+      setForgotMsg({ type: "error", text: "Vui lòng nhập đúng 6 chữ số mã OTP xác thực qua Gmail!" });
+      return;
+    }
+
+    if (forgotNewPassword.length < 6) {
+      setForgotMsg({ type: "error", text: "Mật khẩu mới phải có tối thiểu 6 ký tự!" });
+      return;
+    }
+
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setForgotMsg({ type: "error", text: "Mật khẩu xác nhận không trùng khớp!" });
+      return;
+    }
+
+    try {
+      const res = await authService.changePassword({
+        email: userData.email,
+        ma_otp: forgotOtp.trim(),
+        mat_khau_moi: forgotNewPassword.trim(),
+        loai_otp: "QUEN_MAT_KHAU",
+      });
+
+      if (res?.success || (res as any)?.data?.success) {
+        setForgotMsg({
+          type: "success",
+          text: "🎉 Đặt lại mật khẩu thành công! Mật khẩu mới của bạn đã có hiệu lực.",
+        });
+        showToast("🎉 Đặt lại mật khẩu thành công!", "success");
+        setForgotOtp("");
+        setForgotNewPassword("");
+        setForgotConfirmPassword("");
+      } else {
+        setForgotMsg({
+          type: "error",
+          text: res?.message || (res as any)?.data?.message || "Đặt lại mật khẩu thất bại. Vui lòng kiểm tra lại mã OTP!",
+        });
+      }
+    } catch (err: any) {
+      setForgotMsg({
+        type: "error",
+        text: err.response?.data?.message || err.message || "Lỗi đặt lại mật khẩu!",
+      });
+    }
+  };
+
   // Xử lý Đăng xuất
   const handleLogout = () => {
     const isConfirm = window.confirm("Bạn có chắc chắn muốn đăng xuất không?");
@@ -570,6 +675,22 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                 >
                   <KeyRound className="w-4 h-4 text-emerald-400" />
                   <span>Đổi mật khẩu</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab("forgot_password");
+                    setForgotMsg({ type: "", text: "" });
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    activeTab === "forgot_password"
+                      ? "bg-slate-800 text-emerald-400 border border-slate-700 shadow-sm"
+                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                  }`}
+                >
+                  <HelpCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Quên mật khẩu</span>
                 </button>
               </nav>
             </div>
@@ -840,6 +961,156 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                       className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
                     >
                       Xác nhận đổi mật khẩu
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* TAB 4: QUÊN MẬT KHẨU (GỬI MÃ OTP QUA GMAIL) */}
+            {activeTab === "forgot_password" && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <HelpCircle className="w-5 h-5 text-emerald-400" />
+                    <span>Quên Mật Khẩu</span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Khôi phục mật khẩu thông qua mã xác thực OTP gửi tới Gmail tài khoản của bạn
+                  </p>
+                </div>
+
+                {forgotMsg.text && (
+                  <div
+                    className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
+                      forgotMsg.type === "success"
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                        : "bg-rose-500/10 border-rose-500/30 text-rose-400"
+                    }`}
+                  >
+                    {forgotMsg.type === "success" ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    )}
+                    <span>{forgotMsg.text}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleResetForgotPassword} className="space-y-3">
+                  {/* Gmail tài khoản */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                      Email đăng ký tài khoản
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="email"
+                        value={userData.email || ""}
+                        readOnly
+                        disabled
+                        className="w-full px-3 py-2 bg-slate-950/60 border border-slate-800 rounded-xl text-xs text-slate-400 cursor-not-allowed select-none"
+                      />
+                      <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    </div>
+                  </div>
+
+                  {/* Nhận và nhập mã OTP */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                      Mã xác thực OTP qua Gmail <span className="text-rose-400">*</span>
+                    </label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        value={forgotOtp}
+                        onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        placeholder="6 chữ số OTP"
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-700/80 rounded-xl text-emerald-400 placeholder-slate-500 text-xs font-mono tracking-widest font-bold text-center focus:outline-none focus:border-emerald-500"
+                        required
+                      />
+                      <button
+                        type="button"
+                        disabled={isSendingForgotOtp || forgotOtpCountdown > 0}
+                        onClick={handleSendForgotOtp}
+                        className="px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-emerald-500/20 active:scale-95 flex items-center gap-1.5 cursor-pointer shrink-0"
+                      >
+                        {isSendingForgotOtp ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Đang gửi...</span>
+                          </>
+                        ) : forgotOtpCountdown > 0 ? (
+                          <span>Gửi lại ({forgotOtpCountdown}s)</span>
+                        ) : (
+                          <>
+                            <Mail className="w-3.5 h-3.5" />
+                            <span>Gửi mã OTP</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Bấm <strong>"Gửi mã OTP"</strong> để nhận mã xác minh 6 chữ số gửi tới hộp thư Gmail của bạn ({userData.email}).
+                    </p>
+                  </div>
+
+                  {/* Mật khẩu mới */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                      Mật khẩu mới <span className="text-rose-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showForgotNewPassword ? "text" : "password"}
+                        value={forgotNewPassword}
+                        onChange={(e) => setForgotNewPassword(e.target.value)}
+                        placeholder="Tối thiểu 6 ký tự"
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:border-emerald-500 focus:outline-none pr-10"
+                        required
+                        minLength={6}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      >
+                        {showForgotNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Xác nhận mật khẩu mới */}
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase mb-1">
+                      Xác nhận mật khẩu mới <span className="text-rose-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showForgotConfirmPassword ? "text" : "password"}
+                        value={forgotConfirmPassword}
+                        onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                        placeholder="Nhập lại mật khẩu mới"
+                        className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:border-emerald-500 focus:outline-none pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotConfirmPassword(!showForgotConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      >
+                        {showForgotConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs rounded-xl shadow transition-all cursor-pointer"
+                    >
+                      Xác nhận đặt lại mật khẩu
                     </button>
                   </div>
                 </form>

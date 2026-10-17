@@ -29,8 +29,8 @@ export const authService = {
         return api.post<{ success: boolean; message: string; data: UserProfile }>('/auth/register', data);
     },
 
-    // Gửi mã OTP xác thực qua Gmail (Đăng ký, Đổi mật khẩu, Cập nhật Email)
-    sendOtp: (email: string, loai_otp: 'DANG_KY' | 'DOI_MAT_KHAU' | 'CAP_NHAT_EMAIL', ho_ten?: string) => {
+    // Gửi mã OTP xác thực qua Gmail (Đăng ký, Đổi mật khẩu, Quên mật khẩu, Cập nhật Email)
+    sendOtp: (email: string, loai_otp: 'DANG_KY' | 'DOI_MAT_KHAU' | 'QUEN_MAT_KHAU' | 'CAP_NHAT_EMAIL', ho_ten?: string) => {
         return api.post<{ success: boolean; message: string }>('/auth/send-otp', {
             email,
             loai_otp,
@@ -39,7 +39,7 @@ export const authService = {
     },
 
     // Xác thực mã OTP
-    verifyOtp: (email: string, ma_otp: string, loai_otp: 'DANG_KY' | 'DOI_MAT_KHAU' | 'CAP_NHAT_EMAIL') => {
+    verifyOtp: (email: string, ma_otp: string, loai_otp: 'DANG_KY' | 'DOI_MAT_KHAU' | 'QUEN_MAT_KHAU' | 'CAP_NHAT_EMAIL') => {
         return api.post<{ success: boolean; message: string }>('/auth/verify-otp', {
             email,
             ma_otp,
@@ -67,8 +67,8 @@ export const authService = {
         return api.delete<{ success: boolean; message: string }>(`/auth/users/${id}`);
     },
 
-    // Đổi mật khẩu (hỗ trợ xác thực qua OTP Gmail hoặc mật khẩu cũ)
-    changePassword: (data: { email?: string; ma_otp?: string; mat_khau_cu?: string; mat_khau_moi: string }) => {
+    // Đổi mật khẩu / Quên mật khẩu (hỗ trợ xác thực qua OTP Gmail hoặc mật khẩu cũ)
+    changePassword: (data: { email?: string; ma_otp?: string; mat_khau_cu?: string; mat_khau_moi: string; loai_otp?: string }) => {
         return api.post<{ success: boolean; message: string }>('/auth/change-password', data);
     },
 

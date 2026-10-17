@@ -203,6 +203,16 @@ function formatDateDMY(dateStr: string): string {
   return dateStr;
 }
 
+// Helper định dạng ngày YYYY-MM-DD sang dạng đầy đủ chữ "Ngày DD tháng MM năm YYYY"
+function formatDateVietnamese(dateStr: string): string {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `Ngày ${parts[2]} tháng ${parts[1]} năm ${parts[0]}`;
+  }
+  return dateStr;
+}
+
 // Helper kiểm tra sân hoặc loại sân có phải là "Dự bị" hay không để ẩn trên trang chủ Khách hàng
 function isDuBiPitch(item?: { ten_loai?: string; ten_san?: string; mo_ta?: string } | null): boolean {
   if (!item) return false;
@@ -1283,13 +1293,15 @@ export default function HomePage() {
     e.preventDefault();
     if (!selectedSlot) return;
 
-    if (!bookingForm.ho_ten.trim() || !bookingForm.so_dien_thoai.trim()) {
+    const hoTen = (bookingForm.ho_ten || currentUser?.ho_ten || '').trim();
+    if (!hoTen) {
       triggerToast({
         type: 'error',
-        message: 'Vui lòng điền đầy đủ Họ tên và Số điện thoại liên hệ!',
+        message: 'Không tìm thấy Họ tên người đặt! Vui lòng đăng nhập lại.',
       });
       return;
     }
+    const soDienThoai = (bookingForm.so_dien_thoai || currentUser?.so_dien_thoai || '').trim();
 
     setIsCreatingPayOS(true);
     setIsPaymentSuccess(false);
@@ -1310,13 +1322,13 @@ export default function HomePage() {
             tong_tien: tongTienDon,
             ghi_chu: bookingForm.ghi_chu || null,
             dich_vu_chon: bookingForm.dich_vu_chon || {},
-            ho_ten: bookingForm.ho_ten,
-            so_dien_thoai: bookingForm.so_dien_thoai,
+            ho_ten: hoTen,
+            so_dien_thoai: soDienThoai,
           },
           so_tien: soTienThanhToan,
           loai_thanh_toan: bookingForm.loai_thanh_toan,
-          ho_ten: bookingForm.ho_ten,
-          so_dien_thoai: bookingForm.so_dien_thoai,
+          ho_ten: hoTen,
+          so_dien_thoai: soDienThoai,
         }),
       });
 
@@ -2576,7 +2588,7 @@ export default function HomePage() {
                     <div className={`text-base font-black mt-0.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                       {selectedSlot.san.ten_san} <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-500">({selectedSlot.san.ten_loai || 'Sân bóng'})</span>
                     </div>
-                    <div className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>Ngày: <span className={`font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{formatDateDMY(filterNgayDa)}</span></div>
+                    <div className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>Ngày đá: <span className={`font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{formatDateVietnamese(filterNgayDa)}</span></div>
                   </div>
 
                   <div className={`sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
@@ -2850,7 +2862,7 @@ export default function HomePage() {
                   }`}>
                   <div>
                     <span className={`font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Ngày thi đấu:</span>
-                    <div className={`font-bold text-sm mt-0.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{formatDateDMY(filterNgayDa)}</div>
+                    <div className={`font-bold text-sm mt-0.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{formatDateVietnamese(filterNgayDa)}</div>
                   </div>
                   <div>
                     <span className={`font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Khung giờ ({selectedSlot.durationMin}p):</span>
@@ -2872,32 +2884,17 @@ export default function HomePage() {
                     <User className="w-4 h-4" />
                     Thông Tin Khách Hàng Đặt Sân
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4">
                     <div>
                       <label className={`text-xs font-semibold block mb-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                        Họ và Tên người đặt <span className="text-rose-500">*</span>
+                        Họ và Tên người đặt <span className="text-emerald-500 font-normal">(Đã khóa theo tài khoản)</span>
                       </label>
                       <input
                         type="text"
-                        required
-                        placeholder="VD: Nguyễn Văn A"
-                        value={bookingForm.ho_ten}
-                        onChange={(e) => setBookingForm({ ...bookingForm, ho_ten: e.target.value })}
-                        className={`w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-slate-950 border border-slate-800 text-slate-100' : 'bg-slate-50 border border-slate-300 text-slate-900'
-                          }`}
-                      />
-                    </div>
-                    <div>
-                      <label className={`text-xs font-semibold block mb-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                        Số điện thoại liên hệ <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        placeholder="VD: 0912345678"
-                        value={bookingForm.so_dien_thoai}
-                        onChange={(e) => setBookingForm({ ...bookingForm, so_dien_thoai: e.target.value })}
-                        className={`w-full px-4 py-2.5 rounded-xl text-sm focus:outline-none focus:border-emerald-500 ${isDarkMode ? 'bg-slate-950 border border-slate-800 text-slate-100' : 'bg-slate-50 border border-slate-300 text-slate-900'
+                        readOnly
+                        disabled
+                        value={bookingForm.ho_ten || currentUser?.ho_ten || ''}
+                        className={`w-full px-4 py-2.5 rounded-xl text-sm font-semibold cursor-not-allowed select-none ${isDarkMode ? 'bg-slate-950/80 border border-slate-800 text-slate-300' : 'bg-slate-100 border border-slate-300 text-slate-700'
                           }`}
                       />
                     </div>
