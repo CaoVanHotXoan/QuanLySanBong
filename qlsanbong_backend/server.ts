@@ -12,6 +12,8 @@ import dotenv from 'dotenv';
 import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yamljs';
 
 dotenv.config();
 
@@ -44,6 +46,8 @@ app.get('/', (req: Request, res: Response) => {
         message: '🚀 Hệ thống API Quản lý Sân bóng đá đang hoạt động!',
         version: '1.0.0',
         endpoints: {
+            swagger_ui: '/api-docs',
+            openapi_spec: '/OpenAPI.yaml',
             auth: '/api/auth',
             dat_san: '/api/dat-san',
             dich_vu: '/api/dich-vu',
@@ -64,7 +68,24 @@ app.use('/api/bao-cao', baoCaoRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api', contentRoutes);
 
-// Cung cấp tài liệu OpenAPI Specification (Swagger)
+// Cung cấp giao diện Swagger UI trực quan tương tác (/api-docs)
+try {
+    const candidates = [
+        path.join(__dirname, 'OpenAPI.yaml'),
+        path.join(__dirname, '..', 'OpenAPI.yaml'),
+        path.join(process.cwd(), 'OpenAPI.yaml')
+    ];
+    const yamlPath = candidates.find(p => fs.existsSync(p));
+    if (yamlPath) {
+        const swaggerDocument = YAML.load(yamlPath);
+        app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+        console.log('📖 [Swagger UI] Đã kích hoạt giao diện tài liệu API tại http://localhost:' + PORT + '/api-docs');
+    }
+} catch (err: any) {
+    console.error('⚠️ [Swagger UI] Lỗi cấu hình Swagger UI:', err.message);
+}
+
+// Cung cấp tài liệu OpenAPI Specification dạng file thô (YAML)
 app.get(['/OpenAPI.yaml', '/openapi.yaml'], (req: Request, res: Response) => {
     const candidates = [
         path.join(__dirname, 'OpenAPI.yaml'),
@@ -194,6 +215,17 @@ io.on('connection', (socket) => {
             console.log(`🔓 [Force Unlock]: Slot ${slotId} đã được Admin/POS mở khóa`);
             io.emit('slots_updated', Array.from(lockedSlots.keys()));
         }
+    });
+
+    // 5. SỰ KIỆN ĐỒNG BỘ ĐƠN ĐẶT SÂN REAL-TIME (Relay giữa POS Management System và Trang Chủ)
+    socket.on('booking_updated', (data: any) => {
+        console.log(`📢 [Socket Relay]: Nhận booking_updated từ ${socket.id}, broadcast tới toàn bộ client.`);
+        io.emit('booking_updated', data);
+    });
+
+    socket.on('payment_success', (data: any) => {
+        console.log(`💰 [Socket Relay]: Nhận payment_success từ ${socket.id}, broadcast tới toàn bộ client.`);
+        io.emit('payment_success', data);
     });
 
     // 5. SỰ KIỆN NGẮT KẾT NỐI (disconnect)

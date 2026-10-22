@@ -3722,12 +3722,25 @@ GO
 CREATE OR ALTER PROCEDURE sp_LayDanhSachTinTuc
     @ma_loai_tin INT = NULL,
     @tu_khoa NVARCHAR(100) = NULL,
+    @page INT = 1,
     @limit INT = 50
 AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
-        SELECT TOP (@limit)
+        IF @page IS NULL OR @page < 1 SET @page = 1;
+        IF @limit IS NULL OR @limit < 1 SET @limit = 50;
+        DECLARE @offset INT = (@page - 1) * @limit;
+
+        -- 1. Lấy tổng số dòng để hỗ trợ tính tổng số trang (Pagination metadata)
+        SELECT COUNT(*) AS total
+        FROM Tin_Tuc t
+        WHERE t.trang_thai = 1
+          AND (@ma_loai_tin IS NULL OR @ma_loai_tin = 0 OR t.ma_loai_tin = @ma_loai_tin)
+          AND (@tu_khoa IS NULL OR @tu_khoa = '' OR t.tieu_de LIKE N'%' + @tu_khoa + '%' OR t.tom_tat LIKE N'%' + @tu_khoa + '%');
+
+        -- 2. Lấy dữ liệu phân trang chuẩn SQL Server OFFSET ... FETCH NEXT
+        SELECT
                 t.id,
                 t.ma_loai_tin,
                 l.ten_loai,
@@ -3743,7 +3756,8 @@ BEGIN
             WHERE t.trang_thai = 1
               AND (@ma_loai_tin IS NULL OR @ma_loai_tin = 0 OR t.ma_loai_tin = @ma_loai_tin)
               AND (@tu_khoa IS NULL OR @tu_khoa = '' OR t.tieu_de LIKE N'%' + @tu_khoa + '%' OR t.tom_tat LIKE N'%' + @tu_khoa + '%')
-            ORDER BY t.ngay_dang DESC;
+            ORDER BY t.ngay_dang DESC
+            OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
     END TRY
     BEGIN CATCH
         ;THROW;

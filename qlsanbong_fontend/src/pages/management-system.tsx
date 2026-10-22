@@ -1544,11 +1544,17 @@ export default function ManagementSystem() {
   useEffect(() => {
     const socket: Socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      timeout: 10000,
     });
     socketRef.current = socket;
 
     socket.on('connect', () => {
       console.log('⚡ [Management System]: Đã kết nối Real-time Socket server:', socket.id);
+      fetchLichSan(formattedDateISO, sanBongList);
+      fetchHistory();
     });
 
     socket.on('slots_updated', (updatedSlots: string[]) => {
@@ -1596,8 +1602,30 @@ export default function ManagementSystem() {
       setTimeout(() => setCustomerSearchAlert(null), 5000);
     });
 
+    // CƠ CHẾ DỰ PHÒNG THÔNG MINH CHO MÔI TRƯỜNG VERCEL / SERVERLESS:
+    // Tự động đồng bộ mỗi 5 giây và khi người dùng quay lại tab (Window Focus)
+    const syncInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchLichSan(formattedDateISO, sanBongList);
+      }
+    }, 5000);
+
+    const handleWindowFocus = () => {
+      fetchLichSan(formattedDateISO, sanBongList);
+      fetchHistory();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleWindowFocus);
+      document.addEventListener('visibilitychange', handleWindowFocus);
+    }
+
     return () => {
       socket.disconnect();
+      clearInterval(syncInterval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleWindowFocus);
+        document.removeEventListener('visibilitychange', handleWindowFocus);
+      }
     };
   }, [formattedDateISO, sanBongList, fetchLichSan, fetchHistory]);
 
@@ -2442,6 +2470,13 @@ export default function ManagementSystem() {
     // 3. Tải lại dữ liệu mới nhất từ CSDL SQL Server
     await fetchLichSan(formattedDateISO, sanBongList);
     await fetchHistory();
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('unlock_all');
+      socketRef.current.emit('booking_updated', {
+        ten_khach_hang: customerName || 'Khách vào sân',
+        ngay_da: formattedDateISO,
+      });
+    }
 
     showToast(`⚽ Khách hàng ${customerName || 'Khách'} đã vào sân thi đấu thành công! Đơn đã chuyển vào Sân đang đá.`, 'success', 'Vào Sân Thành Công');
     handleClearOrder();
@@ -2488,6 +2523,9 @@ export default function ManagementSystem() {
     // 3. Tải lại dữ liệu để đồng bộ 100% CSDL
     await fetchLichSan(formattedDateISO, sanBongList);
     await fetchHistory();
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('booking_updated', { ma_don_dat: maDon, ngay_da: formattedDateISO });
+    }
 
     showToast(`⚽ Đơn #${maDon} đã vào sân thi đấu thành công!`, 'success', 'Vào Sân Thành Công');
     setActiveTab('pitch');
@@ -2710,6 +2748,10 @@ export default function ManagementSystem() {
 
         await fetchLichSan(formattedDateISO, sanBongList);
         await fetchHistory();
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('unlock_all');
+          socketRef.current.emit('booking_updated', { ngay_da: formattedDateISO });
+        }
 
         if (isAlreadyPlaying) {
           showToast('💾 Đã lưu thay đổi cho sân đang đá!', 'success', 'Lưu Thành Công');
@@ -3162,6 +3204,13 @@ export default function ManagementSystem() {
 
     fetchLichSan(formattedDateISO, sanBongList);
     fetchHistory();
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('unlock_all');
+      socketRef.current.emit('booking_updated', {
+        ten_khach_hang: customerName.trim() || 'Khách vãng lai',
+        ngay_da: formattedDateISO
+      });
+    }
     handleClearOrder();
   };
 

@@ -668,15 +668,20 @@ export default function HomePage() {
     loadAllInitialData();
   }, []);
 
-  // Khởi tạo kết nối Real-time Socket.io Client
+  // Khởi tạo kết nối Real-time Socket.io Client + Cơ chế Đồng bộ kép (Dual-Engine Realtime)
   useEffect(() => {
     const socket: Socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      timeout: 10000,
     });
     socketRef.current = socket;
 
     socket.on('connect', () => {
       console.log('⚡ Đã kết nối Real-time Socket server:', socket.id);
+      fetchLichSan(filterNgayDa, sanBongList);
     });
 
     // Lắng nghe danh sách slot đang bị khóa trên toàn hệ thống
@@ -690,14 +695,36 @@ export default function HomePage() {
       handlePaymentSuccessAction(data);
     });
 
-    // Lắng nghe sự kiện cập nhật đơn đặt
+    // Lắng nghe sự kiện cập nhật đơn đặt từ POS hoặc các client khác
     socket.on('booking_updated', () => {
       fetchLichSan(filterNgayDa, sanBongList);
       fetchDichVu();
     });
 
+    // CƠ CHẾ DỰ PHÒNG THÔNG MINH CHO MÔI TRƯỜNG VERCEL / SERVERLESS:
+    // Tự động đồng bộ mỗi 5 giây và khi người dùng quay lại tab (Window Focus)
+    const syncInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchLichSan(filterNgayDa, sanBongList);
+      }
+    }, 5000);
+
+    const handleWindowFocus = () => {
+      fetchLichSan(filterNgayDa, sanBongList);
+      fetchDichVu();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleWindowFocus);
+      document.addEventListener('visibilitychange', handleWindowFocus);
+    }
+
     return () => {
       socket.disconnect();
+      clearInterval(syncInterval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleWindowFocus);
+        document.removeEventListener('visibilitychange', handleWindowFocus);
+      }
     };
   }, [filterNgayDa, sanBongList]);
 
@@ -1407,8 +1434,13 @@ export default function HomePage() {
         fetchDichVu()
       ]);
 
-      // Giải phóng toàn bộ các ô giữ chỗ Real-time trên Socket
+      // Giải phóng toàn bộ các ô giữ chỗ Real-time trên Socket và thông báo tới POS / Management System
       socketRef.current?.emit('unlock_all');
+      socketRef.current?.emit('booking_updated', {
+        ma_don_dat: data.data?.id,
+        ten_khach_hang: bookingForm.ho_ten,
+        ngay_da: filterNgayDa
+      });
       setMyLockedSlotIds([]);
 
       setIsSubmitting(false);

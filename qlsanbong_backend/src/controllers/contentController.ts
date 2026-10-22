@@ -122,24 +122,48 @@ export const layDanhSachTinTuc = async (req: Request, res: Response) => {
     try {
         const ma_loai_tin = req.query.ma_loai_tin ? parseInt(req.query.ma_loai_tin as string, 10) : null;
         const tu_khoa = (req.query.tu_khoa as string) || null;
-        const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+        const page = req.query.page ? Math.max(1, parseInt(req.query.page as string, 10)) : 1;
+        const limit = req.query.limit ? Math.max(1, parseInt(req.query.limit as string, 10)) : 50;
 
-        const cacheKey = `tin_tuc_client_${ma_loai_tin || 'all'}_${tu_khoa || ''}_${limit}`;
+        const cacheKey = `tin_tuc_client_${ma_loai_tin || 'all'}_${tu_khoa || ''}_${page}_${limit}`;
         const cached = memoryCache.get(cacheKey);
         if (cached) {
-            return res.status(200).json({ success: true, data: cached });
+            return res.status(200).json(cached);
         }
 
         const pool = await poolPromise;
         const request = pool.request();
         request.input('ma_loai_tin', sql.Int, ma_loai_tin);
         request.input('tu_khoa', sql.NVarChar(100), tu_khoa);
+        request.input('page', sql.Int, page);
         request.input('limit', sql.Int, limit);
 
         const result = await request.execute('sp_LayDanhSachTinTuc');
-        const data = result.recordset || [];
-        memoryCache.set(cacheKey, data, 180); // Cache 3 phút
-        return res.status(200).json({ success: true, data });
+        
+        let total = 0;
+        let data: any[] = [];
+        if (result.recordsets && result.recordsets.length > 1) {
+            total = result.recordsets[0][0]?.total || 0;
+            data = result.recordsets[1] || [];
+        } else {
+            data = result.recordset || [];
+            total = data.length;
+        }
+
+        const totalPages = Math.ceil(total / limit) || 1;
+        const responseData = {
+            success: true,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages
+            },
+            data
+        };
+
+        memoryCache.set(cacheKey, responseData, 180); // Cache 3 phút
+        return res.status(200).json(responseData);
     } catch (error: any) {
         console.error('Lỗi sp_LayDanhSachTinTuc:', error.message);
         return res.status(500).json({ success: false, message: error.message });
