@@ -634,7 +634,7 @@ export default function ManagementSystem() {
   // Kiểm tra quyền Admin / Nhân viên cũ
   // Kiểm tra quyền Admin / Nhân viên (Chỉ chấp nhận vai trò thực tế từ CSDL)
   const checkIsAuthorizedRole = (user?: AuthUser | string | null): boolean => {
-    if (!user) return true; // Cho phép mở giao diện POS nếu chưa đăng nhập để thao tác bán hàng
+    if (!user) return false; // Chưa đăng nhập -> Tuyệt đối không cho phép truy cập hệ thống quản trị POS
     const role = typeof user === 'string'
       ? user.trim().toUpperCase().replace(/\s+/g, '_')
       : (user.vai_tro || '').trim().toUpperCase().replace(/\s+/g, '_');
@@ -684,7 +684,7 @@ export default function ManagementSystem() {
   const loadUserFromStorage = () => {
     try {
       if (typeof window !== 'undefined') {
-        const storedUser = localStorage.getItem('auth_user');
+        const storedUser = localStorage.getItem('auth_user') || localStorage.getItem('soccer_current_user');
         if (storedUser) {
           const parsedUser: AuthUser = JSON.parse(storedUser);
           // Giữ đúng vai trò từ CSDL trả về, không tự động biến thành ADMIN
@@ -692,14 +692,21 @@ export default function ManagementSystem() {
           if (email === 'admin@gmail.com' || email === 'xoancao2.0@gmail.com') {
             parsedUser.vai_tro = 'ADMIN';
           }
-          setCurrentUser(parsedUser);
+          if (checkIsAuthorizedRole(parsedUser)) {
+            setCurrentUser(parsedUser);
+          } else {
+            setCurrentUser(null);
+            router.replace('/?login=true&requireAdmin=true');
+          }
         } else {
           setCurrentUser(null);
+          router.replace('/?login=true&requireAdmin=true');
         }
       }
     } catch (error) {
       console.error('Lỗi khi đọc thông tin xác thực:', error);
       setCurrentUser(null);
+      router.replace('/?login=true&requireAdmin=true');
     } finally {
       setIsAuthChecking(false);
     }
@@ -1753,7 +1760,7 @@ export default function ManagementSystem() {
     router.push('/');
   };
 
-  const isAuthorized = Boolean(!currentUser || checkIsAuthorizedRole(currentUser));
+  const isAuthorized = Boolean(currentUser && checkIsAuthorizedRole(currentUser));
 
   // Danh sách sân sau lọc
   const filteredSanList = useMemo(() => {
@@ -3768,6 +3775,54 @@ export default function ManagementSystem() {
     }
   };
 
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center text-white select-none">
+        <Head>
+          <title>Đang Xác Thực... - Management System</title>
+        </Head>
+        <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4 shadow-lg shadow-emerald-500/20" />
+        <p className="text-sm font-bold text-slate-300">Đang kiểm tra quyền truy cập hệ thống...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser || !checkIsAuthorizedRole(currentUser)) {
+    return (
+      <div className="min-h-screen bg-[#070b14] flex flex-col items-center justify-center p-6 text-center text-white select-none">
+        <Head>
+          <title>Yêu Cầu Quyền Quản Trị - Management System</title>
+        </Head>
+        <div className="max-w-md w-full p-8 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center mx-auto mb-5 shadow-inner">
+            <LockIcon className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-black text-white mb-2">Yêu Cầu Quyền Quản Trị</h2>
+          <p className="text-xs text-slate-400 leading-relaxed mb-6">
+            Giao diện Management System / POS chỉ dành riêng cho <strong>Quản Trị Viên</strong> hoặc <strong>Nhân Viên</strong>. Vui lòng đăng nhập tài khoản có thẩm quyền để truy cập hệ thống.
+          </p>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => router.replace('/?login=true&requireAdmin=true')}
+              className="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black text-xs transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Đăng Nhập Tài Khoản Quản Lý</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => router.replace('/')}
+              className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+            >
+              Về Trang Chủ Khách Hàng
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <Head>
@@ -4493,24 +4548,121 @@ export default function ManagementSystem() {
                     </div>
                   )}
 
-                  {/* 2. KHỐI CÁC CA ĐÃ ĐẶT VÀO NGÀY HÔM NAY */}
+                  {/* 2. KHỐI CÁC CA ĐÃ ĐẶT VÀO NGÀY HÔM NAY / THEO NGÀY CHỌN */}
                   <div className={`space-y-3 pt-4 border-t ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'}`}>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                       <div>
                         <h3 className={`text-xs font-black uppercase tracking-wider flex items-center gap-2 ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>
                           <CalendarCheck className="w-4 h-4 text-amber-500" />
-                          Danh sách các khách đã đặt vào ngày hôm nay - Chờ vào sân ({allTodayBookings.length})
+                          {formatDateToISO(currentDate) === formatDateToISO(new Date())
+                            ? `Danh sách các khách đã đặt vào ngày hôm nay (${formatVietnameseDate(currentDate)}) - Chờ vào sân (${allTodayBookings.length})`
+                            : `Danh sách các khách đã đặt ngày ${formatVietnameseDate(currentDate)} - Chờ vào sân (${allTodayBookings.length})`}
                         </h3>
                         <p className={`text-[11px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                           👉 <strong>Nhấn vào một ca đặt</strong> để nạp sang <strong>Thông tin Order (mục Home)</strong> (Thanh toán đủ: bấm "VÀO SÂN" • Mới cọc 30%: bấm "LƯU" để vào sân trước trả sau hoặc "THANH TOÁN"), hoặc thao tác nhanh bằng nút bấm bên dưới. <em>Ca đặt sau khi vào sân sẽ tự động biến mất khỏi danh sách này.</em>
                         </p>
+                      </div>
+
+                      {/* Bộ điều hướng & Lịch chọn ngày cho Danh sách đã đặt */}
+                      <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+                        <div className={`flex items-center rounded-xl border p-1 shadow-sm ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleClearOrder();
+                              setCurrentDate((prev) => {
+                                const newDate = new Date(prev);
+                                newDate.setDate(newDate.getDate() - 1);
+                                return newDate;
+                              });
+                            }}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-slate-800 text-slate-300 hover:text-white' : 'hover:bg-slate-200 text-slate-700 hover:text-slate-900'}`}
+                            title="Xem danh sách ca đặt ngày hôm trước"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleClearOrder();
+                              setCurrentDate(new Date());
+                            }}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${formatDateToISO(currentDate) === formatDateToISO(new Date())
+                              ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                              : isDarkMode ? 'text-slate-300 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                              }`}
+                            title="Trở về danh sách ca đặt hôm nay"
+                          >
+                            Hôm nay
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleClearOrder();
+                              setCurrentDate((prev) => {
+                                const newDate = new Date(prev);
+                                newDate.setDate(newDate.getDate() + 1);
+                                return newDate;
+                              });
+                            }}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isDarkMode ? 'hover:bg-slate-800 text-slate-300 hover:text-white' : 'hover:bg-slate-200 text-slate-700 hover:text-slate-900'}`}
+                            title="Xem danh sách ca đặt ngày tiếp theo"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Ô chọn ngày trực tiếp trên Lịch (Date Picker) */}
+                        <div className="relative flex items-center">
+                          <label
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-black cursor-pointer transition-all shadow-sm ${isDarkMode
+                              ? 'bg-slate-900/90 border-slate-700/80 text-amber-400 hover:border-amber-500 hover:bg-slate-800/80'
+                              : 'bg-white border-slate-300 text-amber-800 hover:border-amber-500 hover:bg-amber-50/50'
+                              }`}
+                            title="Nhấp để mở lịch và chọn sang bất kỳ ngày nào khác"
+                          >
+                            <CalendarIcon className="w-4 h-4 text-amber-500 shrink-0" />
+                            <span>{formatVietnameseDate(currentDate)}</span>
+                            <input
+                              type="date"
+                              value={formattedDateISO}
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleClearOrder();
+                                  const selected = new Date(e.target.value + 'T00:00:00');
+                                  setCurrentDate(selected);
+                                }
+                              }}
+                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                            />
+                          </label>
+                        </div>
+
+                        {/* Nút Làm mới dữ liệu */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            fetchLichSan(formattedDateISO, sanBongList);
+                            fetchHistory();
+                          }}
+                          className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${isDarkMode ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100 shadow-sm'}`}
+                          title="Tải lại danh sách ca đặt ngày này"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 text-amber-500" />
+                        </button>
                       </div>
                     </div>
 
                     {allTodayBookings.length === 0 ? (
                       <div className={`p-8 rounded-2xl border text-center ${isDarkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200'}`}>
                         <CalendarCheck className="w-10 h-10 text-emerald-400 mx-auto mb-2 opacity-80" />
-                        <p className={`text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Tất cả ca đặt hôm nay đã vào sân thi đấu hoặc chưa có ca đặt mới.</p>
+                        <p className={`text-xs font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                          {formatDateToISO(currentDate) === formatDateToISO(new Date())
+                            ? 'Tất cả ca đặt hôm nay đã vào sân thi đấu hoặc chưa có ca đặt mới.'
+                            : `Không có ca đặt sân nào vào ngày ${formatVietnameseDate(currentDate)} chờ vào sân hoặc chưa có ca đặt mới.`}
+                        </p>
                       </div>
                     ) : (
                       <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-white'}`}>

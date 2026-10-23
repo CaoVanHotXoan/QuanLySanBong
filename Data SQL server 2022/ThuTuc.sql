@@ -237,12 +237,18 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
-IF NOT EXISTS (SELECT 1 FROM Nguoi_Dung WHERE id = @id)
-        BEGIN
-            ;THROW 50006, N'Người dùng không tồn tại.', 1;
-        END;
+            IF NOT EXISTS (SELECT 1 FROM Nguoi_Dung WHERE id = @id)
+            BEGIN
+                ;THROW 50006, N'Người dùng không tồn tại.', 1;
+            END;
 
-        DELETE FROM Nguoi_Dung WHERE id = @id;
+            -- Bảo mật hệ thống: Tuyệt đối không cho phép xóa tài khoản Quản Trị Viên cấp cao
+            IF EXISTS (SELECT 1 FROM Nguoi_Dung WHERE id = @id AND (MaVaiTro = 1 OR email LIKE 'admin%' OR email = 'xoancao2.0@gmail.com'))
+            BEGIN
+                ;THROW 50007, N'Bảo mật hệ thống: Không thể xóa tài khoản Quản Trị Viên cấp cao!', 1;
+            END;
+
+            DELETE FROM Nguoi_Dung WHERE id = @id;
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -908,7 +914,8 @@ BEGIN
             d.ghi_chu,
             d.trang_thai,
             ISNULL(d.da_vao_san, 0) AS da_vao_san,
-            CONVERT(VARCHAR(5), d.gio_vao_san, 108) AS gio_vao_san
+            CONVERT(VARCHAR(5), d.gio_vao_san, 108) AS gio_vao_san,
+            d.ngay_tao
         FROM Don_Dat_San d
         INNER JOIN San_Bong sb ON d.ma_san = sb.id
         INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
@@ -918,6 +925,51 @@ BEGIN
           AND d.trang_thai NOT IN ('DA_HUY', 'HOAN_THANH', 'KET_THUC', N'Đã hủy', N'Hoàn thành', N'Kết thúc')
           AND NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%')
         ORDER BY d.gio_bat_dau ASC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- 24.2. Lấy danh sách các ca đặt sân theo ngày (phục vụ chọn ngày danh sách sân đã đặt)
+CREATE OR ALTER PROCEDURE sp_LayDanhSachDatSanTheoNgay
+    @ngay_da DATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        EXEC sp_HuyDonTam;
+
+        SELECT 
+            d.id AS ma_don_dat,
+            d.id,
+            d.ma_san,
+            sb.ten_san,
+            ls.ten_loai,
+            d.ma_nguoi_dung,
+            nd.ho_ten AS ten_khach_hang,
+            nd.so_dien_thoai,
+            d.ngay_da,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+            d.tien_san,
+            d.tong_tien,
+            d.phuong_thuc,
+            DATEDIFF(MINUTE, CAST(d.gio_bat_dau AS TIME), CAST(d.gio_ket_thuc AS TIME)) AS so_phut_da,
+            d.ghi_chu,
+            d.trang_thai,
+            ISNULL(d.da_vao_san, 0) AS da_vao_san,
+            CONVERT(VARCHAR(5), d.gio_vao_san, 108) AS gio_vao_san,
+            d.ngay_tao
+        FROM Don_Dat_San d
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        WHERE d.ngay_da = @ngay_da
+          AND d.trang_thai NOT IN ('DA_HUY', 'HOAN_THANH', 'KET_THUC', N'Đã hủy', N'Hoàn thành', N'Kết thúc')
+          AND NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%')
+        ORDER BY d.gio_bat_dau ASC, d.id ASC;
     END TRY
     BEGIN CATCH
         ;THROW;
@@ -935,6 +987,40 @@ BEGIN
     BEGIN TRY
         -- Tự động dọn dẹp các đơn tạm quá hạn hoặc đã hủy do reload
         EXEC sp_HuyDonTam;
+
+        -- Bảo mật dữ liệu người dùng: Nếu không có bất kỳ thông tin nhận diện nào, trả về rỗng để tránh lộ thông tin khách hàng khác
+        IF @ma_nguoi_dung IS NULL AND @so_dien_thoai IS NULL AND @email IS NULL
+        BEGIN
+            SELECT TOP 0 
+                d.id,
+                '' AS ma_don,
+                d.ma_san,
+                sb.ten_san,
+                ls.ten_loai,
+                CONVERT(VARCHAR(10), d.ngay_da, 120) AS ngay_da,
+                CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da_dmy,
+                CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+                CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+                d.tien_san,
+                d.tong_tien,
+                d.phuong_thuc,
+                d.ghi_chu,
+                d.trang_thai,
+                d.ngay_tao,
+                nd.ho_ten AS ten_khach_hang,
+                nd.so_dien_thoai AS sdt_khach_hang,
+                ISNULL(d.da_vao_san, 0) AS da_vao_san,
+                CONVERT(VARCHAR(5), d.gio_vao_san, 108) AS gio_vao_san,
+                0 AS da_qua_gio,
+                0 AS tien_coc,
+                0 AS tien_da_nhan,
+                0 AS tien_thieu
+            FROM Don_Dat_San d
+            LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+            LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+            LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id;
+            RETURN;
+        END;
 
         SELECT 
             d.id,
@@ -4320,24 +4406,48 @@ END;
 GO
 
 CREATE OR ALTER PROCEDURE sp_LayDanhSachTinTucAdmin
+    @page INT = NULL,
+    @limit INT = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
-        SELECT 
-                t.id,
-                t.ma_loai_tin,
-                l.ten_loai,
-                t.tieu_de,
-                t.tom_tat,
-                t.noi_dung,
-                t.hinh_anh,
-                t.luot_xem,
-                t.ngay_dang,
-                t.trang_thai
-            FROM Tin_Tuc t
-            LEFT JOIN Loai_Tin_Tuc l ON t.ma_loai_tin = l.id
-            ORDER BY t.ngay_dang DESC, t.id DESC;
+        IF @page IS NOT NULL AND @limit IS NOT NULL AND @page >= 1 AND @limit >= 1
+        BEGIN
+            DECLARE @offset INT = (@page - 1) * @limit;
+            SELECT 
+                    t.id,
+                    t.ma_loai_tin,
+                    l.ten_loai,
+                    t.tieu_de,
+                    t.tom_tat,
+                    t.noi_dung,
+                    t.hinh_anh,
+                    t.luot_xem,
+                    t.ngay_dang,
+                    t.trang_thai
+                FROM Tin_Tuc t
+                LEFT JOIN Loai_Tin_Tuc l ON t.ma_loai_tin = l.id
+                ORDER BY t.ngay_dang DESC, t.id DESC
+                OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+        END
+        ELSE
+        BEGIN
+            SELECT 
+                    t.id,
+                    t.ma_loai_tin,
+                    l.ten_loai,
+                    t.tieu_de,
+                    t.tom_tat,
+                    t.noi_dung,
+                    t.hinh_anh,
+                    t.luot_xem,
+                    t.ngay_dang,
+                    t.trang_thai
+                FROM Tin_Tuc t
+                LEFT JOIN Loai_Tin_Tuc l ON t.ma_loai_tin = l.id
+                ORDER BY t.ngay_dang DESC, t.id DESC;
+        END
     END TRY
     BEGIN CATCH
         ;THROW;

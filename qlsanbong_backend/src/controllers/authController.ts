@@ -366,6 +366,12 @@ export const layDanhSachNguoiDung = async (req: AuthRequest, res: Response) => {
             users = fallbackRes.recordset || [];
         }
 
+        users.forEach((u: any) => {
+            delete u.mat_khau;
+            delete u.ma_otp;
+            delete u.het_han_luc;
+        });
+
         return res.status(200).json({
             success: true,
             data: users

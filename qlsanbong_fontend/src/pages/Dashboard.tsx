@@ -385,10 +385,156 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
   }
 ];
 
+// =====================================================================
+// COMPONENT PHÂN TRANG CHUẨN CHO CÁC BẢNG TRONG DASHBOARD (10 BẢN GHI/TRANG)
+// =====================================================================
+interface TablePaginationProps {
+  currentPage: number;
+  totalItems: number;
+  pageSize?: number;
+  onPageChange: (page: number) => void;
+  isDarkMode?: boolean;
+}
+
+function TablePagination({
+  currentPage,
+  totalItems,
+  pageSize = 10,
+  onPageChange,
+  isDarkMode = true,
+}: TablePaginationProps) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  const pages: number[] = [];
+  const maxButtons = 5;
+  let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+  let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+  if (endPage - startPage + 1 < maxButtons) {
+    startPage = Math.max(1, endPage - maxButtons + 1);
+  }
+  for (let p = startPage; p <= endPage; p++) {
+    pages.push(p);
+  }
+
+  return (
+    <div
+      className={`p-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t text-xs font-bold ${
+        isDarkMode
+          ? 'border-emerald-900/40 bg-[#0a150e] text-slate-300'
+          : 'border-slate-200 bg-slate-50 text-slate-700'
+      }`}
+    >
+      <div className="flex items-center gap-1.5 text-xs font-medium">
+        <span>Hiển thị</span>
+        <span className="font-black text-emerald-600 dark:text-emerald-400">
+          {startItem} - {endItem}
+        </span>
+        <span>trên tổng số</span>
+        <span className="font-black text-emerald-600 dark:text-emerald-400">
+          {totalItems}
+        </span>
+        <span>bản ghi (Trang {currentPage} / {totalPages})</span>
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onPageChange(1)}
+          disabled={currentPage <= 1}
+          className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+            currentPage <= 1
+              ? 'opacity-30 cursor-not-allowed border-transparent text-slate-400'
+              : 'hover:bg-emerald-600 hover:text-white border-slate-300 dark:border-emerald-900/60 text-slate-700 dark:text-slate-200 cursor-pointer shadow-sm'
+          }`}
+          title="Về trang đầu"
+        >
+          &laquo;
+        </button>
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+          disabled={currentPage <= 1}
+          className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+            currentPage <= 1
+              ? 'opacity-30 cursor-not-allowed border-transparent text-slate-400'
+              : 'hover:bg-emerald-600 hover:text-white border-slate-300 dark:border-emerald-900/60 text-slate-700 dark:text-slate-200 cursor-pointer shadow-sm'
+          }`}
+        >
+          Trước
+        </button>
+
+        {pages.map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onPageChange(p)}
+            className={`min-w-8 h-8 px-2 rounded-lg text-xs font-black transition-all ${
+              p === currentPage
+                ? 'bg-emerald-600 text-white shadow-md scale-105'
+                : 'hover:bg-slate-200 dark:hover:bg-emerald-900/50 border border-slate-300 dark:border-emerald-900/40 text-slate-700 dark:text-slate-200 cursor-pointer'
+            }`}
+          >
+            {p}
+          </button>
+        ))}
+
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+          disabled={currentPage >= totalPages}
+          className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+            currentPage >= totalPages
+              ? 'opacity-30 cursor-not-allowed border-transparent text-slate-400'
+              : 'hover:bg-emerald-600 hover:text-white border-slate-300 dark:border-emerald-900/60 text-slate-700 dark:text-slate-200 cursor-pointer shadow-sm'
+          }`}
+        >
+          Sau
+        </button>
+        <button
+          type="button"
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage >= totalPages}
+          className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all ${
+            currentPage >= totalPages
+              ? 'opacity-30 cursor-not-allowed border-transparent text-slate-400'
+              : 'hover:bg-emerald-600 hover:text-white border-slate-300 dark:border-emerald-900/60 text-slate-700 dark:text-slate-200 cursor-pointer shadow-sm'
+          }`}
+          title="Đến trang cuối"
+        >
+          &raquo;
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const { isDarkMode, setIsDarkMode, toggleTheme } = useAppTheme(true);
   const [activeTab, setActiveTab] = useState<TabType>('OVERVIEW');
+
+  // Quản lý phân trang cho từng Tab (10 bản ghi/trang)
+  const [tabPages, setTabPages] = useState<Record<string, number>>({});
+  const getTabPage = (tabKey: string) => tabPages[tabKey] || 1;
+  const setTabPage = (tabKey: string, page: number) => {
+    setTabPages((prev) => ({ ...prev, [tabKey]: page }));
+  };
+
+  const getPaginatedData = <T,>(list: T[], tabKey: string, pageSize = 10) => {
+    const rawPage = getTabPage(tabKey);
+    const total = (list || []).length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const currentPage = Math.min(Math.max(1, rawPage), totalPages);
+    const startIndex = (currentPage - 1) * pageSize;
+    return {
+      items: (list || []).slice(startIndex, startIndex + pageSize),
+      currentPage,
+      totalItems: total,
+      pageSize,
+    };
+  };
 
   // Quản lý xác thực & Phân quyền Admin
   const [currentAdminUser, setCurrentAdminUser] = useState<AuthUser | null>(null);
@@ -3804,7 +3950,9 @@ export default function AdminDashboard() {
             {/* =================================================================
                 TAB 2: BẢNG 1 - SAN_BONG (CÓ ĐẦY ĐỦ THÊM - SỬA - XÓA DẠNG MODAL)
                 ================================================================= */}
-            {activeTab === 'SAN_BONG' && (
+            {activeTab === 'SAN_BONG' && (() => {
+              const pagedData = getPaginatedData(courtList, 'SAN_BONG', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -3831,7 +3979,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {courtList.map((c) => (
+                      {pagedData.items.map((c) => (
                         <tr key={c.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-emerald-50/50'}>
                           <td className="p-4">
                             <div className="w-16 h-12 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 shadow-sm group">
@@ -3879,13 +4027,23 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('SAN_BONG', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
             {/* =================================================================
                 TAB 4: BẢNG 2 - LOAI_SAN (DANH MỤC LOẠI SÂN)
                 ================================================================= */}
-            {activeTab === 'LOAI_SAN_GIA' && (
+            {activeTab === 'LOAI_SAN_GIA' && (() => {
+              const pagedData = getPaginatedData(categoryList, 'LOAI_SAN_GIA', 10);
+              return (
               <div className="space-y-6 animate-fade-in">
                 {/* BẢNG LOAI_SAN */}
                 <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
@@ -3910,7 +4068,7 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                        {categoryList.map((l) => (
+                        {pagedData.items.map((l) => (
                           <tr key={l.id}>
                             <td className="p-4 font-black text-sm">{l.ten_loai}</td>
                             <td className={`p-4 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>{l.mo_ta}</td>
@@ -3923,16 +4081,24 @@ export default function AdminDashboard() {
                       </tbody>
                     </table>
                   </div>
+                  <TablePagination
+                    currentPage={pagedData.currentPage}
+                    totalItems={pagedData.totalItems}
+                    pageSize={10}
+                    onPageChange={(p) => setTabPage('LOAI_SAN_GIA', p)}
+                    isDarkMode={isDarkMode}
+                  />
                 </div>
               </div>
-            )}
-
-
+              );
+            })()}
 
             {/* =================================================================
                 TAB 7: BẢNG 6 - DICH_VU (CÓ ĐẦY ĐỦ THÊM SỬA XÓA)
                 ================================================================= */}
-            {activeTab === 'DICH_VU' && (
+            {activeTab === 'DICH_VU' && (() => {
+              const pagedData = getPaginatedData(serviceList, 'DICH_VU', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -3970,7 +4136,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {serviceList.map((s) => (
+                      {pagedData.items.map((s) => (
                         <tr key={s.id}>
                           <td className="p-4 font-black text-sm text-slate-900 dark:text-white">{s.ten_dich_vu}</td>
                           <td className="p-4 font-bold">{s.don_vi_tinh}</td>
@@ -3985,13 +4151,23 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('DICH_VU', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
             {/* =================================================================
                 TAB 8: BẢNG 7 - PHIEU_NHAP_KHO (CÓ ĐỦ THÊM SỬA XÓA)
                 ================================================================= */}
-            {activeTab === 'PHIEU_NHAP_KHO' && (
+            {activeTab === 'PHIEU_NHAP_KHO' && (() => {
+              const pagedData = getPaginatedData(inventoryList, 'PHIEU_NHAP_KHO', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -4016,7 +4192,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {inventoryList.map((p) => (
+                      {pagedData.items.map((p) => (
                         <tr key={p.id}>
                           <td className="p-4 font-black">📦 {p.ten_dich_vu}</td>
                           <td className="p-4 font-black text-emerald-700">{p.so_luong_nhap} {p.don_vi_tinh}</td>
@@ -4032,13 +4208,23 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('PHIEU_NHAP_KHO', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
             {/* =================================================================
                 TAB: DON_DAT_THANH_TOAN - ĐƠN ĐẶT SÂN & THANH TOÁN (CÓ ĐỦ THÊM SỬA XÓA)
                 ================================================================= */}
-            {activeTab === 'DON_DAT_THANH_TOAN' && (
+            {activeTab === 'DON_DAT_THANH_TOAN' && (() => {
+              const pagedData = getPaginatedData(filteredBookingList, 'DON_DAT_THANH_TOAN', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -4165,7 +4351,7 @@ export default function AdminDashboard() {
                           </td>
                         </tr>
                       ) : (
-                        filteredBookingList.map((b) => {
+                        pagedData.items.map((b) => {
                           const servicesUsed = (b.dich_vu_da_dung && b.dich_vu_da_dung.length > 0)
                             ? b.dich_vu_da_dung
                             : (b.chi_tiet_dich_vu && b.chi_tiet_dich_vu.length > 0 ? b.chi_tiet_dich_vu : []);
@@ -4346,17 +4532,28 @@ export default function AdminDashboard() {
                               </td>
                             </tr>
                           );
-                        }))}
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('DON_DAT_THANH_TOAN', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
             {/* =================================================================
                 TAB: HOAN_TIEN - LỊCH SỬ HOÀN TIỀN (CÓ ĐỦ THÊM SỬA XÓA)
                 ================================================================= */}
-            {activeTab === 'HOAN_TIEN' && (
+            {activeTab === 'HOAN_TIEN' && (() => {
+              const pagedData = getPaginatedData(refundList, 'HOAN_TIEN', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -4391,7 +4588,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {refundList.map((h) => (
+                      {pagedData.items.map((h) => (
                         <tr key={h.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
                           <td className="p-4 font-black">{h.ten_khach_hang || 'Khách Đặt'}</td>
                           <td className="p-4 font-black text-rose-600 dark:text-rose-400 text-sm">
@@ -4421,13 +4618,23 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('HOAN_TIEN', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
             {/* =================================================================
                 TAB: KHUNG_GIO - BẢNG KHUNG GIỜ (CÓ ĐỦ THÊM SỬA XÓA)
                 ================================================================= */}
-            {activeTab === 'KHUNG_GIO' && (
+            {activeTab === 'KHUNG_GIO' && (() => {
+              const pagedData = getPaginatedData(khungGioList, 'KHUNG_GIO', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -4478,7 +4685,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {khungGioList.map((k, index) => (
+                      {pagedData.items.map((k, index) => (
                         <tr key={k.id || index} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
                           <td className="p-4">
                             <span className="font-black text-sm text-emerald-600 dark:text-emerald-400 font-mono px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
@@ -4512,16 +4719,24 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('KHUNG_GIO', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
-            {/* =================================================================
-                TAB 11: BẢNG 10 - NGUOI_DUNG (CÓ ĐỦ THÊM SỬA XÓA)
-                ================================================================= */}
             {/* =================================================================
                 TAB 11: BẢNG 10 - NGUOI_DUNG (CÓ ĐỦ THÊM SỬA XÓA, ẢNH, MẬT KHẨU, LỌC VAI TRÒ)
                 ================================================================= */}
-            {activeTab === 'NGUOI_DUNG' && (
+            {activeTab === 'NGUOI_DUNG' && (() => {
+              const filteredUsers = userList.filter((u) => userRoleFilter === 'ALL' || u.vai_tro === userRoleFilter);
+              const pagedData = getPaginatedData(filteredUsers, 'NGUOI_DUNG', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -4572,9 +4787,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {userList
-                        .filter((u) => userRoleFilter === 'ALL' || u.vai_tro === userRoleFilter)
-                        .map((u) => (
+                      {pagedData.items.map((u) => (
                           <tr key={u.id} className="hover:bg-slate-50/80 dark:hover:bg-emerald-950/30 transition-colors">
                             <td className="p-4 font-black text-sm whitespace-nowrap">
                               <div className="flex items-center gap-3">
@@ -4637,19 +4850,29 @@ export default function AdminDashboard() {
                         ))}
                     </tbody>
                   </table>
-                  {userList.filter((u) => userRoleFilter === 'ALL' || u.vai_tro === userRoleFilter).length === 0 && (
+                  {filteredUsers.length === 0 && (
                     <div className="p-8 text-center text-slate-400 font-bold">
                       Không có người dùng nào thuộc vai trò này.
                     </div>
                   )}
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('NGUOI_DUNG', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
             {/* =================================================================
                 TAB 12: BẢNG 11 - VAI_TRO (CÓ ĐỦ THÊM SỬA XÓA)
                 ================================================================= */}
-            {activeTab === 'VAI_TRO' && (
+            {activeTab === 'VAI_TRO' && (() => {
+              const pagedData = getPaginatedData(roleList, 'VAI_TRO', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -4671,7 +4894,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {roleList.map((r) => (
+                      {pagedData.items.map((r) => (
                         <tr key={r.MaVaiTro}>
                           <td className="p-4 font-black text-sm text-purple-700 dark:text-purple-300">🛡️ {r.TenVaiTro}</td>
                           <td className="p-4 text-slate-600 dark:text-slate-300">{r.MoTa}</td>
@@ -4684,8 +4907,16 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('VAI_TRO', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
             {/* =================================================================
                 TAB: ABOUT_US - QUẢN LÝ THÔNG TIN VỀ CHÚNG TÔI
@@ -4911,7 +5142,9 @@ export default function AdminDashboard() {
             {/* =================================================================
                 TAB 13: BANNER QUẢNG CÁO (BANNER)
                 ================================================================= */}
-            {activeTab === 'BANNER' && (
+            {activeTab === 'BANNER' && (() => {
+              const pagedData = getPaginatedData(bannerList, 'BANNER', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -4945,7 +5178,7 @@ export default function AdminDashboard() {
                           <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">Chưa có banner nào. Hãy bấm &quot;Thêm Banner Mới&quot; để tạo.</td>
                         </tr>
                       ) : (
-                        bannerList.map((b) => (
+                        pagedData.items.map((b) => (
                           <tr key={b.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
                             <td className="p-4">
                               {b.hinh_anh ? (
@@ -5015,13 +5248,23 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('BANNER', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
             {/* =================================================================
                 TAB 14: LIÊN HỆ & PHẢN HỒI (LIEN_HE)
                 ================================================================= */}
-            {activeTab === 'LIEN_HE' && (
+            {activeTab === 'LIEN_HE' && (() => {
+              const pagedData = getPaginatedData(lienHeList, 'LIEN_HE', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -5057,7 +5300,7 @@ export default function AdminDashboard() {
                           <td colSpan={6} className="p-8 text-center text-slate-400 font-bold">Chưa có phản hồi liên hệ nào từ khách hàng.</td>
                         </tr>
                       ) : (
-                        lienHeList.map((lh) => (
+                        pagedData.items.map((lh) => (
                           <tr key={lh.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
                             <td className="p-3 md:p-4 whitespace-nowrap">
                               <div className="font-black text-xs md:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -5127,13 +5370,23 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('LIEN_HE', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
             {/* =================================================================
                 TAB 15: LOẠI TIN TỨC (LOAI_TIN_TUC)
                 ================================================================= */}
-            {activeTab === 'LOAI_TIN_TUC' && (
+            {activeTab === 'LOAI_TIN_TUC' && (() => {
+              const pagedData = getPaginatedData(loaiTinList, 'LOAI_TIN_TUC', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -5165,7 +5418,7 @@ export default function AdminDashboard() {
                           <td colSpan={4} className="p-8 text-center text-slate-400 font-bold">Chưa có loại tin tức nào.</td>
                         </tr>
                       ) : (
-                        loaiTinList.map((lt) => (
+                        pagedData.items.map((lt) => (
                           <tr key={lt.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
                             <td className={`p-4 font-mono font-black ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>#{lt.id}</td>
                             <td className="p-4 font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
@@ -5209,13 +5462,23 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('LOAI_TIN_TUC', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
             {/* =================================================================
                 TAB 16: TIN TỨC & BÀI VIẾT (TIN_TUC)
                 ================================================================= */}
-            {activeTab === 'TIN_TUC' && (
+            {activeTab === 'TIN_TUC' && (() => {
+              const pagedData = getPaginatedData(newsList, 'TIN_TUC', 10);
+              return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                 <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
@@ -5260,7 +5523,7 @@ export default function AdminDashboard() {
                           <td colSpan={7} className="p-8 text-center text-slate-400 font-bold">Chưa có bài viết tin tức nào. Hãy bấm &quot;Viết Tin Tức Mới&quot; để tạo bài viết đầu tiên.</td>
                         </tr>
                       ) : (
-                        newsList.map((nw) => (
+                        pagedData.items.map((nw) => (
                           <tr key={nw.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
                             <td className="p-4">
                               {nw.hinh_anh ? (
@@ -5330,8 +5593,16 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+                <TablePagination
+                  currentPage={pagedData.currentPage}
+                  totalItems={pagedData.totalItems}
+                  pageSize={10}
+                  onPageChange={(p) => setTabPage('TIN_TUC', p)}
+                  isDarkMode={isDarkMode}
+                />
               </div>
-            )}
+              );
+            })()}
 
           </div>
         </div>

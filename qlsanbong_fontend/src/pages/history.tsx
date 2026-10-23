@@ -31,7 +31,8 @@ import {
   Eye,
   FileText,
   Sun,
-  Moon
+  Moon,
+  Lock
 } from 'lucide-react';
 
 // 1. Định nghĩa Interface đơn đặt sân lấy từ CSDL SQL Server
@@ -234,11 +235,13 @@ export default function History() {
         setCurrentUser(parsed);
         fetchBookingHistory(parsed);
       } else {
-        fetchBookingHistory(null);
+        setCurrentUser(null);
+        setDanhSachDon([]);
       }
     } catch (e) {
       console.error('Lỗi đọc localStorage:', e);
-      fetchBookingHistory(null);
+      setCurrentUser(null);
+      setDanhSachDon([]);
     }
   }, [fetchBookingHistory]);
 
@@ -716,23 +719,40 @@ export default function History() {
               <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>Đang tải lịch sử đơn đặt sân từ CSDL SQL Server...</p>
             </div>
           ) : danhSachDon.length === 0 ? (
-            /* Trạng thái rỗng khi chưa có đơn */
+            /* Trạng thái rỗng khi chưa có đơn hoặc chưa đăng nhập */
             <div className="py-16 px-4 text-center">
               <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border shadow-inner ${
                 isDarkMode ? 'bg-slate-950 text-slate-500 border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-300'
               }`}>
-                <Receipt className="w-8 h-8" />
+                {!currentUser ? <Lock className="w-8 h-8 text-amber-500" /> : <Receipt className="w-8 h-8 text-slate-400" />}
               </div>
-              <p className={`text-base font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Bạn chưa có đơn đặt sân nào trong hệ thống CSDL.</p>
-              <p className={`text-xs mt-1 max-w-md mx-auto ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
-                Khi bạn đặt sân bóng trên trang chủ, toàn bộ thông tin đơn đặt và dịch vụ kèm theo sẽ được hiển thị đầy đủ tại đây.
-              </p>
-              <button
-                onClick={() => router.push('/')}
-                className="mt-5 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 text-xs font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer hover:from-emerald-400 hover:to-teal-400"
-              >
-                Đặt sân ngay bây giờ
-              </button>
+              {!currentUser ? (
+                <>
+                  <p className={`text-base font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Vui lòng đăng nhập để xem lịch sử đặt sân của bạn.</p>
+                  <p className={`text-xs mt-1 max-w-md mx-auto ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
+                    Hệ thống bảo mật thông tin cá nhân. Bạn cần đăng nhập tài khoản để tra cứu chi tiết các ca đặt sân và hóa đơn của chính mình.
+                  </p>
+                  <button
+                    onClick={() => router.push('/?login=true')}
+                    className="mt-5 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 text-xs font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer hover:from-emerald-400 hover:to-teal-400"
+                  >
+                    Đăng nhập ngay
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className={`text-base font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>Bạn chưa có đơn đặt sân nào trong hệ thống CSDL.</p>
+                  <p className={`text-xs mt-1 max-w-md mx-auto ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
+                    Khi bạn đặt sân bóng trên trang chủ, toàn bộ thông tin đơn đặt và dịch vụ kèm theo sẽ được hiển thị đầy đủ tại đây.
+                  </p>
+                  <button
+                    onClick={() => router.push('/')}
+                    className="mt-5 px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 text-xs font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all cursor-pointer hover:from-emerald-400 hover:to-teal-400"
+                  >
+                    Đặt sân ngay bây giờ
+                  </button>
+                </>
+              )}
             </div>
           ) : (
             /* Bảng hiển thị đơn đặt sân & tài chính */
