@@ -345,6 +345,7 @@ export default function HomePage() {
     durationMin: number; // 60 | 90 | 120
     gioKetThuc: string; // VD: '08:30'
     giaTien: number;
+    holdSlotKeys?: string[];
   } | null>(null);
 
   // Modal Step: 'DURATION' (chọn giờ kết thúc) -> 'INFO' (thông tin & dịch vụ) -> 'QR' (thanh toán VietQR)
@@ -1150,9 +1151,10 @@ export default function HomePage() {
     }
 
     // -------------------------------------------------------------
-    // TÍNH TOÁN THỜI LƯỢNG TỐI ĐA ĐỂ GIỮ CHỖ Ở NGOÀI MA TRẬN
+    // TÍNH TOÁN TOÀN BỘ CÁC Ô THỜI GIAN MÀ KHÁCH CÓ THỂ MUA TRONG MỤC LỰA CHỌN
     // -------------------------------------------------------------
-    // Nếu những ô sau đó chưa có ai chọn thì ở ngoài sẽ giữ chỗ cho thời gian tối đa của lựa chọn (120p, 90p, 60p, 30p)
+    // Danh sách các mức thời lượng trong mục lựa chọn: 30p, 60p, 90p, 120p
+    // Tìm mức thời lượng tối đa mà khách có thể mua được từ slot này mà không bị xung đột
     let maxHoldDuration = 30;
     if (!checkConflictForSan(san.id, slot.start, 120)) {
       maxHoldDuration = 120;
@@ -1164,7 +1166,7 @@ export default function HomePage() {
       maxHoldDuration = 30;
     }
 
-    // Khóa toàn bộ các ô thuộc khoảng thời gian tối đa này trên Socket.IO Real-time
+    // Khóa toàn bộ tất cả những ô thời gian mà khách có thể mua trong mục lựa chọn trên Socket.IO Real-time
     const holdTotalSlots = Math.ceil(maxHoldDuration / 30);
     const holdSlotKeys: string[] = [];
     let curHoldTime = slot.start;
@@ -1188,6 +1190,7 @@ export default function HomePage() {
       durationMin: initialDuration,
       gioKetThuc: initialEndTime,
       giaTien,
+      holdSlotKeys,
     });
     setBookingStep('DURATION');
     setBookingForm((prev) => ({
@@ -1199,9 +1202,10 @@ export default function HomePage() {
   };
 
   // ===================================================================================
-  // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 2]: CHỌN THỜI LƯỢNG ĐÁ (60p, 90p, 120p,...)
-  // - Tính toán lại các ô slot 30 phút tương ứng
-  // - Phát tín hiệu Socket.io 'lock_slots' để khóa đồng loạt các ô này trên màn hình các khách khác
+  // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 2]: CHỌN THỜI LƯỢNG ĐÁ (30p, 60p, 90p, 120p,...)
+  // - Khi khách 2 chọn bất kỳ ô thời gian nào trong mục lựa chọn:
+  // - VẪN TIẾP TỤC KHÓA TẤT CẢ NHỮNG Ô THỜI GIAN MÀ KHÁCH 2 CÓ THỂ MUA TRONG MỤC LỰA CHỌN
+  //   trên giao diện khách 1 (không rút gọn danh sách làm nhả các ô còn lại ra ma trận)
   // ===================================================================================
   const handleSelectDuration = (durationMin: number) => {
     if (!selectedSlot) return;
@@ -1216,18 +1220,15 @@ export default function HomePage() {
     const donGiaPhut = Number(selectedSlot.san.don_gia_phut) || 5000;
     const newGiaTien = durationMin * donGiaPhut;
 
-    // Tính danh sách các ô slot 30 phút tương ứng với thời lượng mới
-    const totalSlots = Math.ceil(durationMin / 30);
-    const newSlotKeys: string[] = [];
-    let curTime = selectedSlot.slot.start;
-    for (let i = 0; i < totalSlots; i++) {
-      newSlotKeys.push(`${filterNgayDa}_${selectedSlot.san.id}_${curTime}`);
-      curTime = addMinutesToTime(curTime, 30);
-    }
+    // QUAN TRỌNG: Dù khách 2 chọn ô thời gian nào (30p, 60p, 90p, 120p),
+    // bên giao diện khách 1 VẪN PHẢI KHÓA TẤT CẢ những ô thời gian mà khách 2 có thể mua trong mục lựa chọn.
+    // Không được rút gọn danh sách khóa chỉ còn ô của thời lượng đang chọn để tránh khách khác cướp slot!
+    const activeHoldKeys = (selectedSlot.holdSlotKeys && selectedSlot.holdSlotKeys.length > 0)
+      ? selectedSlot.holdSlotKeys
+      : myLockedSlotIds;
 
-    // Gửi sự kiện lock_slots lên Socket.IO để khóa đồng loạt các ô này
-    socketRef.current?.emit('lock_slots', newSlotKeys);
-    setMyLockedSlotIds(newSlotKeys);
+    socketRef.current?.emit('lock_slots', activeHoldKeys);
+    setMyLockedSlotIds(activeHoldKeys);
 
     setSelectedSlot({
       ...selectedSlot,
@@ -1282,7 +1283,8 @@ export default function HomePage() {
   // ===================================================================================
   // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 4]: XÁC NHẬN THỜI LƯỢNG & CHUYỂN SANG NHẬP THÔNG TIN KHÁCH
   // - Kiểm tra lại xung đột khung giờ đá với các đơn khác trong ngày
-  // - Chuyển sang Bước 2 ('INFO') để điền họ tên, số điện thoại, ghi chú, hình thức thanh toán
+  // - Tiếp tục duy trì khóa toàn bộ các ô thời gian mà khách 2 có thể mua trong suốt phiên đặt
+  //   để đảm bảo an toàn tuyệt đối, chống xung đột cướp slot
   // ===================================================================================
   const handleProceedToInfo = () => {
     if (!selectedSlot) return;
@@ -1294,17 +1296,12 @@ export default function HomePage() {
       return;
     }
 
-    // Khi người dùng chốt thời lượng và sang bước điền thông tin:
-    // Cập nhật lại Socket.IO chỉ khóa đúng các ô thuộc thời lượng đã chọn, nhả các ô thừa ra cho khách khác
-    const chosenSlots = Math.ceil(selectedSlot.durationMin / 30);
-    const finalSlotKeys: string[] = [];
-    let curTime = selectedSlot.slot.start;
-    for (let i = 0; i < chosenSlots; i++) {
-      finalSlotKeys.push(`${filterNgayDa}_${selectedSlot.san.id}_${curTime}`);
-      curTime = addMinutesToTime(curTime, 30);
-    }
-    socketRef.current?.emit('lock_slots', finalSlotKeys);
-    setMyLockedSlotIds(finalSlotKeys);
+    // Duy trì khóa toàn bộ các ô thời gian khả dụng trong suốt phiên đặt
+    const activeHoldKeys = (selectedSlot.holdSlotKeys && selectedSlot.holdSlotKeys.length > 0)
+      ? selectedSlot.holdSlotKeys
+      : myLockedSlotIds;
+    socketRef.current?.emit('lock_slots', activeHoldKeys);
+    setMyLockedSlotIds(activeHoldKeys);
 
     setBookingStep('INFO');
   };
