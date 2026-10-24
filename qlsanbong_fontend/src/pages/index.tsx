@@ -1348,11 +1348,15 @@ export default function HomePage() {
             dich_vu_chon: bookingForm.dich_vu_chon || {},
             ho_ten: hoTen,
             so_dien_thoai: soDienThoai,
+            ma_nguoi_dung: currentUser?.id || undefined,
+            email: currentUser?.email || undefined,
           },
           so_tien: soTienThanhToan,
           loai_thanh_toan: bookingForm.loai_thanh_toan,
           ho_ten: hoTen,
           so_dien_thoai: soDienThoai,
+          ma_nguoi_dung: currentUser?.id || undefined,
+          email: currentUser?.email || undefined,
         }),
       });
 

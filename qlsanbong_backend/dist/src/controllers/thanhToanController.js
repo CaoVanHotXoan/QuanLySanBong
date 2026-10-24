@@ -122,7 +122,7 @@ const taoThanhToanPayOS = async (req, res) => {
                 message: 'Cổng thanh toán PayOS chưa được cấu hình đúng key trong máy chủ!'
             });
         }
-        const { ma_don_dat, bookingData, so_tien, loai_thanh_toan, ho_ten, so_dien_thoai } = req.body;
+        const { ma_don_dat, bookingData, so_tien, loai_thanh_toan, ho_ten, so_dien_thoai, ma_nguoi_dung, email } = req.body;
         const amount = Math.round(Number(so_tien) || 10000);
         if (amount <= 0) {
             return res.status(400).json({
@@ -135,20 +135,49 @@ const taoThanhToanPayOS = async (req, res) => {
         // Nếu tạo đơn mới trước khi thanh toán -> Thực thi Procedure sp_DatSan
         if (!finalDonDatId && bookingData) {
             const { ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu } = bookingData;
-            // Xác định người dùng hoặc tạo qua Procedure sp_ThemNguoiDung
-            let ma_nd = null;
+            // Xác định người dùng: Ưu tiên mã người dùng đăng nhập hiện tại
+            let ma_nd = (req.user?.id) || ma_nguoi_dung || bookingData?.ma_nguoi_dung || null;
+            const userEmail = (email && email.trim()) ? email.trim() : (bookingData?.email || req.user?.email || null);
             const ten_khach = (ho_ten && ho_ten.trim()) ? ho_ten.trim() : (bookingData.ho_ten || 'Khách Đặt Sân');
             const sdt_khach = (so_dien_thoai && so_dien_thoai.trim()) ? so_dien_thoai.trim() : (bookingData.so_dien_thoai || '0900000000');
-            // Kiểm tra số điện thoại người dùng đã có
-            const userCheck = await pool.request()
-                .input('sdt', db_1.sql.VarChar(20), sdt_khach)
-                .query('SELECT TOP 1 id FROM Nguoi_Dung WHERE so_dien_thoai = @sdt');
-            if (userCheck.recordset && userCheck.recordset.length > 0) {
-                ma_nd = userCheck.recordset[0].id;
+            if (ma_nd) {
+                const userCheckById = await pool.request()
+                    .input('uid', db_1.sql.Int, ma_nd)
+                    .query('SELECT TOP 1 id, so_dien_thoai, ho_ten FROM Nguoi_Dung WHERE id = @uid');
+                if (userCheckById.recordset && userCheckById.recordset.length > 0) {
+                    ma_nd = userCheckById.recordset[0].id;
+                    if (sdt_khach && (!userCheckById.recordset[0].so_dien_thoai || userCheckById.recordset[0].so_dien_thoai !== sdt_khach)) {
+                        await pool.request()
+                            .input('uid', db_1.sql.Int, ma_nd)
+                            .input('sdt', db_1.sql.VarChar(20), sdt_khach)
+                            .query('UPDATE Nguoi_Dung SET so_dien_thoai = @sdt WHERE id = @uid');
+                    }
+                }
+                else {
+                    ma_nd = null;
+                }
             }
-            else {
-                // Tạo người dùng mới qua Stored Procedure sp_ThemNguoiDung
-                const uniqueEmail = `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@sport247.vn`;
+            // Nếu chưa có, tìm theo email
+            if (!ma_nd && userEmail) {
+                const userByEmail = await pool.request()
+                    .input('mail', db_1.sql.VarChar(255), userEmail)
+                    .query('SELECT TOP 1 id FROM Nguoi_Dung WHERE LOWER(email) = LOWER(@mail)');
+                if (userByEmail.recordset && userByEmail.recordset.length > 0) {
+                    ma_nd = userByEmail.recordset[0].id;
+                }
+            }
+            // Nếu vẫn chưa có, kiểm tra số điện thoại người dùng đã có
+            if (!ma_nd && sdt_khach) {
+                const userCheck = await pool.request()
+                    .input('sdt', db_1.sql.VarChar(20), sdt_khach)
+                    .query('SELECT TOP 1 id FROM Nguoi_Dung WHERE so_dien_thoai = @sdt');
+                if (userCheck.recordset && userCheck.recordset.length > 0) {
+                    ma_nd = userCheck.recordset[0].id;
+                }
+            }
+            // Nếu vẫn chưa có, tạo người dùng mới qua Stored Procedure sp_ThemNguoiDung
+            if (!ma_nd) {
+                const uniqueEmail = userEmail || `khach_${Date.now()}_${Math.floor(Math.random() * 1000)}@sport247.vn`;
                 const newUserRes = await pool.request()
                     .input('ho_ten', db_1.sql.NVarChar(100), ten_khach)
                     .input('email', db_1.sql.VarChar(255), uniqueEmail)

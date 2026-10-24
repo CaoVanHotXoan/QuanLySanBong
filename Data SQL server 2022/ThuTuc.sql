@@ -1102,8 +1102,32 @@ BEGIN
         EXEC sp_HuyDonTam;
         EXEC sp_DongBoTrangThaiDonDatSan;
 
+        -- Tự động đồng bộ trạng thái đơn nếu đã có giao dịch PayOS/chuyển khoản thành công trong bảng Thanh_Toan
+        UPDATE d
+        SET d.trang_thai = CASE 
+            WHEN tt_sum.da_tra >= ISNULL(d.tong_tien, d.tien_san) THEN 'DA_THANH_TOAN'
+            ELSE 'DA_COC'
+        END
+        FROM Don_Dat_San d
+        CROSS APPLY (
+            SELECT SUM(tt.so_tien) AS da_tra
+            FROM Thanh_Toan tt
+            WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd IN ('THANH_CONG', 'CHO_XU_LY')
+        ) tt_sum
+        WHERE d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN')
+          AND tt_sum.da_tra > 0;
+
+        -- Chuẩn hóa tham số tìm kiếm
+        DECLARE @clean_phone VARCHAR(20) = NULL;
+        IF @so_dien_thoai IS NOT NULL AND LTRIM(RTRIM(@so_dien_thoai)) <> ''
+            SET @clean_phone = REPLACE(REPLACE(LTRIM(RTRIM(@so_dien_thoai)), ' ', ''), '.', '');
+
+        DECLARE @clean_email VARCHAR(255) = NULL;
+        IF @email IS NOT NULL AND LTRIM(RTRIM(@email)) <> ''
+            SET @clean_email = LOWER(LTRIM(RTRIM(@email)));
+
         -- Bảo mật dữ liệu người dùng: Nếu không có bất kỳ thông tin nhận diện nào, trả về rỗng để tránh lộ thông tin khách hàng khác
-        IF @ma_nguoi_dung IS NULL AND @so_dien_thoai IS NULL AND @email IS NULL
+        IF @ma_nguoi_dung IS NULL AND @clean_phone IS NULL AND @clean_email IS NULL
         BEGIN
             SELECT TOP 0 
                 d.id,
@@ -1202,11 +1226,37 @@ BEGIN
         LEFT JOIN San_Bong sb ON d.ma_san = sb.id
         LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
         LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
-        WHERE (@ma_nguoi_dung IS NULL OR d.ma_nguoi_dung = @ma_nguoi_dung)
-          AND (@so_dien_thoai IS NULL OR nd.so_dien_thoai = @so_dien_thoai)
-          AND (@email IS NULL OR nd.email = @email)
-          AND NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%' AND (d.ghi_chu IS NULL OR d.ghi_chu NOT LIKE N'%CẢNH BÁO%'))
-          AND NOT (d.trang_thai = 'DA_HUY' AND (d.ghi_chu LIKE '%PayOS VietQR%' OR d.ghi_chu LIKE '%PayOS #%'))
+        WHERE (
+            -- 1. Khớp theo ID người dùng đặt sân
+            (@ma_nguoi_dung IS NOT NULL AND d.ma_nguoi_dung = @ma_nguoi_dung)
+            -- 2. Hoặc khớp theo Số điện thoại (ở bảng Nguoi_Dung hoặc ghi chú)
+            OR (@clean_phone IS NOT NULL AND (
+                REPLACE(REPLACE(ISNULL(nd.so_dien_thoai, ''), ' ', ''), '.', '') = @clean_phone
+                OR d.ghi_chu LIKE '%' + @clean_phone + '%'
+            ))
+            -- 3. Hoặc khớp theo Email
+            OR (@clean_email IS NOT NULL AND (
+                LOWER(ISNULL(nd.email, '')) = @clean_email
+                OR d.ghi_chu LIKE '%' + @clean_email + '%'
+            ))
+            -- 4. Hoặc nếu là Quản trị viên (ADMIN), cho phép xem các đơn của quản trị viên
+            OR (@ma_nguoi_dung IS NOT NULL AND EXISTS (
+                SELECT 1 FROM Nguoi_Dung adm 
+                WHERE adm.id = @ma_nguoi_dung AND (adm.MaVaiTro = 1 OR LOWER(adm.email) IN ('admin@gmail.com', 'xoancao2.0@gmail.com'))
+            ) AND (nd.ho_ten LIKE N'%Quản Trị%' OR d.ghi_chu LIKE N'%Quản Trị%' OR d.id = 157))
+        )
+        -- Không ẩn các đơn đã có giao dịch thanh toán thành công
+        AND NOT (
+            d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') 
+            AND d.ghi_chu LIKE '%PayOS%' 
+            AND (d.ghi_chu IS NULL OR d.ghi_chu NOT LIKE N'%CẢNH BÁO%')
+            AND NOT EXISTS (
+                SELECT 1 FROM Thanh_Toan tt 
+                WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd IN ('THANH_CONG', 'CHO_XU_LY')
+            )
+        )
+        -- Loại bỏ đơn rác đã hủy
+        AND NOT (d.trang_thai = 'DA_HUY' AND (d.ghi_chu LIKE '%PayOS VietQR%' OR d.ghi_chu LIKE '%PayOS #%'))
         ORDER BY d.id DESC;
     END TRY
     BEGIN CATCH

@@ -206,7 +206,13 @@ export default function History() {
       if (user?.so_dien_thoai || user?.soDienThoai) queryParams.append('so_dien_thoai', user.so_dien_thoai || user.soDienThoai);
       if (user?.email) queryParams.append('email', user.email);
 
-      const res = await fetch(`${API_BASE_URL}/dat-san/lich-su-khach-hang?${queryParams.toString()}`);
+      const token = typeof window !== 'undefined' ? (localStorage.getItem('auth_token') || localStorage.getItem('token')) : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(`${API_BASE_URL}/dat-san/lich-su-khach-hang?${queryParams.toString()}`, { headers });
       const data = await res.json();
 
       if (data.success && Array.isArray(data.data)) {
@@ -907,68 +913,21 @@ export default function History() {
                           {renderStatusBadge(item.trang_thai, tienThieu, tienDaNhan, item.tong_tien)}
                         </td>
 
-                        {/* Hành động */}
+                        {/* Hành động: Chỉ hiển thị duy nhất nút Xem chi tiết */}
                         <td className="py-4 px-4 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1.5">
-                            {isPast ? (
-                              /* Đơn đã qua giờ: CHỈ HIỆN DUY NHẤT NÚT XEM CHI TIẾT */
-                              <button
-                                onClick={() => setSelectedOrderForDetail(item)}
-                                className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 ${
-                                  isDarkMode
-                                    ? 'bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white border-slate-700 hover:border-cyan-500/50'
-                                    : 'bg-cyan-50 hover:bg-cyan-100 text-cyan-700 hover:text-cyan-900 border-cyan-200'
-                                }`}
-                                title="Xem chi tiết đơn đặt sân & hóa đơn"
-                              >
-                                <Eye className="w-3.5 h-3.5 text-cyan-500" />
-                                <span>Xem chi tiết</span>
-                              </button>
-                            ) : (
-                              /* Đơn chưa qua giờ: Hiện các nút tương tác bình thường */
-                              <>
-                                {/* Nút Xem chi tiết nhanh */}
-                                <button
-                                  onClick={() => setSelectedOrderForDetail(item)}
-                                  className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                                    isDarkMode
-                                      ? 'text-slate-400 hover:text-cyan-300 bg-slate-950 hover:bg-slate-800 border-slate-800 hover:border-cyan-500/50'
-                                      : 'text-slate-600 hover:text-cyan-700 bg-slate-100 hover:bg-slate-200 border-slate-200'
-                                  }`}
-                                  title="Xem chi tiết hóa đơn"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </button>
-
-                                {/* Nút Dịch Vụ: Chỉ hiện khi đơn chưa bị hủy */}
-                                {canAddService && (
-                                  <button
-                                    onClick={() => handleOpenAddServiceModal(item)}
-                                    className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                                      isDarkMode
-                                        ? 'bg-slate-950 hover:bg-slate-800 text-slate-200 hover:text-emerald-400 border-slate-700/80 hover:border-emerald-500/50'
-                                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 hover:text-emerald-950 border-emerald-200'
-                                    }`}
-                                    title="Thêm nước uống, phụ kiện vào hóa đơn này"
-                                  >
-                                    <Plus className="w-3.5 h-3.5 text-emerald-500" />
-                                    <span>Dịch vụ</span>
-                                  </button>
-                                )}
-
-                                {/* Nút Thanh Toán: Luôn hiện khi còn thiếu tiền */}
-                                {!isCancelled && tienThieu > 0 && (
-                                  <button
-                                    onClick={() => handleOpenVietQRPayment(item)}
-                                    className="px-2.5 py-1.5 text-[11px] font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-lg transition-all shadow-md shadow-emerald-500/20 flex items-center gap-1.5 cursor-pointer hover:scale-105"
-                                    title={`Quét mã VietQR (MB Bank) để thanh toán số tiền còn thiếu ${formatCurrency(tienThieu)}`}
-                                  >
-                                    <QrCode className="w-3.5 h-3.5" />
-                                    <span>Thanh toán</span>
-                                  </button>
-                                )}
-                              </>
-                            )}
+                            <button
+                              onClick={() => setSelectedOrderForDetail(item)}
+                              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 ${
+                                isDarkMode
+                                  ? 'bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white border-slate-700 hover:border-cyan-500/50'
+                                  : 'bg-cyan-50 hover:bg-cyan-100 text-cyan-700 hover:text-cyan-900 border-cyan-200'
+                              }`}
+                              title="Xem chi tiết đơn đặt sân & hóa đơn"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-cyan-500" />
+                              <span>Xem chi tiết</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1497,6 +1456,28 @@ export default function History() {
             <div className={`p-4 border-t flex items-center justify-end gap-2 ${
               isDarkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'
             }`}>
+              {(() => {
+                const isFullyPaid = (selectedOrderForDetail.trang_thai === 'DA_THANH_TOAN' || selectedOrderForDetail.trang_thai === 'HOAN_THANH' || selectedOrderForDetail.trang_thai === 'KET_THUC');
+                const modalDaNhan = isFullyPaid ? Number(selectedOrderForDetail.tong_tien || 0) : Number(selectedOrderForDetail.tien_da_nhan || 0);
+                const modalThieu = isFullyPaid ? 0 : Number(selectedOrderForDetail.tien_thieu || Math.max(0, (selectedOrderForDetail.tong_tien || 0) - modalDaNhan));
+                if (modalThieu > 0 && selectedOrderForDetail.trang_thai !== 'DA_HUY') {
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const orderToPay = selectedOrderForDetail;
+                        setSelectedOrderForDetail(null);
+                        handleOpenVietQRPayment(orderToPay);
+                      }}
+                      className="px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 hover:from-emerald-400 hover:to-teal-400 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/20 hover:scale-105"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>Thanh toán VietQR ({formatCurrency(modalThieu)})</span>
+                    </button>
+                  );
+                }
+                return null;
+              })()}
               <button
                 type="button"
                 onClick={() => setSelectedOrderForDetail(null)}
