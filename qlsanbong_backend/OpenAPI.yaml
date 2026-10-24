@@ -9,6 +9,8 @@ info:
     name: Sport 247 Admin Team
     email: admin@sport247.vn
 servers:
+  - url: https://qlsbbackend.vercel.app
+    description: Máy chủ Cloud Vercel Production (Online)
   - url: http://localhost:5000
     description: Máy chủ API Backend Local (Node.js & Express)
 tags:

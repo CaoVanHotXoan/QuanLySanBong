@@ -353,6 +353,11 @@ const layDanhSachNguoiDung = async (req, res) => {
             `);
             users = fallbackRes.recordset || [];
         }
+        users.forEach((u) => {
+            delete u.mat_khau;
+            delete u.ma_otp;
+            delete u.het_han_luc;
+        });
         return res.status(200).json({
             success: true,
             data: users
@@ -591,17 +596,18 @@ exports.xoaVaiTro = xoaVaiTro;
 const guiMaOTP = async (req, res) => {
     try {
         const { email, loai_otp, ho_ten } = req.body;
+        let userName = ho_ten;
         if (!email || !email.trim()) {
             return res.status(400).json({
                 success: false,
                 message: 'Vui lòng cung cấp địa chỉ Email!'
             });
         }
-        const validTypes = ['DANG_KY', 'DOI_MAT_KHAU', 'CAP_NHAT_EMAIL'];
+        const validTypes = ['DANG_KY', 'DOI_MAT_KHAU', 'QUEN_MAT_KHAU', 'CAP_NHAT_EMAIL'];
         if (!loai_otp || !validTypes.includes(loai_otp)) {
             return res.status(400).json({
                 success: false,
-                message: 'Loại mã OTP không hợp lệ (DANG_KY, DOI_MAT_KHAU, CAP_NHAT_EMAIL)!'
+                message: 'Loại mã OTP không hợp lệ (DANG_KY, DOI_MAT_KHAU, QUEN_MAT_KHAU, CAP_NHAT_EMAIL)!'
             });
         }
         const normalizedEmail = email.toLowerCase().trim();
@@ -618,7 +624,7 @@ const guiMaOTP = async (req, res) => {
                 });
             }
         }
-        else if (loai_otp === 'DOI_MAT_KHAU') {
+        else if (loai_otp === 'DOI_MAT_KHAU' || loai_otp === 'QUEN_MAT_KHAU') {
             const checkUser = await pool.request()
                 .input('email', db_1.sql.VarChar(255), normalizedEmail)
                 .query('SELECT TOP 1 id, ho_ten FROM Nguoi_Dung WHERE email = @email');
@@ -627,6 +633,9 @@ const guiMaOTP = async (req, res) => {
                     success: false,
                     message: 'Không tìm thấy tài khoản nào khớp với địa chỉ Email này!'
                 });
+            }
+            if (!userName && checkUser.recordset[0].ho_ten) {
+                userName = checkUser.recordset[0].ho_ten;
             }
         }
         else if (loai_otp === 'CAP_NHAT_EMAIL') {
@@ -657,7 +666,7 @@ const guiMaOTP = async (req, res) => {
             toEmail: normalizedEmail,
             otpCode,
             purpose: loai_otp,
-            userName: ho_ten || req.user?.ho_ten || 'Quý khách'
+            userName: userName || req.user?.ho_ten || 'Quý khách'
         });
         if (!sent) {
             return res.status(500).json({
@@ -745,12 +754,21 @@ const doiMatKhau = async (req, res) => {
         const pool = await db_1.poolPromise;
         // Nếu có mã OTP -> Xác thực bằng OTP qua sp_KiemTraOTP
         if (ma_otp) {
-            const otpRes = await pool.request()
+            const reqLoaiOtp = req.body.loai_otp || 'QUEN_MAT_KHAU';
+            let otpRes = await pool.request()
                 .input('email', db_1.sql.VarChar(255), targetEmail)
                 .input('ma_otp', db_1.sql.VarChar(10), String(ma_otp).trim())
-                .input('loai_otp', db_1.sql.VarChar(50), 'DOI_MAT_KHAU')
+                .input('loai_otp', db_1.sql.VarChar(50), reqLoaiOtp)
                 .execute('sp_KiemTraOTP');
-            const check = otpRes.recordset && otpRes.recordset[0];
+            let check = otpRes.recordset && otpRes.recordset[0];
+            if ((!check || check.hop_le !== 1) && reqLoaiOtp !== 'DOI_MAT_KHAU') {
+                otpRes = await pool.request()
+                    .input('email', db_1.sql.VarChar(255), targetEmail)
+                    .input('ma_otp', db_1.sql.VarChar(10), String(ma_otp).trim())
+                    .input('loai_otp', db_1.sql.VarChar(50), 'DOI_MAT_KHAU')
+                    .execute('sp_KiemTraOTP');
+                check = otpRes.recordset && otpRes.recordset[0];
+            }
             if (!check || check.hop_le !== 1) {
                 return res.status(400).json({
                     success: false,

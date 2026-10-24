@@ -20,7 +20,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   // 2. Dự phòng: Nếu deploy tách biệt môi trường, lấy từ máy chủ Backend
-  const backendBase = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+  const backendBase = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 'https://qlsbbackend.vercel.app';
   try {
     const backendRes = await fetch(`${backendBase}/OpenAPI.yaml`);
     if (backendRes.ok) {

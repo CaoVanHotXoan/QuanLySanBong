@@ -215,7 +215,7 @@ CREATE TABLE Tin_Tuc (
     luot_xem INT DEFAULT 0,
     ngay_dang DATETIME DEFAULT GETDATE(),
     trang_thai BIT DEFAULT 1,
-    FOREIGN KEY (ma_loai_tin) REFERENCES Loai_Tin_Tuc(id) ON DELETE NO ACTION
+    FOREIGN KEY (ma_loai_tin) REFERENCES Loai_Tin_Tuc(id) ON DELETE CASCADE
 );
 GO
 

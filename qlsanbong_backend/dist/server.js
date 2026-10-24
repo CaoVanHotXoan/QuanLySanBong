@@ -16,6 +16,8 @@ const dotenv_1 = __importDefault(require("dotenv"));
 const compression_1 = __importDefault(require("compression"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
+const yamljs_1 = __importDefault(require("yamljs"));
 dotenv_1.default.config();
 // Khởi chạy kết nối CSDL
 require("./src/config/db");
@@ -42,6 +44,8 @@ app.get('/', (req, res) => {
         message: '🚀 Hệ thống API Quản lý Sân bóng đá đang hoạt động!',
         version: '1.0.0',
         endpoints: {
+            swagger_ui: '/api-docs',
+            openapi_spec: '/OpenAPI.yaml',
             auth: '/api/auth',
             dat_san: '/api/dat-san',
             dich_vu: '/api/dich-vu',
@@ -60,7 +64,24 @@ app.use('/api/thanh-toan', thanhToanRoutes_1.default);
 app.use('/api/bao-cao', baoCaoRoutes_1.default);
 app.use('/api/upload', uploadRoutes_1.default);
 app.use('/api', contentRoutes_1.default);
-// Cung cấp tài liệu OpenAPI Specification (Swagger)
+// Cung cấp giao diện Swagger UI trực quan tương tác (/api-docs)
+try {
+    const candidates = [
+        path_1.default.join(__dirname, 'OpenAPI.yaml'),
+        path_1.default.join(__dirname, '..', 'OpenAPI.yaml'),
+        path_1.default.join(process.cwd(), 'OpenAPI.yaml')
+    ];
+    const yamlPath = candidates.find(p => fs_1.default.existsSync(p));
+    if (yamlPath) {
+        const swaggerDocument = yamljs_1.default.load(yamlPath);
+        app.use('/api-docs', swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(swaggerDocument));
+        console.log('📖 [Swagger UI] Đã kích hoạt giao diện tài liệu API tại http://localhost:' + PORT + '/api-docs');
+    }
+}
+catch (err) {
+    console.error('⚠️ [Swagger UI] Lỗi cấu hình Swagger UI:', err.message);
+}
+// Cung cấp tài liệu OpenAPI Specification dạng file thô (YAML)
 app.get(['/OpenAPI.yaml', '/openapi.yaml'], (req, res) => {
     const candidates = [
         path_1.default.join(__dirname, 'OpenAPI.yaml'),
@@ -178,6 +199,15 @@ io.on('connection', (socket) => {
             console.log(`🔓 [Force Unlock]: Slot ${slotId} đã được Admin/POS mở khóa`);
             io.emit('slots_updated', Array.from(lockedSlots.keys()));
         }
+    });
+    // 5. SỰ KIỆN ĐỒNG BỘ ĐƠN ĐẶT SÂN REAL-TIME (Relay giữa POS Management System và Trang Chủ)
+    socket.on('booking_updated', (data) => {
+        console.log(`📢 [Socket Relay]: Nhận booking_updated từ ${socket.id}, broadcast tới toàn bộ client.`);
+        io.emit('booking_updated', data);
+    });
+    socket.on('payment_success', (data) => {
+        console.log(`💰 [Socket Relay]: Nhận payment_success từ ${socket.id}, broadcast tới toàn bộ client.`);
+        io.emit('payment_success', data);
     });
     // 5. SỰ KIỆN NGẮT KẾT NỐI (disconnect)
     socket.on('disconnect', () => {

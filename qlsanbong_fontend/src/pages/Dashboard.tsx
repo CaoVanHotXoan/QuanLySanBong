@@ -2337,26 +2337,56 @@ export default function AdminDashboard() {
     try {
       const isCurrentlyActive = (item.trang_thai as any) == 1 || (item.trang_thai as any) === true;
       const newStatus = isCurrentlyActive ? 0 : 1;
+      // Cập nhật Optimistic tức thì
+      setLoaiTinList((prev) => prev.map((lt) => lt.id === item.id ? { ...lt, trang_thai: newStatus } : lt));
       await contentService.updateLoaiTin(item.id, { ten_loai: item.ten_loai, trang_thai: newStatus });
       setToastMessage({ type: 'success', message: `Đã ${newStatus === 1 ? 'kích hoạt' : 'tạm ẩn'} danh mục [${item.ten_loai}]!` });
-      loadAllDataFromBackend();
+      loadAllDataFromBackend(false);
     } catch (err: any) {
       setToastMessage({ type: 'error', message: err.message || 'Lỗi cập nhật trạng thái loại tin' });
+      loadAllDataFromBackend(false);
     }
   };
 
   const handleDeleteLoaiTin = (id: number, name?: string) => {
+    const relatedNews = newsList.filter((n) => Number(n.ma_loai_tin) === Number(id));
+    const relatedCount = relatedNews.length;
+
+    const modalTitle = relatedCount > 0
+      ? '⚠️ CẢNH BÁO: XÓA LOẠI TIN TỨC VÀ BÀI VIẾT LIÊN QUAN'
+      : 'Xác Nhận Xóa Loại Tin Tức';
+
+    const modalMessage = relatedCount > 0
+      ? `Loại tin tức [${name || `#${id}`}] hiện đang có ${relatedCount} bài viết trực thuộc! Nếu bạn xác nhận xóa, TOÀN BỘ ${relatedCount} bài viết tin tức này sẽ bị xóa vĩnh viễn khỏi hệ thống.`
+      : `Bạn có chắc chắn muốn xóa danh mục loại tin [${name || `#${id}`}] không? Hành động này không thể hoàn tác.`;
+
+    const modalItemDesc = relatedCount > 0
+      ? `Danh mục "${name || `#${id}`}" và ${relatedCount} bài viết tin tức liên quan`
+      : `Danh mục "${name || `#${id}`}"`;
+
     openDeleteConfirm(
-      'Xóa Loại Tin Tức',
-      'Bạn có chắc chắn muốn xóa loại tin này?',
-      name || `#${id}`,
+      modalTitle,
+      modalMessage,
+      modalItemDesc,
       async () => {
+        // Optimistic UI: Lập tức xóa danh mục và bài viết liên quan khỏi giao diện người dùng
+        setLoaiTinList((prev) => prev.filter((item) => item.id !== id));
+        if (relatedCount > 0) {
+          setNewsList((prev) => prev.filter((item) => Number(item.ma_loai_tin) !== Number(id)));
+        }
+
         try {
           await contentService.deleteLoaiTin(id);
-          setToastMessage({ type: 'success', message: '🗑️ Đã xóa loại tin tức thành công!' });
-          loadAllDataFromBackend();
+          setToastMessage({
+            type: 'success',
+            message: relatedCount > 0
+              ? `🗑️ Đã xóa loại tin [${name || `#${id}`}] và ${relatedCount} bài viết liên quan thành công!`
+              : '🗑️ Đã xóa loại tin tức thành công!'
+          });
+          loadAllDataFromBackend(false);
         } catch (err: any) {
           setToastMessage({ type: 'error', message: err.message || 'Lỗi xóa loại tin tức' });
+          loadAllDataFromBackend(false);
         }
       }
     );
@@ -2367,12 +2397,26 @@ export default function AdminDashboard() {
     e.preventDefault();
     try {
       const data = newsModal.data;
-      if (!data.tieu_de?.trim() || !data.noi_dung?.trim()) return;
+      if (!data.tieu_de?.trim() || !data.noi_dung?.trim()) {
+        setToastMessage({ type: 'error', message: 'Vui lòng nhập đầy đủ Tiêu đề và Nội dung bài viết!' });
+        return;
+      }
+
+      // Xác thực mã loại tin hợp lệ, nếu không có hoặc không tồn tại thì tự động lấy danh mục đầu tiên
+      const validMaLoai = Number(data.ma_loai_tin) > 0 && loaiTinList.some(lt => Number(lt.id) === Number(data.ma_loai_tin))
+        ? Number(data.ma_loai_tin)
+        : (loaiTinList[0]?.id ?? 1);
+
       const isStatusActive = (data.trang_thai as any) == 1 || (data.trang_thai as any) === true;
       const payload = {
         ...data,
+        tieu_de: data.tieu_de.trim(),
+        tom_tat: data.tom_tat?.trim() || '',
+        noi_dung: data.noi_dung,
+        ma_loai_tin: validMaLoai,
         trang_thai: isStatusActive ? 1 : 0
       };
+
       if (newsModal.mode === 'ADD') {
         const res = await contentService.createTinTuc(payload);
         if (res.success) {
@@ -2384,8 +2428,8 @@ export default function AdminDashboard() {
           setToastMessage({ type: 'success', message: '✅ Cập nhật bài viết tin tức thành công!' });
         }
       }
-      loadAllDataFromBackend();
-      setNewsModal({ isOpen: false, mode: 'ADD', data: { ma_loai_tin: 1, trang_thai: 1 } });
+      setNewsModal({ isOpen: false, mode: 'ADD', data: { ma_loai_tin: loaiTinList[0]?.id || 1, trang_thai: 1 } });
+      loadAllDataFromBackend(false);
     } catch (err: any) {
       setToastMessage({ type: 'error', message: err.message || 'Lỗi lưu tin tức' });
     }
@@ -2395,26 +2439,32 @@ export default function AdminDashboard() {
     try {
       const isCurrentlyActive = (item.trang_thai as any) == 1 || (item.trang_thai as any) === true;
       const newStatus = isCurrentlyActive ? 0 : 1;
+      // Optimistic UI
+      setNewsList((prev) => prev.map((nw) => nw.id === item.id ? { ...nw, trang_thai: newStatus } : nw));
       await contentService.updateTinTuc(item.id, { ...item, trang_thai: newStatus });
       setToastMessage({ type: 'success', message: `Đã ${newStatus === 1 ? 'xuất bản bài viết' : 'chuyển bài viết về bản nháp'}!` });
-      loadAllDataFromBackend();
+      loadAllDataFromBackend(false);
     } catch (err: any) {
       setToastMessage({ type: 'error', message: err.message || 'Lỗi cập nhật trạng thái bài viết' });
+      loadAllDataFromBackend(false);
     }
   };
 
   const handleDeleteTinTuc = (id: number, title?: string) => {
     openDeleteConfirm(
       'Xóa Bài Viết Tin Tức',
-      'Bạn có chắc chắn muốn xóa bài viết này?',
+      'Bạn có chắc chắn muốn xóa bài viết này không? Bài viết sẽ bị xóa vĩnh viễn khỏi website.',
       title || `#${id}`,
       async () => {
+        // Optimistic UI
+        setNewsList((prev) => prev.filter((item) => item.id !== id));
         try {
           await contentService.deleteTinTuc(id);
           setToastMessage({ type: 'success', message: '🗑️ Đã xóa bài viết tin tức thành công!' });
-          loadAllDataFromBackend();
+          loadAllDataFromBackend(false);
         } catch (err: any) {
           setToastMessage({ type: 'error', message: err.message || 'Lỗi xóa tin tức' });
+          loadAllDataFromBackend(false);
         }
       }
     );
@@ -5403,6 +5453,7 @@ export default function AdminDashboard() {
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4 w-24">MÃ LOẠI</th>
                         <th className="p-4">TÊN LOẠI TIN TỨC</th>
+                        <th className="p-4 text-center">SỐ BÀI VIẾT</th>
                         <th className="p-4 text-center">TRẠNG THÁI</th>
                         <th className="p-4 text-right">THAO TÁC</th>
                       </tr>
@@ -5410,16 +5461,27 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {loaiTinList.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="p-8 text-center text-slate-400 font-bold">Chưa có loại tin tức nào.</td>
+                          <td colSpan={5} className="p-8 text-center text-slate-400 font-bold">Chưa có loại tin tức nào.</td>
                         </tr>
                       ) : (
-                        pagedData.items.map((lt) => (
+                        pagedData.items.map((lt) => {
+                          const articleCount = newsList.filter((n) => Number(n.ma_loai_tin) === Number(lt.id)).length;
+                          return (
                           <tr key={lt.id} className="hover:bg-slate-50/50 dark:hover:bg-emerald-950/20 transition-colors">
                             <td className={`p-4 font-mono font-black ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>#{lt.id}</td>
                             <td className="p-4 font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
                               📁 {lt.ten_loai}
                             </td>
                             <td className="p-4 text-center">
+                              <span className={`px-2.5 py-1 rounded-lg font-bold text-[11px] inline-flex items-center gap-1 border ${
+                                articleCount > 0
+                                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900/40'
+                                  : 'bg-slate-50 dark:bg-[#060e09] text-slate-400 border-slate-200 dark:border-slate-800'
+                              }`}>
+                                📄 {articleCount} bài viết
+                              </span>
+                            </td>
+                            <td className="p-4 text-center">`;
                               {(() => {
                                 const isLoaiActive = (lt.trang_thai as any) == 1 || (lt.trang_thai as any) === true;
                                 return (
@@ -5452,7 +5514,8 @@ export default function AdminDashboard() {
                               </button>
                             </td>
                           </tr>
-                        ))
+                        );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -5483,17 +5546,24 @@ export default function AdminDashboard() {
                     <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">Soạn thảo, đăng tải các bài viết thể thao, tin giải đấu và sự kiện sân bóng</p>
                   </div>
                   <button
-                    onClick={() => setNewsModal({
-                      isOpen: true,
-                      mode: 'ADD',
-                      data: {
-                        ma_loai_tin: loaiTinList[0]?.id || 1,
-                        tieu_de: '',
-                        tom_tat: '',
-                        noi_dung: '',
-                        trang_thai: 1
+                    onClick={() => {
+                      if (loaiTinList.length === 0) {
+                        setToastMessage({ type: 'error', message: '⚠️ Vui lòng tạo ít nhất 1 Loại tin tức trước khi viết bài!' });
+                        return;
                       }
-                    })}
+                      setNewsModal({
+                        isOpen: true,
+                        mode: 'ADD',
+                        data: {
+                          ma_loai_tin: loaiTinList[0]?.id,
+                          tieu_de: '',
+                          tom_tat: '',
+                          noi_dung: '',
+                          hinh_anh: '',
+                          trang_thai: 1
+                        }
+                      });
+                    }}
                     className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer transition-all hover:scale-[1.02]"
                   >
                     <Plus className="w-4 h-4 stroke-[3]" /> Viết Tin Tức Mới

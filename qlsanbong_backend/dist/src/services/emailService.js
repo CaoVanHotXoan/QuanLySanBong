@@ -358,6 +358,11 @@ const sendOtpEmail = async (payload) => {
             purposeDesc = 'yêu cầu thay đổi mật khẩu bảo mật tài khoản tại Sport247';
             actionName = 'đổi mật khẩu';
         }
+        else if (payload.purpose === 'QUEN_MAT_KHAU') {
+            purposeTitle = 'Khôi Phục Mật Khẩu (Quên Mật Khẩu)';
+            purposeDesc = 'yêu cầu khôi phục và đặt lại mật khẩu mới cho tài khoản tại Sport247';
+            actionName = 'khôi phục mật khẩu';
+        }
         else if (payload.purpose === 'CAP_NHAT_EMAIL') {
             purposeTitle = 'Xác Thực Cập Nhật Gmail';
             purposeDesc = 'xác thực địa chỉ hòm thư Gmail mới cho tài khoản của bạn tại Sport247';

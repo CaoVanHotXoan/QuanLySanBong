@@ -3927,6 +3927,17 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
+            -- Tự động kiểm tra và chuẩn hóa ma_loai_tin nếu không tồn tại để tránh vi phạm FOREIGN KEY
+            IF @ma_loai_tin IS NULL OR NOT EXISTS (SELECT 1 FROM Loai_Tin_Tuc WHERE id = @ma_loai_tin)
+            BEGIN
+                SELECT TOP 1 @ma_loai_tin = id FROM Loai_Tin_Tuc ORDER BY id ASC;
+                -- Nếu bảng Loai_Tin_Tuc chưa có dữ liệu nào, tự động tạo 1 danh mục mặc định
+                IF @ma_loai_tin IS NULL
+                BEGIN
+                    INSERT INTO Loai_Tin_Tuc (ten_loai, trang_thai) VALUES (N'Tin Tức Thể Thao', 1);
+                    SET @ma_loai_tin = SCOPE_IDENTITY();
+                END;
+            END;
             INSERT INTO Tin_Tuc (ma_loai_tin, tieu_de, tom_tat, noi_dung, hinh_anh, luot_xem, ngay_dang, trang_thai)
                 VALUES (@ma_loai_tin, @tieu_de, @tom_tat, @noi_dung, @hinh_anh, 0, GETDATE(), @trang_thai);
             
@@ -4388,13 +4399,13 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
-            IF EXISTS (SELECT 1 FROM Tin_Tuc WHERE ma_loai_tin = @id)
-                BEGIN
-                    ;THROW 50091, N'Không thể xóa loại tin tức đang có bài viết liên kết! Vui lòng chuyển hoặc xóa bài viết trước.', 1;
-                END;
+            -- Tự động xóa toàn bộ các bài viết tin tức thuộc loại tin tức này (Cascade delete)
+            DELETE FROM Tin_Tuc WHERE ma_loai_tin = @id;
             
-                DELETE FROM Loai_Tin_Tuc WHERE id = @id;
-                SELECT N'Xóa loại tin tức thành công' AS thong_bao;
+            -- Xóa danh mục loại tin tức
+            DELETE FROM Loai_Tin_Tuc WHERE id = @id;
+
+            SELECT N'Xóa loại tin tức và toàn bộ bài viết liên quan thành công' AS thong_bao;
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -4468,6 +4479,12 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
+            -- Tự động kiểm tra và chuẩn hóa ma_loai_tin nếu không tồn tại để tránh vi phạm FOREIGN KEY
+            IF @ma_loai_tin IS NULL OR NOT EXISTS (SELECT 1 FROM Loai_Tin_Tuc WHERE id = @ma_loai_tin)
+            BEGIN
+                SELECT TOP 1 @ma_loai_tin = id FROM Loai_Tin_Tuc ORDER BY id ASC;
+            END;
+
             UPDATE Tin_Tuc
                 SET ma_loai_tin = @ma_loai_tin,
                     tieu_de = @tieu_de,

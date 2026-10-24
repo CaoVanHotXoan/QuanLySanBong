@@ -105,9 +105,30 @@ export const xoaLoaiTinTuc = async (req: AuthRequest, res: Response) => {
         if (isNaN(id)) return res.status(400).json({ success: false, message: 'ID không hợp lệ!' });
 
         const pool = await poolPromise;
+        
+        // 1. Dọn dẹp ảnh Cloudinary của các bài viết thuộc danh mục này nếu có
+        try {
+            const articlesResult = await pool.request()
+                .input('ma_loai_tin', sql.Int, id)
+                .query('SELECT hinh_anh FROM Tin_Tuc WHERE ma_loai_tin = @ma_loai_tin');
+            if (articlesResult.recordset && articlesResult.recordset.length > 0) {
+                for (const row of articlesResult.recordset) {
+                    if (row.hinh_anh) {
+                        await deleteFromCloudinary(row.hinh_anh, 'image').catch(() => {});
+                    }
+                }
+            }
+        } catch (imgErr) {
+            console.warn('Cảnh báo dọn dẹp ảnh Cloudinary của bài viết liên quan:', imgErr);
+        }
+
+        // 2. Xóa danh mục và cascade toàn bộ bài viết trong Stored Procedure
         await pool.request().input('id', sql.Int, id).execute('sp_XoaLoaiTinTuc');
+        
+        // 3. Xóa cache cả loại tin và tin tức
         memoryCache.delPrefix('loai_tin_');
-        return res.status(200).json({ success: true, message: 'Xóa loại tin tức thành công!' });
+        memoryCache.delPrefix('tin_tuc_');
+        return res.status(200).json({ success: true, message: 'Xóa loại tin tức và các bài viết liên quan thành công!' });
     } catch (error: any) {
         console.error('Lỗi sp_XoaLoaiTinTuc:', error.message);
         return res.status(400).json({ success: false, message: error.message });
@@ -208,9 +229,13 @@ export const layChiTietTinTuc = async (req: Request, res: Response) => {
 export const themTinTuc = async (req: AuthRequest, res: Response) => {
     try {
         let { ma_loai_tin, tieu_de, tom_tat, noi_dung, hinh_anh, trang_thai } = req.body;
-        if (!ma_loai_tin || !tieu_de || !noi_dung) {
-            return res.status(400).json({ success: false, message: 'Vui lòng cung cấp đầy đủ Loại tin, Tiêu đề và Nội dung!' });
+        if (!tieu_de || !noi_dung) {
+            return res.status(400).json({ success: false, message: 'Vui lòng cung cấp đầy đủ Tiêu đề và Nội dung bài viết!' });
         }
+
+        // Chuẩn hóa mã loại tin
+        const parsedMaLoai = parseInt(String(ma_loai_tin), 10);
+        const finalMaLoai = (!isNaN(parsedMaLoai) && parsedMaLoai > 0) ? parsedMaLoai : null;
 
         // 1. Tự động lưu trữ ảnh lên Cloudinary nếu là link ngoài
         if (hinh_anh) {
@@ -220,9 +245,9 @@ export const themTinTuc = async (req: AuthRequest, res: Response) => {
         const isStatusActive = (trang_thai as any) == 1 || (trang_thai as any) === true || trang_thai === undefined;
         const pool = await poolPromise;
         const result = await pool.request()
-            .input('ma_loai_tin', sql.Int, ma_loai_tin)
-            .input('tieu_de', sql.NVarChar(255), tieu_de)
-            .input('tom_tat', sql.NVarChar(500), tom_tat || null)
+            .input('ma_loai_tin', sql.Int, finalMaLoai)
+            .input('tieu_de', sql.NVarChar(255), tieu_de.trim())
+            .input('tom_tat', sql.NVarChar(500), tom_tat?.trim() || null)
             .input('noi_dung', sql.NVarChar(sql.MAX), noi_dung)
             .input('hinh_anh', sql.VarChar(255), hinh_anh || null)
             .input('trang_thai', sql.Bit, isStatusActive ? 1 : 0)
@@ -241,9 +266,12 @@ export const suaTinTuc = async (req: AuthRequest, res: Response) => {
         const id = parseInt(String(req.params.id), 10);
         let { ma_loai_tin, tieu_de, tom_tat, noi_dung, hinh_anh, trang_thai } = req.body;
 
-        if (isNaN(id) || !ma_loai_tin || !tieu_de || !noi_dung) {
+        if (isNaN(id) || !tieu_de || !noi_dung) {
             return res.status(400).json({ success: false, message: 'Vui lòng cung cấp đầy đủ thông tin bài viết!' });
         }
+
+        const parsedMaLoai = parseInt(String(ma_loai_tin), 10);
+        const finalMaLoai = (!isNaN(parsedMaLoai) && parsedMaLoai > 0) ? parsedMaLoai : null;
 
         const pool = await poolPromise;
 
@@ -258,16 +286,16 @@ export const suaTinTuc = async (req: AuthRequest, res: Response) => {
 
         // 3. Nếu ảnh cũ trên Cloudinary khác với ảnh mới, xóa ảnh cũ trên Cloudinary
         if (oldNews && oldNews.hinh_anh && oldNews.hinh_anh !== hinh_anh) {
-            await deleteFromCloudinary(oldNews.hinh_anh, 'image');
+            await deleteFromCloudinary(oldNews.hinh_anh, 'image').catch(() => {});
         }
 
         // 4. Cập nhật bài viết qua Stored Procedure
         const isStatusActive = (trang_thai as any) == 1 || (trang_thai as any) === true;
         await pool.request()
             .input('id', sql.Int, id)
-            .input('ma_loai_tin', sql.Int, ma_loai_tin)
-            .input('tieu_de', sql.NVarChar(255), tieu_de)
-            .input('tom_tat', sql.NVarChar(500), tom_tat || null)
+            .input('ma_loai_tin', sql.Int, finalMaLoai)
+            .input('tieu_de', sql.NVarChar(255), tieu_de.trim())
+            .input('tom_tat', sql.NVarChar(500), tom_tat?.trim() || null)
             .input('noi_dung', sql.NVarChar(sql.MAX), noi_dung)
             .input('hinh_anh', sql.VarChar(255), hinh_anh || null)
             .input('trang_thai', sql.Bit, isStatusActive ? 1 : 0)

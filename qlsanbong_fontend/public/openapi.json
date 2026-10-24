@@ -11,6 +11,10 @@
   },
   "servers": [
     {
+      "url": "https://qlsbbackend.vercel.app",
+      "description": "Máy chủ Cloud Vercel Production (https://qlsbbackend.vercel.app)"
+    },
+    {
       "url": "http://localhost:5000",
       "description": "Máy chủ API Backend Local (Node.js & Express)"
     }

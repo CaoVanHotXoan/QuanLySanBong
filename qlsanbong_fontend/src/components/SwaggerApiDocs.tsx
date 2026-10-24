@@ -330,7 +330,9 @@ function getEndpointSnippet(
   jwtToken: string = '',
   lang: 'curl' | 'fetch' | 'axios' = 'curl'
 ): string {
-  let url = `${serverUrl}${ep.path}`;
+  const cleanServer = (serverUrl || 'https://qlsbbackend.vercel.app').replace(/\/+$/, '');
+  const cleanPath = ep.path.startsWith('/') ? ep.path : `/${ep.path}`;
+  let url = `${cleanServer}${cleanPath}`;
   const queryParams = new URLSearchParams();
 
   if (ep.operation.parameters) {
@@ -436,7 +438,13 @@ export default function SwaggerApiDocs({
   const [spec, setSpec] = useState<OpenAPISpec | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeServer, setActiveServer] = useState('http://localhost:5000');
+  const [activeServer, setActiveServer] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      return isLocal ? 'http://localhost:5000' : 'https://qlsbbackend.vercel.app';
+    }
+    return 'https://qlsbbackend.vercel.app';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('ALL');
   const [selectedMethod, setSelectedMethod] = useState<string>('ALL');
@@ -506,30 +514,62 @@ export default function SwaggerApiDocs({
     async function loadSpec() {
       try {
         setLoading(true);
-        // Try fetch openapi.json directly
+        let data: OpenAPISpec | null = null;
+
+        // Ưu tiên tải openapi.json trực tiếp từ public
         const res = await fetch('/openapi.json');
         if (res.ok) {
-          const data = await res.json();
-          setSpec(data);
-          if (data.servers && data.servers.length > 0) {
-            setActiveServer(data.servers[0].url);
-          }
-          // Default expand all tags
-          if (data.tags) {
-            const initialTagState: Record<string, boolean> = {};
-            data.tags.forEach((t: any) => { initialTagState[t.name] = true; });
-            setExpandedTags(initialTagState);
-          }
+          data = await res.json();
         } else {
-          // Fallback to fetch OpenAPI.yaml and parse via js-yaml
+          // Fallback sang API endpoint hoặc OpenAPI.yaml
           const yamlRes = await fetch('/OpenAPI.yaml');
           if (yamlRes.ok) {
             const text = await yamlRes.text();
             const jsyaml = await import('js-yaml');
-            const parsed = jsyaml.load(text) as OpenAPISpec;
-            setSpec(parsed);
+            data = jsyaml.load(text) as OpenAPISpec;
           } else {
-            throw new Error('Không thể tải tệp OpenAPI.yaml');
+            throw new Error('Không thể tải tệp tài liệu OpenAPI');
+          }
+        }
+
+        if (data) {
+          // Đảm bảo luôn có cả Cloud Vercel Production và Localhost trong danh sách servers
+          const defaultServers = [
+            { url: 'https://qlsbbackend.vercel.app', description: 'Máy chủ Cloud Vercel Production (https://qlsbbackend.vercel.app)' },
+            { url: 'http://localhost:5000', description: 'Máy chủ Local Development (http://localhost:5000)' }
+          ];
+
+          let serversList = (data.servers && data.servers.length > 0) ? [...data.servers] : defaultServers;
+          if (!serversList.some((s: any) => s.url.includes('qlsbbackend.vercel.app'))) {
+            serversList.unshift({
+              url: 'https://qlsbbackend.vercel.app',
+              description: 'Máy chủ Cloud Vercel Production (https://qlsbbackend.vercel.app)'
+            });
+          }
+          if (!serversList.some((s: any) => s.url.includes('localhost:5000'))) {
+            serversList.push({
+              url: 'http://localhost:5000',
+              description: 'Máy chủ Local Development (http://localhost:5000)'
+            });
+          }
+          data.servers = serversList;
+          setSpec(data);
+
+          // Tự động chọn server phù hợp theo môi trường duyệt web
+          const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+          if (isLocal) {
+            const localServer = serversList.find((s: any) => s.url.includes('localhost'));
+            setActiveServer(localServer?.url || 'http://localhost:5000');
+          } else {
+            const cloudServer = serversList.find((s: any) => s.url.includes('qlsbbackend.vercel.app')) || serversList.find((s: any) => s.url.startsWith('https://'));
+            setActiveServer(cloudServer?.url || 'https://qlsbbackend.vercel.app');
+          }
+
+          // Mặc định mở toàn bộ các nhóm API tags
+          if (data.tags) {
+            const initialTagState: Record<string, boolean> = {};
+            data.tags.forEach((t: any) => { initialTagState[t.name] = true; });
+            setExpandedTags(initialTagState);
           }
         }
       } catch (err: any) {
@@ -692,7 +732,9 @@ export default function SwaggerApiDocs({
   // Execute Try It Out API Call
   const handleExecute = async (ep: EndpointFlatItem) => {
     const epId = ep.id;
-    let finalUrl = `${activeServer}${ep.path}`;
+    const cleanServer = (activeServer || 'https://qlsbbackend.vercel.app').replace(/\/+$/, '');
+    const cleanPath = ep.path.startsWith('/') ? ep.path : `/${ep.path}`;
+    let finalUrl = `${cleanServer}${cleanPath}`;
     const pVals = tryParams[epId] || {};
 
     // Replace path parameters (e.g. {id} or :id)
@@ -723,18 +765,6 @@ export default function SwaggerApiDocs({
       }
     }
 
-    const headers: Record<string, string> = {
-      'Accept': 'application/json'
-    };
-
-    if (ep.method !== 'GET') {
-      headers['Content-Type'] = 'application/json';
-    }
-
-    if (jwtToken) {
-      headers['Authorization'] = `Bearer ${jwtToken.trim()}`;
-    }
-
     let bodyData: any = undefined;
     if (['POST', 'PUT', 'PATCH'].includes(ep.method)) {
       const rawText = tryBody[epId];
@@ -746,6 +776,21 @@ export default function SwaggerApiDocs({
           return;
         }
       }
+    }
+
+    const headers: Record<string, string> = {
+      'Accept': 'application/json'
+    };
+
+    // Chỉ gửi Content-Type khi có dữ liệu body
+    if (bodyData !== undefined) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    // Tự động lấy token từ state hoặc LocalStorage nếu đã đăng nhập trên web
+    const activeToken = jwtToken || (typeof window !== 'undefined' ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '') : '');
+    if (activeToken) {
+      headers['Authorization'] = `Bearer ${activeToken.trim()}`;
     }
 
     // Build Curl preview

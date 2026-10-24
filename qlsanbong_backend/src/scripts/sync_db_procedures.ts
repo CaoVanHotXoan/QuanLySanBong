@@ -120,6 +120,109 @@ async function syncProcedures() {
     `);
     console.log('✅ Đã tạo / cập nhật Stored Procedure: sp_GuiLienHe');
 
+    // 6. Cập nhật sp_XoaLoaiTinTuc (Cascade delete tin tức liên quan)
+    await pool.request().query(`
+      CREATE OR ALTER PROCEDURE sp_XoaLoaiTinTuc
+          @id INT
+      AS
+      BEGIN
+          SET NOCOUNT ON;
+          BEGIN TRY
+              BEGIN TRANSACTION;
+                  DELETE FROM Tin_Tuc WHERE ma_loai_tin = @id;
+                  DELETE FROM Loai_Tin_Tuc WHERE id = @id;
+                  SELECT N'Xóa loại tin tức và toàn bộ bài viết liên quan thành công' AS thong_bao;
+              COMMIT TRANSACTION;
+          END TRY
+          BEGIN CATCH
+              IF @@TRANCOUNT > 0
+                  ROLLBACK TRANSACTION;
+              ;THROW;
+          END CATCH;
+      END;
+    `);
+    console.log('✅ Đã tạo / cập nhật Stored Procedure: sp_XoaLoaiTinTuc');
+
+    // 7. Cập nhật sp_ThemTinTuc (Tự động fallback loại tin an toàn)
+    await pool.request().query(`
+      CREATE OR ALTER PROCEDURE sp_ThemTinTuc
+          @ma_loai_tin INT,
+          @tieu_de NVARCHAR(255),
+          @tom_tat NVARCHAR(500) = NULL,
+          @noi_dung NVARCHAR(MAX),
+          @hinh_anh VARCHAR(255) = NULL,
+          @trang_thai BIT = 1
+      AS
+      BEGIN
+          SET NOCOUNT ON;
+          BEGIN TRY
+              BEGIN TRANSACTION;
+                  IF @ma_loai_tin IS NULL OR NOT EXISTS (SELECT 1 FROM Loai_Tin_Tuc WHERE id = @ma_loai_tin)
+                  BEGIN
+                      SELECT TOP 1 @ma_loai_tin = id FROM Loai_Tin_Tuc ORDER BY id ASC;
+                      IF @ma_loai_tin IS NULL
+                      BEGIN
+                          INSERT INTO Loai_Tin_Tuc (ten_loai, trang_thai) VALUES (N'Tin Tức Thể Thao', 1);
+                          SET @ma_loai_tin = SCOPE_IDENTITY();
+                      END;
+                  END;
+
+                  INSERT INTO Tin_Tuc (ma_loai_tin, tieu_de, tom_tat, noi_dung, hinh_anh, luot_xem, ngay_dang, trang_thai)
+                      VALUES (@ma_loai_tin, @tieu_de, @tom_tat, @noi_dung, @hinh_anh, 0, GETDATE(), @trang_thai);
+                  
+                  SELECT SCOPE_IDENTITY() AS id, N'Thêm tin tức thành công' AS thong_bao;
+              COMMIT TRANSACTION;
+          END TRY
+          BEGIN CATCH
+              IF @@TRANCOUNT > 0
+                  ROLLBACK TRANSACTION;
+              ;THROW;
+          END CATCH;
+      END;
+    `);
+    console.log('✅ Đã tạo / cập nhật Stored Procedure: sp_ThemTinTuc');
+
+    // 8. Cập nhật sp_SuaTinTuc
+    await pool.request().query(`
+      CREATE OR ALTER PROCEDURE sp_SuaTinTuc
+          @id INT,
+          @ma_loai_tin INT,
+          @tieu_de NVARCHAR(255),
+          @tom_tat NVARCHAR(500) = NULL,
+          @noi_dung NVARCHAR(MAX),
+          @hinh_anh VARCHAR(255) = NULL,
+          @trang_thai BIT = 1
+      AS
+      BEGIN
+          SET NOCOUNT ON;
+          BEGIN TRY
+              BEGIN TRANSACTION;
+                  IF @ma_loai_tin IS NULL OR NOT EXISTS (SELECT 1 FROM Loai_Tin_Tuc WHERE id = @ma_loai_tin)
+                  BEGIN
+                      SELECT TOP 1 @ma_loai_tin = id FROM Loai_Tin_Tuc ORDER BY id ASC;
+                  END;
+
+                  UPDATE Tin_Tuc
+                      SET ma_loai_tin = @ma_loai_tin,
+                          tieu_de = @tieu_de,
+                          tom_tat = @tom_tat,
+                          noi_dung = @noi_dung,
+                          hinh_anh = @hinh_anh,
+                          trang_thai = @trang_thai
+                      WHERE id = @id;
+                  
+                      SELECT N'Cập nhật tin tức thành công' AS thong_bao;
+              COMMIT TRANSACTION;
+          END TRY
+          BEGIN CATCH
+              IF @@TRANCOUNT > 0
+                  ROLLBACK TRANSACTION;
+              ;THROW;
+          END CATCH;
+      END;
+    `);
+    console.log('✅ Đã tạo / cập nhật Stored Procedure: sp_SuaTinTuc');
+
     console.log('🎉 Đồng bộ SQL Server hoàn tất thành công 100%!');
     process.exit(0);
   } catch (error: any) {

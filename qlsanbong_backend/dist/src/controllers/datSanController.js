@@ -838,6 +838,29 @@ const layLichSuKhachHang = async (req, res) => {
         else {
             request.input('email', db_1.sql.VarChar(255), null);
         }
+        // Bảo mật dữ liệu người dùng: Nếu không truyền danh tính, thử lấy từ Token hoặc trả về mảng rỗng
+        if (!ma_nd_param && !sdt_param && !email_param) {
+            if (req.user) {
+                if (req.user.id) {
+                    ma_nd_param = req.user.id;
+                    request.input('ma_nguoi_dung', db_1.sql.Int, ma_nd_param);
+                }
+                if (req.user.so_dien_thoai) {
+                    sdt_param = req.user.so_dien_thoai;
+                    request.input('so_dien_thoai', db_1.sql.VarChar(20), sdt_param);
+                }
+                if (req.user.email) {
+                    email_param = req.user.email;
+                    request.input('email', db_1.sql.VarChar(255), email_param);
+                }
+            }
+            else {
+                return res.status(200).json({
+                    success: true,
+                    data: []
+                });
+            }
+        }
         const result = await request.execute('sp_LayLichSuDatSan');
         const data = result.recordset || [];
         // 100% Stored Procedure: Lấy chi tiết dịch vụ bằng sp_LayChiTietDichVuDonDat
