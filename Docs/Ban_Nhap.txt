@@ -42,6 +42,7 @@ Có thể tùy chỉnh CSDL nhưng phải dùng procedure và cập nhật vào
 File QuanLySanBong.sql thì chứa dữ liệu table không chứa procedure
 File ThuTuc.sql thì chứa toàn bộ procedure 
 
+Và deploy fontend trên vercel không bị lỗi
 
 
 Chỉnh lại upload file ảnh và video và dán link ảnh và video đều lưu trên Cloudinary 

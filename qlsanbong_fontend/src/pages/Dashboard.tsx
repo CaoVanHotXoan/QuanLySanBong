@@ -173,6 +173,7 @@ export interface DonDatSan {
   ngay_da: string;
   gio_bat_dau: string;
   gio_ket_thuc: string;
+  khung_gio?: string;
   tien_san: number;
   tong_tien: number;
   phuong_thuc?: 'TIEN_MAT' | 'CHUYEN_KHOAN' | string;
@@ -182,6 +183,9 @@ export interface DonDatSan {
   so_phut_da?: number;
   ghi_chu?: string;
   trang_thai: 'DA_COC' | 'DA_THANH_TOAN' | 'CHO_XAC_NHAN' | 'DA_CHOT' | 'HOAN_THANH' | 'DA_HUY' | string;
+  da_vao_san?: boolean | number;
+  gio_vao_san?: string;
+  trang_thai_vao_san?: string;
   dich_vu_da_dung?: {
     ma_dich_vu: number;
     ten_dich_vu: string;
@@ -1231,7 +1235,7 @@ export default function AdminDashboard() {
         if (!isDangDa) return false;
 
         // Kiểm tra khung giờ kết thúc: nếu đã quá giờ kết thúc thì trận đấu đã xong, sân đã giải phóng
-        const endTimeStr = String(b.khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
+        const endTimeStr = String((b as any).khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
           String(b.gio_ket_thuc || '').match(/\d{1,2}:\d{2}/)?.[0];
         if (endTimeStr) {
           const [endH, endM] = endTimeStr.split(':').map(Number);
@@ -1446,7 +1450,7 @@ export default function AdminDashboard() {
         if (!isDangDa) return false;
 
         if (isCurDateToday) {
-          const endTimeStr = String(b.khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
+          const endTimeStr = String((b as any).khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
             String(b.gio_ket_thuc || '').match(/\d{1,2}:\d{2}/)?.[0];
           if (endTimeStr) {
             const [endH, endM] = endTimeStr.split(':').map(Number);
@@ -1477,7 +1481,7 @@ export default function AdminDashboard() {
         // Kiểm tra xem có ca nào sắp đá trong ngày hôm nay hoặc các ca của ngày được chọn
         const upcomingBookings = courtBookings.filter(b => {
           if (!isCurDateToday) return true;
-          const endTimeStr = String(b.khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
+          const endTimeStr = String((b as any).khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
             String(b.gio_ket_thuc || '').match(/\d{1,2}:\d{2}/)?.[0];
           if (endTimeStr) {
             const [endH, endM] = endTimeStr.split(':').map(Number);
