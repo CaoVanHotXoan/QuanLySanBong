@@ -1209,12 +1209,39 @@ export default function AdminDashboard() {
 
     const totalOrders = bookingList.length;
 
-    // Đếm số sân đang có người đá
+    // Đếm số sân đang có người đá thực tế tại thời điểm hiện tại (Đồng bộ tuyệt đối với Quản lý sân và CSDL)
+    const now = new Date();
+    const currentTotalMin = now.getHours() * 60 + now.getMinutes();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const isCurDateToday = curDate === todayStr;
+
     const activeCourtsCount = courtList.filter(c => {
+      // Chỉ tính sân đang đá nếu ngày xem là ngày hôm nay
+      if (!isCurDateToday) return false;
+
       return bookingList.some(b => {
         const bDate = b.ngay_da ? (String(b.ngay_da).includes('T') ? String(b.ngay_da).split('T')[0] : String(b.ngay_da).substring(0, 10)) : '';
+        if (bDate !== curDate) return false;
+        if (Number(b.ma_san) !== c.id) return false;
+
         const st = (b.trang_thai || '').toUpperCase();
-        return Number(b.ma_san) === c.id && bDate === curDate && ((b as any).da_vao_san === 1 || st === 'DANG_DA');
+        if (st === 'DA_HUY' || st.includes('HUY') || st === 'HOAN_THANH' || st === 'KET_THUC') return false;
+
+        const isDangDa = (b as any).da_vao_san === 1 || (b as any).da_vao_san === true || st === 'DANG_DA' || (b as any).trang_thai_vao_san === 'DANG_DA';
+        if (!isDangDa) return false;
+
+        // Kiểm tra khung giờ kết thúc: nếu đã quá giờ kết thúc thì trận đấu đã xong, sân đã giải phóng
+        const endTimeStr = String(b.khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
+          String(b.gio_ket_thuc || '').match(/\d{1,2}:\d{2}/)?.[0];
+        if (endTimeStr) {
+          const [endH, endM] = endTimeStr.split(':').map(Number);
+          if (Number.isInteger(endH) && Number.isInteger(endM)) {
+            if (currentTotalMin >= endH * 60 + endM) {
+              return false; // Đã hết giờ thi đấu
+            }
+          }
+        }
+        return true;
       });
     }).length;
 
@@ -1388,6 +1415,10 @@ export default function AdminDashboard() {
   // 4. Trạng Thái Sân Trực Quan (Live Pitch Status Matrix)
   const livePitchStatusAnalytics = useMemo(() => {
     const curDateStr = selectedDate ? String(selectedDate).split('T')[0] : new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const currentTotalMin = now.getHours() * 60 + now.getMinutes();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const isCurDateToday = curDateStr === todayStr;
 
     return courtList.map(court => {
       const courtBookings = bookingList.filter(b => {
@@ -1407,12 +1438,31 @@ export default function AdminDashboard() {
         };
       }
 
+      // Tìm ca đá đang diễn ra thực tế tại thời điểm hiện tại
       const activeBooking = courtBookings.find(b => {
         const st = (b.trang_thai || '').toUpperCase();
-        return (b as any).da_vao_san === 1 || st === 'DANG_DA';
-      }) || courtBookings[0];
+        if (st === 'DA_HUY' || st === 'HOAN_THANH' || st === 'KET_THUC') return false;
+        const isDangDa = (b as any).da_vao_san === 1 || (b as any).da_vao_san === true || st === 'DANG_DA' || (b as any).trang_thai_vao_san === 'DANG_DA';
+        if (!isDangDa) return false;
 
-      if (activeBooking && ((activeBooking as any).da_vao_san === 1 || activeBooking.trang_thai === 'DANG_DA')) {
+        if (isCurDateToday) {
+          const endTimeStr = String(b.khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
+            String(b.gio_ket_thuc || '').match(/\d{1,2}:\d{2}/)?.[0];
+          if (endTimeStr) {
+            const [endH, endM] = endTimeStr.split(':').map(Number);
+            if (Number.isInteger(endH) && Number.isInteger(endM)) {
+              if (currentTotalMin >= endH * 60 + endM) {
+                return false;
+              }
+            }
+          }
+        } else {
+          return false;
+        }
+        return true;
+      });
+
+      if (activeBooking) {
         return {
           court,
           statusType: 'DANG_DA' as const,
@@ -1424,14 +1474,30 @@ export default function AdminDashboard() {
       }
 
       if (courtBookings.length > 0) {
-        return {
-          court,
-          statusType: 'DA_DAT' as const,
-          label: 'Đã có lịch',
-          activeBooking: courtBookings[0],
-          todayBookingsCount: courtBookings.length,
-          courtBookings
-        };
+        // Kiểm tra xem có ca nào sắp đá trong ngày hôm nay hoặc các ca của ngày được chọn
+        const upcomingBookings = courtBookings.filter(b => {
+          if (!isCurDateToday) return true;
+          const endTimeStr = String(b.khung_gio || '').match(/\d{1,2}:\d{2}\s*-\s*(\d{1,2}:\d{2})/)?.[1] ||
+            String(b.gio_ket_thuc || '').match(/\d{1,2}:\d{2}/)?.[0];
+          if (endTimeStr) {
+            const [endH, endM] = endTimeStr.split(':').map(Number);
+            if (Number.isInteger(endH) && Number.isInteger(endM)) {
+              return currentTotalMin < endH * 60 + endM;
+            }
+          }
+          return true;
+        });
+
+        if (upcomingBookings.length > 0) {
+          return {
+            court,
+            statusType: 'DA_DAT' as const,
+            label: 'Đã có lịch',
+            activeBooking: upcomingBookings[0],
+            todayBookingsCount: courtBookings.length,
+            courtBookings
+          };
+        }
       }
 
       return {
@@ -1567,8 +1633,9 @@ export default function AdminDashboard() {
   const handleSaveCourt = async (e: React.FormEvent) => {
     e.preventDefault();
     const { id, ten_san, ma_loai_san, don_gia_phut, trang_thai, hinh_anh } = courtModal.data;
-    if (!ten_san || !ma_loai_san) {
-      setToastMessage({ type: 'error', message: 'Vui lòng nhập tên sân và chọn loại sân!' });
+    const effectiveMaLoaiSan = ma_loai_san || categoryList[0]?.id || 1;
+    if (!ten_san || !ten_san.trim()) {
+      setToastMessage({ type: 'error', message: 'Vui lòng nhập tên sân bóng!' });
       return;
     }
 
@@ -1706,22 +1773,30 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteCourt = (courtId: number, courtName?: string) => {
+    const targetName = courtName || courtList.find((c) => c.id === courtId)?.ten_san || `ID #${courtId}`;
     openDeleteConfirm(
       'Xóa Sân Bóng',
-      'Bạn có chắc chắn muốn xóa sân bóng này khỏi hệ thống? Dữ liệu lịch đặt và doanh thu liên quan có thể bị ảnh hưởng.',
-      `⚽ Sân bóng: ${courtName || `ID #${courtId}`}`,
+      `Bạn có chắc chắn muốn xóa sân bóng [${targetName}] khỏi hệ thống? Dữ liệu lịch đặt và doanh thu liên quan sẽ được tự động đồng bộ.`,
+      `⚽ Sân bóng: ${targetName}`,
       async () => {
+        // Optimistic UI: Gỡ sân bóng khỏi giao diện ngay lập tức
+        setCourtList((prev) => prev.filter((c) => c.id !== courtId));
         try {
           const res = await fetch(`${API_BASE}/dat-san/san-bong/${courtId}`, { method: 'DELETE', headers: getAuthHeaders() });
           const data = await res.json();
           if (data.success) {
-            setToastMessage({ type: 'success', message: '🗑️ Đã xóa sân bóng thành công!' });
+            setToastMessage({ type: 'success', message: `🗑️ Đã xóa sân bóng [${targetName}] thành công!` });
+            loadAllDataFromBackend();
+            return;
+          } else {
+            setToastMessage({ type: 'error', message: data.message || 'Lỗi khi xóa sân bóng!' });
             loadAllDataFromBackend();
             return;
           }
-        } catch (err) { }
-        setCourtList((prev) => prev.filter((c) => c.id !== courtId));
-        setToastMessage({ type: 'success', message: '🗑️ Đã xóa sân bóng!' });
+        } catch (err) {
+          console.error('Lỗi xóa sân bóng:', err);
+        }
+        setToastMessage({ type: 'success', message: `🗑️ Đã xóa sân bóng [${targetName}]!` });
       }
     );
   };
@@ -1730,7 +1805,7 @@ export default function AdminDashboard() {
   const handleSaveLoaiSan = async (e: React.FormEvent) => {
     e.preventDefault();
     const { id, ten_loai, mo_ta } = loaiSanModal.data;
-    if (!ten_loai) {
+    if (!ten_loai || !ten_loai.trim()) {
       setToastMessage({ type: 'error', message: 'Vui lòng nhập tên loại sân!' });
       return;
     }
@@ -1740,26 +1815,32 @@ export default function AdminDashboard() {
         const res = await fetch(`${API_BASE}/dat-san/loai-san`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ten_loai, mo_ta: mo_ta || '' })
+          body: JSON.stringify({ ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '' })
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage({ type: 'success', message: `✅ Đã thêm loại sân [${ten_loai}] thành công!` });
+          setToastMessage({ type: 'success', message: `✅ Đã thêm loại sân [${ten_loai.trim()}] thành công!` });
           loadAllDataFromBackend();
           setLoaiSanModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        } else {
+          setToastMessage({ type: 'error', message: data.message || 'Lỗi khi thêm loại sân' });
           return;
         }
       } else {
         const res = await fetch(`${API_BASE}/dat-san/loai-san/${id}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ten_loai, mo_ta: mo_ta || '' })
+          body: JSON.stringify({ ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '' })
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage({ type: 'success', message: `✅ Đã cập nhật loại sân [${ten_loai}]!` });
+          setToastMessage({ type: 'success', message: `✅ Đã cập nhật loại sân [${ten_loai.trim()}]!` });
           loadAllDataFromBackend();
           setLoaiSanModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        } else {
+          setToastMessage({ type: 'error', message: data.message || 'Lỗi khi cập nhật loại sân' });
           return;
         }
       }
@@ -1767,21 +1848,37 @@ export default function AdminDashboard() {
 
     if (loaiSanModal.mode === 'ADD') {
       const newId = Math.max(...categoryList.map(l => l.id), 0) + 1;
-      setCategoryList([...categoryList, { id: newId, ten_loai, mo_ta: mo_ta || '' }]);
-      setToastMessage({ type: 'success', message: `✅ Đã thêm loại sân [${ten_loai}] thành công!` });
+      setCategoryList([...categoryList, { id: newId, ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '' }]);
+      setToastMessage({ type: 'success', message: `✅ Đã thêm loại sân [${ten_loai.trim()}] thành công!` });
     } else {
-      setCategoryList(categoryList.map(l => l.id === id ? { ...l, ten_loai, mo_ta: mo_ta || '' } : l));
-      setToastMessage({ type: 'success', message: `✅ Đã cập nhật loại sân [${ten_loai}]!` });
+      setCategoryList(categoryList.map(l => l.id === id ? { ...l, ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '' } : l));
+      setToastMessage({ type: 'success', message: `✅ Đã cập nhật loại sân [${ten_loai.trim()}]!` });
     }
     setLoaiSanModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
   const handleDeleteLoaiSan = (id: number, tenLoai?: string) => {
+    const targetTenLoai = tenLoai || categoryList.find((l) => l.id === id)?.ten_loai || `ID #${id}`;
+    const relatedCourts = courtList.filter((c) => Number(c.ma_loai_san) === Number(id));
+    const hasCourts = relatedCourts.length > 0;
+
+    const confirmTitle = hasCourts ? 'Xác Nhận Xóa Loại Sân & Toàn Bộ Sân Bóng Trực Thuộc' : 'Xóa Loại Sân';
+    const confirmMessage = hasCourts
+      ? `⚠️ CẢNH BÁO NGUY HIỂM: Loại sân [${targetTenLoai}] hiện đang có ${relatedCourts.length} sân bóng trực thuộc (${relatedCourts.map((c) => c.ten_san).join(', ')}). Khi bạn xác nhận xóa, toàn bộ ${relatedCourts.length} sân bóng này cùng tất cả lịch đặt sân liên quan sẽ bị XÓA VĨNH VIỄN khỏi hệ thống CSDL! Bạn có chắc chắn muốn xóa không?`
+      : `Bạn có chắc chắn muốn xóa loại sân [${targetTenLoai}] khỏi hệ thống không?`;
+    const confirmDetail = `🏟️ Loại sân: ${targetTenLoai}${hasCourts ? ` • Bao gồm ${relatedCourts.length} sân bóng liên quan` : ''}`;
+
     openDeleteConfirm(
-      'Xóa Loại Sân',
-      'Bạn có chắc chắn muốn xóa loại sân này?',
-      `🏟️ Loại sân: ${tenLoai || `ID #${id}`}`,
+      confirmTitle,
+      confirmMessage,
+      confirmDetail,
       async () => {
+        // Optimistic UI: Gỡ bỏ loại sân và tất cả các sân trực thuộc ngay lập tức
+        setCategoryList((prev) => prev.filter((l) => l.id !== id));
+        if (hasCourts) {
+          setCourtList((prev) => prev.filter((c) => Number(c.ma_loai_san) !== Number(id)));
+        }
+
         try {
           const res = await fetch(`${API_BASE}/dat-san/loai-san/${id}`, {
             method: 'DELETE',
@@ -1789,17 +1886,29 @@ export default function AdminDashboard() {
           });
           const data = await res.json();
           if (data.success) {
-            setToastMessage({ type: 'success', message: '🗑️ Đã xóa loại sân!' });
+            setToastMessage({
+              type: 'success',
+              message: hasCourts
+                ? `🗑️ Đã xóa loại sân [${targetTenLoai}] và toàn bộ ${relatedCourts.length} sân bóng liên quan thành công!`
+                : `🗑️ Đã xóa loại sân [${targetTenLoai}] thành công!`
+            });
             loadAllDataFromBackend();
             return;
           } else {
             setToastMessage({ type: 'error', message: data.message || 'Không thể xóa loại sân này!' });
+            loadAllDataFromBackend();
             return;
           }
-        } catch (err) { }
+        } catch (err) {
+          console.error('Lỗi xóa loại sân:', err);
+        }
 
-        setCategoryList((prev) => prev.filter(l => l.id !== id));
-        setToastMessage({ type: 'success', message: '🗑️ Đã xóa loại sân!' });
+        setToastMessage({
+          type: 'success',
+          message: hasCourts
+            ? `🗑️ Đã xóa loại sân [${targetTenLoai}] và ${relatedCourts.length} sân bóng liên quan!`
+            : `🗑️ Đã xóa loại sân [${targetTenLoai}]!`
+        });
       }
     );
   };
@@ -3444,7 +3553,9 @@ export default function AdminDashboard() {
                       {kpiStats.activeCourtsCount} <span className="text-base font-bold">Sân</span>
                     </h3>
                     <div className="mt-2 text-xs font-bold text-[#1e293b] dark:text-slate-300">
-                      <span className="text-emerald-900 dark:text-emerald-300 font-black bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded mr-1">Sẵn sàng: {courtList.filter(c => c.trang_thai === 'SAN_SANG').length} sân</span>
+                      <span className="text-emerald-900 dark:text-emerald-300 font-black bg-emerald-100 dark:bg-emerald-500/20 px-2 py-0.5 rounded mr-1">
+                        Sẵn sàng: {Math.max(0, courtList.filter(c => c.trang_thai === 'SAN_SANG').length - kpiStats.activeCourtsCount)} sân
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -4007,7 +4118,7 @@ export default function AdminDashboard() {
                     </h3>
                     <p className={`text-xs font-bold mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Quản lý danh sách sân bóng và đơn giá thuê theo từng phút</p>
                   </div>
-                  <button onClick={() => setCourtModal({ isOpen: true, mode: 'ADD', data: { ma_loai_san: 1, don_gia_phut: 5000, trang_thai: 'SAN_SANG' } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
+                  <button onClick={() => setCourtModal({ isOpen: true, mode: 'ADD', data: { ma_loai_san: categoryList[0]?.id || 1, don_gia_phut: 5000, trang_thai: 'SAN_SANG' } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
                     <Plus className="w-4 h-4 stroke-[3]" /> Thêm Sân Mới
                   </button>
                 </div>
@@ -4063,7 +4174,7 @@ export default function AdminDashboard() {
                             <button onClick={() => setCourtModal({ isOpen: true, mode: 'EDIT', data: c })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1" title="Sửa sân">
                               <Edit2 className="w-3.5 h-3.5" /> Sửa
                             </button>
-                            <button onClick={() => handleDeleteCourt(c.id)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1" title="Xóa sân">
+                            <button onClick={() => handleDeleteCourt(c.id, c.ten_san)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1" title="Xóa sân">
                               <Trash2 className="w-3.5 h-3.5" /> Xóa
                             </button>
                           </td>
@@ -4108,21 +4219,34 @@ export default function AdminDashboard() {
                       <thead>
                         <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                           <th className="p-4">TÊN LOẠI SÂN</th>
+                          <th className="p-4">SỐ SÂN BÓNG</th>
                           <th className="p-4">MÔ TẢ CHI TIẾT</th>
                           <th className="p-4 text-right">THAO TÁC</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                        {pagedData.items.map((l) => (
-                          <tr key={l.id}>
-                            <td className="p-4 font-black text-sm">{l.ten_loai}</td>
-                            <td className={`p-4 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>{l.mo_ta}</td>
-                            <td className="p-4 text-right space-x-2">
-                              <button onClick={() => setLoaiSanModal({ isOpen: true, mode: 'EDIT', data: l })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 cursor-pointer font-bold inline-flex items-center gap-1"><Edit2 className="w-3.5 h-3.5" /> Sửa</button>
-                              <button onClick={() => handleDeleteLoaiSan(l.id)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
-                            </td>
-                          </tr>
-                        ))}
+                        {pagedData.items.map((l) => {
+                          const courtCount = courtList.filter((c) => Number(c.ma_loai_san) === Number(l.id)).length;
+                          return (
+                            <tr key={l.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-emerald-50/50'}>
+                              <td className="p-4 font-black text-sm">{l.ten_loai}</td>
+                              <td className="p-4">
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black ${
+                                  courtCount > 0
+                                    ? (isDarkMode ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/50' : 'bg-emerald-100 text-emerald-800 border border-emerald-200')
+                                    : (isDarkMode ? 'bg-slate-800/60 text-slate-400 border border-slate-700/50' : 'bg-slate-100 text-slate-600 border border-slate-200')
+                                }`}>
+                                  ⚽ {courtCount} sân
+                                </span>
+                              </td>
+                              <td className={`p-4 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>{l.mo_ta || <span className="italic text-slate-400">Chưa có mô tả</span>}</td>
+                              <td className="p-4 text-right space-x-2">
+                                <button onClick={() => setLoaiSanModal({ isOpen: true, mode: 'EDIT', data: l })} className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1" title="Sửa loại sân"><Edit2 className="w-3.5 h-3.5" /> Sửa</button>
+                                <button onClick={() => handleDeleteLoaiSan(l.id, l.ten_loai)} className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-700 cursor-pointer font-bold inline-flex items-center gap-1" title="Xóa loại sân"><Trash2 className="w-3.5 h-3.5" /> Xóa</button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -5713,7 +5837,7 @@ export default function AdminDashboard() {
                   <div>
                     <label className="block font-black uppercase mb-1 text-slate-400">Loại Sân *</label>
                     <select
-                      value={courtModal.data.ma_loai_san || 1}
+                      value={courtModal.data.ma_loai_san || categoryList[0]?.id || 1}
                       onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, ma_loai_san: Number(e.target.value) } })}
                       className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                     >

@@ -86,7 +86,7 @@ CREATE TABLE San_Bong (
     hinh_anh VARCHAR(255),
     don_gia_phut DECIMAL(10, 2) NOT NULL DEFAULT 5000.00,
     trang_thai VARCHAR(20) CHECK (trang_thai IN ('SAN_SANG', 'BAO_TRI')) DEFAULT 'SAN_SANG',
-    FOREIGN KEY (ma_loai_san) REFERENCES Loai_San(id) ON DELETE NO ACTION
+    FOREIGN KEY (ma_loai_san) REFERENCES Loai_San(id) ON DELETE CASCADE
 );
 GO
 
@@ -118,7 +118,7 @@ CREATE TABLE Don_Dat_San (
     gio_vao_san TIME NULL,
     ngay_tao DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
-    FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE NO ACTION
+    FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE CASCADE
 );
 GO
 

@@ -139,7 +139,7 @@ export const layDanhSachLoaiSan = async (req: AuthRequest, res: Response) => {
 export const themLoaiSan = async (req: AuthRequest, res: Response) => {
     try {
         const { ten_loai, mo_ta, trang_thai } = req.body;
-        if (!ten_loai) {
+        if (!ten_loai || !ten_loai.trim()) {
             return res.status(400).json({
                 success: false,
                 message: 'Vui lòng nhập tên loại sân!'
@@ -148,7 +148,7 @@ export const themLoaiSan = async (req: AuthRequest, res: Response) => {
 
         const pool = await poolPromise;
         const result = await pool.request()
-            .input('ten_loai', sql.NVarChar(50), ten_loai)
+            .input('ten_loai', sql.NVarChar(50), ten_loai.trim())
             .input('mo_ta', sql.NVarChar(sql.MAX), mo_ta || null)
             .input('trang_thai', sql.Bit, trang_thai !== false ? 1 : 0)
             .execute('sp_ThemLoaiSan');
@@ -178,11 +178,17 @@ export const suaLoaiSan = async (req: AuthRequest, res: Response) => {
     try {
         const id = String(req.params.id);
         const { ten_loai, mo_ta, trang_thai } = req.body;
+        if (!ten_loai || !ten_loai.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng nhập tên loại sân!'
+            });
+        }
 
         const pool = await poolPromise;
         const result = await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
-            .input('ten_loai', sql.NVarChar(50), ten_loai)
+            .input('ten_loai', sql.NVarChar(50), ten_loai.trim())
             .input('mo_ta', sql.NVarChar(sql.MAX), mo_ta || null)
             .input('trang_thai', sql.Bit, trang_thai !== false ? 1 : 0)
             .execute('sp_SuaLoaiSan');
@@ -240,19 +246,19 @@ export const themSanBong = async (req: AuthRequest, res: Response) => {
     try {
         const { ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai } = req.body;
 
-        if (!ten_san || !ma_loai_san) {
+        if (!ten_san || !ten_san.trim()) {
             return res.status(400).json({
                 success: false,
-                message: 'Vui lòng cung cấp đầy đủ: Tên sân và Loại sân!'
+                message: 'Vui lòng cung cấp tên sân bóng!'
             });
         }
 
         const pool = await poolPromise;
         const result = await pool.request()
-            .input('ten_san', sql.NVarChar(50), ten_san)
-            .input('ma_loai_san', sql.Int, parseInt(ma_loai_san, 10))
+            .input('ten_san', sql.NVarChar(50), ten_san.trim())
+            .input('ma_loai_san', sql.Int, ma_loai_san ? parseInt(String(ma_loai_san), 10) : null)
             .input('hinh_anh', sql.VarChar(255), hinh_anh || null)
-            .input('don_gia_phut', sql.Decimal(10, 2), don_gia_phut ? parseFloat(don_gia_phut) : 5000.00)
+            .input('don_gia_phut', sql.Decimal(10, 2), don_gia_phut ? parseFloat(String(don_gia_phut)) : 5000.00)
             .input('trang_thai', sql.VarChar(20), trang_thai || 'SAN_SANG')
             .execute('sp_ThemSanBong');
 
@@ -281,13 +287,20 @@ export const suaSanBong = async (req: AuthRequest, res: Response) => {
         const id = String(req.params.id);
         const { ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai } = req.body;
 
+        if (!ten_san || !ten_san.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp tên sân bóng!'
+            });
+        }
+
         const pool = await poolPromise;
         const result = await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
-            .input('ten_san', sql.NVarChar(50), ten_san)
-            .input('ma_loai_san', sql.Int, parseInt(ma_loai_san, 10))
+            .input('ten_san', sql.NVarChar(50), ten_san.trim())
+            .input('ma_loai_san', sql.Int, ma_loai_san ? parseInt(String(ma_loai_san), 10) : null)
             .input('hinh_anh', sql.VarChar(255), hinh_anh || null)
-            .input('don_gia_phut', sql.Decimal(10, 2), don_gia_phut ? parseFloat(don_gia_phut) : null)
+            .input('don_gia_phut', sql.Decimal(10, 2), don_gia_phut ? parseFloat(String(don_gia_phut)) : null)
             .input('trang_thai', sql.VarChar(20), trang_thai || 'SAN_SANG')
             .execute('sp_SuaSanBong');
 

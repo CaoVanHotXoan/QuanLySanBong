@@ -384,7 +384,7 @@ GO
 
 CREATE OR ALTER PROCEDURE sp_ThemSanBong
     @ten_san NVARCHAR(50),
-    @ma_loai_san INT,
+    @ma_loai_san INT = NULL,
     @hinh_anh VARCHAR(255) = NULL,
     @don_gia_phut DECIMAL(10, 2) = 5000.00,
     @trang_thai VARCHAR(20) = 'SAN_SANG'
@@ -393,19 +393,25 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
-IF NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @ma_loai_san)
-        BEGIN
-            ;THROW 50007, N'Loại sân không tồn tại.', 1;
-        END;
+            -- Tự động fallback loại sân hợp lệ nếu chưa chọn hoặc ID không tồn tại
+            IF @ma_loai_san IS NULL OR NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @ma_loai_san)
+            BEGIN
+                SELECT TOP 1 @ma_loai_san = id FROM Loai_San ORDER BY id ASC;
+                IF @ma_loai_san IS NULL
+                BEGIN
+                    INSERT INTO Loai_San (ten_loai, mo_ta, trang_thai) VALUES (N'Sân bóng tiêu chuẩn', N'Loại sân tạo tự động', 1);
+                    SET @ma_loai_san = SCOPE_IDENTITY();
+                END;
+            END;
 
-        INSERT INTO San_Bong (ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai)
-        VALUES (@ten_san, @ma_loai_san, ISNULL(@hinh_anh, '/images/default-pitch.jpg'), @don_gia_phut, @trang_thai);
+            INSERT INTO San_Bong (ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai)
+            VALUES (LTRIM(RTRIM(@ten_san)), @ma_loai_san, ISNULL(@hinh_anh, '/images/default-pitch.jpg'), ISNULL(@don_gia_phut, 5000.00), ISNULL(@trang_thai, 'SAN_SANG'));
 
-        SELECT 
-            sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, ls.id AS ma_loai_san, ls.ten_loai
-        FROM San_Bong sb
-        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
-        WHERE sb.id = SCOPE_IDENTITY();
+            SELECT 
+                sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, ls.id AS ma_loai_san, ls.ten_loai
+            FROM San_Bong sb
+            INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+            WHERE sb.id = SCOPE_IDENTITY();
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -419,7 +425,7 @@ GO
 CREATE OR ALTER PROCEDURE sp_SuaSanBong
     @id INT,
     @ten_san NVARCHAR(50),
-    @ma_loai_san INT,
+    @ma_loai_san INT = NULL,
     @hinh_anh VARCHAR(255) = NULL,
     @don_gia_phut DECIMAL(10, 2) = NULL,
     @trang_thai VARCHAR(20) = 'SAN_SANG'
@@ -428,24 +434,34 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
-IF NOT EXISTS (SELECT 1 FROM San_Bong WHERE id = @id)
-        BEGIN
-            ;THROW 50008, N'Sân bóng không tồn tại.', 1;
-        END;
+            IF NOT EXISTS (SELECT 1 FROM San_Bong WHERE id = @id)
+            BEGIN
+                ;THROW 50008, N'Sân bóng không tồn tại.', 1;
+            END;
 
-        UPDATE San_Bong
-        SET ten_san = @ten_san,
-            ma_loai_san = @ma_loai_san,
-            hinh_anh = ISNULL(@hinh_anh, hinh_anh),
-            don_gia_phut = ISNULL(@don_gia_phut, don_gia_phut),
-            trang_thai = @trang_thai
-        WHERE id = @id;
+            -- Fallback ma_loai_san hợp lệ
+            IF @ma_loai_san IS NULL OR NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @ma_loai_san)
+            BEGIN
+                SELECT @ma_loai_san = ma_loai_san FROM San_Bong WHERE id = @id;
+                IF @ma_loai_san IS NULL OR NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @ma_loai_san)
+                BEGIN
+                    SELECT TOP 1 @ma_loai_san = id FROM Loai_San ORDER BY id ASC;
+                END;
+            END;
 
-        SELECT 
-            sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, ls.id AS ma_loai_san, ls.ten_loai
-        FROM San_Bong sb
-        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
-        WHERE sb.id = @id;
+            UPDATE San_Bong
+            SET ten_san = LTRIM(RTRIM(@ten_san)),
+                ma_loai_san = @ma_loai_san,
+                hinh_anh = ISNULL(@hinh_anh, hinh_anh),
+                don_gia_phut = ISNULL(@don_gia_phut, don_gia_phut),
+                trang_thai = ISNULL(@trang_thai, trang_thai)
+            WHERE id = @id;
+
+            SELECT 
+                sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, ls.id AS ma_loai_san, ls.ten_loai
+            FROM San_Bong sb
+            INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+            WHERE sb.id = @id;
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -463,12 +479,17 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
-IF NOT EXISTS (SELECT 1 FROM San_Bong WHERE id = @id)
-        BEGIN
-            ;THROW 50009, N'Sân bóng không tồn tại.', 1;
-        END;
+            IF NOT EXISTS (SELECT 1 FROM San_Bong WHERE id = @id)
+            BEGIN
+                ;THROW 50009, N'Sân bóng không tồn tại.', 1;
+            END;
 
-        DELETE FROM San_Bong WHERE id = @id;
+            -- Xóa các đơn đặt sân liên quan trước
+            DELETE FROM Don_Dat_San WHERE ma_san = @id;
+
+            -- Xóa sân bóng
+            DELETE FROM San_Bong WHERE id = @id;
+
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -834,13 +855,104 @@ BEGIN
 END;
 GO
 
+-- =====================================================================
+-- Thủ tục: sp_DongBoTrangThaiDonDatSan
+-- Mục đích: Tự động đồng bộ và giải phóng các ca đặt sân đã quá giờ thi đấu
+--           - Nếu đơn DANG_DA hoặc da_vao_san = 1 mà đã kết thúc khung giờ:
+--             + Đã trả đủ tiền -> Chuyển sang HOAN_THANH và da_vao_san = 0
+--             + Chưa trả đủ tiền -> Chuyển sang CHO_THANH_TOAN và da_vao_san = 0
+--           - Đảm bảo tính nhất quán giữa Dashboard (SÂN ĐANG ĐÁ) và Giao diện nhân viên
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_DongBoTrangThaiDonDatSan
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        DECLARE @now DATETIME = GETDATE();
+        DECLARE @today DATE = CAST(@now AS DATE);
+        DECLARE @currentTime TIME = CAST(@now AS TIME);
+
+        -- 1. Cập nhật các đơn có trạng thái DANG_DA hoặc da_vao_san = 1 nhưng đã quá giờ thi đấu
+        -- 1.1. Đơn đã thanh toán đầy đủ: chuyển thành HOAN_THANH, da_vao_san = 0
+        UPDATE d
+        SET d.trang_thai = 'HOAN_THANH',
+            d.da_vao_san = 0
+        FROM Don_Dat_San d
+        WHERE (d.trang_thai = 'DANG_DA' OR d.da_vao_san = 1)
+          AND (d.ngay_da < @today OR (d.ngay_da = @today AND d.gio_ket_thuc IS NOT NULL AND d.gio_ket_thuc <= @currentTime))
+          AND ISNULL((
+              SELECT SUM(tt.so_tien) 
+              FROM Thanh_Toan tt 
+              WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd IN ('THANH_CONG', 'CHO_XU_LY')
+          ), 0) >= ISNULL(d.tong_tien, d.tien_san);
+
+        -- 1.2. Đơn chưa thanh toán đủ: chuyển thành CHO_THANH_TOAN, da_vao_san = 0 (giải phóng sân vào mục chờ thanh toán)
+        UPDATE d
+        SET d.trang_thai = 'CHO_THANH_TOAN',
+            d.da_vao_san = 0
+        FROM Don_Dat_San d
+        WHERE (d.trang_thai = 'DANG_DA' OR d.da_vao_san = 1)
+          AND (d.ngay_da < @today OR (d.ngay_da = @today AND d.gio_ket_thuc IS NOT NULL AND d.gio_ket_thuc <= @currentTime))
+          AND ISNULL((
+              SELECT SUM(tt.so_tien) 
+              FROM Thanh_Toan tt 
+              WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd IN ('THANH_CONG', 'CHO_XU_LY')
+          ), 0) < ISNULL(d.tong_tien, d.tien_san);
+    END TRY
+    BEGIN CATCH
+        -- Bỏ qua lỗi để không làm gián đoạn các luồng truy vấn
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- Thủ tục: sp_XacNhanVaoSan
+-- Mục đích: Xác nhận cho khách vào sân thi đấu trực tiếp (POS Management)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_XacNhanVaoSan
+    @id INT,
+    @trang_thai VARCHAR(20) = 'DANG_DA'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Don_Dat_San WHERE id = @id)
+        BEGIN
+            ;THROW 50001, N'Đơn đặt sân không tồn tại!', 1;
+        END;
+
+        UPDATE Don_Dat_San
+        SET da_vao_san = 1,
+            gio_vao_san = CAST(GETDATE() AS TIME),
+            trang_thai = ISNULL(@trang_thai, 'DANG_DA')
+        WHERE id = @id;
+
+        SELECT 
+            id,
+            ma_san,
+            ngay_da,
+            gio_bat_dau,
+            gio_ket_thuc,
+            trang_thai,
+            da_vao_san,
+            gio_vao_san
+        FROM Don_Dat_San
+        WHERE id = @id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE sp_LayTatCaDonDat
 AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
-        -- Tự động dọn dẹp các đơn tạm quá hạn
+        -- Tự động dọn dẹp các đơn tạm quá hạn & đồng bộ trạng thái đơn quá hạn
         EXEC sp_HuyDonTam;
+        EXEC sp_DongBoTrangThaiDonDatSan;
 
         SELECT 
             d.id,
@@ -893,8 +1005,9 @@ AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
-        -- Tự động dọn dẹp các đơn tạm quá hạn
+        -- Tự động dọn dẹp các đơn tạm quá hạn & đồng bộ trạng thái đơn quá hạn
         EXEC sp_HuyDonTam;
+        EXEC sp_DongBoTrangThaiDonDatSan;
 
         SELECT 
             d.id AS ma_don_dat,
@@ -985,8 +1098,9 @@ AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
-        -- Tự động dọn dẹp các đơn tạm quá hạn hoặc đã hủy do reload
+        -- Tự động dọn dẹp các đơn tạm quá hạn hoặc đã hủy do reload & đồng bộ trạng thái đơn quá hạn
         EXEC sp_HuyDonTam;
+        EXEC sp_DongBoTrangThaiDonDatSan;
 
         -- Bảo mật dữ liệu người dùng: Nếu không có bất kỳ thông tin nhận diện nào, trả về rỗng để tránh lộ thông tin khách hàng khác
         IF @ma_nguoi_dung IS NULL AND @so_dien_thoai IS NULL AND @email IS NULL
@@ -1969,12 +2083,17 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
-INSERT INTO Loai_San (ten_loai, mo_ta, trang_thai)
-        VALUES (@ten_loai, @mo_ta, @trang_thai);
+            IF EXISTS (SELECT 1 FROM Loai_San WHERE LOWER(LTRIM(RTRIM(ten_loai))) = LOWER(LTRIM(RTRIM(@ten_loai))))
+            BEGIN
+                ;THROW 50035, N'Tên loại sân đã tồn tại trong hệ thống.', 1;
+            END;
 
-        SELECT id, ten_loai, mo_ta, trang_thai
-        FROM Loai_San
-        WHERE id = SCOPE_IDENTITY();
+            INSERT INTO Loai_San (ten_loai, mo_ta, trang_thai)
+            VALUES (LTRIM(RTRIM(@ten_loai)), @mo_ta, @trang_thai);
+
+            SELECT id, ten_loai, mo_ta, trang_thai
+            FROM Loai_San
+            WHERE id = SCOPE_IDENTITY();
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -1995,20 +2114,25 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
-IF NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @id)
-        BEGIN
-            ;THROW 50030, N'Loại sân không tồn tại.', 1;
-        END;
+            IF NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @id)
+            BEGIN
+                ;THROW 50030, N'Loại sân không tồn tại.', 1;
+            END;
 
-        UPDATE Loai_San
-        SET ten_loai = @ten_loai,
-            mo_ta = ISNULL(@mo_ta, mo_ta),
-            trang_thai = ISNULL(@trang_thai, trang_thai)
-        WHERE id = @id;
+            IF EXISTS (SELECT 1 FROM Loai_San WHERE LOWER(LTRIM(RTRIM(ten_loai))) = LOWER(LTRIM(RTRIM(@ten_loai))) AND id <> @id)
+            BEGIN
+                ;THROW 50036, N'Tên loại sân đã được sử dụng bởi loại sân khác.', 1;
+            END;
 
-        SELECT id, ten_loai, mo_ta, trang_thai
-        FROM Loai_San
-        WHERE id = @id;
+            UPDATE Loai_San
+            SET ten_loai = LTRIM(RTRIM(@ten_loai)),
+                mo_ta = ISNULL(@mo_ta, mo_ta),
+                trang_thai = ISNULL(@trang_thai, trang_thai)
+            WHERE id = @id;
+
+            SELECT id, ten_loai, mo_ta, trang_thai
+            FROM Loai_San
+            WHERE id = @id;
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -2026,17 +2150,23 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
-IF NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @id)
-        BEGIN
-            ;THROW 50031, N'Loại sân không tồn tại.', 1;
-        END;
+            IF NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @id)
+            BEGIN
+                ;THROW 50031, N'Loại sân không tồn tại.', 1;
+            END;
 
-        IF EXISTS (SELECT 1 FROM San_Bong WHERE ma_loai_san = @id)
-        BEGIN
-            ;THROW 50032, N'Không thể xóa loại sân đang có sân bóng sử dụng. Vui lòng chuyển hoặc xóa các sân bóng thuộc loại sân này trước!', 1;
-        END;
+            -- 1. Xóa các đơn đặt sân liên quan đến các sân thuộc loại sân này
+            DELETE FROM Don_Dat_San 
+            WHERE ma_san IN (SELECT id FROM San_Bong WHERE ma_loai_san = @id);
 
-        DELETE FROM Loai_San WHERE id = @id;
+            -- 2. Xóa tất cả các sân bóng thuộc loại sân này
+            DELETE FROM San_Bong 
+            WHERE ma_loai_san = @id;
+
+            -- 3. Xóa loại sân
+            DELETE FROM Loai_San 
+            WHERE id = @id;
+
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
@@ -3430,6 +3560,9 @@ BEGIN
     BEGIN TRY
         IF @ngay_da IS NULL SET @ngay_da = CAST(GETDATE() AS DATE);
         IF @gio_hien_tai IS NULL SET @gio_hien_tai = CAST(GETDATE() AS TIME);
+
+        -- Đồng bộ trạng thái các đơn quá hạn thi đấu
+        EXEC sp_DongBoTrangThaiDonDatSan;
 
         SELECT 
             sb.id AS ma_san,
