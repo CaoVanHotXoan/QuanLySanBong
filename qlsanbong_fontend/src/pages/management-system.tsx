@@ -347,6 +347,223 @@ function playNotificationChime() {
   }
 }
 
+interface PitchTimeInputsProps {
+  item: SelectedPitchOrder;
+  isMainLoadedPitch: boolean;
+  maxAvail: string;
+  isDarkMode: boolean;
+  onUpdatePitchTime: (pitchId: number, newStart: string, newEnd: string) => void;
+  showToast: (msg: string, type?: 'success' | 'error' | 'info' | 'warning', title?: string) => void;
+  calculateMinutesDiff: (start: string, end: string) => number;
+  addMinutesToTimeStr: (timeStr: string, minutes: number) => string;
+}
+
+function PitchTimeInputs({
+  item,
+  isMainLoadedPitch,
+  maxAvail,
+  isDarkMode,
+  onUpdatePitchTime,
+  showToast,
+  calculateMinutesDiff,
+  addMinutesToTimeStr,
+}: PitchTimeInputsProps) {
+  const [startInput, setStartInput] = useState<string>(item.startTime || '10:30');
+  const [endInput, setEndInput] = useState<string>(item.endTime || '11:00');
+
+  useEffect(() => {
+    setStartInput(item.startTime || '');
+  }, [item.startTime]);
+
+  useEffect(() => {
+    setEndInput(item.endTime || '');
+  }, [item.endTime]);
+
+  const handleCurrentTime = () => {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const currentTimeStr = `${hh}:${mm}`;
+    const duration = calculateMinutesDiff(item.startTime, item.endTime) || 60;
+    let nextEndTime = item.endTime;
+    if (!nextEndTime || nextEndTime <= currentTimeStr) {
+      nextEndTime = addMinutesToTimeStr(currentTimeStr, duration);
+    }
+    setStartInput(currentTimeStr);
+    setEndInput(nextEndTime);
+    onUpdatePitchTime(item.pitch.id, currentTimeStr, nextEndTime);
+  };
+
+  const handleStartChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/[^0-9:]/g, '');
+    if (val.length === 2 && !val.includes(':') && startInput.length < 2) {
+      val = val + ':';
+    }
+    setStartInput(val);
+
+    if (val.length === 5) {
+      const parts = val.split(':');
+      const hh = Number(parts[0]);
+      const mm = Number(parts[1]);
+      if (isNaN(hh) || isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+        showToast(`Giờ bắt đầu (${val}) không hợp lệ (00:00 - 23:59)!`, 'warning', 'Giờ Không Hợp Lệ');
+        return;
+      }
+      let nextEnd = endInput;
+      if (!nextEnd || nextEnd <= val) {
+        const prevDuration = calculateMinutesDiff(item.startTime, item.endTime) || 60;
+        nextEnd = addMinutesToTimeStr(val, prevDuration);
+        setEndInput(nextEnd);
+      }
+      onUpdatePitchTime(item.pitch.id, val, nextEnd);
+    }
+  };
+
+  const handleStartBlur = () => {
+    if (startInput.length < 5) {
+      if (startInput.length >= 1 && startInput.length <= 2) {
+        const hh = Number(startInput);
+        if (hh >= 0 && hh <= 23) {
+          const formatted = `${String(hh).padStart(2, '0')}:00`;
+          setStartInput(formatted);
+          let nextEnd = endInput;
+          if (!nextEnd || nextEnd <= formatted) {
+            nextEnd = addMinutesToTimeStr(formatted, 60);
+            setEndInput(nextEnd);
+          }
+          onUpdatePitchTime(item.pitch.id, formatted, nextEnd);
+          return;
+        }
+      }
+      setStartInput(item.startTime || '10:30');
+    }
+  };
+
+  const handleEndChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/[^0-9:]/g, '');
+    if (val.length === 2 && !val.includes(':') && endInput.length < 2) {
+      val = val + ':';
+    }
+    setEndInput(val);
+
+    if (val.length === 5) {
+      const parts = val.split(':');
+      const hh = Number(parts[0]);
+      const mm = Number(parts[1]);
+      if (isNaN(hh) || isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+        showToast(`Giờ kết thúc (${val}) không hợp lệ (00:00 - 23:59)!`, 'warning', 'Giờ Không Hợp Lệ');
+        return;
+      }
+      if (val <= startInput) {
+        showToast(`Giờ kết thúc (${val}) phải sau giờ bắt đầu (${startInput})!`, 'warning', 'Giờ Không Hợp Lệ');
+        return;
+      }
+      if (isMainLoadedPitch && val > maxAvail) {
+        showToast(`⚠️ Sân chỉ trống đến ${maxAvail} (có ca đặt lúc ${maxAvail}). Vui lòng chọn sân khác để đá tiếp!`, 'warning', 'Trùng Lịch Sân');
+        return;
+      }
+      onUpdatePitchTime(item.pitch.id, startInput, val);
+    }
+  };
+
+  const handleEndBlur = () => {
+    if (endInput.length < 5) {
+      if (endInput.length >= 1 && endInput.length <= 2) {
+        const hh = Number(endInput);
+        if (hh >= 0 && hh <= 23) {
+          const formatted = `${String(hh).padStart(2, '0')}:00`;
+          if (formatted > startInput) {
+            setEndInput(formatted);
+            onUpdatePitchTime(item.pitch.id, startInput, formatted);
+            return;
+          }
+        }
+      }
+      setEndInput(item.endTime || '11:00');
+    } else if (endInput <= startInput) {
+      setEndInput(item.endTime || '11:00');
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <div>
+        <div className="flex items-center justify-between h-6 mb-1 px-0.5">
+          <span className={`text-[10.5px] font-extrabold flex items-center gap-1 whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>
+            <Clock className="w-3 h-3 text-emerald-500 shrink-0" /> Bắt đầu
+          </span>
+          {!isMainLoadedPitch && (
+            <button
+              type="button"
+              onClick={handleCurrentTime}
+              className={`text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-1 transition-all cursor-pointer border active:scale-95 shadow-xs ${isDarkMode
+                ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-400'
+                }`}
+              title="Điền thời gian hiện tại vào ô bắt đầu"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Hiện tại</span>
+            </button>
+          )}
+        </div>
+        <input
+          type="text"
+          list={`pos_time_list_start_${item.pitch.id}`}
+          maxLength={5}
+          placeholder="13:30"
+          disabled={isMainLoadedPitch}
+          value={startInput}
+          onChange={handleStartChange}
+          onBlur={handleStartBlur}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          className={`w-full px-2.5 py-1.5 rounded-xl border font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${isMainLoadedPitch
+            ? (isDarkMode ? 'opacity-80 bg-slate-900 border-slate-700 cursor-not-allowed text-slate-300' : 'opacity-80 bg-slate-100 border-slate-300 cursor-not-allowed text-slate-600')
+            : isDarkMode
+              ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-600'
+              : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 shadow-sm'
+            }`}
+        />
+        <datalist id={`pos_time_list_start_${item.pitch.id}`}>
+          {TIME_OPTIONS_24H.map((t) => (
+            <option key={`opt_s_${t}`} value={t} />
+          ))}
+        </datalist>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between h-6 mb-1 px-0.5">
+          <span className={`text-[10.5px] font-extrabold flex items-center gap-1 whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>
+            <Clock className="w-3 h-3 text-amber-500 shrink-0" /> Kết thúc
+          </span>
+          <span className={`text-[9.5px] font-semibold tracking-tight ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>
+            24h
+          </span>
+        </div>
+        <input
+          type="text"
+          list={`pos_time_list_end_${item.pitch.id}`}
+          maxLength={5}
+          placeholder="14:00"
+          value={endInput}
+          onChange={handleEndChange}
+          onBlur={handleEndBlur}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          className={`w-full px-2.5 py-1.5 rounded-xl border font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${isDarkMode
+            ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-600'
+            : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 shadow-sm'
+            }`}
+        />
+        <datalist id={`pos_time_list_end_${item.pitch.id}`}>
+          {TIME_OPTIONS_24H.filter((t) => !isMainLoadedPitch || t <= maxAvail).map((t) => (
+            <option key={`opt_e_${t}`} value={t} />
+          ))}
+        </datalist>
+      </div>
+    </div>
+  );
+}
+
 export default function ManagementSystem() {
   const router = useRouter();
 
@@ -2099,8 +2316,12 @@ export default function ManagementSystem() {
       // CHỈ GỠ ĐƯỢC Ở ĐẦU THỜI GIAN VỚI CUỐI THỜI GIAN
       // NHỮNG Ô Ở GIỮA THÌ KHÔNG GỠ ĐƯỢC
       // -------------------------------------------------------------
-      const isStartSlot = slot.start === curr.startTime;
-      const isEndSlot = slot.end === curr.endTime;
+      // Tìm danh sách tất cả các ô slot đang giao thoa với khung giờ của sân này
+      const pitchSlots = availableTimeSlots.filter((s) =>
+        isTimeOverlapping(s.start, s.end, curr.startTime, curr.endTime)
+      );
+      const isStartSlot = slot.start === curr.startTime || (pitchSlots.length > 0 && pitchSlots[0].start === slot.start);
+      const isEndSlot = slot.end === curr.endTime || (pitchSlots.length > 0 && pitchSlots[pitchSlots.length - 1].start === slot.start);
 
       // Nếu không phải ô đầu cũng không phải ô cuối -> Ô Ở GIỮA -> KHÔNG GỠ ĐƯỢC
       if (!isStartSlot && !isEndSlot) {
@@ -2190,30 +2411,32 @@ export default function ManagementSystem() {
   };
 
   const handleUpdatePitchTime = (pitchId: number, newStart: string, newEnd: string) => {
-    // Ràng buộc 1: Thời gian kết thúc KHÔNG được trước hoặc bằng thời gian bắt đầu
-    if (newStart && newEnd && newEnd <= newStart) {
-      showToast(`Thời gian kết thúc (${newEnd}) phải sau thời gian bắt đầu (${newStart})!`, 'warning', 'Giờ Không Hợp Lệ');
-      return;
+    // Tự động bảo đảm giờ kết thúc phải sau giờ bắt đầu
+    let resolvedEnd = newEnd;
+    if (newStart && resolvedEnd && resolvedEnd <= newStart) {
+      const prevP = selectedPitches.find((x) => x.pitch.id === pitchId);
+      const duration = prevP?.durationMin || 60;
+      resolvedEnd = addMinutesToTimeStr(newStart, duration);
     }
 
     // Ràng buộc 2: Kiểm tra trùng lịch với ca đặt khác trên cùng sân
-    if (newStart && newEnd && newStart.length === 5 && newEnd.length === 5) {
-      const conflict = checkPitchTimeConflict(pitchId, newStart, newEnd, editingInvoiceId);
+    if (newStart && resolvedEnd && newStart.length === 5 && resolvedEnd.length === 5) {
+      const conflict = checkPitchTimeConflict(pitchId, newStart, resolvedEnd, editingInvoiceId);
       if (conflict.hasConflict) {
         const confBooking = conflict.conflictingBooking;
         const bStart = (confBooking?.gio_bat_dau || '').substring(0, 5);
         const bEnd = (confBooking?.gio_ket_thuc || '').substring(0, 5);
         const khach = confBooking?.ten_khach_hang || 'Khách khác';
-        showToast(`⚠️ Khung giờ ${newStart} - ${newEnd} bị trùng lịch với ca đặt của ${khach} (${bStart} - ${bEnd}). Vui lòng chọn mốc giờ hoặc sân khác!`, 'warning', 'Trùng Lịch Sân');
+        showToast(`⚠️ Khung giờ ${newStart} - ${resolvedEnd} bị trùng lịch với ca đặt của ${khach} (${bStart} - ${bEnd}). Vui lòng chọn mốc giờ hoặc sân khác!`, 'warning', 'Trùng Lịch Sân');
         return;
       }
     }
 
     const newPitches = selectedPitches.map((p) => {
       if (p.pitch.id === pitchId) {
-        const durationMin = calculateMinutesDiff(newStart, newEnd);
+        const durationMin = calculateMinutesDiff(newStart, resolvedEnd);
         const price = Math.round(durationMin * (Number(p.pitch.don_gia_phut) || 3000));
-        return { ...p, startTime: newStart, endTime: newEnd, durationMin, price };
+        return { ...p, startTime: newStart, endTime: resolvedEnd, durationMin, price };
       }
       return p;
     });
@@ -5956,111 +6179,18 @@ export default function ManagementSystem() {
                                 </div>
 
                                 {/* Ô nhập/chọn Giờ bắt đầu & Giờ kết thúc bất kỳ chuẩn 24h */}
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div>
-                                    <div className="flex items-center justify-between h-6 mb-1 px-0.5">
-                                      <span className={`text-[10.5px] font-extrabold flex items-center gap-1 whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>
-                                        <Clock className="w-3 h-3 text-emerald-500 shrink-0" /> Bắt đầu
-                                      </span>
-                                      {!isMainLoadedPitch && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const now = new Date();
-                                            const hh = String(now.getHours()).padStart(2, '0');
-                                            const mm = String(now.getMinutes()).padStart(2, '0');
-                                            const currentTimeStr = `${hh}:${mm}`;
-                                            const duration = calculateMinutesDiff(item.startTime, item.endTime) || 60;
-                                            let nextEndTime = item.endTime;
-                                            if (!nextEndTime || nextEndTime <= currentTimeStr) {
-                                              nextEndTime = addMinutesToTimeStr(currentTimeStr, duration);
-                                            }
-                                            handleUpdatePitchTime(item.pitch.id, currentTimeStr, nextEndTime);
-                                          }}
-                                          className={`text-[9px] px-2 py-0.5 rounded-full font-black flex items-center gap-1 transition-all cursor-pointer border active:scale-95 shadow-xs ${isDarkMode
-                                            ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40'
-                                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-400'
-                                            }`}
-                                          title="Điền thời gian hiện tại vào ô bắt đầu"
-                                        >
-                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                          <span>Hiện tại</span>
-                                        </button>
-                                      )}
-                                    </div>
-                                    <input
-                                      type="text"
-                                      list={`pos_time_list_start_${item.pitch.id}`}
-                                      maxLength={5}
-                                      placeholder="13:30"
-                                      disabled={isMainLoadedPitch}
-                                      value={item.startTime || '10:30'}
-                                      onChange={(e) => {
-                                        let val = e.target.value.replace(/[^0-9:]/g, '');
-                                        if (val.length === 2 && !val.includes(':') && (item.startTime || '').length < 2) {
-                                          val = val + ':';
-                                        }
-                                        handleUpdatePitchTime(item.pitch.id, val, item.endTime);
-                                      }}
-                                      className={`w-full px-2.5 py-1.5 rounded-xl border font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${isMainLoadedPitch
-                                        ? (isDarkMode ? 'opacity-80 bg-slate-900 border-slate-700 cursor-not-allowed text-slate-300' : 'opacity-80 bg-slate-100 border-slate-300 cursor-not-allowed text-slate-600')
-                                        : isDarkMode
-                                          ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-600'
-                                          : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 shadow-sm'
-                                        }`}
-                                    />
-                                    <datalist id={`pos_time_list_start_${item.pitch.id}`}>
-                                      {TIME_OPTIONS_24H.filter((t) => !item.endTime || t < item.endTime).map((t) => (
-                                        <option key={`opt_s_${t}`} value={t} />
-                                      ))}
-                                    </datalist>
-                                  </div>
-                                  <div>
-                                    <div className="flex items-center justify-between h-6 mb-1 px-0.5">
-                                      <span className={`text-[10.5px] font-extrabold flex items-center gap-1 whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>
-                                        <Clock className="w-3 h-3 text-amber-500 shrink-0" /> Kết thúc
-                                      </span>
-                                      <span className={`text-[9.5px] font-semibold tracking-tight ${isDarkMode ? 'text-slate-500' : 'text-slate-600'}`}>
-                                        24h
-                                      </span>
-                                    </div>
-                                    <input
-                                      type="text"
-                                      list={`pos_time_list_end_${item.pitch.id}`}
-                                      maxLength={5}
-                                      placeholder="14:00"
-                                      value={item.endTime || '11:00'}
-                                      onChange={(e) => {
-                                        let val = e.target.value.replace(/[^0-9:]/g, '');
-                                        if (val.length === 2 && !val.includes(':') && (item.endTime || '').length < 2) {
-                                          val = val + ':';
-                                        }
-                                        if (val.length === 5) {
-                                          if (val <= item.startTime) {
-                                            showToast(`Giờ kết thúc (${val}) phải sau giờ bắt đầu (${item.startTime})!`, 'warning', 'Giờ Không Hợp Lệ');
-                                            return;
-                                          }
-                                          if (isMainLoadedPitch && val > maxAvail) {
-                                            showToast(`⚠️ Sân chỉ trống đến ${maxAvail} (có ca đặt lúc ${maxAvail}). Vui lòng chọn sân khác để đá tiếp!`, 'warning', 'Trùng Lịch Sân');
-                                            return;
-                                          }
-                                        }
-                                        handleUpdatePitchTime(item.pitch.id, item.startTime, val);
-                                      }}
-                                      className={`w-full px-2.5 py-1.5 rounded-xl border font-mono font-bold text-xs focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all ${isDarkMode
-                                        ? 'bg-slate-950 border-slate-700 text-white placeholder:text-slate-600'
-                                        : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 shadow-sm'
-                                        }`}
-                                    />
-                                    <datalist id={`pos_time_list_end_${item.pitch.id}`}>
-                                      {TIME_OPTIONS_24H.filter((t) => t > item.startTime && (!isMainLoadedPitch || t <= maxAvail)).map((t) => (
-                                        <option key={`opt_e_${t}`} value={t} />
-                                      ))}
-                                    </datalist>
-                                  </div>
-                                </div>
+                                 <PitchTimeInputs
+                                   item={item}
+                                   isMainLoadedPitch={isMainLoadedPitch}
+                                   maxAvail={maxAvail}
+                                   isDarkMode={isDarkMode}
+                                   onUpdatePitchTime={handleUpdatePitchTime}
+                                   showToast={showToast}
+                                   calculateMinutesDiff={calculateMinutesDiff}
+                                   addMinutesToTimeStr={addMinutesToTimeStr}
+                                 />
 
-                                {/* Nút Thêm Giờ Đá Nhanh (+15p, +30p, +60p) */}
+                                 {/* Nút Thêm Giờ Đá Nhanh (+15p, +30p, +60p) */}
                                 <div className="flex items-center gap-1.5 pt-1">
                                   <span className={`text-[9px] font-bold flex items-center gap-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>
                                     <Clock className="w-2.5 h-2.5 text-amber-500" /> +Giờ đá:
