@@ -269,7 +269,6 @@ export default function Login({
             ma_otp: otpCode.trim(),
             // Payload bảo mật Captcha ngầm đa tầng
             website_url_hp: honeypotVal,
-            _t_init: formInitTime,
             captchaToken: await getInvisibleCaptchaToken("register"),
           }),
         });
@@ -310,7 +309,6 @@ export default function Login({
             mat_khau: password,
             // Payload bảo mật Captcha ngầm đa tầng
             website_url_hp: honeypotVal,
-            _t_init: formInitTime,
             captchaToken: await getInvisibleCaptchaToken("login"),
           }),
         });

@@ -79,19 +79,14 @@ export const invisibleCaptchaGuard = async (req: Request, res: Response, next: N
         // -------------------------------------------------------------
         // 3. TẦNG 3: PHÂN TÍCH THỜI GIAN ĐIỀN FORM (HUMAN TIMING CHECK)
         // -------------------------------------------------------------
-        // Người thật cần ít nhất 600ms - 1000ms để gõ/chọn. Nếu submit < 500ms => Chắc chắn là script Bot
+        // Tránh chặn nhầm người dùng hợp lệ (trình duyệt tự động điền / autofill hoặc đồng hồ client bị lệch so với server)
         const { _t_init } = req.body;
         if (_t_init) {
             const initTime = Number(_t_init);
             if (!isNaN(initTime)) {
                 const elapsed = now - initTime;
-                if (elapsed < 500) {
-                    console.warn(`[Anti-Bot] Chặn Bot do thời gian submit quá ngắn (${elapsed}ms) từ IP: ${clientIp}`);
-                    return res.status(403).json({
-                        success: false,
-                        isBot: true,
-                        message: 'Thao tác quá nhanh bất thường. Vui lòng thử lại!'
-                    });
+                if (elapsed >= 0 && elapsed < 300) {
+                    console.info(`[Anti-Bot Timing] Submit nhanh (${elapsed}ms) từ IP: ${clientIp}`);
                 }
             }
         }
