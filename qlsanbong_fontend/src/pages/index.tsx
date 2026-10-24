@@ -1535,30 +1535,7 @@ export default function HomePage() {
               </div>
             </a>
 
-            {/* KHUNG TÌM KIẾM TÊN SÂN Ở GIỮA (ĐÃ BỎ CHỮ SQL LIVE THEO YÊU CẦU) */}
-            <div className="flex-1 max-w-lg mx-1 sm:mx-4 min-w-0">
-              <div className="relative flex items-center">
-                <Search className="w-4 h-4 text-emerald-500 absolute left-3.5 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchCourtName}
-                  onChange={(e) => setSearchCourtName(e.target.value)}
-                  placeholder="Tìm kiếm tên sân (VD: Sân 5A, Sân 7, Pickleball...)"
-                  className={`w-full pl-10 pr-10 py-2 rounded-2xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all ${isDarkMode
-                    ? 'bg-slate-900/90 border border-slate-700/80 text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:ring-emerald-500'
-                    : 'bg-slate-100/90 border border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-emerald-600 focus:ring-emerald-600'
-                    }`}
-                />
-                {searchCourtName && (
-                  <button
-                    onClick={() => setSearchCourtName('')}
-                    className="absolute right-3 p-1 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-white"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
+
 
             {/* CỤM NÚT PHẢI: NÚT SÁNG/TỐI + ĐĂNG NHẬP (ĐÃ BỎ 2 NÚT ĐẶT SÂN NHANH & TRANG QUẢN TRỊ THEO YÊU CẦU) */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -1751,7 +1728,7 @@ export default function HomePage() {
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isDarkMode ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-900/80' : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-200'
                   }`}
               >
-                📅 Lịch sân theo giờ
+                📅 Đặt sân
               </a>
               <Link
                 href="/tin-tuc"
@@ -1843,7 +1820,7 @@ export default function HomePage() {
             onClick={() => setIsMobileMenuOpen(false)}
             className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-bold transition-all hover:bg-emerald-500/10 hover:text-emerald-400 text-slate-300"
           >
-            📅 Lịch sân theo giờ
+            📅 Đặt sân
           </a>
           <Link
             href="/tin-tuc"
