@@ -903,125 +903,113 @@ export default function AdminDashboard() {
     router.push('/');
   };
 
-  // Đồng bộ toàn bộ 11 bảng từ Backend CSDL Stored Procedures
-  const loadAllDataFromBackend = async () => {
-    setIsLoading(true);
+  // Đồng bộ toàn bộ các bảng từ Backend CSDL Stored Procedures (Tối ưu tải song song Promise.allSettled)
+  const loadAllDataFromBackend = async (showSpinner: boolean = true) => {
+    if (showSpinner) setIsLoading(true);
     try {
-      const resCourts = await fetch(`${API_BASE}/dat-san/san-bong`);
-      if (resCourts.ok) {
-        const data = await resCourts.json();
-        if (data.success && Array.isArray(data.data)) setCourtList(data.data);
+      const results = await Promise.allSettled([
+        // 0: Sân bóng
+        fetch(`${API_BASE}/dat-san/san-bong`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 1: Loại sân
+        fetch(`${API_BASE}/dat-san/loai-san`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 2: Tất cả đơn đặt sân
+        fetch(`${API_BASE}/dat-san/tat-ca-don`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 3: Chi tiết bán hàng dịch vụ
+        fetch(`${API_BASE}/dich-vu/chi-tiet-ban-hang`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 4: Danh mục dịch vụ
+        fetch(`${API_BASE}/dich-vu`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 5: Phiếu nhập kho
+        fetch(`${API_BASE}/dich-vu/phieu-nhap`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 6: Giao dịch thanh toán
+        fetch(`${API_BASE}/thanh-toan/danh-sach`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 7: Lịch sử hoàn tiền
+        fetch(`${API_BASE}/thanh-toan/hoan-tien`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 8: Khung giờ
+        fetch(`${API_BASE}/dat-san/khung-gio/all`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 9: Người dùng (Users)
+        fetch(`${API_BASE}/auth/users`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 10: Vai trò (Roles)
+        fetch(`${API_BASE}/auth/vai-tro`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 11: Banners quảng cáo
+        fetch(`${API_BASE}/banner/admin`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 12: Liên hệ khách hàng
+        fetch(`${API_BASE}/lien-he`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 13: Loại tin tức
+        fetch(`${API_BASE}/tin-tuc/loai-tin/admin`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 14: Danh sách tin tức
+        fetch(`${API_BASE}/tin-tuc/admin`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 15: Nội dung About Us
+        contentService.getAboutUs().catch(() => null),
+      ]);
+
+      // 0. Sân bóng
+      if (results[0].status === 'fulfilled' && results[0].value?.success && Array.isArray(results[0].value.data)) {
+        setCourtList(results[0].value.data);
       }
-
-      const resLoai = await fetch(`${API_BASE}/dat-san/loai-san`);
-      if (resLoai.ok) {
-        const data = await resLoai.json();
-        if (data.success && Array.isArray(data.data)) setCategoryList(data.data);
+      // 1. Loại sân
+      if (results[1].status === 'fulfilled' && results[1].value?.success && Array.isArray(results[1].value.data)) {
+        setCategoryList(results[1].value.data);
       }
-
-      const resBookings = await fetch(`${API_BASE}/dat-san/tat-ca-don`);
-      if (resBookings.ok) {
-        const data = await resBookings.json();
-        if (data.success && Array.isArray(data.data)) {
-          setBookingList(data.data.map((b: any) => ({ ...b, dich_vu_da_dung: b.dich_vu_da_dung || b.chi_tiet_dich_vu || [] })));
-        }
+      // 2. Tất cả đơn đặt sân
+      if (results[2].status === 'fulfilled' && results[2].value?.success && Array.isArray(results[2].value.data)) {
+        setBookingList(results[2].value.data.map((b: any) => ({ ...b, dich_vu_da_dung: b.dich_vu_da_dung || b.chi_tiet_dich_vu || [] })));
       }
-
-      const resDetails = await fetch(`${API_BASE}/dich-vu/chi-tiet-ban-hang`);
-      if (resDetails.ok) {
-        const data = await resDetails.json();
-        if (data.success && Array.isArray(data.data)) setServiceDetailList(data.data);
+      // 3. Chi tiết bán hàng dịch vụ
+      if (results[3].status === 'fulfilled' && results[3].value?.success && Array.isArray(results[3].value.data)) {
+        setServiceDetailList(results[3].value.data);
       }
-
-      const resServices = await fetch(`${API_BASE}/dich-vu`);
-      if (resServices.ok) {
-        const data = await resServices.json();
-        if (data.success && Array.isArray(data.data)) setServiceList(data.data);
+      // 4. Danh mục dịch vụ
+      if (results[4].status === 'fulfilled' && results[4].value?.success && Array.isArray(results[4].value.data)) {
+        setServiceList(results[4].value.data);
       }
-
-      const resNhap = await fetch(`${API_BASE}/dich-vu/phieu-nhap`);
-      if (resNhap.ok) {
-        const data = await resNhap.json();
-        if (data.success && Array.isArray(data.data)) setInventoryList(data.data);
+      // 5. Phiếu nhập kho
+      if (results[5].status === 'fulfilled' && results[5].value?.success && Array.isArray(results[5].value.data)) {
+        setInventoryList(results[5].value.data);
       }
-
-      const resPayments = await fetch(`${API_BASE}/thanh-toan/danh-sach`);
-      if (resPayments.ok) {
-        const data = await resPayments.json();
-        if (data.success && Array.isArray(data.data)) setPaymentList(data.data);
+      // 6. Giao dịch thanh toán
+      if (results[6].status === 'fulfilled' && results[6].value?.success && Array.isArray(results[6].value.data)) {
+        setPaymentList(results[6].value.data);
       }
-
-      const resRefunds = await fetch(`${API_BASE}/thanh-toan/hoan-tien`);
-      if (resRefunds.ok) {
-        const data = await resRefunds.json();
-        if (data.success && Array.isArray(data.data)) setRefundList(data.data);
+      // 7. Lịch sử hoàn tiền
+      if (results[7].status === 'fulfilled' && results[7].value?.success && Array.isArray(results[7].value.data)) {
+        setRefundList(results[7].value.data);
       }
-
-      const resKhung = await fetch(`${API_BASE}/dat-san/khung-gio/all`);
-      if (resKhung.ok) {
-        const data = await resKhung.json();
-        if (data.success && Array.isArray(data.data)) setKhungGioList(data.data);
+      // 8. Khung giờ
+      if (results[8].status === 'fulfilled' && results[8].value?.success && Array.isArray(results[8].value.data)) {
+        setKhungGioList(results[8].value.data);
       }
-
-      const resUsers = await fetch(`${API_BASE}/auth/users`);
-      if (resUsers.ok) {
-        const data = await resUsers.json();
-        if (data.success && Array.isArray(data.data)) setUserList(data.data);
+      // 9. Người dùng (Users)
+      if (results[9].status === 'fulfilled' && results[9].value?.success && Array.isArray(results[9].value.data)) {
+        setUserList(results[9].value.data);
       }
-
-      const resRoles = await fetch(`${API_BASE}/auth/vai-tro`);
-      if (resRoles.ok) {
-        const data = await resRoles.json();
-        if (data.success && Array.isArray(data.data)) setRoleList(data.data);
+      // 10. Vai trò (Roles)
+      if (results[10].status === 'fulfilled' && results[10].value?.success && Array.isArray(results[10].value.data)) {
+        setRoleList(results[10].value.data);
       }
-
-      // 12. Banners
-      try {
-        const resBanners = await fetch(`${API_BASE}/banner/admin`);
-        if (resBanners.ok) {
-          const data = await resBanners.json();
-          if (data.success && Array.isArray(data.data)) setBannerList(data.data);
-        }
-      } catch (_e) { }
-
-      // 13. Liên Hệ
-      try {
-        const resLienHe = await fetch(`${API_BASE}/lien-he`);
-        if (resLienHe.ok) {
-          const data = await resLienHe.json();
-          if (data.success && Array.isArray(data.data)) setLienHeList(data.data);
-        }
-      } catch (_e) { }
-
-      // 14. Loại Tin Tức
-      try {
-        const resLoaiTin = await fetch(`${API_BASE}/tin-tuc/loai-tin/admin`);
-        if (resLoaiTin.ok) {
-          const data = await resLoaiTin.json();
-          if (data.success && Array.isArray(data.data)) setLoaiTinList(data.data);
-        }
-      } catch (_e) { }
-
-      // 15. Tin Tức
-      try {
-        const resNews = await fetch(`${API_BASE}/tin-tuc/admin`);
-        if (resNews.ok) {
-          const data = await resNews.json();
-          if (data.success && Array.isArray(data.data)) setNewsList(data.data);
-        }
-      } catch (_e) { }
-
-      // 16. About Us
-      try {
-        const resAbout = await contentService.getAboutUs();
-        if (resAbout?.success && resAbout.data) {
-          setAboutUsData(resAbout.data);
-        }
-      } catch (_e) { }
+      // 11. Banners quảng cáo
+      if (results[11].status === 'fulfilled' && results[11].value?.success && Array.isArray(results[11].value.data)) {
+        setBannerList(results[11].value.data);
+      }
+      // 12. Liên hệ khách hàng
+      if (results[12].status === 'fulfilled' && results[12].value?.success && Array.isArray(results[12].value.data)) {
+        setLienHeList(results[12].value.data);
+      }
+      // 13. Loại tin tức
+      if (results[13].status === 'fulfilled' && results[13].value?.success && Array.isArray(results[13].value.data)) {
+        setLoaiTinList(results[13].value.data);
+      }
+      // 14. Danh sách tin tức
+      if (results[14].status === 'fulfilled' && results[14].value?.success && Array.isArray(results[14].value.data)) {
+        setNewsList(results[14].value.data);
+      }
+      // 15. Nội dung About Us
+      if (results[15].status === 'fulfilled' && results[15].value?.success && results[15].value.data) {
+        setAboutUsData(results[15].value.data);
+      }
     } catch (err) {
       console.warn('Lỗi tải dữ liệu từ CSDL:', err);
     } finally {
-      setIsLoading(false);
+      if (showSpinner) setIsLoading(false);
     }
   };
 
@@ -2715,6 +2703,11 @@ export default function AdminDashboard() {
       'Bạn có chắc chắn muốn xóa đơn đặt sân này cùng toàn bộ giao dịch thanh toán liên quan?',
       `📋 Đơn đặt sân: #${id} ${info ? `(${info})` : ''}`,
       async () => {
+        // CÁCH 1: Optimistic UI - Gỡ đơn ra khỏi bảng ngay lập tức (0.05 giây)
+        setBookingList((prev) => prev.filter(b => b.id !== id));
+        setPaymentList((prev) => prev.filter(p => p.ma_don_dat !== id));
+        setToastMessage({ type: 'success', message: `🗑️ Đã xóa đơn đặt sân #${id}!` });
+
         try {
           const res = await fetch(`${API_BASE}/dat-san/don-dat-thanh-toan/${id}`, {
             method: 'DELETE',
@@ -2722,15 +2715,17 @@ export default function AdminDashboard() {
           });
           const data = await res.json();
           if (data.success) {
-            setToastMessage({ type: 'success', message: `🗑️ Đã xóa đơn đặt sân #${id}!` });
-            loadAllDataFromBackend();
+            // Tải ngầm đồng bộ song song không làm đơ/chặn màn hình
+            loadAllDataFromBackend(false);
             return;
+          } else {
+            setToastMessage({ type: 'error', message: data.message || 'Lỗi khi xóa đơn đặt sân' });
+            loadAllDataFromBackend(false);
           }
-        } catch (err) { }
-
-        setBookingList((prev) => prev.filter(b => b.id !== id));
-        setPaymentList((prev) => prev.filter(p => p.ma_don_dat !== id));
-        setToastMessage({ type: 'success', message: `🗑️ Đã xóa đơn đặt sân #${id}!` });
+        } catch (err) {
+          console.error('Lỗi khi xóa đơn đặt sân:', err);
+          loadAllDataFromBackend(false);
+        }
       }
     );
   };
