@@ -120,10 +120,10 @@
 # Cấu hình Gmail App Password & Dịch vụ Email Nodemailer
 MAIL_HOST=smtp.gmail.com
 MAIL_PORT=587
-MAIL_USER=xoancao2.0@gmail.com
-MAIL_PASSWORD=vhsfdbqmmcplqszk
-MAIL_FROM=xoancao2.0@gmail.com
-ADMIN_NOTIFICATION_EMAIL=xoancao2.0@gmail.com
+MAIL_USER=your_email@gmail.com
+MAIL_PASSWORD=your_gmail_app_password_here
+MAIL_FROM="Sport247 <no-reply@sport247.vn>"
+ADMIN_NOTIFICATION_EMAIL=your_admin_email@gmail.com
 ```
 
 ---

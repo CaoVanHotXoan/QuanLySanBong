@@ -249,7 +249,7 @@ CREATE TABLE About_Us (
 );
 GO
 
--- 3.17. Bảng Xac_Thuc_OTP (Lưu trữ và xác thực mã OTP qua Gmail)
+-- 3.17. Bảng Xac_Thuc_OTP (Lưu trữ và xác thực mã OTP qua Gmail - Bảo mật đa tầng chống Spam & Brute-force)
 CREATE TABLE Xac_Thuc_OTP (
     id INT IDENTITY(1,1) PRIMARY KEY,
     email VARCHAR(255) NOT NULL,
@@ -257,7 +257,10 @@ CREATE TABLE Xac_Thuc_OTP (
     loai_otp VARCHAR(50) NOT NULL,
     het_han_luc DATETIME NOT NULL,
     da_xac_thuc BIT DEFAULT 0,
-    ngay_tao DATETIME DEFAULT GETDATE()
+    ngay_tao DATETIME DEFAULT GETDATE(),
+    ip_gui VARCHAR(45) NULL,
+    so_lan_sai INT DEFAULT 0,
+    bi_khoa BIT DEFAULT 0
 );
 GO
 
@@ -271,6 +274,7 @@ CREATE NONCLUSTERED INDEX IX_ThanhToan_MaDonDat ON Thanh_Toan(ma_don_dat);
 CREATE NONCLUSTERED INDEX IX_TinTuc_MaLoaiTin_TrangThai ON Tin_Tuc(ma_loai_tin, trang_thai) INCLUDE (tieu_de, ngay_dang, luot_xem);
 CREATE NONCLUSTERED INDEX IX_LienHe_TrangThai ON Lien_He(trang_thai_xu_ly);
 CREATE NONCLUSTERED INDEX IX_XacThucOTP_Email_Loai ON Xac_Thuc_OTP(email, loai_otp, da_xac_thuc, het_han_luc);
+CREATE NONCLUSTERED INDEX IX_XacThucOTP_IP_NgayTao ON Xac_Thuc_OTP(ip_gui, ngay_tao);
 GO
 
 -- =====================================================================

@@ -17,7 +17,7 @@ async function initOtpDb() {
         const pool = await sql.connect(config);
         console.log('✅ Đã kết nối SQL Server!');
 
-        // 1. Tạo bảng Xac_Thuc_OTP nếu chưa có
+        // 1. Tạo bảng Xac_Thuc_OTP nếu chưa có (và thêm các cột bảo mật nếu thiếu)
         await pool.request().query(`
             IF OBJECT_ID('Xac_Thuc_OTP', 'U') IS NULL
             BEGIN
@@ -28,10 +28,23 @@ async function initOtpDb() {
                     loai_otp VARCHAR(50) NOT NULL,
                     het_han_luc DATETIME NOT NULL,
                     da_xac_thuc BIT DEFAULT 0,
-                    ngay_tao DATETIME DEFAULT GETDATE()
+                    ngay_tao DATETIME DEFAULT GETDATE(),
+                    ip_gui VARCHAR(45) NULL,
+                    so_lan_sai INT DEFAULT 0,
+                    bi_khoa BIT DEFAULT 0
                 );
                 CREATE NONCLUSTERED INDEX IX_XacThucOTP_Email_Loai ON Xac_Thuc_OTP(email, loai_otp, da_xac_thuc, het_han_luc);
+                CREATE NONCLUSTERED INDEX IX_XacThucOTP_IP_NgayTao ON Xac_Thuc_OTP(ip_gui, ngay_tao);
                 PRINT 'Đã tạo bảng Xac_Thuc_OTP thành công';
+            END
+            ELSE
+            BEGIN
+                IF COL_LENGTH('Xac_Thuc_OTP', 'ip_gui') IS NULL
+                    ALTER TABLE Xac_Thuc_OTP ADD ip_gui VARCHAR(45) NULL;
+                IF COL_LENGTH('Xac_Thuc_OTP', 'so_lan_sai') IS NULL
+                    ALTER TABLE Xac_Thuc_OTP ADD so_lan_sai INT DEFAULT 0;
+                IF COL_LENGTH('Xac_Thuc_OTP', 'bi_khoa') IS NULL
+                    ALTER TABLE Xac_Thuc_OTP ADD bi_khoa BIT DEFAULT 0;
             END
         `);
         console.log('✅ Bảng Xac_Thuc_OTP đã sẵn sàng!');
@@ -42,34 +55,75 @@ async function initOtpDb() {
                 @email VARCHAR(255),
                 @ma_otp VARCHAR(10),
                 @loai_otp VARCHAR(50),
-                @thoi_gian_phut INT = 5
+                @thoi_gian_phut INT = 5,
+                @ip_gui VARCHAR(45) = NULL
             AS
             BEGIN
                 SET NOCOUNT ON;
                 BEGIN TRY
+                    BEGIN TRANSACTION;
+
+                    -- Kiểm tra Cooldown 60s
+                    IF EXISTS (
+                        SELECT 1 FROM Xac_Thuc_OTP
+                        WHERE email = @email AND loai_otp = @loai_otp AND ngay_tao >= DATEADD(SECOND, -60, GETDATE())
+                    )
+                    BEGIN
+                        SELECT 0 AS hop_le, 0 AS cho_phep_gui, N'Mã OTP vừa được gửi cách đây chưa đầy 60 giây. Vui lòng chờ 1 phút!' AS thong_bao;
+                        COMMIT TRANSACTION;
+                        RETURN;
+                    END;
+
+                    -- Giới hạn tối đa 5 mã OTP / 1 giờ / 1 email
+                    IF (SELECT COUNT(*) FROM Xac_Thuc_OTP WHERE email = @email AND ngay_tao >= DATEADD(HOUR, -1, GETDATE())) >= 5
+                    BEGIN
+                        SELECT 0 AS hop_le, 0 AS cho_phep_gui, N'Email này đã nhận quá 5 mã OTP trong 1 giờ. Vui lòng thử lại sau!' AS thong_bao;
+                        COMMIT TRANSACTION;
+                        RETURN;
+                    END;
+
+                    -- Giới hạn IP
+                    IF @ip_gui IS NOT NULL AND @ip_gui <> 'unknown-ip' AND @ip_gui <> '::1' AND @ip_gui <> '127.0.0.1'
+                    BEGIN
+                        IF (SELECT COUNT(*) FROM Xac_Thuc_OTP WHERE ip_gui = @ip_gui AND ngay_tao >= DATEADD(MINUTE, -15, GETDATE())) >= 10
+                        BEGIN
+                            SELECT 0 AS hop_le, 0 AS cho_phep_gui, N'IP của bạn đang bị tạm khóa do gửi quá nhiều OTP. Vui lòng thử lại sau 15 phút!' AS thong_bao;
+                            COMMIT TRANSACTION;
+                            RETURN;
+                        END;
+                    END;
+
                     UPDATE Xac_Thuc_OTP 
                     SET da_xac_thuc = 1 
                     WHERE email = @email AND loai_otp = @loai_otp AND da_xac_thuc = 0;
 
-                    INSERT INTO Xac_Thuc_OTP (email, ma_otp, loai_otp, het_han_luc, da_xac_thuc, ngay_tao)
+                    INSERT INTO Xac_Thuc_OTP (email, ma_otp, loai_otp, het_han_luc, da_xac_thuc, ngay_tao, ip_gui, so_lan_sai, bi_khoa)
                     VALUES (
                         @email, 
                         @ma_otp, 
                         @loai_otp, 
                         DATEADD(MINUTE, ISNULL(@thoi_gian_phut, 5), GETDATE()), 
                         0, 
-                        GETDATE()
+                        GETDATE(),
+                        @ip_gui,
+                        0,
+                        0
                     );
 
                     SELECT 
+                        1 AS hop_le,
+                        1 AS cho_phep_gui,
                         SCOPE_IDENTITY() AS id,
                         @email AS email,
                         @ma_otp AS ma_otp,
                         @loai_otp AS loai_otp,
                         DATEADD(MINUTE, ISNULL(@thoi_gian_phut, 5), GETDATE()) AS het_han_luc,
                         N'Tạo mã OTP thành công' AS thong_bao;
+                    COMMIT TRANSACTION;
                 END TRY
                 BEGIN CATCH
+                    IF @@TRANCOUNT > 0
+                        ROLLBACK TRANSACTION;
                     ;THROW;
                 END CATCH;
             END;
@@ -85,39 +139,79 @@ async function initOtpDb() {
             AS
             BEGIN
                 SET NOCOUNT ON;
-                DECLARE @id INT, @het_han_luc DATETIME, @da_xac_thuc BIT;
+                BEGIN TRY
+                    BEGIN TRANSACTION;
+                        DECLARE @id INT, @het_han_luc DATETIME, @da_xac_thuc BIT, @ma_chinh_xac VARCHAR(10), @so_lan_sai INT, @bi_khoa BIT;
 
-                SELECT TOP 1 
-                    @id = id, 
-                    @het_han_luc = het_han_luc, 
-                    @da_xac_thuc = da_xac_thuc
-                FROM Xac_Thuc_OTP
-                WHERE email = @email AND loai_otp = @loai_otp AND ma_otp = @ma_otp
-                ORDER BY id DESC;
+                        SELECT TOP 1 
+                            @id = id, 
+                            @ma_chinh_xac = ma_otp,
+                            @het_han_luc = het_han_luc, 
+                            @da_xac_thuc = da_xac_thuc,
+                            @so_lan_sai = ISNULL(so_lan_sai, 0),
+                            @bi_khoa = ISNULL(bi_khoa, 0)
+                        FROM Xac_Thuc_OTP
+                        WHERE email = @email AND loai_otp = @loai_otp
+                        ORDER BY id DESC;
 
-                IF @id IS NULL
-                BEGIN
-                    SELECT 0 AS hop_le, N'Mã OTP không chính xác!' AS thong_bao;
-                    RETURN;
-                END;
+                        IF @id IS NULL
+                        BEGIN
+                            SELECT 0 AS hop_le, N'Không tìm thấy yêu cầu mã OTP nào cho email này!' AS thong_bao;
+                            COMMIT TRANSACTION;
+                            RETURN;
+                        END;
 
-                IF @het_han_luc < GETDATE()
-                BEGIN
-                    SELECT 0 AS hop_le, N'Mã OTP đã hết hiệu lực (quá hạn)! Vui lòng lấy mã mới.' AS thong_bao;
-                    RETURN;
-                END;
+                        IF @bi_khoa = 1
+                        BEGIN
+                            SELECT 0 AS hop_le, N'Mã OTP này đã bị hủy do nhập sai quá 5 lần! Vui lòng yêu cầu mã mới.' AS thong_bao;
+                            COMMIT TRANSACTION;
+                            RETURN;
+                        END;
 
-                IF @da_xac_thuc = 1
-                BEGIN
-                    SELECT 0 AS hop_le, N'Mã OTP này đã được sử dụng trước đó!' AS thong_bao;
-                    RETURN;
-                END;
+                        IF @het_han_luc < GETDATE()
+                        BEGIN
+                            SELECT 0 AS hop_le, N'Mã OTP đã hết hiệu lực (quá hạn 5 phút)! Vui lòng lấy mã mới.' AS thong_bao;
+                            COMMIT TRANSACTION;
+                            RETURN;
+                        END;
 
-                UPDATE Xac_Thuc_OTP
-                SET da_xac_thuc = 1
-                WHERE id = @id;
+                        IF @da_xac_thuc = 1
+                        BEGIN
+                            SELECT 0 AS hop_le, N'Mã OTP này đã được xác thực sử dụng trước đó!' AS thong_bao;
+                            COMMIT TRANSACTION;
+                            RETURN;
+                        END;
 
-                SELECT 1 AS hop_le, N'Xác thực mã OTP thành công!' AS thong_bao;
+                        IF @ma_chinh_xac <> RTRIM(LTRIM(@ma_otp))
+                        BEGIN
+                            SET @so_lan_sai = @so_lan_sai + 1;
+                            IF @so_lan_sai >= 5
+                            BEGIN
+                                UPDATE Xac_Thuc_OTP SET so_lan_sai = @so_lan_sai, bi_khoa = 1 WHERE id = @id;
+                                SELECT 0 AS hop_le, N'Bạn đã nhập sai mã OTP 5 lần! Mã xác thực đã bị khóa hủy để bảo đảm an toàn. Vui lòng bấm gửi lại mã mới.' AS thong_bao;
+                            END
+                            ELSE
+                            BEGIN
+                                UPDATE Xac_Thuc_OTP SET so_lan_sai = @so_lan_sai WHERE id = @id;
+                                DECLARE @so_lan_con_lai INT = 5 - @so_lan_sai;
+                                SELECT 0 AS hop_le, N'Mã OTP không chính xác! Bạn còn ' + CAST(@so_lan_con_lai AS NVARCHAR(10)) + N' lần thử.' AS thong_bao;
+                            END
+                            COMMIT TRANSACTION;
+                            RETURN;
+                        END;
+
+                        UPDATE Xac_Thuc_OTP
+                        SET da_xac_thuc = 1
+                        WHERE id = @id;
+
+                        SELECT 1 AS hop_le, N'Xác thực mã OTP thành công!' AS thong_bao;
+                    COMMIT TRANSACTION;
+                END TRY
+                BEGIN CATCH
+                    IF @@TRANCOUNT > 0
+                        ROLLBACK TRANSACTION;
+                    ;THROW;
+                END CATCH;
             END;
         `);
         console.log('✅ Procedure sp_KiemTraOTP đã sẵn sàng!');

@@ -6,6 +6,7 @@
 
 import express, { Router } from 'express';
 import * as contentController from '../controllers/contentController';
+import { invisibleCaptchaGuard } from '../middlewares/captchaGuard';
 
 const router: Router = express.Router();
 
@@ -29,7 +30,7 @@ router.get('/about-us', contentController.layThongTinAboutUs);
 router.put('/about-us', contentController.capNhatAboutUs);
 
 // --- LIÊN HỆ ---
-router.post('/lien-he', contentController.guiLienHe);
+router.post('/lien-he', invisibleCaptchaGuard, contentController.guiLienHe);
 router.get('/lien-he', contentController.layDanhSachLienHe);
 router.put('/lien-he/:id/trang-thai', contentController.capNhatTrangThaiLienHe);
 router.post('/lien-he/:id/tra-loi', contentController.traLoiLienHe);

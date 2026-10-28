@@ -654,13 +654,35 @@ const guiMaOTP = async (req, res) => {
         }
         // Sinh mã OTP 6 số ngẫu nhiên
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-        // Lưu vào CSDL SQL Server qua Stored Procedure sp_LuuMaOTP
-        await pool.request()
-            .input('email', db_1.sql.VarChar(255), normalizedEmail)
-            .input('ma_otp', db_1.sql.VarChar(10), otpCode)
-            .input('loai_otp', db_1.sql.VarChar(50), loai_otp)
-            .input('thoi_gian_phut', db_1.sql.Int, 5)
-            .execute('sp_LuuMaOTP');
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown-ip';
+        // Lưu vào CSDL SQL Server qua Stored Procedure sp_LuuMaOTP (Tích hợp kiểm tra bảo mật đa tầng)
+        let dbResult;
+        try {
+            dbResult = await pool.request()
+                .input('email', db_1.sql.VarChar(255), normalizedEmail)
+                .input('ma_otp', db_1.sql.VarChar(10), otpCode)
+                .input('loai_otp', db_1.sql.VarChar(50), loai_otp)
+                .input('thoi_gian_phut', db_1.sql.Int, 5)
+                .input('ip_gui', db_1.sql.VarChar(45), clientIp)
+                .execute('sp_LuuMaOTP');
+        }
+        catch (argErr) {
+            // Dự phòng tương thích nếu DB đang dùng sp_LuuMaOTP phiên bản cũ 4 tham số
+            dbResult = await pool.request()
+                .input('email', db_1.sql.VarChar(255), normalizedEmail)
+                .input('ma_otp', db_1.sql.VarChar(10), otpCode)
+                .input('loai_otp', db_1.sql.VarChar(50), loai_otp)
+                .input('thoi_gian_phut', db_1.sql.Int, 5)
+                .execute('sp_LuuMaOTP');
+        }
+        const otpRecord = dbResult.recordset && dbResult.recordset[0];
+        // Nếu tầng CSDL phát hiện vi phạm bảo mật (spam / cooldown 60s / quá số lần cho phép) -> Chặn ngay, không gửi Gmail
+        if (otpRecord && otpRecord.hop_le === 0) {
+            return res.status(429).json({
+                success: false,
+                message: otpRecord.thong_bao || 'Yêu cầu gửi mã OTP vi phạm giới hạn an toàn!'
+            });
+        }
         // Gửi mã OTP về Gmail người dùng qua nodemailer
         const sent = await (0, emailService_1.sendOtpEmail)({
             toEmail: normalizedEmail,

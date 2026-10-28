@@ -9,7 +9,7 @@
  * =====================================================================
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.invisibleCaptchaGuard = void 0;
+exports.otpSecurityGuard = exports.invisibleCaptchaGuard = void 0;
 const ipHistory = new Map();
 const MAX_REQUESTS_PER_MINUTE = 15;
 const BLOCK_DURATION_MS = 2 * 60 * 1000; // Khóa 2 phút nếu spam vượt quá giới hạn
@@ -113,3 +113,114 @@ const invisibleCaptchaGuard = async (req, res, next) => {
     }
 };
 exports.invisibleCaptchaGuard = invisibleCaptchaGuard;
+const otpIpHistory = new Map();
+const otpEmailHistory = new Map();
+const OTP_MAX_PER_IP = 5; // Tối đa 5 lần gửi OTP / 10 phút từ 1 IP
+const OTP_IP_WINDOW_MS = 10 * 60 * 1000;
+const OTP_IP_BLOCK_MS = 15 * 60 * 1000; // Khóa IP 15 phút nếu spam
+const OTP_EMAIL_COOLDOWN_MS = 60 * 1000; // Phải cách nhau ít nhất 60 giây giữa 2 lần gửi cho cùng 1 email
+const OTP_MAX_PER_EMAIL = 5; // Tối đa 5 lần gửi OTP cho 1 email / 1 giờ
+const OTP_EMAIL_WINDOW_MS = 60 * 60 * 1000;
+const otpSecurityGuard = async (req, res, next) => {
+    try {
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown-ip';
+        const now = Date.now();
+        const { email, website_url_hp, company_name_hp, bot_trap } = req.body;
+        // 1. Bẫy Bot ngầm Honeypot
+        if (website_url_hp || company_name_hp || bot_trap) {
+            console.warn(`[Anti-Bot OTP] Chặn Bot qua Honeypot Trap từ IP: ${clientIp}`);
+            return res.status(403).json({
+                success: false,
+                isBot: true,
+                message: 'Hệ thống bảo mật từ chối: Phát hiện yêu cầu tự động từ robot!'
+            });
+        }
+        // 2. Kiểm tra định dạng Email hợp lệ
+        if (!email || typeof email !== 'string') {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp địa chỉ Email hợp lệ!'
+            });
+        }
+        const normalizedEmail = email.toLowerCase().trim();
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!emailRegex.test(normalizedEmail)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Địa chỉ Email không đúng định dạng chuẩn!'
+            });
+        }
+        // 3. Rate Limit theo IP
+        let ipRec = otpIpHistory.get(clientIp);
+        if (!ipRec) {
+            ipRec = { count: 1, firstRequestTime: now, blockedUntil: 0 };
+            otpIpHistory.set(clientIp, ipRec);
+        }
+        else {
+            if (ipRec.blockedUntil > now) {
+                const remainingMinutes = Math.ceil((ipRec.blockedUntil - now) / 60000);
+                return res.status(429).json({
+                    success: false,
+                    message: `IP của bạn đang bị tạm khóa do gửi mã OTP quá nhiều lần! Vui lòng thử lại sau ${remainingMinutes} phút.`
+                });
+            }
+            if (now - ipRec.firstRequestTime > OTP_IP_WINDOW_MS) {
+                ipRec.count = 1;
+                ipRec.firstRequestTime = now;
+            }
+            else {
+                ipRec.count += 1;
+                if (ipRec.count > OTP_MAX_PER_IP) {
+                    ipRec.blockedUntil = now + OTP_IP_BLOCK_MS;
+                    console.warn(`[Anti-Spam OTP] IP ${clientIp} đã bị khóa 15 phút do vượt quá ${OTP_MAX_PER_IP} yêu cầu OTP.`);
+                    return res.status(429).json({
+                        success: false,
+                        message: 'Phát hiện hành vi gửi OTP dồn dập! IP của bạn bị tạm khóa 15 phút.'
+                    });
+                }
+            }
+        }
+        // 4. Rate Limit & Cooldown 60s theo từng địa chỉ Email
+        let emailRec = otpEmailHistory.get(normalizedEmail);
+        if (!emailRec) {
+            otpEmailHistory.set(normalizedEmail, {
+                count: 1,
+                firstRequestTime: now,
+                lastRequestTime: now
+            });
+        }
+        else {
+            // Kiểm tra Cooldown 60s
+            const elapsed = now - emailRec.lastRequestTime;
+            if (elapsed < OTP_EMAIL_COOLDOWN_MS) {
+                const waitSec = Math.ceil((OTP_EMAIL_COOLDOWN_MS - elapsed) / 1000);
+                return res.status(429).json({
+                    success: false,
+                    message: `Mã OTP vừa được gửi. Vui lòng đợi ${waitSec} giây trước khi bấm gửi lại!`
+                });
+            }
+            // Kiểm tra tối đa 5 lần / giờ
+            if (now - emailRec.firstRequestTime > OTP_EMAIL_WINDOW_MS) {
+                emailRec.count = 1;
+                emailRec.firstRequestTime = now;
+                emailRec.lastRequestTime = now;
+            }
+            else {
+                emailRec.count += 1;
+                emailRec.lastRequestTime = now;
+                if (emailRec.count > OTP_MAX_PER_EMAIL) {
+                    return res.status(429).json({
+                        success: false,
+                        message: `Email này đã nhận quá số lượng mã OTP cho phép trong 1 giờ (${OTP_MAX_PER_EMAIL} lần). Vui lòng thử lại sau!`
+                    });
+                }
+            }
+        }
+        next();
+    }
+    catch (error) {
+        console.error('[Anti-Bot Guard] Lỗi xác thực OTP Guard:', error);
+        next();
+    }
+};
+exports.otpSecurityGuard = otpSecurityGuard;

@@ -43,6 +43,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const contentController = __importStar(require("../controllers/contentController"));
+const captchaGuard_1 = require("../middlewares/captchaGuard");
 const router = express_1.default.Router();
 // --- LOẠI TIN TỨC ---
 router.get('/tin-tuc/loai-tin', contentController.layDanhSachLoaiTinTuc);
@@ -61,7 +62,7 @@ router.delete('/tin-tuc/:id', contentController.xoaTinTuc);
 router.get('/about-us', contentController.layThongTinAboutUs);
 router.put('/about-us', contentController.capNhatAboutUs);
 // --- LIÊN HỆ ---
-router.post('/lien-he', contentController.guiLienHe);
+router.post('/lien-he', captchaGuard_1.invisibleCaptchaGuard, contentController.guiLienHe);
 router.get('/lien-he', contentController.layDanhSachLienHe);
 router.put('/lien-he/:id/trang-thai', contentController.capNhatTrangThaiLienHe);
 router.post('/lien-he/:id/tra-loi', contentController.traLoiLienHe);
