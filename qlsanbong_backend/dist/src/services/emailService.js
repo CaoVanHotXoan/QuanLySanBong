@@ -3,8 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendOtpEmail = exports.sendContactReplyEmail = exports.sendContactEmailToAdmin = void 0;
+exports.sendOtpEmail = exports.sendContactReplyEmail = exports.sendContactEmailToAdmin = exports.isMailServiceEnabled = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
+const cacheService_1 = __importDefault(require("./cacheService"));
+const db_1 = require("../config/db");
 /**
  * Khởi tạo Transporter gửi mail qua SMTP Gmail
  */
@@ -30,10 +32,49 @@ const createTransporter = () => {
     });
 };
 /**
+ * Kiểm tra trạng thái Bật / Tắt dịch vụ gửi Gmail SMTP
+ * 1. Kiểm tra biến môi trường .env (Kill-switch khẩn cấp)
+ * 2. Kiểm tra Cache RAM (60s)
+ * 3. Truy vấn Stored Procedure sp_LayGiaTriCauHinh từ CSDL
+ */
+const isMailServiceEnabled = async () => {
+    // 1. Kiểm tra biến .env trước (Kill-Switch khẩn cấp)
+    if (process.env.MAIL_ENABLED === 'false' || process.env.MAIL_ENABLED === '0') {
+        return false;
+    }
+    // 2. Kiểm tra Cache RAM (60s)
+    const cached = cacheService_1.default.get('GMAIL_SMTP_ENABLED');
+    if (cached !== null && cached !== undefined) {
+        return cached;
+    }
+    // 3. Truy vấn Stored Procedure sp_LayGiaTriCauHinh
+    try {
+        const pool = await db_1.poolPromise;
+        const result = await pool.request()
+            .input('ma_cau_hinh', db_1.sql.VarChar(50), 'GMAIL_SMTP_ENABLED')
+            .execute('sp_LayGiaTriCauHinh');
+        const row = result.recordset && result.recordset[0];
+        const isEnabled = row ? (row.gia_tri === '1' || row.gia_tri === 'true') : true;
+        // Lưu vào cache 60 giây
+        cacheService_1.default.set('GMAIL_SMTP_ENABLED', isEnabled, 60);
+        return isEnabled;
+    }
+    catch (err) {
+        console.warn('⚠️ Lỗi kiểm tra cấu hình mail từ DB, mặc định fallback sang .env:', err.message);
+        return process.env.MAIL_ENABLED !== 'false';
+    }
+};
+exports.isMailServiceEnabled = isMailServiceEnabled;
+/**
  * Gửi email thông báo liên hệ mới tới Quản trị viên (Gmail)
  */
 const sendContactEmailToAdmin = async (payload) => {
     try {
+        const mailEnabled = await (0, exports.isMailServiceEnabled)();
+        if (!mailEnabled) {
+            console.log(`ℹ️ [MAIL SERVICE TẮT] Bỏ qua gửi email thông báo liên hệ tới Admin.`);
+            return true;
+        }
         const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.MAIL_USER || 'xoancao2.0@gmail.com';
         const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Sport247 <no-reply@sport247.vn>';
         const transporter = createTransporter();
@@ -140,6 +181,16 @@ exports.sendContactEmailToAdmin = sendContactEmailToAdmin;
  * Gửi email phản hồi cho khách hàng. Nếu gửi thất bại (email không tồn tại), tự động gửi bản sao về Gmail của Admin.
  */
 const sendContactReplyEmail = async (payload) => {
+    const mailEnabled = await (0, exports.isMailServiceEnabled)();
+    if (!mailEnabled) {
+        console.log(`ℹ️ [MAIL SERVICE TẮT] Bỏ qua gửi email phản hồi tới khách (${payload.toEmail || 'Không có email'})`);
+        return {
+            success: true,
+            sentToCustomer: false,
+            sentToAdminFallback: false,
+            message: 'Đã lưu phản hồi thành công (Dịch vụ gửi Gmail đang tạm tắt theo cấu hình).'
+        };
+    }
     const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || process.env.MAIL_USER || 'xoancao2.0@gmail.com';
     const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Sport247 <no-reply@sport247.vn>';
     const transporter = createTransporter();
@@ -343,6 +394,11 @@ const sendContactReplyEmail = async (payload) => {
 exports.sendContactReplyEmail = sendContactReplyEmail;
 const sendOtpEmail = async (payload) => {
     try {
+        const mailEnabled = await (0, exports.isMailServiceEnabled)();
+        if (!mailEnabled) {
+            console.log(`🔑 [MAIL SERVICE TẮT] Không gửi qua Gmail SMTP. Mã OTP cho ${payload.toEmail} là: ${payload.otpCode}`);
+            return true;
+        }
         const transporter = createTransporter();
         const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Sport247 <no-reply@sport247.vn>';
         let purposeTitle = 'Xác thực tài khoản';

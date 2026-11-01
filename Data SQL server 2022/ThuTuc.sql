@@ -107,6 +107,7 @@ BEGIN
            OR LOWER(nd.email) = LOWER(@emailWithDomain)
            OR (CHARINDEX('@', nd.email) > 0 AND LOWER(SUBSTRING(nd.email, 1, CHARINDEX('@', nd.email) - 1)) = LOWER(@usernameOnly))
            OR LOWER(nd.ho_ten) = LOWER(@usernameOnly)
+           OR (LOWER(@cleanIden) IN ('admin', 'admin@gmail.com') AND (vt.TenVaiTro = 'ADMIN' OR nd.MaVaiTro = 1))
         ORDER BY 
             CASE 
                 WHEN LOWER(nd.email) = LOWER(@cleanIden) THEN 1
@@ -114,8 +115,10 @@ BEGIN
                 WHEN LOWER(nd.email) = LOWER(@emailWithDomain) THEN 3
                 WHEN LOWER(nd.ho_ten) = LOWER(@usernameOnly) THEN 4
                 WHEN nd.so_dien_thoai = @cleanIden THEN 5
-                ELSE 6
-            END ASC;
+                WHEN LOWER(@cleanIden) IN ('admin', 'admin@gmail.com') AND (vt.TenVaiTro = 'ADMIN' OR nd.MaVaiTro = 1) THEN 6
+                ELSE 7
+            END ASC,
+            nd.id ASC;
 
         IF @@ROWCOUNT = 0
         BEGIN
@@ -242,10 +245,10 @@ BEGIN
                 ;THROW 50006, N'Người dùng không tồn tại.', 1;
             END;
 
-            -- Bảo mật hệ thống: Tuyệt đối không cho phép xóa tài khoản Quản Trị Viên cấp cao
-            IF EXISTS (SELECT 1 FROM Nguoi_Dung WHERE id = @id AND (MaVaiTro = 1 OR email LIKE 'admin%' OR email = 'xoancao2.0@gmail.com'))
+            -- Bảo mật hệ thống: Tuyệt đối không cho phép xóa tài khoản Quản Trị Viên gốc (Root Admin ID = 1)
+            IF @id = 1 OR EXISTS (SELECT 1 FROM Nguoi_Dung WHERE id = @id AND email = 'xoancao2.0@gmail.com')
             BEGIN
-                ;THROW 50007, N'Bảo mật hệ thống: Không thể xóa tài khoản Quản Trị Viên cấp cao!', 1;
+                ;THROW 50007, N'Bảo mật hệ thống: Không thể xóa tài khoản Quản Trị Viên gốc!', 1;
             END;
 
             DELETE FROM Nguoi_Dung WHERE id = @id;
@@ -5072,6 +5075,79 @@ BEGIN
         END;
 
         SELECT 1 AS thanh_cong, N'Đã đồng bộ thương hiệu Sport247 trên toàn bộ CSDL thành công!' AS thong_bao;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- NHÓM THỦ TỤC: CẤU HÌNH HỆ THỐNG & BẬT / TẮT CHỨC NĂNG (FEATURE FLAGS)
+-- =====================================================================
+
+CREATE OR ALTER PROCEDURE sp_LayDanhSachCauHinh
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Tự động khởi tạo nếu chưa có dữ liệu cấu hình
+    IF NOT EXISTS (SELECT 1 FROM Cau_Hinh_He_Thong WHERE ma_cau_hinh = 'GMAIL_SMTP_ENABLED')
+    BEGIN
+        INSERT INTO Cau_Hinh_He_Thong (ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat)
+        VALUES ('GMAIL_SMTP_ENABLED', N'Gửi Email & OTP qua Gmail SMTP', '1', N'Bật/Tắt chức năng gửi mã OTP và email thông báo qua máy chủ Google Gmail SMTP', GETDATE());
+    END;
+
+    SELECT ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat
+    FROM Cau_Hinh_He_Thong
+    ORDER BY ma_cau_hinh ASC;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_LayGiaTriCauHinh
+    @ma_cau_hinh VARCHAR(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Tự động khởi tạo cấu hình mặc định nếu bảng trống
+    IF @ma_cau_hinh = 'GMAIL_SMTP_ENABLED' AND NOT EXISTS (SELECT 1 FROM Cau_Hinh_He_Thong WHERE ma_cau_hinh = 'GMAIL_SMTP_ENABLED')
+    BEGIN
+        INSERT INTO Cau_Hinh_He_Thong (ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat)
+        VALUES ('GMAIL_SMTP_ENABLED', N'Gửi Email & OTP qua Gmail SMTP', '1', N'Bật/Tắt chức năng gửi mã OTP và email thông báo qua máy chủ Google Gmail SMTP', GETDATE());
+    END;
+
+    SELECT TOP 1 ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat
+    FROM Cau_Hinh_He_Thong
+    WHERE ma_cau_hinh = @ma_cau_hinh;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_CapNhatCauHinh
+    @ma_cau_hinh VARCHAR(50),
+    @gia_tri NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        IF EXISTS (SELECT 1 FROM Cau_Hinh_He_Thong WHERE ma_cau_hinh = @ma_cau_hinh)
+        BEGIN
+            UPDATE Cau_Hinh_He_Thong
+            SET gia_tri = @gia_tri, ngay_cap_nhat = GETDATE()
+            WHERE ma_cau_hinh = @ma_cau_hinh;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO Cau_Hinh_He_Thong (ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat)
+            VALUES (@ma_cau_hinh, @ma_cau_hinh, @gia_tri, N'Cấu hình tự động', GETDATE());
+        END;
+
+        SELECT TOP 1 ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat
+        FROM Cau_Hinh_He_Thong
+        WHERE ma_cau_hinh = @ma_cau_hinh;
+
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH

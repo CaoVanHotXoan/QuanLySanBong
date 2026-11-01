@@ -120,6 +120,7 @@ export type TabType =
   // 6. Hệ Thống & Phân Quyền (Nguoi_Dung, Vai_Tro, OpenAPI)
   | 'NGUOI_DUNG'
   | 'VAI_TRO'
+  | 'CHUC_NANG'
   | 'OPENAPI';
 
 // Danh sách các khung giờ 24h từ 00:00 đến 24:00
@@ -286,6 +287,14 @@ export interface NguoiDung {
 }
 
 // 11. Vai_Tro
+export interface CauHinhHeThong {
+  ma_cau_hinh: string;
+  ten_cau_hinh: string;
+  gia_tri: string;
+  mo_ta?: string;
+  ngay_cap_nhat?: string;
+}
+
 export interface VaiTro {
   MaVaiTro: number;
   TenVaiTro: string;
@@ -384,6 +393,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     items: [
       { id: 'NGUOI_DUNG', label: 'Danh Sách Người Dùng', icon: User, tableHint: 'Nguoi_Dung' },
       { id: 'VAI_TRO', label: 'Phân Quyền & Vai Trò', icon: ShieldCheck, tableHint: 'Vai_Tro' },
+      { id: 'CHUC_NANG', label: 'Chức Năng', icon: SlidersHorizontal, tableHint: 'Cau_Hinh_He_Thong' },
       { id: 'OPENAPI', label: 'OpenAPI (Swagger)', icon: Code2, badge: 'API' }
     ]
   }
@@ -557,6 +567,15 @@ export default function AdminDashboard() {
   const [khungGioList, setKhungGioList] = useState<KhungGio[]>([]);
   const [userList, setUserList] = useState<NguoiDung[]>([]);
   const [roleList, setRoleList] = useState<VaiTro[]>([]);
+  const [configList, setConfigList] = useState<CauHinhHeThong[]>([
+    {
+      ma_cau_hinh: 'GMAIL_SMTP_ENABLED',
+      ten_cau_hinh: 'Gửi Email & OTP qua Gmail SMTP',
+      gia_tri: '1',
+      mo_ta: 'Bật/Tắt chức năng gửi mã OTP và email thông báo qua máy chủ Google Gmail SMTP'
+    }
+  ]);
+  const [isUpdatingConfig, setIsUpdatingConfig] = useState<string | null>(null);
   const [lockedSlots, setLockedSlots] = useState<string[]>([]);
 
   // Dữ liệu mở rộng: Banner, Liên Hệ, Loại Tin Tức, Tin Tức, About Us
@@ -942,6 +961,8 @@ export default function AdminDashboard() {
         fetch(`${API_BASE}/tin-tuc/loai-tin/admin`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
         // 14: Danh sách tin tức
         fetch(`${API_BASE}/tin-tuc/admin`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 15: Cấu hình hệ thống Bật/Tắt
+        fetch(`${API_BASE}/auth/cau-hinh`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
         // 15: Nội dung About Us
         contentService.getAboutUs().catch(() => null),
       ]);
@@ -1006,9 +1027,15 @@ export default function AdminDashboard() {
       if (results[14].status === 'fulfilled' && results[14].value?.success && Array.isArray(results[14].value.data)) {
         setNewsList(results[14].value.data);
       }
-      // 15. Nội dung About Us
-      if (results[15].status === 'fulfilled' && results[15].value?.success && results[15].value.data) {
-        setAboutUsData(results[15].value.data);
+      // 15. Cấu hình hệ thống Bật/Tắt
+      const res15: any = results[15];
+      if (res15 && res15.status === 'fulfilled' && res15.value?.success && Array.isArray(res15.value.data)) {
+        setConfigList(res15.value.data);
+      }
+      // 16. Nội dung About Us
+      const res16: any = results[16];
+      if (res16 && res16.status === 'fulfilled' && res16.value?.success && res16.value.data) {
+        setAboutUsData(res16.value.data);
       }
     } catch (err) {
       console.warn('Lỗi tải dữ liệu từ CSDL:', err);
@@ -2261,6 +2288,49 @@ export default function AdminDashboard() {
     setRoleModal({ isOpen: false, mode: 'ADD', data: {} });
   };
 
+  const handleToggleConfig = async (ma_cau_hinh: string, currentGiaTri: string) => {
+    const newGiaTri = currentGiaTri === '1' ? '0' : '1';
+    setIsUpdatingConfig(ma_cau_hinh);
+    setConfigList((prev) =>
+      prev.map((c) => (c.ma_cau_hinh === ma_cau_hinh ? { ...c, gia_tri: newGiaTri } : c))
+    );
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/cau-hinh/${ma_cau_hinh}`, {
+        method: 'PUT',
+        headers: {
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ gia_tri: newGiaTri })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setToastMessage({
+          type: 'success',
+          message: `⚙️ Đã ${newGiaTri === '1' ? 'BẬT' : 'TẮT'} thành công [${ma_cau_hinh}]!`
+        });
+      } else {
+        setConfigList((prev) =>
+          prev.map((c) => (c.ma_cau_hinh === ma_cau_hinh ? { ...c, gia_tri: currentGiaTri } : c))
+        );
+        setToastMessage({
+          type: 'error',
+          message: data.message || 'Lỗi khi cập nhật cấu hình hệ thống'
+        });
+      }
+    } catch (err: any) {
+      setConfigList((prev) =>
+        prev.map((c) => (c.ma_cau_hinh === ma_cau_hinh ? { ...c, gia_tri: currentGiaTri } : c))
+      );
+      setToastMessage({
+        type: 'error',
+        message: err.message || 'Không thể kết nối máy chủ để cập nhật cấu hình!'
+      });
+    } finally {
+      setIsUpdatingConfig(null);
+    }
+  };
+
   const handleDeleteRole = (id: number, roleName?: string) => {
     openDeleteConfirm(
       'Xóa Vai Trò Phân Quyền',
@@ -3437,6 +3507,7 @@ export default function AdminDashboard() {
                 {activeTab === 'KHUNG_GIO' && 'Bảng Khung Giờ Hoạt Động'}
                 {activeTab === 'NGUOI_DUNG' && 'Danh Sách Người Dùng'}
                 {activeTab === 'VAI_TRO' && 'Phân Quyền & Vai Trò'}
+                {activeTab === 'CHUC_NANG' && 'Quản Lý Bật / Tắt Chức Năng Hệ Thống'}
                 {activeTab === 'OPENAPI' && 'Tài Liệu API Toàn Bộ Dự Án'}
               </h2>
             </div>
@@ -5090,6 +5161,159 @@ export default function AdminDashboard() {
               </div>
               );
             })()}
+
+            
+
+            {/* =================================================================
+                TAB: CHUC_NANG - QUẢN LÝ BẬT / TẮT CHỨC NĂNG HỆ THỐNG
+                ================================================================= */}
+            {activeTab === 'CHUC_NANG' && (
+              <div className="space-y-6 animate-fade-in w-full max-w-full min-w-0">
+                <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                  <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                    <div>
+                      <h3 className="text-base font-black flex items-center gap-2">
+                        <SlidersHorizontal className="w-5 h-5 text-emerald-600" /> Quản Lý Chức Năng Hệ Thống (Feature Flags)
+                      </h3>
+                      <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
+                        Bật/Tắt linh hoạt các dịch vụ của toàn bộ trang web qua CSDL SQL Server (Stored Procedure: <code className="text-emerald-700 dark:text-emerald-400 font-bold">sp_LayDanhSachCauHinh</code>, <code className="text-emerald-700 dark:text-emerald-400 font-bold">sp_CapNhatCauHinh</code>).
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => loadAllDataFromBackend(true)}
+                      className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer transition-all hover:scale-[1.02]"
+                    >
+                      <RefreshCw className="w-4 h-4 stroke-[2.5]" /> Làm Mới Cấu Hình
+                    </button>
+                  </div>
+
+                  <div className="p-6 space-y-6">
+                    {/* Banner hướng dẫn an toàn */}
+                    <div className={`p-4 rounded-xl border flex items-start gap-3 text-xs leading-relaxed ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-emerald-200' : 'bg-emerald-50 border-emerald-200 text-emerald-900'}`}>
+                      <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="font-bold">Cơ chế bảo vệ & điều khiển thông minh:</strong>
+                        <p className="mt-1">
+                          Khi bạn <strong className="text-rose-700 dark:text-rose-400">TẮT</strong> chức năng gửi Gmail, toàn bộ kết nối tới Google SMTP sẽ bị ngắt 100% để bảo vệ an toàn khỏi spam và bot. Hệ thống tự động chuyển sang chế độ <strong className="text-emerald-700 dark:text-emerald-400">Giả lập OTP thử nghiệm</strong> (mã OTP được hiển thị trực tiếp cho người dùng), giúp bạn thoải mái chấm thi và thuyết trình đồ án mà không bao giờ bị lỗi hoặc bị Google khóa hòm thư!
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Danh sách các card cấu hình chức năng */}
+                    <div className="grid grid-cols-1 gap-4">
+                      {configList.map((cfg) => {
+                        const isEnabled = cfg.gia_tri === '1' || cfg.gia_tri === 'true';
+                        const isUpdating = isUpdatingConfig === cfg.ma_cau_hinh;
+
+                        return (
+                          <div
+                            key={cfg.ma_cau_hinh}
+                            className={`p-5 rounded-2xl border transition-all ${
+                              isDarkMode
+                                ? 'bg-[#0e2116]/80 border-emerald-900/50 hover:border-emerald-600/60'
+                                : 'bg-slate-50/80 border-slate-200 hover:border-emerald-300'
+                            } flex flex-col md:flex-row md:items-center justify-between gap-5`}
+                          >
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2.5">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                  isEnabled
+                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+                                    : 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'
+                                }`}>
+                                  <Mail className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <h4 className="text-sm font-black flex items-center gap-2">
+                                    {cfg.ten_cau_hinh}
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                      isEnabled
+                                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 ring-1 ring-emerald-500/30'
+                                        : 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300 ring-1 ring-rose-500/30'
+                                    }`}>
+                                      {isEnabled ? '● ĐANG BẬT' : '○ ĐANG TẮT'}
+                                    </span>
+                                  </h4>
+                                  <p className="text-xs text-slate-700 dark:text-slate-400 font-medium">
+                                    {cfg.mo_ta || 'Cấu hình hệ thống'}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600 dark:text-slate-400 pt-1">
+                                <span className="font-mono bg-slate-200/60 dark:bg-black/30 px-2 py-0.5 rounded font-bold">
+                                  Key: {cfg.ma_cau_hinh}
+                                </span>
+                                <span>• Bảng: <strong className="text-emerald-700 dark:text-emerald-400">Cau_Hinh_He_Thong</strong></span>
+                                <span>• Cập nhật: {cfg.ngay_cap_nhat ? new Date(cfg.ngay_cap_nhat).toLocaleTimeString('vi-VN') + ' ' + new Date(cfg.ngay_cap_nhat).toLocaleDateString('vi-VN') : 'Mặc định'}</span>
+                              </div>
+                            </div>
+
+                            {/* NÚT GẠT BẬT / TẮT (TOGGLE SWITCH) */}
+                            <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
+                              <button
+                                type="button"
+                                disabled={isUpdating}
+                                onClick={() => handleToggleConfig(cfg.ma_cau_hinh, cfg.gia_tri)}
+                                className={`relative inline-flex h-9 w-20 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  isEnabled ? 'bg-emerald-600' : 'bg-slate-400 dark:bg-slate-700'
+                                } ${isUpdating ? 'opacity-60 cursor-wait' : ''}`}
+                              >
+                                <span className="sr-only">Bật tắt cấu hình</span>
+                                <span
+                                  className={`pointer-events-none inline-flex items-center justify-center h-8 w-8 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                                    isEnabled ? 'translate-x-11' : 'translate-x-0'
+                                  }`}
+                                >
+                                  {isUpdating ? (
+                                    <RefreshCw className="w-4 h-4 text-slate-500 animate-spin" />
+                                  ) : isEnabled ? (
+                                    <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />
+                                  ) : (
+                                    <X className="w-4 h-4 text-rose-500 stroke-[3]" />
+                                  )}
+                                </span>
+                              </button>
+
+                              <span className={`text-xs font-black min-w-[65px] ${
+                                isEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'
+                              }`}>
+                                {isEnabled ? 'ĐANG BẬT' : 'ĐANG TẮT'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Bảng chi tiết trạng thái nghiệp vụ khi Bật / Tắt */}
+                    <div className={`p-4 rounded-xl border text-xs space-y-2 ${isDarkMode ? 'bg-[#060e09] border-emerald-900/40 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>
+                      <div className="font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-emerald-500" /> Bảng đối chiếu trạng thái hoạt động:
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                        <div className="p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5">
+                          <strong className="text-emerald-700 dark:text-emerald-400 font-bold block mb-1">🟢 KHI BẬT GMAIL SMTP (Giá trị: 1):</strong>
+                          <ul className="list-disc list-inside space-y-1 text-slate-700 dark:text-slate-400">
+                            <li>Gửi mã OTP thật tới hộp thư Gmail của khách hàng.</li>
+                            <li>Gửi thông báo liên hệ mới tới hòm thư của Admin.</li>
+                            <li>Gửi phản hồi thư giải đáp thắc mắc tới email khách.</li>
+                          </ul>
+                        </div>
+                        <div className="p-3 rounded-lg border border-rose-500/20 bg-rose-500/5">
+                          <strong className="text-rose-700 dark:text-rose-400 font-bold block mb-1">🛡️ KHI TẮT GMAIL SMTP (Giá trị: 0):</strong>
+                          <ul className="list-disc list-inside space-y-1 text-slate-700 dark:text-slate-400">
+                            <li>Ngắt kết nối SMTP Google, chống spam và bot 100%.</li>
+                            <li>Mã OTP thử nghiệm hiển thị trực tiếp cho khách / dev test.</li>
+                            <li>Các chức năng Đặt sân, VietQR PayOS, Real-time chạy bình thường.</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* =================================================================
                 TAB: ABOUT_US - QUẢN LÝ THÔNG TIN VỀ CHÚNG TÔI

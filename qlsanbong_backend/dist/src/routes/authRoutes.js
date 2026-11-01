@@ -77,4 +77,7 @@ router.post('/vai-tro', authController.themVaiTro);
 router.put('/vai-tro/:id', authController.suaVaiTro);
 // Xóa vai trò
 router.delete('/vai-tro/:id', authController.xoaVaiTro);
+// Quản lý Cấu hình hệ thống & Bật/Tắt chức năng (Dashboard Admin)
+router.get('/cau-hinh', authController.layDanhSachCauHinh);
+router.put('/cau-hinh/:ma_cau_hinh', authController.capNhatCauHinh);
 exports.default = router;

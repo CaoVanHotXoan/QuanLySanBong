@@ -280,8 +280,90 @@ async function initOtpDb() {
         `);
         console.log('✅ Procedure sp_CapNhatEmailNguoiDung đã sẵn sàng!');
 
+        // 6. Tạo Bảng Cau_Hinh_He_Thong và các Procedures cấu hình Bật/Tắt
+        await pool.request().query(`
+            IF OBJECT_ID('Cau_Hinh_He_Thong', 'U') IS NULL
+            BEGIN
+                CREATE TABLE Cau_Hinh_He_Thong (
+                    ma_cau_hinh VARCHAR(50) PRIMARY KEY,
+                    ten_cau_hinh NVARCHAR(100) NOT NULL,
+                    gia_tri NVARCHAR(255) NOT NULL,
+                    mo_ta NVARCHAR(255) NULL,
+                    ngay_cap_nhat DATETIME DEFAULT GETDATE()
+                );
+                INSERT INTO Cau_Hinh_He_Thong (ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat)
+                VALUES ('GMAIL_SMTP_ENABLED', N'Gửi Email & OTP qua Gmail SMTP', '1', N'Bật/Tắt chức năng gửi mã OTP và email thông báo qua máy chủ Google Gmail SMTP', GETDATE());
+                PRINT 'Đã tạo bảng Cau_Hinh_He_Thong thành công';
+            END
+            ELSE IF NOT EXISTS (SELECT 1 FROM Cau_Hinh_He_Thong WHERE ma_cau_hinh = 'GMAIL_SMTP_ENABLED')
+            BEGIN
+                INSERT INTO Cau_Hinh_He_Thong (ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat)
+                VALUES ('GMAIL_SMTP_ENABLED', N'Gửi Email & OTP qua Gmail SMTP', '1', N'Bật/Tắt chức năng gửi mã OTP và email thông báo qua máy chủ Google Gmail SMTP', GETDATE());
+            END
+        `);
+        console.log('✅ Bảng Cau_Hinh_He_Thong đã sẵn sàng!');
+
+        await pool.request().batch(`
+            CREATE OR ALTER PROCEDURE sp_LayDanhSachCauHinh
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                SELECT ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat
+                FROM Cau_Hinh_He_Thong
+                ORDER BY ma_cau_hinh ASC;
+            END;
+        `);
+
+        await pool.request().batch(`
+            CREATE OR ALTER PROCEDURE sp_LayGiaTriCauHinh
+                @ma_cau_hinh VARCHAR(50)
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                SELECT TOP 1 ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat
+                FROM Cau_Hinh_He_Thong
+                WHERE ma_cau_hinh = @ma_cau_hinh;
+            END;
+        `);
+
+        await pool.request().batch(`
+            CREATE OR ALTER PROCEDURE sp_CapNhatCauHinh
+                @ma_cau_hinh VARCHAR(50),
+                @gia_tri NVARCHAR(255)
+            AS
+            BEGIN
+                SET NOCOUNT ON;
+                BEGIN TRY
+                    BEGIN TRANSACTION;
+                    IF EXISTS (SELECT 1 FROM Cau_Hinh_He_Thong WHERE ma_cau_hinh = @ma_cau_hinh)
+                    BEGIN
+                        UPDATE Cau_Hinh_He_Thong
+                        SET gia_tri = @gia_tri, ngay_cap_nhat = GETDATE()
+                        WHERE ma_cau_hinh = @ma_cau_hinh;
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO Cau_Hinh_He_Thong (ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat)
+                        VALUES (@ma_cau_hinh, @ma_cau_hinh, @gia_tri, N'Cấu hình hệ thống', GETDATE());
+                    END;
+
+                    SELECT TOP 1 ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat
+                    FROM Cau_Hinh_He_Thong
+                    WHERE ma_cau_hinh = @ma_cau_hinh;
+
+                    COMMIT TRANSACTION;
+                END TRY
+                BEGIN CATCH
+                    IF @@TRANCOUNT > 0
+                        ROLLBACK TRANSACTION;
+                    ;THROW;
+                END CATCH;
+            END;
+        `);
+        console.log('✅ Procedures sp_LayDanhSachCauHinh, sp_LayGiaTriCauHinh, sp_CapNhatCauHinh đã sẵn sàng!');
+
         await pool.close();
-        console.log('🎉 Hoàn tất cấu hình CSDL cho mã OTP!');
+        console.log('🎉 Hoàn tất cấu hình CSDL cho mã OTP và Cấu hình hệ thống!');
     } catch (err) {
         console.error('Lỗi khởi tạo OTP DB:', err);
     }

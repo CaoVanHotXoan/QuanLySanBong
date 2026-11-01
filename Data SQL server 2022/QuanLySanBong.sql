@@ -42,6 +42,7 @@ IF OBJECT_ID('Banner', 'U') IS NOT NULL DROP TABLE Banner;
 IF OBJECT_ID('Lien_He', 'U') IS NOT NULL DROP TABLE Lien_He;
 IF OBJECT_ID('About_Us', 'U') IS NOT NULL DROP TABLE About_Us;
 IF OBJECT_ID('Xac_Thuc_OTP', 'U') IS NOT NULL DROP TABLE Xac_Thuc_OTP;
+IF OBJECT_ID('Cau_Hinh_He_Thong', 'U') IS NOT NULL DROP TABLE Cau_Hinh_He_Thong;
 GO
 
 -- =====================================================================
@@ -264,6 +265,16 @@ CREATE TABLE Xac_Thuc_OTP (
 );
 GO
 
+-- 3.18. Bảng Cau_Hinh_He_Thong (Quản lý các cờ Bật / Tắt chức năng hệ thống - Feature Flags)
+CREATE TABLE Cau_Hinh_He_Thong (
+    ma_cau_hinh VARCHAR(50) PRIMARY KEY,
+    ten_cau_hinh NVARCHAR(100) NOT NULL,
+    gia_tri NVARCHAR(255) NOT NULL,
+    mo_ta NVARCHAR(255) NULL,
+    ngay_cap_nhat DATETIME DEFAULT GETDATE()
+);
+GO
+
 -- =====================================================================
 -- 4. CHỈ MỤC TỐI ƯU HIỆU NĂNG TRUY VẤN (PERFORMANCE INDEXES)
 -- =====================================================================
@@ -412,6 +423,14 @@ BEGIN
     INSERT INTO Banner (tieu_de, loai_banner, hinh_anh, video_url, lien_ket, thu_tu, trang_thai) VALUES
     (N'Chào mừng bạn đến với Soccer247 - Đặt sân nhanh chóng!', 'IMAGE', 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=1200&q=80', NULL, '/', 1, 1),
     (N'Ưu đãi giờ vàng: Giảm 20% cho khung giờ ban ngày', 'IMAGE', 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?auto=format&fit=crop&w=1200&q=80', NULL, '/', 2, 1);
+END;
+GO
+
+-- 5.10. Dữ liệu Cấu hình hệ thống mặc định (Bật/Tắt chức năng)
+IF NOT EXISTS (SELECT 1 FROM Cau_Hinh_He_Thong WHERE ma_cau_hinh = 'GMAIL_SMTP_ENABLED')
+BEGIN
+    INSERT INTO Cau_Hinh_He_Thong (ma_cau_hinh, ten_cau_hinh, gia_tri, mo_ta, ngay_cap_nhat) VALUES
+    ('GMAIL_SMTP_ENABLED', N'Gửi Email & OTP qua Gmail SMTP', '1', N'Bật/Tắt chức năng gửi mã OTP và email thông báo qua máy chủ Google Gmail SMTP', GETDATE());
 END;
 GO
 
