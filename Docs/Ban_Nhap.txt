@@ -10,8 +10,16 @@ Làm thêm đặt trực tiếp
 - thêm 2 sân dự phòng
 
 =================Làm thêm=====================
-Gửi OTP gmail khi đăng ký
-Làm hủy đơn
+Làm lại giao diện lịch đặt sân giống lịch google
+Thêm cơ thành viên(mã giảm giả, )
+Đặt nhiều sân 1 lúc trong cùng 1 khung giờ, thêm thời gian dùng
+Hủy đơn khi  khách không vào sân
+
+
+
+=================================
+Danh sách test tay
+
 
 Làm thống kế xuất ra file excel, doanh thu hôm nay, tuần này, 
 
@@ -34,6 +42,9 @@ Cách thức hoạt động
 upload file 
 tối đa 2mb 
 anh đuôi jpg/png
+
+
+Màu trang web:
 
 ======================================
 fix lỗi không ảnh hưởng đến tất cả các chức năng của toàn bộ trang web

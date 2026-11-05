@@ -93,4 +93,11 @@ router.post('/xac-nhan-gia-han', datSanController.xacNhanGiaHan);
 router.post('/chuyen-san-da-tiep', datSanController.chuyenSanDaTiep);
 router.post('/ban-le-dich-vu', datSanController.banLeDichVu);
 router.post('/ket-thuc-tran-dau', datSanController.ketThucTranDau);
+// Quản lý hợp đồng Lịch Cố Định (Fixed / Recurring Bookings)
+router.get('/lich-co-dinh', datSanController.layDanhSachLichCoDinh);
+router.get('/lich-co-dinh/:id', datSanController.layChiTietLichCoDinh);
+router.post('/lich-co-dinh/kiem-tra', datSanController.kiemTraTrungLichCoDinh);
+router.post('/lich-co-dinh', datSanController.themLichCoDinh);
+router.put('/lich-co-dinh/:id/trang-thai', datSanController.doiTrangThaiLichCoDinh);
+router.delete('/lich-co-dinh/:id', datSanController.huyLichCoDinh);
 exports.default = router;

@@ -18,13 +18,47 @@
  * 13. sp_HuyDonVaHoanCoc
  * =====================================================================
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanDateForSql = exports.cleanTimeForSql = void 0;
+exports.huyLichCoDinh = exports.doiTrangThaiLichCoDinh = exports.themLichCoDinh = exports.kiemTraTrungLichCoDinh = exports.layChiTietLichCoDinh = exports.layDanhSachLichCoDinh = exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanDateForSql = exports.cleanTimeForSql = void 0;
 const db_1 = require("../config/db");
 const cacheService_1 = __importDefault(require("../services/cacheService"));
+const datSanService = __importStar(require("../services/datSanService"));
 const cleanTimeForSql = (val, fallback = '00:00:00') => {
     if (!val)
         return fallback;
@@ -1963,3 +1997,175 @@ const banLeDichVu = async (req, res) => {
     }
 };
 exports.banLeDichVu = banLeDichVu;
+/**
+ * =====================================================================
+ * CÁC CONTROLLER QUẢN LÝ LỊCH CỐ ĐỊNH (FIXED / RECURRING BOOKINGS)
+ * =====================================================================
+ */
+const layDanhSachLichCoDinh = async (req, res) => {
+    try {
+        const { trang_thai, ma_san, tu_khoa } = req.query;
+        const list = await datSanService.layDanhSachLichCoDinh({
+            trang_thai: trang_thai ? String(trang_thai) : undefined,
+            ma_san: ma_san ? Number(ma_san) : undefined,
+            tu_khoa: tu_khoa ? String(tu_khoa) : undefined
+        });
+        return res.status(200).json({
+            success: true,
+            data: list
+        });
+    }
+    catch (error) {
+        console.error('Lỗi layDanhSachLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách lịch cố định'
+        });
+    }
+};
+exports.layDanhSachLichCoDinh = layDanhSachLichCoDinh;
+const layChiTietLichCoDinh = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = await datSanService.layChiTietLichCoDinh(Number(id));
+        return res.status(200).json({
+            success: true,
+            data
+        });
+    }
+    catch (error) {
+        console.error('Lỗi layChiTietLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy chi tiết lịch cố định'
+        });
+    }
+};
+exports.layChiTietLichCoDinh = layChiTietLichCoDinh;
+const kiemTraTrungLichCoDinh = async (req, res) => {
+    try {
+        const { ma_san, cac_thu_trong_tuan, gio_bat_dau, gio_ket_thuc, tu_ngay, den_ngay, don_gia_moi_buoi } = req.body;
+        if (!ma_san || !cac_thu_trong_tuan || !gio_bat_dau || !gio_ket_thuc || !tu_ngay || !den_ngay) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ thông tin: Sân, thứ trong tuần, khung giờ và khoảng ngày!'
+            });
+        }
+        const data = await datSanService.kiemTraTrungLichCoDinh({
+            ma_san: Number(ma_san),
+            cac_thu_trong_tuan: String(cac_thu_trong_tuan),
+            gio_bat_dau: String(gio_bat_dau),
+            gio_ket_thuc: String(gio_ket_thuc),
+            tu_ngay: String(tu_ngay),
+            den_ngay: String(den_ngay),
+            don_gia_moi_buoi: Number(don_gia_moi_buoi || 0)
+        });
+        return res.status(200).json({
+            success: true,
+            data
+        });
+    }
+    catch (error) {
+        console.error('Lỗi kiemTraTrungLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi kiểm tra trùng lịch'
+        });
+    }
+};
+exports.kiemTraTrungLichCoDinh = kiemTraTrungLichCoDinh;
+const themLichCoDinh = async (req, res) => {
+    try {
+        const { ma_san, ten_doi_bong, so_dien_thoai, cac_thu_trong_tuan, gio_bat_dau, gio_ket_thuc, tu_ngay, den_ngay, don_gia_moi_buoi, tien_coc, bo_qua_ngay_trung, ghi_chu } = req.body;
+        if (!ma_san || !ten_doi_bong || !so_dien_thoai || !cac_thu_trong_tuan || !gio_bat_dau || !gio_ket_thuc || !tu_ngay || !den_ngay) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng điền đầy đủ các thông tin bắt buộc của hợp đồng lịch cố định!'
+            });
+        }
+        const currentUserId = req.user?.id || req.body.ma_nguoi_dung || null;
+        const result = await datSanService.themLichCoDinh({
+            ma_nguoi_dung: currentUserId ? Number(currentUserId) : undefined,
+            ma_san: Number(ma_san),
+            ten_doi_bong: String(ten_doi_bong).trim(),
+            so_dien_thoai: String(so_dien_thoai).trim(),
+            cac_thu_trong_tuan: String(cac_thu_trong_tuan),
+            gio_bat_dau: String(gio_bat_dau),
+            gio_ket_thuc: String(gio_ket_thuc),
+            tu_ngay: String(tu_ngay),
+            den_ngay: String(den_ngay),
+            don_gia_moi_buoi: Number(don_gia_moi_buoi || 0),
+            tien_coc: Number(tien_coc || 0),
+            bo_qua_ngay_trung: Boolean(bo_qua_ngay_trung),
+            ghi_chu: ghi_chu ? String(ghi_chu) : undefined
+        });
+        // Bắn Socket.IO cập nhật real-time lịch sân
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+        }
+        return res.status(201).json({
+            success: true,
+            message: `Tạo hợp đồng lịch cố định cho "${ten_doi_bong}" thành công! Đã tự động sinh ${result.danh_sach_buoi?.length || 0} buổi thi đấu.`,
+            data: result
+        });
+    }
+    catch (error) {
+        console.error('Lỗi themLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi tạo hợp đồng lịch cố định'
+        });
+    }
+};
+exports.themLichCoDinh = themLichCoDinh;
+const doiTrangThaiLichCoDinh = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { trang_thai, ghi_chu } = req.body;
+        if (!trang_thai) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp trạng thái mới!'
+            });
+        }
+        const updated = await datSanService.doiTrangThaiLichCoDinh(Number(id), String(trang_thai), ghi_chu);
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật trạng thái hợp đồng thành công!',
+            data: updated
+        });
+    }
+    catch (error) {
+        console.error('Lỗi doiTrangThaiLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi đổi trạng thái lịch cố định'
+        });
+    }
+};
+exports.doiTrangThaiLichCoDinh = doiTrangThaiLichCoDinh;
+const huyLichCoDinh = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { ly_do } = req.body;
+        const cancelled = await datSanService.huyLichCoDinh(Number(id), ly_do);
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+        }
+        return res.status(200).json({
+            success: true,
+            message: 'Đã hủy hợp đồng lịch cố định và tự động giải phóng các ca đá chưa diễn ra!',
+            data: cancelled
+        });
+    }
+    catch (error) {
+        console.error('Lỗi huyLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi hủy hợp đồng lịch cố định'
+        });
+    }
+};
+exports.huyLichCoDinh = huyLichCoDinh;

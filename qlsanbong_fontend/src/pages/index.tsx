@@ -48,7 +48,12 @@ import {
   Play,
   Pause,
   ImageIcon,
-  Menu
+  Menu,
+  Smartphone,
+  Table,
+  Sunrise,
+  Sunset,
+  LayoutGrid
 } from 'lucide-react';
 import Login, { AuthUser } from './Login/login';
 import Profile from './profile';
@@ -334,6 +339,19 @@ export default function HomePage() {
     return today.toISOString().split('T')[0];
   });
   const [filterKhungGio, setFilterKhungGio] = useState<string>('ALL');
+
+  // Chế độ xem Lịch: 'CARD' (Dạng Thẻ tối ưu linh hoạt cho Điện thoại & Tablet) hoặc 'MATRIX' (Bảng ma trận nhiều cột)
+  const [scheduleViewMode, setScheduleViewMode] = useState<'CARD' | 'MATRIX'>('CARD');
+
+  // Bộ lọc buổi trong ngày: 'ALL' (Cả ngày) | 'MORNING' (Sáng) | 'AFTERNOON' (Chiều) | 'EVENING' (Tối)
+  const [filterBuoi, setFilterBuoi] = useState<'ALL' | 'MORNING' | 'AFTERNOON' | 'EVENING'>('ALL');
+
+  // Tự động nhận diện thiết bị: Màn hình nhỏ (< 1024px) ưu tiên kích hoạt chế độ Thẻ Sân Mobile
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setScheduleViewMode('CARD');
+    }
+  }, []);
 
   // Danh sách Khung giờ tải động từ CSDL SQL Server (Mặc định 6h - 19h)
   const [timeSlotsList, setTimeSlotsList] = useState<KhungGioItem[]>(DEFAULT_TIME_SLOTS);
@@ -1035,6 +1053,18 @@ export default function HomePage() {
     if (filterKhungGio === 'ALL') return activeSlots;
     return activeSlots.filter((s) => s.start === filterKhungGio);
   }, [filterKhungGio, timeSlotsList, isSlotInThePast]);
+
+  // Lọc theo buổi trong ngày (Sáng: 06h-12h, Chiều: 12h-17h, Tối: 17h-21h) giúp người dùng điện thoại lướt chọn siêu tốc
+  const displayTimeSlots = useMemo(() => {
+    if (filterBuoi === 'ALL') return filteredTimeSlots;
+    return filteredTimeSlots.filter((slot) => {
+      const hour = parseInt(slot.start.split(':')[0], 10);
+      if (filterBuoi === 'MORNING') return hour >= 6 && hour < 12;
+      if (filterBuoi === 'AFTERNOON') return hour >= 12 && hour < 17;
+      if (filterBuoi === 'EVENING') return hour >= 17;
+      return true;
+    });
+  }, [filteredTimeSlots, filterBuoi]);
 
   // Kiểm tra xung đột thời lượng đặt (30p, 60p, 90p, 120p) với các đơn đặt đã có trong CSDL và các ô đang GIỮ CHỖ Real-time
   const checkConflictForSan = useCallback((sanId: number, start: string, durationMin: number) => {
@@ -2058,111 +2088,246 @@ export default function HomePage() {
         </section>
 
         {/* =====================================================================
-            3. LỊCH SÂN THEO THỜI GIAN (CUỘN NGANG)
+            3. LỊCH SÂN THEO THỜI GIAN (TỐI ƯU TOÀN DIỆN CHO ĐIỆN THOẠI & MÁY TÍNH)
             ===================================================================== */}
-        <section id="ma-tran-lich-san" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+        <section id="ma-tran-lich-san" className="py-12 sm:py-20 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          {/* HEADER SECTION: TIÊU ĐỀ, CHẾ ĐỘ XEM & CHÚ GIẢI TRẠNG THÁI */}
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-6 sm:mb-8 gap-4">
             <div>
-              <h2 className={`text-2xl sm:text-4xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold mb-2 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Đặt Sân Trực Tuyến 24/7</span>
+              </div>
+              <h2 className={`text-xl sm:text-3xl lg:text-4xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                 Lịch Sân Theo Thời Gian
               </h2>
-              <p className={`text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Bấm vào các ô màu xanh lá để chọn thời lượng (1 tiếng, 1 tiếng 30 phút, 2 tiếng) và thanh toán đặt sân.
+              <p className={`text-xs sm:text-sm mt-1 max-w-2xl ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                Chạm vào các ô màu xanh lá để chọn thời lượng thi đấu (1 tiếng, 1.5 tiếng, 2 tiếng) và đặt cọc online.
               </p>
             </div>
 
-            {/* Bảng chú giải trạng thái */}
-            <div className={`flex flex-wrap items-center gap-3 p-2.5 rounded-2xl border text-xs font-semibold ${isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+            {/* BỘ CHỌN CHẾ ĐỘ XEM & CHÚ GIẢI MÀU SẮC */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {/* CHUYỂN ĐỔI CHẾ ĐỘ XEM (MOBILE CARD vs BẢNG MA TRẬN) */}
+              <div className={`flex items-center p-1 rounded-2xl border shadow-sm ${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+                <button
+                  type="button"
+                  onClick={() => setScheduleViewMode('CARD')}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    scheduleViewMode === 'CARD'
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/25 font-black'
+                      : isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Dạng Thẻ Sân</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleViewMode('MATRIX')}
+                  className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    scheduleViewMode === 'MATRIX'
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/25 font-black'
+                      : isDarkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Table className="w-3.5 h-3.5" />
+                  <span>Bảng Ma Trận</span>
+                </button>
+              </div>
+
+              {/* BẢNG CHÚ GIẢI TRẠNG THÁI */}
+              <div className={`grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 p-2 rounded-2xl border text-[11px] font-bold ${
+                isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
               }`}>
-              <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-300">
-                <span className="w-3 h-3 rounded-md bg-emerald-500 shadow-sm shadow-emerald-500/50" />
-                <span>Sân Trống</span>
-              </div>
-              <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/50 text-amber-500 dark:text-amber-400">
-                <span className="w-3 h-3 rounded-md bg-amber-500 shadow-sm shadow-amber-500/50 animate-pulse" />
-                <span>Đang Giữ Chỗ (Màu Cam)</span>
-              </div>
-              <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/40 text-rose-600 dark:text-rose-300">
-                <span className="w-3 h-3 rounded-md bg-rose-500 shadow-sm shadow-rose-500/50" />
-                <span>Đã Đặt</span>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300">
+                  <span className="w-2.5 h-2.5 rounded-md bg-emerald-500 shrink-0 shadow-sm" />
+                  <span>Trống</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-500 dark:text-amber-400">
+                  <span className="w-2.5 h-2.5 rounded-md bg-amber-500 shrink-0 animate-pulse shadow-sm" />
+                  <span>Giữ Chỗ</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-300">
+                  <span className="w-2.5 h-2.5 rounded-md bg-rose-500 shrink-0 shadow-sm" />
+                  <span>Đã Đặt</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-500/10 border border-slate-500/30 text-slate-500 dark:text-slate-400">
+                  <span className="w-2.5 h-2.5 rounded-md bg-slate-400 shrink-0 shadow-sm" />
+                  <span>Đã Qua</span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* THANH ĐIỀU HƯỚNG NGÀY & BỘ LỌC SÂN (DATE NAVIGATION & COURT FILTER) */}
-          <div className={`mb-6 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-2xl border shadow-lg backdrop-blur-md relative z-20 w-full max-w-full ${isDarkMode ? 'bg-slate-900/80 border-slate-800 shadow-slate-950/40' : 'bg-white border-slate-200 shadow-slate-200/50'
-            }`}>
-            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3 w-full lg:w-auto min-w-0">
-              {/* NÚT LỌC LOẠI SÂN (SÂN 5, SÂN 7, PICKLEBALL... - LOẠI BỎ SÂN DỰ BỊ) */}
-              <div className={`flex items-center justify-between sm:justify-start gap-2 px-3 py-2 sm:py-1.5 rounded-xl border transition-all min-w-0 flex-1 sm:flex-initial ${isDarkMode
-                ? 'bg-slate-950/90 border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500'
-                : 'bg-slate-50 border-slate-300 hover:border-emerald-500 focus-within:border-emerald-500 shadow-sm'
-                }`}>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <LandPlot className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className={`text-[11px] sm:text-xs font-bold whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                    Lọc Loại Sân:
-                  </span>
-                </div>
-                <select
-                  value={filterLoaiSan}
-                  onChange={(e) => handleLoaiSanChange(e.target.value)}
-                  className={`bg-transparent text-[11px] sm:text-xs font-black focus:outline-none cursor-pointer truncate max-w-[140px] sm:max-w-none ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
-                    }`}
-                >
-                  <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
-                    Tất Cả Loại Sân ({loaiSanList.filter((l) => !isDuBiPitch(l)).length} loại)
-                  </option>
-                  {loaiSanList.filter((l) => !isDuBiPitch(l)).map((loai) => (
-                    <option key={loai.id} value={loai.id} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
-                      {loai.ten_loai}
-                    </option>
-                  ))}
-                </select>
+          {/* THANH ĐIỀU HƯỚNG NGÀY & BỘ LỌC ĐA TIÊU CHÍ (THÍCH ỨNG ĐIỆN THOẠI & MÁY TÍNH) */}
+          <div className={`mb-6 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border shadow-xl backdrop-blur-md relative z-20 space-y-3 sm:space-y-4 ${
+            isDarkMode ? 'bg-slate-900/85 border-slate-800 shadow-slate-950/40' : 'bg-white/95 border-slate-200 shadow-slate-200/50'
+          }`}>
+            {/* HÀNG 1: CHỌN NGÀY VÀ SELECT DROPDOWNS */}
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              {/* THANH ĐIỀU HƯỚNG NGÀY */}
+              <div className="w-full lg:w-auto min-w-0">
+                <DateNavigationBar
+                  value={filterNgayDa}
+                  onChange={(_date, formattedDateStr) => setFilterNgayDa(formattedDateStr)}
+                />
               </div>
 
-              {/* NÚT LỌC SÂN BÓNG (HIỂN THỊ LỊCH SÂN ĐÓ - ĐỒNG BỘ THEO LOẠI SÂN) */}
-              <div className={`flex items-center justify-between sm:justify-start gap-2 px-3 py-2 sm:py-1.5 rounded-xl border transition-all min-w-0 flex-1 sm:flex-initial ${isDarkMode
-                ? 'bg-slate-950/90 border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500'
-                : 'bg-slate-50 border-slate-300 hover:border-emerald-500 focus-within:border-emerald-500 shadow-sm'
+              {/* BỘ LỌC SELECT CHO LOẠI SÂN VÀ SÂN */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full lg:w-auto min-w-0">
+                {/* LỌC LOẠI SÂN */}
+                <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all ${
+                  isDarkMode ? 'bg-slate-950/90 border-slate-700' : 'bg-slate-50 border-slate-300'
                 }`}>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-500" />
-                  <span className={`text-[11px] sm:text-xs font-bold whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                    Lọc Sân:
-                  </span>
-                </div>
-                <select
-                  value={filterSanId}
-                  onChange={(e) => setFilterSanId(e.target.value)}
-                  className={`bg-transparent text-[11px] sm:text-xs font-black focus:outline-none cursor-pointer truncate max-w-[140px] sm:max-w-none ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <LandPlot className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className={`text-xs font-bold whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                      Loại Sân:
+                    </span>
+                  </div>
+                  <select
+                    value={filterLoaiSan}
+                    onChange={(e) => handleLoaiSanChange(e.target.value)}
+                    className={`bg-transparent text-xs font-black focus:outline-none cursor-pointer truncate max-w-[140px] sm:max-w-none ${
+                      isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
                     }`}
-                >
-                  <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
-                    {filterLoaiSan === 'ALL'
-                      ? `Tất Cả Các Sân (${availableSanOptions.length} sân)`
-                      : `Tất Cả Sân Thuộc Loại (${availableSanOptions.length} sân)`}
-                  </option>
-                  {availableSanOptions.map((san) => (
-                    <option key={san.id} value={san.id} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
-                      {san.ten_san}
+                  >
+                    <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
+                      Tất Cả Loại Sân ({loaiSanList.filter((l) => !isDuBiPitch(l)).length})
                     </option>
-                  ))}
-                </select>
+                    {loaiSanList.filter((l) => !isDuBiPitch(l)).map((loai) => (
+                      <option key={loai.id} value={loai.id} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
+                        {loai.ten_loai}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* LỌC SÂN CỤ THỂ */}
+                <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all ${
+                  isDarkMode ? 'bg-slate-950/90 border-slate-700' : 'bg-slate-50 border-slate-300'
+                }`}>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className={`text-xs font-bold whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                      Chọn Sân:
+                    </span>
+                  </div>
+                  <select
+                    value={filterSanId}
+                    onChange={(e) => setFilterSanId(e.target.value)}
+                    className={`bg-transparent text-xs font-black focus:outline-none cursor-pointer truncate max-w-[140px] sm:max-w-none ${
+                      isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
+                    }`}
+                  >
+                    <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
+                      Tất Cả ({availableSanOptions.length} sân)
+                    </option>
+                    {availableSanOptions.map((san) => (
+                      <option key={san.id} value={san.id} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
+                        {san.ten_san}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
-            <div className="w-full lg:w-auto min-w-0">
-              <DateNavigationBar
-                value={filterNgayDa}
-                onChange={(_date, formattedDateStr) => setFilterNgayDa(formattedDateStr)}
-              />
+            {/* HÀNG 2: BỘ LỌC NHANH THỜI ĐIỂM TRONG NGÀY (BUỔI) & THANH CUỘN NGANG CHỌN SÂN 1 CHẠM */}
+            <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              {/* LỌC BUỔI: CẢ NGÀY / SÁNG / CHIỀU / TỐI */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar shrink-0">
+                <span className={`text-xs font-bold mr-1 shrink-0 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Khung giờ:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFilterBuoi('ALL')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                    filterBuoi === 'ALL'
+                      ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                      : isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Cả Ngày
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterBuoi('MORNING')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
+                    filterBuoi === 'MORNING'
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                      : isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Sunrise className="w-3.5 h-3.5" />
+                  Sáng (06h - 12h)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterBuoi('AFTERNOON')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
+                    filterBuoi === 'AFTERNOON'
+                      ? 'bg-orange-500 text-slate-950 font-black shadow-sm'
+                      : isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Sun className="w-3.5 h-3.5" />
+                  Chiều (12h - 17h)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterBuoi('EVENING')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1 cursor-pointer ${
+                    filterBuoi === 'EVENING'
+                      ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                      : isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Sunset className="w-3.5 h-3.5" />
+                  Tối (17h - 21h) 🔥
+                </button>
+              </div>
+
+              {/* PILLS CHỌN SÂN 1 CHẠM (TIỆN LỢI TRÊN ĐIỆN THOẠI) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                <button
+                  type="button"
+                  onClick={() => setFilterSanId('ALL')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                    filterSanId === 'ALL'
+                      ? 'bg-emerald-500 text-slate-950 font-black shadow-sm ring-2 ring-emerald-400'
+                      : isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  Tất Cả ({filteredSanList.length} sân)
+                </button>
+                {filteredSanList.map((s) => {
+                  const isSelected = filterSanId === s.id.toString();
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setFilterSanId(isSelected ? 'ALL' : s.id.toString())}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-500 text-slate-950 font-black shadow-sm ring-2 ring-emerald-400'
+                          : isDarkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {s.ten_san}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          {/* KHUNG BẢNG MA TRẬN GRID (CUỘN NGANG) */}
-          <div className={`overflow-x-auto rounded-3xl border shadow-2xl backdrop-blur-xl ${isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-white/90'
-            }`}>
+          {/* KHUNG LỊCH SÂN THỜI GIAN THỰC (TỐI ƯU MOBILE & DESKTOP) */}
+          <div className={`rounded-3xl border shadow-2xl backdrop-blur-xl transition-all ${
+            scheduleViewMode === 'MATRIX' ? 'overflow-x-auto' : ''
+          } ${isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-slate-200 bg-white/90'}`}>
             {isLoadingData ? (
               <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
                 <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
@@ -2173,234 +2338,276 @@ export default function HomePage() {
                 <AlertCircle className="w-8 h-8 text-amber-500 mx-auto mb-2" />
                 <p className="text-base font-bold">Không tìm thấy sân bóng nào phù hợp với bộ lọc!</p>
               </div>
-            ) : filteredSanList.length === 1 ? (
-              /* GIAO DIỆN 1 SÂN: CÁC Ô KHUNG GIỜ XẾP XUỐNG DƯỚI ĐẸP MẮT (KHÔNG CUỘN NGANG) */
-              (() => {
-                const san = filteredSanList[0];
-                return (
-                  <div className="p-6 sm:p-8 space-y-6">
-                    {/* Header thông tin sân đã lọc */}
-                    <div className={`p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
-                      }`}>
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/25 shrink-0">
-                          <Zap className="w-6 h-6" />
-                        </div>
-                        <div>
+            ) : displayTimeSlots.length === 0 ? (
+              <div className={`text-center py-12 px-4 rounded-3xl border border-dashed m-4 sm:m-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/30 text-slate-400' : 'border-slate-300 bg-slate-50 text-slate-600'}`}>
+                <Clock className="w-10 h-10 text-slate-400 mx-auto mb-3 opacity-60" />
+                <p className="text-sm font-bold">
+                  Không có khung giờ nào trong buổi đã chọn hoặc các khung giờ hôm nay đã kết thúc.
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Quý khách vui lòng chọn buổi khác hoặc đổi sang ngày tiếp theo để xem lịch sân!
+                </p>
+                <div className="mt-4 flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFilterBuoi('ALL')}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 cursor-pointer"
+                  >
+                    Xem cả ngày
+                  </button>
+                </div>
+              </div>
+            ) : scheduleViewMode === 'CARD' ? (
+              /* =========================================================================
+                 CHẾ ĐỘ 1: DẠNG THẺ SÂN LINH HOẠT - TỐI ƯU 100% CHO ĐIỆN THOẠI & TABLET
+                 ========================================================================= */
+              <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
+                {filteredSanList.map((san) => {
+                  const availableCount = displayTimeSlots.filter((slot) => {
+                    const slotKey = `${san.id}_${slot.start}`;
+                    const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
+                    const slotData = gridSlots[slotKey];
+                    const matchedSyncOrder = syncOrders.find((order) => {
+                      if ((order.ngay_da || '').substring(0, 10) !== filterNgayDa) return false;
+                      if (order.trang_thai === 'Đã hủy') return false;
+                      const matchSan = (order.ma_san && order.ma_san === san.id) ||
+                        (order.ten_san && (order.ten_san.includes(san.ten_san) || san.ten_san.includes(order.ten_san)));
+                      if (!matchSan) return false;
+                      return isTimeOverlapping(slot.start, slot.end,
+                        (order.gio_bat_dau || '').substring(0, 5),
+                        (order.gio_ket_thuc || '').substring(0, 5));
+                    });
+                    const isBooked = (slotData && slotData.trang_thai === 'DA_CHOT') || !!matchedSyncOrder;
+                    const isPast = isSlotInThePast(slot.start);
+                    const isLockedByOther = lockedSlots.includes(slotKeyRealtime) && !myLockedSlotIds.includes(slotKeyRealtime);
+                    return !isBooked && !isPast && !isLockedByOther;
+                  }).length;
+
+                  return (
+                    <div
+                      key={san.id}
+                      className={`rounded-2xl sm:rounded-3xl border p-3.5 sm:p-6 shadow-md transition-all ${
+                        isDarkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      {/* HEADER THẺ SÂN: TÊN SÂN, LOẠI SÂN, GIÁ TIỀN & SỐ KHUNG GIỜ TRỐNG */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-3 border-b border-slate-200/80 dark:border-slate-800 gap-2 sm:gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/25 shrink-0">
+                            <LandPlot className="w-5 h-5 sm:w-6 sm:h-6" />
+                          </div>
                           <div>
-                            <h3 className={`text-xl sm:text-2xl font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{san.ten_san}</h3>
-                          </div>
-                          <div className={`text-xs mt-1 flex flex-wrap items-center gap-2 sm:gap-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
-                            <span>Ngày xem: <strong className={isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}>{formatDateDMY(filterNgayDa)}</strong></span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className={`text-base sm:text-lg font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                {san.ten_san}
+                              </h3>
+                              {san.ten_loai && (
+                                <span className={`px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold border ${
+                                  isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-200/70 border-slate-300 text-slate-700'
+                                }`}>
+                                  {san.ten_loai}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 text-xs mt-0.5">
+                              {san.don_gia_phut ? (
+                                <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>
+                                  Giá thuê: <strong className="text-emerald-500">{(Number(san.don_gia_phut) * 60).toLocaleString('vi-VN')} đ/h</strong>
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs font-bold">
-                        <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700'}>Trạng thái:</span>
-                        <span className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 font-bold ${isDarkMode ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          Sẵn sàng đặt sân
-                        </span>
-                      </div>
-                    </div>
 
-                    {/* Danh sách các ô giờ xếp xuống (Grid đa cột responsive) */}
-                    <div>
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                          <Clock className="w-4 h-4" /> Danh Sách Khung Giờ (Bấm ô xanh để chọn giờ)
-                        </h4>
-                        <span className={`text-xs font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{filteredTimeSlots.length} khung giờ khả dụng</span>
-                      </div>
-
-                      {filteredTimeSlots.length === 0 ? (
-                        <div className={`text-center py-12 px-4 rounded-2xl border border-dashed ${isDarkMode ? 'border-slate-800 bg-slate-900/30 text-slate-400' : 'border-slate-300 bg-slate-50 text-slate-600'}`}>
-                          <Clock className="w-10 h-10 text-slate-400 dark:text-slate-500 mx-auto mb-3 opacity-60" />
-                          <p className="text-sm font-bold">
-                            Tất cả các khung giờ hôm nay đã kết thúc hoặc đã qua giờ.
-                          </p>
-                          <p className="text-xs text-slate-400 mt-1">
-                            Quý khách vui lòng chọn ngày tiếp theo để đặt sân!
-                          </p>
+                        {/* HUY HIỆU SỐ SLOT CÒN TRỐNG */}
+                        <div className="flex items-center justify-between sm:justify-end gap-2 text-xs">
+                          {availableCount > 0 ? (
+                            <span className={`px-2.5 py-1 rounded-xl font-bold flex items-center gap-1.5 border ${
+                              isDarkMode ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-emerald-100/80 text-emerald-800 border-emerald-300'
+                            }`}>
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                              {availableCount} khung giờ khả dụng
+                            </span>
+                          ) : (
+                            <span className={`px-2.5 py-1 rounded-xl font-bold flex items-center gap-1.5 border ${
+                              isDarkMode ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 'bg-rose-100 text-rose-800 border-rose-300'
+                            }`}>
+                              <XCircle className="w-3.5 h-3.5" />
+                              Hết khung giờ trống
+                            </span>
+                          )}
                         </div>
-                      ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-3 sm:gap-4">
-                          {filteredTimeSlots.map((slot) => {
-                            const slotKey = `${san.id}_${slot.start}`;
-                            const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
-                            const slotData = gridSlots[slotKey];
+                      </div>
 
-                            // Kiểm tra đơn từ Management System (sync qua localStorage SYSTEM_ORDERS)
-                            const matchedSyncOrder = syncOrders.find((order) => {
-                              if ((order.ngay_da || '').substring(0, 10) !== filterNgayDa) return false;
-                              if (order.trang_thai === 'Đã hủy') return false;
-                              const matchSan = (order.ma_san && order.ma_san === san.id) ||
-                                (order.ten_san && (order.ten_san.includes(san.ten_san) || san.ten_san.includes(order.ten_san)));
-                              if (!matchSan) return false;
-                              return isTimeOverlapping(slot.start, slot.end,
-                                (order.gio_bat_dau || '').substring(0, 5),
-                                (order.gio_ket_thuc || '').substring(0, 5));
-                            });
-                            const isSyncBooked = !!matchedSyncOrder;
+                      {/* LƯỚI KHUNG GIỜ THÍCH ỨNG: 3 CỘT TRÊN PHONE, 4-8 CỘT TRÊN TABLET & DESKTOP */}
+                      <div className="grid grid-cols-3 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-2 sm:gap-2.5">
+                        {displayTimeSlots.map((slot) => {
+                          const slotKey = `${san.id}_${slot.start}`;
+                          const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
+                          const slotData = gridSlots[slotKey];
 
-                            const isBooked = (slotData && slotData.trang_thai === 'DA_CHOT') || isSyncBooked;
-                            const isPast = isSlotInThePast(slot.start);
-                            const isLockedByOther =
-                              lockedSlots.includes(slotKeyRealtime) && !myLockedSlotIds.includes(slotKeyRealtime);
+                          const matchedSyncOrder = syncOrders.find((order) => {
+                            if ((order.ngay_da || '').substring(0, 10) !== filterNgayDa) return false;
+                            if (order.trang_thai === 'Đã hủy') return false;
+                            const matchSan = (order.ma_san && order.ma_san === san.id) ||
+                              (order.ten_san && (order.ten_san.includes(san.ten_san) || san.ten_san.includes(order.ten_san)));
+                            if (!matchSan) return false;
+                            return isTimeOverlapping(slot.start, slot.end,
+                              (order.gio_bat_dau || '').substring(0, 5),
+                              (order.gio_ket_thuc || '').substring(0, 5));
+                          });
+                          const isSyncBooked = !!matchedSyncOrder;
+                          const isBooked = (slotData && slotData.trang_thai === 'DA_CHOT') || isSyncBooked;
+                          const isPast = isSlotInThePast(slot.start);
+                          const isLockedByOther = lockedSlots.includes(slotKeyRealtime) && !myLockedSlotIds.includes(slotKeyRealtime);
 
-                            return (
-                              <div key={slot.start} className="w-full">
-                                {isBooked ? (
-                                  <div
-                                    title="Khung giờ này đã được đặt"
-                                    className="w-full h-28 p-3 rounded-2xl border border-rose-600/70 bg-gradient-to-br from-rose-950/90 to-red-950/90 text-rose-300 flex flex-col items-center justify-between shadow-md shadow-rose-950/40 cursor-not-allowed select-none transition-all"
-                                  >
-                                    <div className="w-full flex items-center justify-between">
-                                      <span className="text-sm font-black text-rose-300 font-mono">{slot.label}</span>
-                                      <span className="text-[10px] text-rose-400/80 font-mono">{slot.start}</span>
-                                    </div>
-                                    <div className="flex flex-col items-center justify-center my-auto">
-                                      <span className="inline-flex items-center gap-1.5 text-xs font-black text-rose-300 tracking-wide">
-                                        <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                                        ĐÃ ĐẶT
-                                      </span>
-                                    </div>
-                                    <div className="w-full text-center">
-                                      <span className="text-[10px] text-rose-400/80 font-mono font-bold px-2.5 py-0.5 rounded-full bg-rose-900/40">
-                                        Hết chỗ
-                                      </span>
-                                    </div>
+                          return (
+                            <div key={slot.start} className="w-full">
+                              {isBooked ? (
+                                <div
+                                  title="Khung giờ này đã được đặt"
+                                  className="w-full h-16 sm:h-20 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-rose-600/70 bg-gradient-to-br from-rose-950/90 to-red-950/90 text-rose-300 flex flex-col items-center justify-between shadow-sm cursor-not-allowed select-none transition-all"
+                                >
+                                  <div className="w-full flex items-center justify-between">
+                                    <span className="text-[11px] sm:text-xs font-black text-rose-300 font-mono truncate">{slot.label}</span>
+                                    <span className="text-[9px] sm:text-[10px] text-rose-400/80 font-mono">{slot.start}</span>
                                   </div>
-                                ) : isPast ? (
-                                  /* Khung giờ đã qua trong ngày -> Khóa màu xám, không chọn được */
-                                  <div
-                                    title={`Khung giờ ${slot.label} đã qua`}
-                                    className={`w-full h-28 p-3 rounded-2xl border flex flex-col items-center justify-between select-none cursor-not-allowed transition-all ${
-                                      isDarkMode
-                                        ? 'border-slate-800 bg-slate-900/40 text-slate-500 opacity-60'
-                                        : 'border-slate-300 bg-slate-100 text-slate-400 opacity-70'
-                                    }`}
-                                  >
-                                    <div className="w-full flex items-center justify-between">
-                                      <span className="text-sm font-extrabold text-slate-400 font-mono line-through">{slot.label}</span>
-                                      <span className="text-[10px] text-slate-400 font-mono">{slot.start}</span>
-                                    </div>
-                                    <div className="flex flex-col items-center justify-center my-auto">
-                                      <span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wide">
-                                        ĐÃ QUA GIỜ
-                                      </span>
-                                    </div>
-                                    <div className="w-full text-center">
-                                      <span className="text-[10px] text-slate-400 font-mono font-bold px-2.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800">
-                                        Khóa giờ
-                                      </span>
-                                    </div>
+                                  <div className="flex items-center gap-1 my-auto">
+                                    <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                    <span className="text-[10px] sm:text-xs font-black text-rose-300 tracking-wide">ĐÃ ĐẶT</span>
                                   </div>
-                                ) : isLockedByOther ? (
-                                  /* 3. KHÁCH HÀNG KHÁC ĐANG GIỮ CHỖ THỜI GIAN THỰC -> KHÓA MÀU CAM NỔI BẬT */
-                                  <div
-                                    title="Khung giờ này đang được khách hàng khác giữ chỗ thao tác đặt sân"
-                                    onClick={() => {
-                                      triggerToast({
-                                        type: 'info',
-                                        message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang được khách hàng khác chọn giữ chỗ. Vui lòng chọn khung giờ khác!`,
-                                      });
-                                    }}
-                                    className="w-full h-28 p-3 rounded-2xl border border-amber-500/80 bg-gradient-to-br from-amber-950/90 via-orange-950/85 to-amber-900/90 text-amber-300 flex flex-col items-center justify-between shadow-lg shadow-amber-950/50 cursor-not-allowed select-none transition-all hover:scale-[1.02]"
-                                  >
-                                    <div className="w-full flex items-center justify-between">
-                                      <span className="text-sm font-black text-amber-300 font-mono">{slot.label}</span>
-                                      <span className="text-[10px] text-amber-400 font-mono font-bold">{slot.start}</span>
-                                    </div>
-                                    <div className="flex flex-col items-center gap-1 my-auto">
-                                      <span className="inline-flex items-center gap-1.5 text-xs font-black text-amber-300 tracking-wide">
-                                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                                        ĐANG GIỮ CHỖ
-                                      </span>
-                                      <span className="text-[10px] text-amber-300/90 font-medium">Khách đang chọn...</span>
-                                    </div>
-                                    <div className="w-full text-center">
-                                      <span className="text-[10px] text-amber-300 font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30">
-                                        Tạm Khóa (Màu Cam)
-                                      </span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => handleSlotClick(san, slot)}
-                                    className={`w-full h-28 p-3 rounded-2xl border transition-all duration-200 flex flex-col items-center justify-between group shadow-sm hover:scale-[1.03] cursor-pointer ${isDarkMode
-                                        ? 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-600/40 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-950/50'
-                                        : 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-300 hover:border-emerald-500 hover:shadow-md hover:shadow-emerald-200'
-                                      }`}
-                                  >
-                                    <div className="w-full flex items-center justify-between">
-                                      <span className={`text-sm font-black font-mono group-hover:scale-110 transition-transform ${isDarkMode ? 'text-emerald-400' : 'text-slate-900'}`}>
-                                        {slot.label}
-                                      </span>
-                                      <span className={`text-[11px] font-mono font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>{slot.start}</span>
-                                    </div>
-                                    <div className="flex flex-col items-center gap-0.5 my-auto">
-                                      <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
-                                        TRỐNG
-                                      </span>
-                                      <span className={`text-[10px] font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Khả dụng</span>
-                                    </div>
-                                    <span className="w-full py-1 text-[11px] text-center rounded-xl bg-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-slate-950 text-emerald-600 dark:text-emerald-400 transition-all font-black">
-                                      + Chọn Giờ
+                                  <div className="w-full text-center">
+                                    <span className="text-[8px] sm:text-[9px] text-rose-400/80 font-mono font-bold px-1.5 py-0.2 rounded-full bg-rose-900/40">
+                                      Hết chỗ
                                     </span>
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                                  </div>
+                                </div>
+                              ) : isPast ? (
+                                <div
+                                  title={`Khung giờ ${slot.label} đã qua`}
+                                  className={`w-full h-16 sm:h-20 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border flex flex-col items-center justify-between select-none cursor-not-allowed transition-all ${
+                                    isDarkMode
+                                      ? 'border-slate-800 bg-slate-900/40 text-slate-500 opacity-60'
+                                      : 'border-slate-300 bg-slate-100 text-slate-400 opacity-70'
+                                  }`}
+                                >
+                                  <div className="w-full flex items-center justify-between">
+                                    <span className="text-[11px] sm:text-xs font-extrabold text-slate-400 font-mono line-through truncate">{slot.label}</span>
+                                    <span className="text-[9px] sm:text-[10px] text-slate-400 font-mono">{slot.start}</span>
+                                  </div>
+                                  <span className="text-[10px] sm:text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wide my-auto">
+                                    ĐÃ QUA
+                                  </span>
+                                  <div className="w-full text-center">
+                                    <span className="text-[8px] sm:text-[9px] text-slate-400 font-mono font-bold px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-800">
+                                      Khóa giờ
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : isLockedByOther ? (
+                                <div
+                                  title="Khung giờ này đang được khách hàng khác giữ chỗ thao tác đặt sân"
+                                  onClick={() => {
+                                    triggerToast({
+                                      type: 'info',
+                                      message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang được khách hàng khác chọn giữ chỗ. Vui lòng chọn khung giờ khác!`,
+                                    });
+                                  }}
+                                  className="w-full h-16 sm:h-20 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-amber-500/80 bg-gradient-to-br from-amber-950/90 via-orange-950/85 to-amber-900/90 text-amber-300 flex flex-col items-center justify-between shadow-md cursor-not-allowed select-none transition-all hover:scale-[1.02]"
+                                >
+                                  <div className="w-full flex items-center justify-between">
+                                    <span className="text-[11px] sm:text-xs font-black text-amber-300 font-mono truncate">{slot.label}</span>
+                                    <span className="text-[9px] sm:text-[10px] text-amber-400 font-mono font-bold">{slot.start}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 my-auto">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                                    <span className="text-[10px] sm:text-xs font-black text-amber-300 tracking-wide">GIỮ CHỖ</span>
+                                  </div>
+                                  <div className="w-full text-center">
+                                    <span className="text-[8px] sm:text-[9px] text-amber-300 font-mono font-bold px-1.5 py-0.2 rounded-full bg-amber-500/20 border border-amber-500/30">
+                                      Tạm Khóa
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSlotClick(san, slot)}
+                                  className={`w-full h-16 sm:h-20 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border transition-all duration-200 flex flex-col items-center justify-between group shadow-sm hover:scale-[1.03] active:scale-95 cursor-pointer ${
+                                    isDarkMode
+                                      ? 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-600/40 hover:border-emerald-400 hover:shadow-lg hover:shadow-emerald-950/50'
+                                      : 'bg-emerald-50 hover:bg-emerald-100/80 border-emerald-300 hover:border-emerald-500 hover:shadow-md hover:shadow-emerald-200'
+                                  }`}
+                                >
+                                  <div className="w-full flex items-center justify-between">
+                                    <span className={`text-[11px] sm:text-xs font-black font-mono group-hover:scale-105 transition-transform truncate ${
+                                      isDarkMode ? 'text-emerald-400' : 'text-slate-900'
+                                    }`}>
+                                      {slot.label}
+                                    </span>
+                                    <span className={`text-[9px] sm:text-[10px] font-mono font-bold ${
+                                      isDarkMode ? 'text-slate-400' : 'text-slate-700'
+                                    }`}>
+                                      {slot.start}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-0.5 my-auto">
+                                    <span className="text-[10px] sm:text-xs font-black text-emerald-600 dark:text-emerald-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
+                                      TRỐNG
+                                    </span>
+                                  </div>
+                                  <span className="w-full py-0.5 text-[9px] sm:text-[10px] text-center rounded-lg bg-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-slate-950 text-emerald-600 dark:text-emerald-400 transition-all font-black">
+                                    + Đặt Giờ
+                                  </span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                );
-              })()
-            ) : filteredTimeSlots.length === 0 ? (
-              <div className={`text-center py-16 px-4 rounded-2xl border border-dashed m-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/30 text-slate-400' : 'border-slate-300 bg-slate-50 text-slate-600'}`}>
-                <Clock className="w-12 h-12 text-slate-400 dark:text-slate-500 mx-auto mb-3 opacity-60" />
-                <p className="text-base font-bold">
-                  Tất cả các khung giờ trong ngày đã qua hoặc không còn khung giờ khả dụng.
-                </p>
-                <p className="text-sm text-slate-400 mt-1">
-                  Quý khách vui lòng đổi sang ngày tiếp theo để xem lịch sân và đặt chỗ!
-                </p>
+                  );
+                })}
               </div>
             ) : (
-              <table className="w-full text-left border-collapse min-w-[1200px] lg:min-w-[2000px]">
-                <thead>
-                  <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-100'
-                    }`}>
-                    <th className={`p-2 lg:p-4 text-[10px] lg:text-xs font-black uppercase tracking-wider w-[110px] min-w-[110px] lg:w-[200px] lg:min-w-[200px] sticky left-0 z-20 shadow-md border-r break-words whitespace-normal ${isDarkMode ? 'text-slate-300 bg-slate-950 border-slate-800' : 'text-slate-700 bg-slate-100 border-slate-200'
+              <div>
+                <div className={`lg:hidden px-4 py-2.5 text-center text-xs font-semibold flex items-center justify-center gap-1.5 border-b ${
+                  isDarkMode ? 'bg-slate-950/80 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
+                }`}>
+                  <span>👉</span>
+                  <span>Vuốt bảng sang trái/phải để xem các khung giờ tiếp theo</span>
+                </div>
+                <table className="w-full text-left border-collapse min-w-[1200px] lg:min-w-[2000px]">
+                  <thead>
+                    <tr className={`border-b ${isDarkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-100'
                       }`}>
-                      Sân Bóng / Giờ Bắt Đầu
-                    </th>
-                    {filteredTimeSlots.map((slot) => (
-                      <th key={slot.start} className={`p-2 lg:p-3 text-center border-l min-w-[80px] lg:min-w-[140px] ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
+                      <th className={`p-2 lg:p-4 text-[10px] lg:text-xs font-black uppercase tracking-wider w-[110px] min-w-[110px] lg:w-[200px] lg:min-w-[200px] sticky left-0 z-20 shadow-md border-r break-words whitespace-normal ${isDarkMode ? 'text-slate-300 bg-slate-950 border-slate-800' : 'text-slate-700 bg-slate-100 border-slate-200'
                         }`}>
-                        <div className={`text-xs lg:text-base font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{slot.label}</div>
-                        <div className={`text-[9px] lg:text-[11px] font-mono mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>{slot.start}</div>
+                        Sân Bóng / Giờ Bắt Đầu
                       </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/60' : 'divide-slate-200'}`}>
-                  {filteredSanList.map((san) => (
-                    <tr key={san.id} className={isDarkMode ? 'hover:bg-slate-800/20 transition-colors' : 'hover:bg-slate-50 transition-colors'}>
-                      {/* Cột Danh sách sân - Cố định bên trái khi cuộn */}
-                      <td className={`p-2 lg:p-4 w-[110px] min-w-[110px] lg:w-[200px] lg:min-w-[200px] sticky left-0 z-20 border-r shadow-md leading-tight break-words whitespace-normal ${isDarkMode ? 'bg-slate-900 border-slate-800/80' : 'bg-white border-slate-200'
-                        }`}>
-                        <div className={`font-extrabold text-[11px] lg:text-sm flex items-center gap-1.5 break-words whitespace-normal ${isDarkMode ? 'text-white' : 'text-slate-900'
+                      {displayTimeSlots.map((slot) => (
+                        <th key={slot.start} className={`p-2 lg:p-3 text-center border-l min-w-[80px] lg:min-w-[140px] ${isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
                           }`}>
-                          {san.ten_san}
-                        </div>
-                      </td>
+                          <div className={`text-xs lg:text-base font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{slot.label}</div>
+                          <div className={`text-[9px] lg:text-[11px] font-mono mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>{slot.start}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/60' : 'divide-slate-200'}`}>
+                    {filteredSanList.map((san) => (
+                      <tr key={san.id} className={isDarkMode ? 'hover:bg-slate-800/20 transition-colors' : 'hover:bg-slate-50 transition-colors'}>
+                        {/* Cột Danh sách sân - Cố định bên trái khi cuộn */}
+                        <td className={`p-2 lg:p-4 w-[110px] min-w-[110px] lg:w-[200px] lg:min-w-[200px] sticky left-0 z-20 border-r shadow-md leading-tight break-words whitespace-normal ${isDarkMode ? 'bg-slate-900 border-slate-800/80' : 'bg-white border-slate-200'
+                          }`}>
+                          <div className={`font-extrabold text-[11px] lg:text-sm flex items-center gap-1.5 break-words whitespace-normal ${isDarkMode ? 'text-white' : 'text-slate-900'
+                            }`}>
+                            {san.ten_san}
+                          </div>
+                        </td>
 
-                      {/* Các ô Slot 30 phút trên dòng của sân */}
-                      {filteredTimeSlots.map((slot) => {
+                        {/* Các ô Slot 30 phút trên dòng của sân */}
+                        {displayTimeSlots.map((slot) => {
                         const slotKey = `${san.id}_${slot.start}`;
                         const slotKeyRealtime = `${filterNgayDa}_${san.id}_${slot.start}`;
                         const slotData = gridSlots[slotKey];
@@ -2503,6 +2710,7 @@ export default function HomePage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </section>

@@ -6,7 +6,7 @@
  * =====================================================================
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.huyDonVaHoanCoc = exports.datSanStoredProcedure = exports.layTatCaDonDatSan = exports.layLichSanTheoNgay = exports.layDanhSachKhungGio = exports.layDanhSachLoaiSan = exports.layDanhSachSan = void 0;
+exports.huyLichCoDinh = exports.doiTrangThaiLichCoDinh = exports.themLichCoDinh = exports.kiemTraTrungLichCoDinh = exports.layChiTietLichCoDinh = exports.layDanhSachLichCoDinh = exports.huyDonVaHoanCoc = exports.datSanStoredProcedure = exports.layTatCaDonDatSan = exports.layLichSanTheoNgay = exports.layDanhSachKhungGio = exports.layDanhSachLoaiSan = exports.layDanhSachSan = void 0;
 const db_1 = require("../config/db");
 const layDanhSachSan = async () => {
     const pool = await db_1.poolPromise;
@@ -94,3 +94,101 @@ const huyDonVaHoanCoc = async (maDonDat, lyDoHuy) => {
     return result.recordset && result.recordset[0];
 };
 exports.huyDonVaHoanCoc = huyDonVaHoanCoc;
+// =====================================================================
+// DỊCH VỤ QUẢN LÝ LỊCH CỐ ĐỊNH (FIXED / RECURRING BOOKING SERVICE)
+// =====================================================================
+const layDanhSachLichCoDinh = async (params) => {
+    const pool = await db_1.poolPromise;
+    try {
+        const result = await pool.request()
+            .input('trang_thai', db_1.sql.VarChar(30), params.trang_thai || null)
+            .input('ma_san', db_1.sql.Int, params.ma_san || null)
+            .input('tu_khoa', db_1.sql.NVarChar(100), params.tu_khoa || null)
+            .execute('sp_LayDanhSachLichCoDinh');
+        return result.recordset || [];
+    }
+    catch (e) {
+        const result = await pool.request().query(`
+            SELECT 
+                lcd.*, sb.ten_san, ls.ten_loai AS ten_loai_san,
+                ISNULL(nd.ho_ten, lcd.ten_doi_bong) AS ten_khach_hang
+            FROM Lich_Co_Dinh lcd
+            LEFT JOIN San_Bong sb ON lcd.ma_san = sb.id
+            LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+            LEFT JOIN Nguoi_Dung nd ON lcd.ma_nguoi_dung = nd.id
+            ORDER BY lcd.id DESC
+        `);
+        return result.recordset || [];
+    }
+};
+exports.layDanhSachLichCoDinh = layDanhSachLichCoDinh;
+const layChiTietLichCoDinh = async (id) => {
+    const pool = await db_1.poolPromise;
+    const result = await pool.request()
+        .input('id', db_1.sql.Int, id)
+        .execute('sp_LayChiTietLichCoDinh');
+    return {
+        hop_dong: result.recordsets[0]?.[0] || null,
+        danh_sach_buoi: result.recordsets[1] || []
+    };
+};
+exports.layChiTietLichCoDinh = layChiTietLichCoDinh;
+const kiemTraTrungLichCoDinh = async (params) => {
+    const pool = await db_1.poolPromise;
+    const result = await pool.request()
+        .input('ma_san', db_1.sql.Int, params.ma_san)
+        .input('cac_thu_trong_tuan', db_1.sql.VarChar(50), params.cac_thu_trong_tuan)
+        .input('gio_bat_dau', db_1.sql.VarChar(8), params.gio_bat_dau)
+        .input('gio_ket_thuc', db_1.sql.VarChar(8), params.gio_ket_thuc)
+        .input('tu_ngay', db_1.sql.Date, params.tu_ngay)
+        .input('den_ngay', db_1.sql.Date, params.den_ngay)
+        .input('don_gia_moi_buoi', db_1.sql.Decimal(10, 2), params.don_gia_moi_buoi || 0)
+        .execute('sp_KiemTraTrungLichCoDinh');
+    return {
+        tong_quan: result.recordsets[0]?.[0] || {},
+        chi_tiet_ngay: result.recordsets[1] || []
+    };
+};
+exports.kiemTraTrungLichCoDinh = kiemTraTrungLichCoDinh;
+const themLichCoDinh = async (params) => {
+    const pool = await db_1.poolPromise;
+    const result = await pool.request()
+        .input('ma_nguoi_dung', db_1.sql.Int, params.ma_nguoi_dung || null)
+        .input('ma_san', db_1.sql.Int, params.ma_san)
+        .input('ten_doi_bong', db_1.sql.NVarChar(100), params.ten_doi_bong)
+        .input('so_dien_thoai', db_1.sql.VarChar(20), params.so_dien_thoai)
+        .input('cac_thu_trong_tuan', db_1.sql.VarChar(50), params.cac_thu_trong_tuan)
+        .input('gio_bat_dau', db_1.sql.VarChar(8), params.gio_bat_dau)
+        .input('gio_ket_thuc', db_1.sql.VarChar(8), params.gio_ket_thuc)
+        .input('tu_ngay', db_1.sql.Date, params.tu_ngay)
+        .input('den_ngay', db_1.sql.Date, params.den_ngay)
+        .input('don_gia_moi_buoi', db_1.sql.Decimal(10, 2), params.don_gia_moi_buoi || 0)
+        .input('tien_coc', db_1.sql.Decimal(10, 2), params.tien_coc || 0)
+        .input('bo_qua_ngay_trung', db_1.sql.Bit, params.bo_qua_ngay_trung ? 1 : 0)
+        .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), params.ghi_chu || null)
+        .execute('sp_ThemLichCoDinh');
+    return {
+        hop_dong: result.recordsets[0]?.[0] || null,
+        danh_sach_buoi: result.recordsets[1] || []
+    };
+};
+exports.themLichCoDinh = themLichCoDinh;
+const doiTrangThaiLichCoDinh = async (id, trang_thai, ghi_chu) => {
+    const pool = await db_1.poolPromise;
+    const result = await pool.request()
+        .input('id', db_1.sql.Int, id)
+        .input('trang_thai', db_1.sql.VarChar(30), trang_thai)
+        .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || null)
+        .execute('sp_DoiTrangThaiLichCoDinh');
+    return result.recordset?.[0] || null;
+};
+exports.doiTrangThaiLichCoDinh = doiTrangThaiLichCoDinh;
+const huyLichCoDinh = async (id, ly_do) => {
+    const pool = await db_1.poolPromise;
+    const result = await pool.request()
+        .input('id', db_1.sql.Int, id)
+        .input('ly_do', db_1.sql.NVarChar(255), ly_do || 'Hủy hợp đồng lịch cố định')
+        .execute('sp_HuyLichCoDinh');
+    return result.recordset?.[0] || null;
+};
+exports.huyLichCoDinh = huyLichCoDinh;

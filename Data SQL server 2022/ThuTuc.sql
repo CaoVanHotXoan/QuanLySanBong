@@ -5158,5 +5158,446 @@ BEGIN
 END;
 GO
 
+-- =====================================================================
+-- CÁC STORED PROCEDURES CHO QUẢN LÝ LỊCH CỐ ĐỊNH (FIXED / RECURRING BOOKINGS)
+-- =====================================================================
+
+CREATE OR ALTER PROCEDURE sp_LayDanhSachLichCoDinh
+    @trang_thai VARCHAR(30) = NULL,
+    @ma_san INT = NULL,
+    @tu_khoa NVARCHAR(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT 
+            lcd.id,
+            lcd.ma_nguoi_dung,
+            lcd.ma_san,
+            sb.ten_san,
+            ls.ten_loai AS ten_loai_san,
+            lcd.ten_doi_bong,
+            lcd.so_dien_thoai,
+            lcd.cac_thu_trong_tuan,
+            CONVERT(VARCHAR(5), lcd.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), lcd.gio_ket_thuc, 108) AS gio_ket_thuc,
+            lcd.tu_ngay,
+            lcd.den_ngay,
+            lcd.tong_so_buoi,
+            lcd.don_gia_moi_buoi,
+            lcd.tien_coc,
+            lcd.tong_tien,
+            lcd.trang_thai,
+            lcd.ghi_chu,
+            lcd.ngay_tao,
+            ISNULL(nd.ho_ten, lcd.ten_doi_bong) AS ten_khach_hang,
+            (SELECT COUNT(*) FROM Don_Dat_San dds WHERE dds.ma_lich_co_dinh = lcd.id AND dds.trang_thai != 'DA_HUY') AS so_buoi_da_sinh,
+            (SELECT COUNT(*) FROM Don_Dat_San dds WHERE dds.ma_lich_co_dinh = lcd.id AND (dds.ngay_da < CAST(GETDATE() AS DATE) OR dds.trang_thai IN ('HOAN_THANH', 'DA_THANH_TOAN', 'Da Thanh Toan'))) AS so_buoi_da_da,
+            (SELECT COUNT(*) FROM Don_Dat_San dds WHERE dds.ma_lich_co_dinh = lcd.id AND dds.ngay_da >= CAST(GETDATE() AS DATE) AND dds.trang_thai NOT IN ('HOAN_THANH', 'DA_THANH_TOAN', 'Da Thanh Toan', 'DA_HUY')) AS so_buoi_con_lai
+        FROM Lich_Co_Dinh lcd
+        LEFT JOIN San_Bong sb ON lcd.ma_san = sb.id
+        LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        LEFT JOIN Nguoi_Dung nd ON lcd.ma_nguoi_dung = nd.id
+        WHERE (@trang_thai IS NULL OR @trang_thai = '' OR lcd.trang_thai = @trang_thai)
+          AND (@ma_san IS NULL OR lcd.ma_san = @ma_san)
+          AND (@tu_khoa IS NULL OR @tu_khoa = '' 
+               OR lcd.ten_doi_bong LIKE CONCAT('%', @tu_khoa, '%')
+               OR lcd.so_dien_thoai LIKE CONCAT('%', @tu_khoa, '%')
+               OR sb.ten_san LIKE CONCAT('%', @tu_khoa, '%'))
+        ORDER BY lcd.id DESC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_LayChiTietLichCoDinh
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        -- 1. Thông tin hợp đồng
+        SELECT 
+            lcd.id,
+            lcd.ma_nguoi_dung,
+            lcd.ma_san,
+            sb.ten_san,
+            ls.ten_loai AS ten_loai_san,
+            lcd.ten_doi_bong,
+            lcd.so_dien_thoai,
+            lcd.cac_thu_trong_tuan,
+            CONVERT(VARCHAR(5), lcd.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), lcd.gio_ket_thuc, 108) AS gio_ket_thuc,
+            lcd.tu_ngay,
+            lcd.den_ngay,
+            lcd.tong_so_buoi,
+            lcd.don_gia_moi_buoi,
+            lcd.tien_coc,
+            lcd.tong_tien,
+            lcd.trang_thai,
+            lcd.ghi_chu,
+            lcd.ngay_tao,
+            ISNULL(nd.ho_ten, lcd.ten_doi_bong) AS ten_khach_hang
+        FROM Lich_Co_Dinh lcd
+        LEFT JOIN San_Bong sb ON lcd.ma_san = sb.id
+        LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        LEFT JOIN Nguoi_Dung nd ON lcd.ma_nguoi_dung = nd.id
+        WHERE lcd.id = @id;
+
+        -- 2. Danh sách các buổi thi đấu đã sinh ra trong Don_Dat_San
+        SELECT 
+            dds.id,
+            dds.ngay_da,
+            CONVERT(VARCHAR(5), dds.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), dds.gio_ket_thuc, 108) AS gio_ket_thuc,
+            dds.tien_san,
+            dds.tong_tien,
+            dds.trang_thai,
+            dds.phuong_thuc,
+            dds.da_vao_san,
+            dds.ghi_chu
+        FROM Don_Dat_San dds
+        WHERE dds.ma_lich_co_dinh = @id
+        ORDER BY dds.ngay_da ASC, dds.gio_bat_dau ASC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_KiemTraTrungLichCoDinh
+    @ma_san INT,
+    @cac_thu_trong_tuan VARCHAR(50),
+    @gio_bat_dau VARCHAR(8),
+    @gio_ket_thuc VARCHAR(8),
+    @tu_ngay DATE,
+    @den_ngay DATE,
+    @don_gia_moi_buoi DECIMAL(10, 2) = 0
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        DECLARE @clean_gbd TIME = CAST(CASE 
+            WHEN @gio_bat_dau LIKE '24:00%' THEN '23:59:59'
+            WHEN LEN(LTRIM(RTRIM(@gio_bat_dau))) = 5 THEN CONCAT(LTRIM(RTRIM(@gio_bat_dau)), ':00')
+            ELSE LTRIM(RTRIM(@gio_bat_dau))
+        END AS TIME);
+
+        DECLARE @clean_gkt TIME = CAST(CASE 
+            WHEN @gio_ket_thuc LIKE '24:00%' THEN '23:59:59'
+            WHEN LEN(LTRIM(RTRIM(@gio_ket_thuc))) = 5 THEN CONCAT(LTRIM(RTRIM(@gio_ket_thuc)), ':00')
+            ELSE LTRIM(RTRIM(@gio_ket_thuc))
+        END AS TIME);
+
+        -- Bảng tạm chứa danh sách ngày dự kiến
+        CREATE TABLE #DanhSachNgayDuKien (
+            ngay_da DATE,
+            thu_tieng_viet NVARCHAR(20),
+            bi_trung BIT DEFAULT 0,
+            ly_do_trung NVARCHAR(255) NULL
+        );
+
+        DECLARE @cur DATE = @tu_ngay;
+        WHILE @cur <= @den_ngay
+        BEGIN
+            DECLARE @dw_offset INT = ((DATEPART(dw, @cur) + @@DATEFIRST - 1) % 7);
+            DECLARE @day_code_vn VARCHAR(5) = CASE WHEN @dw_offset = 0 THEN 'CN' ELSE CAST((@dw_offset + 1) AS VARCHAR(5)) END;
+
+            -- Kiểm tra ngày này có nằm trong các thứ đăng ký không
+            IF (CHARINDEX(@day_code_vn, @cac_thu_trong_tuan) > 0)
+               OR (@dw_offset = 0 AND (CHARINDEX('8', @cac_thu_trong_tuan) > 0 OR CHARINDEX('1', @cac_thu_trong_tuan) > 0 OR CHARINDEX('CN', @cac_thu_trong_tuan) > 0))
+            BEGIN
+                DECLARE @thu_name NVARCHAR(20) = CASE 
+                    WHEN @dw_offset = 0 THEN N'Chủ Nhật'
+                    WHEN @dw_offset = 1 THEN N'Thứ Hai'
+                    WHEN @dw_offset = 2 THEN N'Thứ Ba'
+                    WHEN @dw_offset = 3 THEN N'Thứ Tư'
+                    WHEN @dw_offset = 4 THEN N'Thứ Năm'
+                    WHEN @dw_offset = 5 THEN N'Thứ Sáu'
+                    WHEN @dw_offset = 6 THEN N'Thứ Bảy'
+                END;
+
+                -- Kiểm tra xung đột với đơn đặt sân đang có
+                DECLARE @is_conflict BIT = 0;
+                DECLARE @conflict_reason NVARCHAR(255) = NULL;
+
+                IF EXISTS (
+                    SELECT 1 FROM Don_Dat_San
+                    WHERE ma_san = @ma_san
+                      AND ngay_da = @cur
+                      AND trang_thai != 'DA_HUY'
+                      AND gio_bat_dau < @clean_gkt
+                      AND (gio_ket_thuc IS NULL OR gio_ket_thuc > @clean_gbd)
+                )
+                BEGIN
+                    SET @is_conflict = 1;
+                    SELECT TOP 1 @conflict_reason = CONCAT(N'Trùng với đơn #', id, N' (', CONVERT(VARCHAR(5), gio_bat_dau, 108), N'-', CONVERT(VARCHAR(5), gio_ket_thuc, 108), N') - TT: ', trang_thai)
+                    FROM Don_Dat_San
+                    WHERE ma_san = @ma_san
+                      AND ngay_da = @cur
+                      AND trang_thai != 'DA_HUY'
+                      AND gio_bat_dau < @clean_gkt
+                      AND (gio_ket_thuc IS NULL OR gio_ket_thuc > @clean_gbd);
+                END;
+
+                INSERT INTO #DanhSachNgayDuKien (ngay_da, thu_tieng_viet, bi_trung, ly_do_trung)
+                VALUES (@cur, @thu_name, @is_conflict, @conflict_reason);
+            END;
+
+            SET @cur = DATEADD(DAY, 1, @cur);
+        END;
+
+        -- Result set 1: Tổng quan
+        DECLARE @total_buoi INT = (SELECT COUNT(*) FROM #DanhSachNgayDuKien);
+        DECLARE @buoi_trung INT = (SELECT COUNT(*) FROM #DanhSachNgayDuKien WHERE bi_trung = 1);
+        DECLARE @buoi_hop_le INT = @total_buoi - @buoi_trung;
+        DECLARE @tong_tien_du_kien DECIMAL(10,2) = @buoi_hop_le * @don_gia_moi_buoi;
+
+        SELECT 
+            @total_buoi AS tong_so_buoi_du_kien,
+            @buoi_hop_le AS so_buoi_hop_le,
+            @buoi_trung AS so_buoi_bi_trung,
+            @tong_tien_du_kien AS tong_tien_du_kien,
+            CASE WHEN @buoi_trung = 0 AND @total_buoi > 0 THEN 1 ELSE 0 END AS hop_le_hoan_toan;
+
+        -- Result set 2: Chi tiết từng ngày
+        SELECT ngay_da, thu_tieng_viet, bi_trung, ly_do_trung
+        FROM #DanhSachNgayDuKien
+        ORDER BY ngay_da ASC;
+
+        DROP TABLE #DanhSachNgayDuKien;
+    END TRY
+    BEGIN CATCH
+        IF OBJECT_ID('tempdb..#DanhSachNgayDuKien') IS NOT NULL DROP TABLE #DanhSachNgayDuKien;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_ThemLichCoDinh
+    @ma_nguoi_dung INT = NULL,
+    @ma_san INT,
+    @ten_doi_bong NVARCHAR(100),
+    @so_dien_thoai VARCHAR(20),
+    @cac_thu_trong_tuan VARCHAR(50),
+    @gio_bat_dau VARCHAR(8),
+    @gio_ket_thuc VARCHAR(8),
+    @tu_ngay DATE,
+    @den_ngay DATE,
+    @don_gia_moi_buoi DECIMAL(10, 2) = 0,
+    @tien_coc DECIMAL(10, 2) = 0,
+    @bo_qua_ngay_trung BIT = 0,
+    @ghi_chu NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF @tu_ngay > @den_ngay
+        BEGIN
+            ;THROW 50001, N'Ngày bắt đầu không được lớn hơn ngày kết thúc hợp đồng.', 1;
+        END;
+
+        DECLARE @clean_gbd TIME = CAST(CASE 
+            WHEN @gio_bat_dau LIKE '24:00%' THEN '23:59:59'
+            WHEN LEN(LTRIM(RTRIM(@gio_bat_dau))) = 5 THEN CONCAT(LTRIM(RTRIM(@gio_bat_dau)), ':00')
+            ELSE LTRIM(RTRIM(@gio_bat_dau))
+        END AS TIME);
+
+        DECLARE @clean_gkt TIME = CAST(CASE 
+            WHEN @gio_ket_thuc LIKE '24:00%' THEN '23:59:59'
+            WHEN LEN(LTRIM(RTRIM(@gio_ket_thuc))) = 5 THEN CONCAT(LTRIM(RTRIM(@gio_ket_thuc)), ':00')
+            ELSE LTRIM(RTRIM(@gio_ket_thuc))
+        END AS TIME);
+
+        -- Xác định hoặc tạo người dùng nếu cần
+        DECLARE @final_user_id INT = @ma_nguoi_dung;
+        IF @final_user_id IS NULL AND @so_dien_thoai IS NOT NULL
+        BEGIN
+            SELECT TOP 1 @final_user_id = id FROM Nguoi_Dung WHERE so_dien_thoai = @so_dien_thoai;
+            IF @final_user_id IS NULL
+            BEGIN
+                DECLARE @email_auto VARCHAR(255) = CONCAT('codinh_', DATEDIFF(SECOND, '2026-01-01', GETDATE()), '_', ABS(CHECKSUM(NEWID()) % 1000), '@khachhang.pos');
+                INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, MaVaiTro)
+                VALUES (@ten_doi_bong, @email_auto, @so_dien_thoai, 3);
+                SET @final_user_id = SCOPE_IDENTITY();
+            END;
+        END;
+        IF @final_user_id IS NULL SET @final_user_id = 1;
+
+        -- Bảng tạm lưu các ngày hợp lệ
+        CREATE TABLE #NgayTao (
+            ngay_da DATE,
+            bi_trung BIT DEFAULT 0
+        );
+
+        DECLARE @cur DATE = @tu_ngay;
+        WHILE @cur <= @den_ngay
+        BEGIN
+            DECLARE @dw_offset INT = ((DATEPART(dw, @cur) + @@DATEFIRST - 1) % 7);
+            DECLARE @day_code_vn VARCHAR(5) = CASE WHEN @dw_offset = 0 THEN 'CN' ELSE CAST((@dw_offset + 1) AS VARCHAR(5)) END;
+
+            IF (CHARINDEX(@day_code_vn, @cac_thu_trong_tuan) > 0)
+               OR (@dw_offset = 0 AND (CHARINDEX('8', @cac_thu_trong_tuan) > 0 OR CHARINDEX('1', @cac_thu_trong_tuan) > 0 OR CHARINDEX('CN', @cac_thu_trong_tuan) > 0))
+            BEGIN
+                DECLARE @trung BIT = 0;
+                IF EXISTS (
+                    SELECT 1 FROM Don_Dat_San
+                    WHERE ma_san = @ma_san
+                      AND ngay_da = @cur
+                      AND trang_thai != 'DA_HUY'
+                      AND gio_bat_dau < @clean_gkt
+                      AND (gio_ket_thuc IS NULL OR gio_ket_thuc > @clean_gbd)
+                )
+                BEGIN
+                    SET @trung = 1;
+                END;
+
+                INSERT INTO #NgayTao (ngay_da, bi_trung) VALUES (@cur, @trung);
+            END;
+
+            SET @cur = DATEADD(DAY, 1, @cur);
+        END;
+
+        IF @bo_qua_ngay_trung = 0 AND EXISTS (SELECT 1 FROM #NgayTao WHERE bi_trung = 1)
+        BEGIN
+            ;THROW 50002, N'Có buổi thi đấu bị trùng lịch với khách khác. Vui lòng kiểm tra lại hoặc bật chế độ bỏ qua ngày trùng.', 1;
+        END;
+
+        -- Đếm số buổi hợp lệ
+        DECLARE @so_buoi_thuc_te INT = (SELECT COUNT(*) FROM #NgayTao WHERE bi_trung = 0);
+        IF @so_buoi_thuc_te = 0
+        BEGIN
+            ;THROW 50003, N'Không tìm thấy buổi thi đấu hợp lệ nào trong khoảng thời gian đã chọn.', 1;
+        END;
+
+        DECLARE @tong_tien_thuc_te DECIMAL(10,2) = @so_buoi_thuc_te * @don_gia_moi_buoi;
+
+        -- 1. Tạo bản ghi trong Lich_Co_Dinh
+        INSERT INTO Lich_Co_Dinh (
+            ma_nguoi_dung, ma_san, ten_doi_bong, so_dien_thoai, cac_thu_trong_tuan,
+            gio_bat_dau, gio_ket_thuc, tu_ngay, den_ngay, tong_so_buoi,
+            don_gia_moi_buoi, tien_coc, tong_tien, trang_thai, ghi_chu, ngay_tao
+        )
+        VALUES (
+            @final_user_id, @ma_san, @ten_doi_bong, @so_dien_thoai, @cac_thu_trong_tuan,
+            @clean_gbd, @clean_gkt, @tu_ngay, @den_ngay, @so_buoi_thuc_te,
+            @don_gia_moi_buoi, @tien_coc, @tong_tien_thuc_te, 'DANG_HOAT_DONG', @ghi_chu, GETDATE()
+        );
+
+        DECLARE @newId INT = SCOPE_IDENTITY();
+
+        -- 2. Tự động sinh các bản ghi trong Don_Dat_San cho từng buổi hợp lệ
+        INSERT INTO Don_Dat_San (
+            ma_nguoi_dung, ma_san, ma_lich_co_dinh, ngay_da, gio_bat_dau, gio_ket_thuc,
+            tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao
+        )
+        SELECT 
+            @final_user_id,
+            @ma_san,
+            @newId,
+            nt.ngay_da,
+            @clean_gbd,
+            @clean_gkt,
+            @don_gia_moi_buoi,
+            @don_gia_moi_buoi,
+            'TIEN_MAT',
+            CONCAT(N'Lịch cố định: ', @ten_doi_bong, N' (HĐ #', @newId, N')'),
+            'DA_CHOT',
+            GETDATE()
+        FROM #NgayTao nt
+        WHERE nt.bi_trung = 0
+        ORDER BY nt.ngay_da ASC;
+
+        DROP TABLE #NgayTao;
+
+        COMMIT TRANSACTION;
+
+        -- Trả về thông tin hợp đồng vừa tạo
+        EXEC sp_LayChiTietLichCoDinh @id = @newId;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        IF OBJECT_ID('tempdb..#NgayTao') IS NOT NULL DROP TABLE #NgayTao;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_DoiTrangThaiLichCoDinh
+    @id INT,
+    @trang_thai VARCHAR(30),
+    @ghi_chu NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Lich_Co_Dinh WHERE id = @id)
+        BEGIN
+            ;THROW 50004, N'Không tìm thấy hợp đồng lịch cố định.', 1;
+        END;
+
+        UPDATE Lich_Co_Dinh
+        SET trang_thai = @trang_thai,
+            ghi_chu = ISNULL(@ghi_chu, ghi_chu)
+        WHERE id = @id;
+
+        COMMIT TRANSACTION;
+
+        SELECT TOP 1 * FROM Lich_Co_Dinh WHERE id = @id;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_HuyLichCoDinh
+    @id INT,
+    @ly_do NVARCHAR(255) = N'Hủy hợp đồng lịch cố định'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Lich_Co_Dinh WHERE id = @id)
+        BEGIN
+            ;THROW 50005, N'Không tìm thấy hợp đồng lịch cố định.', 1;
+        END;
+
+        -- 1. Cập nhật trạng thái hợp đồng
+        UPDATE Lich_Co_Dinh
+        SET trang_thai = 'DA_HUY',
+            ghi_chu = CONCAT(ISNULL(ghi_chu, ''), N' [Đã hủy: ', @ly_do, N']')
+        WHERE id = @id;
+
+        -- 2. Tự động hủy các buổi đá chưa diễn ra trong tương lai của hợp đồng này
+        UPDATE Don_Dat_San
+        SET trang_thai = 'DA_HUY',
+            ghi_chu = CONCAT(ISNULL(ghi_chu, ''), N' [Hủy theo HĐ #', @id, N': ', @ly_do, N']')
+        WHERE ma_lich_co_dinh = @id
+          AND ngay_da >= CAST(GETDATE() AS DATE)
+          AND trang_thai NOT IN ('HOAN_THANH', 'DA_THANH_TOAN', 'Da Thanh Toan');
+
+        COMMIT TRANSACTION;
+
+        SELECT TOP 1 * FROM Lich_Co_Dinh WHERE id = @id;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
 PRINT N'✅ ĐÃ CÀI ĐẶT THÀNH CÔNG TOÀN BỘ STORED PROCEDURES CHO QuanLySanBong VỚI 100% TRY...CATCH VÀ TRANSACTIONS!';
 GO

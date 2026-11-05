@@ -7,6 +7,9 @@ import { useAppTheme } from '../hooks/useAppTheme';
 import {
   LayoutDashboard,
   Calendar,
+  CalendarClock,
+  CalendarDays,
+  Repeat,
   Layers,
   Clock,
   Coffee,
@@ -113,8 +116,9 @@ export type TabType =
   // 4. Dịch Vụ & Kho (Dich_Vu, Phieu_Nhap_Kho)
   | 'DICH_VU'
   | 'PHIEU_NHAP_KHO'
-  // 5. Tài Chính & Giao Dịch (Don_Dat_San & Thanh_Toan, Lich_Su_Hoan_Tien, Khung_Gio)
+  // 5. Tài Chính & Giao Dịch (Don_Dat_San & Thanh_Toan, Lich_Su_Hoan_Tien, Khung_Gio, Lich_Co_Dinh)
   | 'DON_DAT_THANH_TOAN'
+  | 'LICH_CO_DINH'
   | 'HOAN_TIEN'
   | 'KHUNG_GIO'
   // 6. Hệ Thống & Phân Quyền (Nguoi_Dung, Vai_Tro, OpenAPI)
@@ -384,6 +388,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     groupIcon: CreditCard,
     items: [
       { id: 'DON_DAT_THANH_TOAN', label: 'Đơn Đặt Sân & Thanh Toán', icon: Receipt, tableHint: 'Don_Dat_San, Thanh_Toan' },
+      { id: 'LICH_CO_DINH', label: 'Hợp Đồng Lịch Cố Định', icon: CalendarClock, tableHint: 'Lich_Co_Dinh' },
       { id: 'HOAN_TIEN', label: 'Lịch Sử Hoàn Tiền', icon: RefreshCw, tableHint: 'Lich_Su_Hoan_Tien' }
     ]
   },
@@ -559,6 +564,69 @@ export default function AdminDashboard() {
   const [courtList, setCourtList] = useState<SanBong[]>([]);
   const [categoryList, setCategoryList] = useState<LoaiSan[]>([]);
   const [bookingList, setBookingList] = useState<DonDatSan[]>([]);
+  const [fixedScheduleList, setFixedScheduleList] = useState<any[]>([]);
+  const [fixedScheduleModal, setFixedScheduleModal] = useState<{
+    isOpen: boolean;
+    data: {
+      ma_san: number | '';
+      ten_doi_bong: string;
+      so_dien_thoai: string;
+      cac_thu_trong_tuan: string[];
+      gio_bat_dau: string;
+      gio_ket_thuc: string;
+      tu_ngay: string;
+      den_ngay: string;
+      don_gia_moi_buoi: number;
+      tien_coc: number;
+      bo_qua_ngay_trung: boolean;
+      ghi_chu: string;
+    };
+    checkResult: {
+      checked: boolean;
+      loading: boolean;
+      tong_so_buoi_du_kien?: number;
+      so_buoi_hop_le?: number;
+      so_buoi_bi_trung?: number;
+      tong_tien_du_kien?: number;
+      hop_le_hoan_toan?: boolean;
+      chi_tiet_ngay?: any[];
+      error?: string;
+    };
+  }>({
+    isOpen: false,
+    data: {
+      ma_san: '',
+      ten_doi_bong: '',
+      so_dien_thoai: '',
+      cac_thu_trong_tuan: ['2', '4', '6'],
+      gio_bat_dau: '18:30',
+      gio_ket_thuc: '20:00',
+      tu_ngay: '',
+      den_ngay: '',
+      don_gia_moi_buoi: 300000,
+      tien_coc: 1000000,
+      bo_qua_ngay_trung: false,
+      ghi_chu: ''
+    },
+    checkResult: {
+      checked: false,
+      loading: false
+    }
+  });
+  const [viewScheduleSessionsModal, setViewScheduleSessionsModal] = useState<{
+    isOpen: boolean;
+    schedule: any | null;
+    sessions: any[];
+    loading: boolean;
+  }>({
+    isOpen: false,
+    schedule: null,
+    sessions: [],
+    loading: false
+  });
+  const [fixedScheduleSearch, setFixedScheduleSearch] = useState<string>('');
+  const [fixedScheduleStatusFilter, setFixedScheduleStatusFilter] = useState<string>('ALL');
+  const [fixedScheduleCourtFilter, setFixedScheduleCourtFilter] = useState<string>('ALL');
   const [serviceDetailList, setServiceDetailList] = useState<ChiTietDichVu[]>([]);
   const [serviceList, setServiceList] = useState<DichVu[]>([]);
   const [inventoryList, setInventoryList] = useState<PhieuNhapKho[]>([]);
@@ -963,8 +1031,10 @@ export default function AdminDashboard() {
         fetch(`${API_BASE}/tin-tuc/admin`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
         // 15: Cấu hình hệ thống Bật/Tắt
         fetch(`${API_BASE}/auth/cau-hinh`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-        // 15: Nội dung About Us
+        // 16: Nội dung About Us
         contentService.getAboutUs().catch(() => null),
+        // 17: Hợp đồng Lịch cố định
+        fetch(`${API_BASE}/dat-san/lich-co-dinh`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       ]);
 
       // 0. Sân bóng
@@ -1036,6 +1106,11 @@ export default function AdminDashboard() {
       const res16: any = results[16];
       if (res16 && res16.status === 'fulfilled' && res16.value?.success && res16.value.data) {
         setAboutUsData(res16.value.data);
+      }
+      // 17. Hợp đồng Lịch Cố Định
+      const res17: any = results[17];
+      if (res17 && res17.status === 'fulfilled' && res17.value?.success && Array.isArray(res17.value.data)) {
+        setFixedScheduleList(res17.value.data);
       }
     } catch (err) {
       console.warn('Lỗi tải dữ liệu từ CSDL:', err);
@@ -3275,7 +3350,247 @@ export default function AdminDashboard() {
     setCheckoutModal({ isOpen: false, booking: null, paymentMethod: 'TIEN_MAT', discount: 0 });
   };
 
-  // 1. Màn hình đang kiểm tra quyền Admin
+  // =====================================================================
+  // CÁC HÀM XỬ LÝ LỊCH CỐ ĐỊNH (FIXED / RECURRING BOOKING HANDLERS)
+  // =====================================================================
+
+  const handleOpenAddFixedScheduleModal = () => {
+    const today = new Date();
+    const nextMonth = new Date(today);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const tuNgay = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    const denNgay = `${nextMonth.getFullYear()}-${pad(nextMonth.getMonth() + 1)}-${pad(nextMonth.getDate())}`;
+
+    const defaultCourtId = courtList[0]?.id || '';
+    const defaultCourt = courtList[0];
+    const defaultPrice = defaultCourt ? Number(defaultCourt.don_gia_phut || 5000) * 90 : 350000;
+
+    setFixedScheduleModal({
+      isOpen: true,
+      data: {
+        ma_san: defaultCourtId,
+        ten_doi_bong: '',
+        so_dien_thoai: '',
+        cac_thu_trong_tuan: ['2', '4', '6'],
+        gio_bat_dau: '18:30',
+        gio_ket_thuc: '20:00',
+        tu_ngay: tuNgay,
+        den_ngay: denNgay,
+        don_gia_moi_buoi: defaultPrice,
+        tien_coc: 1000000,
+        bo_qua_ngay_trung: false,
+        ghi_chu: ''
+      },
+      checkResult: {
+        checked: false,
+        loading: false
+      }
+    });
+  };
+
+  const handleToggleWeekdayInModal = (day: string) => {
+    setFixedScheduleModal((prev) => {
+      const current = prev.data.cac_thu_trong_tuan || [];
+      const exists = current.includes(day);
+      const nextDays = exists ? current.filter((d) => d !== day) : [...current, day].sort();
+      return {
+        ...prev,
+        data: { ...prev.data, cac_thu_trong_tuan: nextDays },
+        checkResult: { checked: false, loading: false }
+      };
+    });
+  };
+
+  const handleCheckFixedSchedule = async () => {
+    const { ma_san, cac_thu_trong_tuan, gio_bat_dau, gio_ket_thuc, tu_ngay, den_ngay, don_gia_moi_buoi } = fixedScheduleModal.data;
+    if (!ma_san || cac_thu_trong_tuan.length === 0 || !gio_bat_dau || !gio_ket_thuc || !tu_ngay || !den_ngay) {
+      setToastMessage({ type: 'error', message: '⚠️ Vui lòng điền đủ: Sân, thứ trong tuần, giờ đá và khoảng ngày!' });
+      return;
+    }
+
+    setFixedScheduleModal((prev) => ({
+      ...prev,
+      checkResult: { ...prev.checkResult, loading: true, error: undefined }
+    }));
+
+    try {
+      const res = await fetch(`${API_BASE}/dat-san/lich-co-dinh/kiem-tra`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ma_san: Number(ma_san),
+          cac_thu_trong_tuan: cac_thu_trong_tuan.join(','),
+          gio_bat_dau,
+          gio_ket_thuc,
+          tu_ngay,
+          den_ngay,
+          don_gia_moi_buoi: Number(don_gia_moi_buoi || 0)
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        const { tong_quan, chi_tiet_ngay } = data.data;
+        setFixedScheduleModal((prev) => ({
+          ...prev,
+          checkResult: {
+            checked: true,
+            loading: false,
+            tong_so_buoi_du_kien: tong_quan.tong_so_buoi_du_kien,
+            so_buoi_hop_le: tong_quan.so_buoi_hop_le,
+            so_buoi_bi_trung: tong_quan.so_buoi_bi_trung,
+            tong_tien_du_kien: tong_quan.tong_tien_du_kien,
+            hop_le_hoan_toan: Boolean(tong_quan.hop_le_hoan_toan),
+            chi_tiet_ngay
+          }
+        }));
+      } else {
+        setFixedScheduleModal((prev) => ({
+          ...prev,
+          checkResult: { checked: false, loading: false, error: data.message || 'Lỗi khi kiểm tra lịch' }
+        }));
+        setToastMessage({ type: 'error', message: data.message || 'Lỗi khi kiểm tra lịch' });
+      }
+    } catch (err: any) {
+      setFixedScheduleModal((prev) => ({
+        ...prev,
+        checkResult: { checked: false, loading: false, error: err.message || 'Lỗi kết nối máy chủ' }
+      }));
+      setToastMessage({ type: 'error', message: 'Lỗi kết nối máy chủ khi kiểm tra lịch' });
+    }
+  };
+
+  const handleSaveFixedSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const {
+      ma_san,
+      ten_doi_bong,
+      so_dien_thoai,
+      cac_thu_trong_tuan,
+      gio_bat_dau,
+      gio_ket_thuc,
+      tu_ngay,
+      den_ngay,
+      don_gia_moi_buoi,
+      tien_coc,
+      bo_qua_ngay_trung,
+      ghi_chu
+    } = fixedScheduleModal.data;
+
+    if (!ma_san || !ten_doi_bong.trim() || !so_dien_thoai.trim() || cac_thu_trong_tuan.length === 0 || !tu_ngay || !den_ngay) {
+      setToastMessage({ type: 'error', message: '⚠️ Vui lòng điền đầy đủ các thông tin bắt buộc!' });
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/dat-san/lich-co-dinh`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ma_san: Number(ma_san),
+          ten_doi_bong: ten_doi_bong.trim(),
+          so_dien_thoai: so_dien_thoai.trim(),
+          cac_thu_trong_tuan: cac_thu_trong_tuan.join(','),
+          gio_bat_dau,
+          gio_ket_thuc,
+          tu_ngay,
+          den_ngay,
+          don_gia_moi_buoi: Number(don_gia_moi_buoi || 0),
+          tien_coc: Number(tien_coc || 0),
+          bo_qua_ngay_trung: Boolean(bo_qua_ngay_trung),
+          ghi_chu: ghi_chu.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToastMessage({ type: 'success', message: data.message || '✅ Đã tạo hợp đồng lịch cố định thành công!' });
+        setFixedScheduleModal({ isOpen: false, data: {} as any, checkResult: { checked: false, loading: false } });
+        loadAllDataFromBackend();
+      } else {
+        setToastMessage({ type: 'error', message: `❌ ${data.message || 'Không thể tạo hợp đồng lịch cố định'}` });
+      }
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: `❌ Lỗi kết nối: ${err.message}` });
+    }
+  };
+
+  const handleToggleStatusFixedSchedule = async (id: number, currentStatus: string) => {
+    const nextStatus = currentStatus === 'DANG_HOAT_DONG' ? 'TAM_DUNG' : 'DANG_HOAT_DONG';
+    const statusLabel = nextStatus === 'DANG_HOAT_DONG' ? 'Kích hoạt' : 'Tạm dừng';
+
+    try {
+      const res = await fetch(`${API_BASE}/dat-san/lich-co-dinh/${id}/trang-thai`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ trang_thai: nextStatus })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToastMessage({ type: 'success', message: `✅ Đã chuyển trạng thái hợp đồng sang: ${statusLabel}!` });
+        loadAllDataFromBackend();
+      } else {
+        setToastMessage({ type: 'error', message: data.message || 'Lỗi khi cập nhật trạng thái' });
+      }
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối máy chủ' });
+    }
+  };
+
+  const handleCancelFixedSchedule = (id: number, teamName?: string) => {
+    openDeleteConfirm(
+      'Hủy Hợp Đồng Lịch Cố Định',
+      `Bạn có chắc chắn muốn hủy hợp đồng của "${teamName || `HĐ #${id}`}"?`,
+      'Hệ thống sẽ chuyển trạng thái hợp đồng sang [ĐÃ HỦY] và tự động giải phóng toàn bộ các ca thi đấu chưa diễn ra trong tương lai của đội bóng này.',
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dat-san/lich-co-dinh/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ ly_do: 'Hủy hợp đồng theo yêu cầu ban quản lý' })
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã hủy hợp đồng lịch cố định và giải phóng các ca đá tương lai!' });
+            loadAllDataFromBackend();
+          } else {
+            setToastMessage({ type: 'error', message: data.message || 'Lỗi khi hủy hợp đồng' });
+          }
+        } catch (err: any) {
+          setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối máy chủ' });
+        }
+      }
+    );
+  };
+
+  const handleViewScheduleSessions = async (schedule: any) => {
+    setViewScheduleSessionsModal({
+      isOpen: true,
+      schedule,
+      sessions: [],
+      loading: true
+    });
+
+    try {
+      const res = await fetch(`${API_BASE}/dat-san/lich-co-dinh/${schedule.id}`, {
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setViewScheduleSessionsModal({
+          isOpen: true,
+          schedule: data.data.hop_dong || schedule,
+          sessions: data.data.danh_sach_buoi || [],
+          loading: false
+        });
+      } else {
+        setViewScheduleSessionsModal((prev) => ({ ...prev, loading: false }));
+      }
+    } catch (err) {
+      setViewScheduleSessionsModal((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
   // 1. Màn hình đang kiểm tra quyền Admin hoặc chuyển hướng về Trang chủ
   if (isAuthChecking || !isAuthorized) {
     return <SoccerLoader message="Đang kiểm tra quyền Quản trị viên..." fullScreen={true} />;
@@ -3503,6 +3818,7 @@ export default function AdminDashboard() {
                 {activeTab === 'DICH_VU' && 'Danh Mục Dịch Vụ'}
                 {activeTab === 'PHIEU_NHAP_KHO' && 'Quản Lý Nhập Kho'}
                 {activeTab === 'DON_DAT_THANH_TOAN' && 'Đơn Đặt Sân & Chi Tiết Thanh Toán'}
+                {activeTab === 'LICH_CO_DINH' && 'Quản Lý Hợp Đồng Lịch Cố Định'}
                 {activeTab === 'HOAN_TIEN' && 'Lịch Sử Hoàn Tiền'}
                 {activeTab === 'KHUNG_GIO' && 'Bảng Khung Giờ Hoạt Động'}
                 {activeTab === 'NGUOI_DUNG' && 'Danh Sách Người Dùng'}
@@ -4789,6 +5105,387 @@ export default function AdminDashboard() {
                   isDarkMode={isDarkMode}
                 />
               </div>
+              );
+            })()}
+
+            {/* =================================================================
+                TAB: LICH_CO_DINH - QUẢN LÝ HỢP ĐỒNG LỊCH CỐ ĐỊNH (FIXED / RECURRING)
+                ================================================================= */}
+            {activeTab === 'LICH_CO_DINH' && (() => {
+              let rawList = fixedScheduleList || [];
+              if (fixedScheduleCourtFilter && fixedScheduleCourtFilter !== 'ALL') {
+                rawList = rawList.filter((item) => String(item.ma_san) === fixedScheduleCourtFilter);
+              }
+              if (fixedScheduleStatusFilter && fixedScheduleStatusFilter !== 'ALL') {
+                rawList = rawList.filter((item) => (item.trang_thai || '').toUpperCase() === fixedScheduleStatusFilter);
+              }
+              if (fixedScheduleSearch.trim()) {
+                const q = fixedScheduleSearch.trim().toLowerCase();
+                rawList = rawList.filter((item) =>
+                  (item.ten_doi_bong || '').toLowerCase().includes(q) ||
+                  (item.so_dien_thoai || '').includes(q) ||
+                  (item.ten_san || '').toLowerCase().includes(q) ||
+                  (item.ghi_chu || '').toLowerCase().includes(q) ||
+                  String(item.id).includes(q)
+                );
+              }
+
+              const pagedData = getPaginatedData(rawList, 'LICH_CO_DINH', 10);
+
+              // Thống kê KPI Lịch cố định
+              const totalContracts = (fixedScheduleList || []).length;
+              const activeContracts = (fixedScheduleList || []).filter((i) => i.trang_thai === 'DANG_HOAT_DONG').length;
+              const totalSessions = (fixedScheduleList || []).reduce((sum, i) => sum + (Number(i.tong_so_buoi) || 0), 0);
+              const totalContractValue = (fixedScheduleList || []).reduce((sum, i) => sum + (Number(i.tong_tien) || 0), 0);
+
+              return (
+                <div className="space-y-6">
+                  {/* 1. KPI WIDGETS TỔNG QUAN LỊCH CỐ ĐỊNH */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div className={`p-4 rounded-2xl border shadow-md flex items-center justify-between ${
+                      isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
+                    }`}>
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tổng Hợp Đồng</p>
+                        <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{totalContracts}</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                        <CalendarClock className="w-5 h-5" />
+                      </div>
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border shadow-md flex items-center justify-between ${
+                      isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
+                    }`}>
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Đang Hiệu Lực</p>
+                        <p className="text-xl sm:text-2xl font-black text-teal-600 dark:text-teal-400 mt-1">{activeContracts}</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-teal-500/10 text-teal-500 flex items-center justify-center">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border shadow-md flex items-center justify-between ${
+                      isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
+                    }`}>
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tổng Số Buổi Đã Sinh</p>
+                        <p className="text-xl sm:text-2xl font-black text-amber-500 mt-1">{totalSessions} buổi</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                        <Repeat className="w-5 h-5" />
+                      </div>
+                    </div>
+
+                    <div className={`p-4 rounded-2xl border shadow-md flex items-center justify-between ${
+                      isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
+                    }`}>
+                      <div>
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Doanh Thu Dự Kiến</p>
+                        <p className="text-xl sm:text-2xl font-black text-emerald-500 mt-1">{totalContractValue.toLocaleString('vi-VN')} đ</p>
+                      </div>
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                        <DollarSign className="w-5 h-5" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. BẢNG DỮ LIỆU HỢP ĐỒNG LỊCH CỐ ĐỊNH */}
+                  <div className={`rounded-2xl border overflow-hidden shadow-xl ${
+                    isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  }`}>
+                    {/* Header Bảng & Bộ Lọc Nhanh */}
+                    <div className={`p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b ${
+                      isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'
+                    }`}>
+                      <div>
+                        <h3 className="text-base font-black flex items-center gap-2">
+                          <CalendarClock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                          Hợp Đồng Thuê Sân Cố Định (Lịch Tháng)
+                        </h3>
+                        <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
+                          Quản lý các đội bóng/công ty thuê sân định kỳ. Hệ thống tự động sinh lịch và đồng bộ ma trận giờ đá trên Trang chủ.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        {/* Thanh Tìm Kiếm Nhanh */}
+                        <div className="relative min-w-[180px] max-w-xs">
+                          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                          <input
+                            type="text"
+                            value={fixedScheduleSearch}
+                            onChange={(e) => {
+                              setFixedScheduleSearch(e.target.value);
+                              setTabPage('LICH_CO_DINH', 1);
+                            }}
+                            placeholder="🔍 Tìm đội bóng, SĐT, sân..."
+                            className={`w-full pl-8 pr-7 py-2 rounded-xl text-xs font-semibold outline-none border transition-all ${
+                              isDarkMode
+                                ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 placeholder-slate-500 focus:border-emerald-500'
+                                : 'bg-white border-slate-300 text-slate-700 shadow-sm placeholder-slate-400 focus:border-emerald-500'
+                            }`}
+                          />
+                          {fixedScheduleSearch && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFixedScheduleSearch('');
+                                setTabPage('LICH_CO_DINH', 1);
+                              }}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Lọc Trạng Thái Hợp Đồng */}
+                        <div className="relative min-w-[140px]">
+                          <select
+                            value={fixedScheduleStatusFilter}
+                            onChange={(e) => {
+                              setFixedScheduleStatusFilter(e.target.value);
+                              setTabPage('LICH_CO_DINH', 1);
+                            }}
+                            className={`w-full text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
+                              isDarkMode
+                                ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                                : 'bg-white border-slate-300 text-slate-700 shadow-xs hover:border-emerald-500 focus:border-emerald-500'
+                            }`}
+                          >
+                            <option value="ALL">Tất cả trạng thái</option>
+                            <option value="DANG_HOAT_DONG">Đang hoạt động</option>
+                            <option value="TAM_DUNG">Tạm dừng</option>
+                            <option value="DA_KET_THUC">Đã kết thúc</option>
+                            <option value="DA_HUY">Đã hủy</option>
+                          </select>
+                          <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                        </div>
+
+                        {/* Lọc Theo Sân Bóng */}
+                        <div className="relative min-w-[130px]">
+                          <select
+                            value={fixedScheduleCourtFilter}
+                            onChange={(e) => {
+                              setFixedScheduleCourtFilter(e.target.value);
+                              setTabPage('LICH_CO_DINH', 1);
+                            }}
+                            className={`w-full text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
+                              isDarkMode
+                                ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                                : 'bg-white border-slate-300 text-slate-700 shadow-xs hover:border-emerald-500 focus:border-emerald-500'
+                            }`}
+                          >
+                            <option value="ALL">Tất cả sân</option>
+                            {courtList.map((c) => (
+                              <option key={c.id} value={String(c.id)}>
+                                {c.ten_san}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                        </div>
+
+                        {/* Nút Thêm Lịch Cố Định Mới */}
+                        <button
+                          type="button"
+                          onClick={handleOpenAddFixedScheduleModal}
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/20 active:scale-95 transition-all cursor-pointer shrink-0"
+                        >
+                          <Plus className="w-4 h-4 stroke-[3]" />
+                          <span>+ Thêm Lịch Cố Định</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Danh Sách Hợp Đồng Cố Định */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className={`border-b text-[10px] md:text-xs font-black uppercase tracking-wider ${
+                            isDarkMode ? 'border-emerald-900/30 bg-[#060e09] text-emerald-400' : 'border-slate-200 bg-slate-100 text-slate-700'
+                          }`}>
+                            <th className="p-3 md:p-4 whitespace-nowrap">MÃ HĐ</th>
+                            <th className="p-3 md:p-4 whitespace-nowrap">ĐỘI BÓNG / LIÊN HỆ</th>
+                            <th className="p-3 md:p-4 whitespace-nowrap">SÂN BÓNG</th>
+                            <th className="p-3 md:p-4 whitespace-nowrap">THỨ ĐÁ TRONG TUẦN</th>
+                            <th className="p-3 md:p-4 whitespace-nowrap">GIỜ ĐÁ</th>
+                            <th className="p-3 md:p-4 whitespace-nowrap">THỜI HẠN</th>
+                            <th className="p-3 md:p-4 whitespace-nowrap">TIẾN ĐỘ BUỔI</th>
+                            <th className="p-3 md:p-4 whitespace-nowrap">TỔNG TIỀN / CỌC</th>
+                            <th className="p-3 md:p-4 whitespace-nowrap">TRẠNG THÁI</th>
+                            <th className="p-3 md:p-4 text-right whitespace-nowrap">THAO TÁC</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30 text-[10px] md:text-xs lg:text-sm">
+                          {pagedData.items.length === 0 ? (
+                            <tr>
+                              <td colSpan={10} className="p-8 text-center text-slate-400 italic font-medium">
+                                Không tìm thấy hợp đồng lịch cố định nào phù hợp với bộ lọc!
+                              </td>
+                            </tr>
+                          ) : (
+                            pagedData.items.map((lcd: any) => {
+                              const daysList = (lcd.cac_thu_trong_tuan || '').split(',').map((d: string) => d.trim());
+                              const isPaused = lcd.trang_thai === 'TAM_DUNG';
+                              const isCancelled = lcd.trang_thai === 'DA_HUY';
+                              const isCompleted = lcd.trang_thai === 'DA_KET_THUC';
+
+                              const daDa = Number(lcd.so_buoi_da_da || 0);
+                              const tongBuoi = Number(lcd.tong_so_buoi || 1);
+                              const progressPercent = Math.min(100, Math.round((daDa / tongBuoi) * 100));
+
+                              return (
+                                <tr key={lcd.id} className={isDarkMode ? 'hover:bg-slate-800/30 transition-colors' : 'hover:bg-slate-50 transition-colors'}>
+                                  <td className="p-3 md:p-4 font-mono font-black text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                    #LCD{lcd.id}
+                                  </td>
+                                  <td className="p-3 md:p-4">
+                                    <div className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                      {lcd.ten_doi_bong}
+                                    </div>
+                                    <div className="text-[11px] font-mono text-slate-500 flex items-center gap-1 mt-0.5">
+                                      <Phone className="w-3 h-3 text-emerald-500" />
+                                      {lcd.so_dien_thoai}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 md:p-4 whitespace-nowrap">
+                                    <div className="font-bold text-slate-900 dark:text-emerald-300">
+                                      {lcd.ten_san || `Sân #${lcd.ma_san}`}
+                                    </div>
+                                    {lcd.ten_loai_san && (
+                                      <span className="text-[10px] text-slate-400 font-semibold">
+                                        {lcd.ten_loai_san}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-3 md:p-4">
+                                    <div className="flex items-center gap-1 flex-wrap max-w-[160px]">
+                                      {daysList.map((d: string) => {
+                                        const label = d === 'CN' || d === '8' || d === '1' ? 'CN' : `T${d}`;
+                                        return (
+                                          <span
+                                            key={d}
+                                            className="px-1.5 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30"
+                                          >
+                                            {label}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 md:p-4 font-mono font-bold whitespace-nowrap">
+                                    {lcd.gio_bat_dau} - {lcd.gio_ket_thuc}
+                                  </td>
+                                  <td className="p-3 md:p-4 whitespace-nowrap text-[11px]">
+                                    <div className="font-semibold text-slate-700 dark:text-slate-300">
+                                      {lcd.tu_ngay ? new Date(lcd.tu_ngay).toLocaleDateString('vi-VN') : '—'}
+                                    </div>
+                                    <div className="text-slate-400 font-medium">
+                                      đến {lcd.den_ngay ? new Date(lcd.den_ngay).toLocaleDateString('vi-VN') : '—'}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 md:p-4 whitespace-nowrap">
+                                    <div className="flex items-center justify-between text-[11px] font-bold mb-1">
+                                      <span>Đã đá {daDa}/{tongBuoi}</span>
+                                      <span className="text-slate-400">{progressPercent}%</span>
+                                    </div>
+                                    <div className="w-24 h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                                        style={{ width: `${progressPercent}%` }}
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="p-3 md:p-4 whitespace-nowrap">
+                                    <div className="font-black text-emerald-600 dark:text-emerald-400">
+                                      {Number(lcd.tong_tien || 0).toLocaleString('vi-VN')} đ
+                                    </div>
+                                    <div className="text-[10px] font-semibold text-slate-400">
+                                      Cọc: {Number(lcd.tien_coc || 0).toLocaleString('vi-VN')} đ
+                                    </div>
+                                  </td>
+                                  <td className="p-3 md:p-4 whitespace-nowrap">
+                                    {isCancelled ? (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                                        Đã hủy
+                                      </span>
+                                    ) : isCompleted ? (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-slate-500/20 text-slate-600 dark:text-slate-400 border border-slate-500/30">
+                                        Đã kết thúc
+                                      </span>
+                                    ) : isPaused ? (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                        Tạm dừng
+                                      </span>
+                                    ) : (
+                                      <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                        Đang hiệu lực
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-3 md:p-4 text-right space-x-1.5 whitespace-nowrap">
+                                    {/* Xem danh sách buổi đá */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleViewScheduleSessions(lcd)}
+                                      className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 font-bold text-xs inline-flex items-center gap-1 cursor-pointer"
+                                      title="Xem danh sách các buổi thi đấu đã sinh"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Buổi Đá</span>
+                                    </button>
+
+                                    {/* Bật / Tắt trạng thái */}
+                                    {!isCancelled && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleStatusFixedSchedule(lcd.id, lcd.trang_thai)}
+                                        className={`p-1.5 sm:px-2 sm:py-1 rounded-lg font-bold text-xs inline-flex items-center gap-1 cursor-pointer ${
+                                          isPaused
+                                            ? 'bg-teal-100 hover:bg-teal-200 dark:bg-teal-950/60 dark:hover:bg-teal-900 text-teal-700 dark:text-teal-300'
+                                            : 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-700 dark:text-amber-300'
+                                        }`}
+                                        title={isPaused ? 'Kích hoạt lại hợp đồng' : 'Tạm dừng hợp đồng'}
+                                      >
+                                        <Repeat className="w-3.5 h-3.5" />
+                                        <span className="hidden sm:inline">{isPaused ? 'Kích Hoạt' : 'Tạm Dừng'}</span>
+                                      </button>
+                                    )}
+
+                                    {/* Hủy hợp đồng */}
+                                    {!isCancelled && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCancelFixedSchedule(lcd.id, lcd.ten_doi_bong)}
+                                        className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/60 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 font-bold text-xs inline-flex items-center gap-1 cursor-pointer"
+                                        title="Hủy hợp đồng và giải phóng các ca đá tương lai"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <span className="hidden sm:inline">Hủy HĐ</span>
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Phân Trang Cho Bảng Lịch Cố Định */}
+                    <TablePagination
+                      currentPage={pagedData.currentPage}
+                      totalItems={pagedData.totalItems}
+                      pageSize={10}
+                      onPageChange={(p) => setTabPage('LICH_CO_DINH', p)}
+                      isDarkMode={isDarkMode}
+                    />
+                  </div>
+                </div>
               );
             })()}
 
@@ -8020,6 +8717,522 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          17. MODAL TẠO HỢP ĐỒNG LỊCH CỐ ĐỊNH (FIXED RECURRING CONTRACT MODAL)
+          ===================================================================== */}
+      {fixedScheduleModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${
+            isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
+              <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
+                <CalendarClock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <span>Tạo Hợp Đồng Thuê Sân Cố Định (Lịch Tháng)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setFixedScheduleModal((prev) => ({ ...prev, isOpen: false }))}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFixedSchedule} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Chọn Sân Bóng */}
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Sân bóng <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={fixedScheduleModal.data.ma_san}
+                    onChange={(e) => {
+                      const courtId = Number(e.target.value);
+                      const court = courtList.find((c) => c.id === courtId);
+                      const price = court ? Number(court.don_gia_phut || 5000) * 90 : 350000;
+                      setFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, ma_san: courtId, don_gia_moi_buoi: price },
+                        checkResult: { checked: false, loading: false }
+                      }));
+                    }}
+                    required
+                    className={`w-full p-2.5 rounded-xl border font-bold outline-none ${
+                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    }`}
+                  >
+                    <option value="">-- Chọn Sân Bóng --</option>
+                    {courtList.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.ten_san} {c.ten_loai ? `(${c.ten_loai})` : ''} - {((Number(c.don_gia_phut) || 5000) * 60).toLocaleString('vi-VN')} đ/h
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tên Đội Bóng / Khách Hàng */}
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Tên Đội Bóng / Đại Diện <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={fixedScheduleModal.data.ten_doi_bong}
+                    onChange={(e) =>
+                      setFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, ten_doi_bong: e.target.value }
+                      }))
+                    }
+                    placeholder="VD: FC Tuổi Trẻ, Công ty FPT..."
+                    required
+                    className={`w-full p-2.5 rounded-xl border font-semibold outline-none ${
+                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Số Điện Thoại */}
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Số Điện Thoại Liên Hệ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={fixedScheduleModal.data.so_dien_thoai}
+                    onChange={(e) =>
+                      setFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, so_dien_thoai: e.target.value }
+                      }))
+                    }
+                    placeholder="0912345678"
+                    required
+                    className={`w-full p-2.5 rounded-xl border font-mono font-semibold outline-none ${
+                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    }`}
+                  />
+                </div>
+
+                {/* Đơn Giá Mỗi Buổi */}
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Đơn Giá Thuê / Buổi (VNĐ) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={fixedScheduleModal.data.don_gia_moi_buoi}
+                    onChange={(e) =>
+                      setFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, don_gia_moi_buoi: Number(e.target.value) },
+                        checkResult: { checked: false, loading: false }
+                      }))
+                    }
+                    step={10000}
+                    required
+                    className={`w-full p-2.5 rounded-xl border font-mono font-bold outline-none ${
+                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* BỘ CHỌN THỨ TRONG TUẦN (1 CHẠM) */}
+              <div>
+                <label className="block font-bold mb-1.5 text-slate-700 dark:text-slate-300">
+                  Chọn các thứ đá cố định trong tuần <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {[
+                    { code: '2', label: 'Thứ 2' },
+                    { code: '3', label: 'Thứ 3' },
+                    { code: '4', label: 'Thứ 4' },
+                    { code: '5', label: 'Thứ 5' },
+                    { code: '6', label: 'Thứ 6' },
+                    { code: '7', label: 'Thứ 7' },
+                    { code: 'CN', label: 'Chủ Nhật' },
+                  ].map((d) => {
+                    const isSelected = (fixedScheduleModal.data.cac_thu_trong_tuan || []).includes(d.code);
+                    return (
+                      <button
+                        key={d.code}
+                        type="button"
+                        onClick={() => handleToggleWeekdayInModal(d.code)}
+                        className={`py-2 px-1 rounded-xl text-center font-black text-xs transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30 ring-2 ring-emerald-400 scale-[1.02]'
+                            : isDarkMode
+                            ? 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                            : 'bg-slate-100 border border-slate-300 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* KHUNG GIỜ ĐÁ */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Giờ Bắt Đầu <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={fixedScheduleModal.data.gio_bat_dau}
+                    onChange={(e) =>
+                      setFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, gio_bat_dau: e.target.value },
+                        checkResult: { checked: false, loading: false }
+                      }))
+                    }
+                    className={`w-full p-2.5 rounded-xl border font-mono font-bold outline-none ${
+                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    }`}
+                  >
+                    {TIME_OPTIONS_24H.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Giờ Kết Thúc <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={fixedScheduleModal.data.gio_ket_thuc}
+                    onChange={(e) =>
+                      setFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, gio_ket_thuc: e.target.value },
+                        checkResult: { checked: false, loading: false }
+                      }))
+                    }
+                    className={`w-full p-2.5 rounded-xl border font-mono font-bold outline-none ${
+                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    }`}
+                  >
+                    {TIME_OPTIONS_24H.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* THỜI HẠN HIỆU LỰC HỢP ĐỒNG */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Từ Ngày <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={fixedScheduleModal.data.tu_ngay}
+                    onChange={(e) =>
+                      setFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, tu_ngay: e.target.value },
+                        checkResult: { checked: false, loading: false }
+                      }))
+                    }
+                    required
+                    className={`w-full p-2.5 rounded-xl border font-bold outline-none ${
+                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Đến Ngày <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={fixedScheduleModal.data.den_ngay}
+                    onChange={(e) =>
+                      setFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, den_ngay: e.target.value },
+                        checkResult: { checked: false, loading: false }
+                      }))
+                    }
+                    required
+                    className={`w-full p-2.5 rounded-xl border font-bold outline-none ${
+                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* TIỀN CỌC & GHI CHÚ */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Tiền Cọc Hợp Đồng (VNĐ)
+                  </label>
+                  <input
+                    type="number"
+                    value={fixedScheduleModal.data.tien_coc}
+                    onChange={(e) =>
+                      setFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, tien_coc: Number(e.target.value) }
+                      }))
+                    }
+                    step={50000}
+                    className={`w-full p-2.5 rounded-xl border font-mono font-bold outline-none ${
+                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    }`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
+                    Ghi Chú Hợp Đồng
+                  </label>
+                  <input
+                    type="text"
+                    value={fixedScheduleModal.data.ghi_chu}
+                    onChange={(e) =>
+                      setFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, ghi_chu: e.target.value }
+                      }))
+                    }
+                    placeholder="VD: Hợp đồng đá cố định tối T2-T4..."
+                    className={`w-full p-2.5 rounded-xl border font-semibold outline-none ${
+                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* CHECKBOX BỎ QUA NGÀY TRÙNG */}
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300 pt-1">
+                <input
+                  type="checkbox"
+                  checked={fixedScheduleModal.data.bo_qua_ngay_trung}
+                  onChange={(e) =>
+                    setFixedScheduleModal((prev) => ({
+                      ...prev,
+                      data: { ...prev.data, bo_qua_ngay_trung: e.target.checked }
+                    }))
+                  }
+                  className="w-4 h-4 rounded text-emerald-600 cursor-pointer"
+                />
+                <span>Cho phép bỏ qua các ngày bị trùng lịch với khách khác để vẫn tạo hợp đồng cho các ngày còn lại</span>
+              </label>
+
+              {/* KHUNG KIỂM TRA LỊCH & DỰ TOÁN TỔNG BUỔI */}
+              <div className={`p-3.5 rounded-2xl border transition-all ${
+                fixedScheduleModal.checkResult.checked
+                  ? fixedScheduleModal.checkResult.hop_le_hoan_toan
+                    ? isDarkMode ? 'bg-emerald-950/40 border-emerald-500/50' : 'bg-emerald-50 border-emerald-300'
+                    : isDarkMode ? 'bg-amber-950/40 border-amber-500/50' : 'bg-amber-50 border-amber-300'
+                  : isDarkMode ? 'bg-[#060e09] border-emerald-900/40' : 'bg-slate-50 border-slate-200'
+              }`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-extrabold flex items-center gap-1.5">
+                    <CalendarDays className="w-4 h-4 text-emerald-500" />
+                    Dự toán buổi thi đấu & Kiểm tra xung đột:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCheckFixedSchedule}
+                    disabled={fixedScheduleModal.checkResult.loading}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    {fixedScheduleModal.checkResult.loading ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Search className="w-3.5 h-3.5" />
+                    )}
+                    <span>Kiểm tra lịch & Dự toán</span>
+                  </button>
+                </div>
+
+                {fixedScheduleModal.checkResult.checked && (
+                  <div className="mt-2.5 pt-2.5 border-t border-slate-200/60 dark:border-emerald-900/40 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between font-bold">
+                      <span>Tổng số buổi dự kiến:</span>
+                      <strong className="text-emerald-500">{fixedScheduleModal.checkResult.tong_so_buoi_du_kien} buổi</strong>
+                    </div>
+                    <div className="flex items-center justify-between font-bold">
+                      <span>Số buổi hợp lệ:</span>
+                      <strong className="text-teal-500">{fixedScheduleModal.checkResult.so_buoi_hop_le} buổi</strong>
+                    </div>
+                    {Number(fixedScheduleModal.checkResult.so_buoi_bi_trung || 0) > 0 && (
+                      <div className="flex items-center justify-between font-bold text-rose-500">
+                        <span>Số buổi bị trùng ca:</span>
+                        <strong>{fixedScheduleModal.checkResult.so_buoi_bi_trung} buổi</strong>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between font-extrabold text-sm border-t border-dashed pt-1.5">
+                      <span>Dự toán tổng tiền:</span>
+                      <span className="text-emerald-500 font-mono">
+                        {Number(fixedScheduleModal.checkResult.tong_tien_du_kien || 0).toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+
+                    {Number(fixedScheduleModal.checkResult.so_buoi_bi_trung || 0) > 0 && (
+                      <div className="mt-2 p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px]">
+                        ⚠️ Phát hiện các buổi sau bị kẹt lịch:
+                        <ul className="list-disc list-inside mt-1 space-y-0.5">
+                          {fixedScheduleModal.checkResult.chi_tiet_ngay
+                            ?.filter((n: any) => n.bi_trung)
+                            .slice(0, 3)
+                            .map((n: any, idx: number) => (
+                              <li key={idx}>
+                                {new Date(n.ngay_da).toLocaleDateString('vi-VN')} ({n.thu_tieng_viet}): {n.ly_do_trung}
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* FOOTER BUTTONS */}
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 dark:border-emerald-900/40">
+                <button
+                  type="button"
+                  onClick={() => setFixedScheduleModal((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl font-black bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-slate-950 cursor-pointer shadow-lg shadow-emerald-500/30 flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                  <span>Xác Nhận Tạo Hợp Đồng & Sinh Lịch</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          18. MODAL XEM CHI TIẾT CÁC BUỔI THI ĐẤU ĐÃ SINH CHO HỢP ĐỒNG CỐ ĐỊNH
+          ===================================================================== */}
+      {viewScheduleSessionsModal.isOpen && viewScheduleSessionsModal.schedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${
+            isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
+              <div>
+                <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
+                  <CalendarClock className="w-5 h-5 text-emerald-500" />
+                  <span>Các Buổi Thi Đấu: {viewScheduleSessionsModal.schedule.ten_doi_bong}</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Sân: <strong className="text-emerald-400">{viewScheduleSessionsModal.schedule.ten_san}</strong> | Khung giờ: <strong className="font-mono text-emerald-400">{viewScheduleSessionsModal.schedule.gio_bat_dau} - {viewScheduleSessionsModal.schedule.gio_ket_thuc}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewScheduleSessionsModal((prev) => ({ ...prev, isOpen: false }))}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {viewScheduleSessionsModal.loading ? (
+              <div className="py-12 text-center text-slate-400 flex flex-col items-center justify-center gap-2">
+                <RefreshCw className="w-6 h-6 animate-spin text-emerald-500" />
+                <span className="text-xs font-semibold">Đang tải danh sách buổi thi đấu...</span>
+              </div>
+            ) : viewScheduleSessionsModal.sessions.length === 0 ? (
+              <div className="py-10 text-center text-slate-400 text-xs italic">
+                Chưa có buổi thi đấu nào được sinh ra cho hợp đồng này.
+              </div>
+            ) : (
+              <div className="max-h-96 overflow-y-auto rounded-2xl border border-slate-200 dark:border-emerald-900/30">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className={isDarkMode ? 'bg-[#060e09] text-emerald-400' : 'bg-slate-100 text-slate-700'}>
+                    <tr className="border-b dark:border-emerald-900/30">
+                      <th className="p-3">STT</th>
+                      <th className="p-3">MÃ ĐƠN</th>
+                      <th className="p-3">NGÀY ĐÁ</th>
+                      <th className="p-3">GIỜ ĐÁ</th>
+                      <th className="p-3">TIỀN SÂN</th>
+                      <th className="p-3 text-right">TRẠNG THÁI</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
+                    {viewScheduleSessionsModal.sessions.map((s: any, idx: number) => {
+                      const isPast = new Date(s.ngay_da) < new Date(new Date().toISOString().split('T')[0]);
+                      const isCancelled = s.trang_thai === 'DA_HUY';
+                      return (
+                        <tr key={s.id} className={isDarkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}>
+                          <td className="p-3 text-slate-400 font-mono">{idx + 1}</td>
+                          <td className="p-3 font-mono font-bold text-emerald-500">#{s.id}</td>
+                          <td className="p-3 font-semibold">
+                            {new Date(s.ngay_da).toLocaleDateString('vi-VN')}
+                          </td>
+                          <td className="p-3 font-mono">
+                            {s.gio_bat_dau} - {s.gio_ket_thuc}
+                          </td>
+                          <td className="p-3 font-mono font-bold">
+                            {Number(s.tien_san || 0).toLocaleString('vi-VN')} đ
+                          </td>
+                          <td className="p-3 text-right">
+                            {isCancelled ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                                Đã hủy
+                              </span>
+                            ) : s.trang_thai === 'HOAN_THANH' || s.trang_thai === 'DA_THANH_TOAN' ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                Hoàn thành
+                              </span>
+                            ) : isPast ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-slate-500/20 text-slate-400 border border-slate-500/30">
+                                Đã đá
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-teal-500/20 text-teal-400 border border-teal-500/30">
+                                Đã chốt ca
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-emerald-900/40 mt-4">
+              <button
+                type="button"
+                onClick={() => setViewScheduleSessionsModal((prev) => ({ ...prev, isOpen: false }))}
+                className="px-5 py-2 rounded-xl font-bold text-xs bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}

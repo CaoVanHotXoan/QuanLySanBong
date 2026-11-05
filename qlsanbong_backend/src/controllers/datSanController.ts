@@ -18,10 +18,11 @@
  * =====================================================================
  */
 
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { sql, poolPromise } from '../config/db';
 import { AuthRequest } from '../types';
 import memoryCache from '../services/cacheService';
+import * as datSanService from '../services/datSanService';
 
 export const cleanTimeForSql = (val: any, fallback: string = '00:00:00'): string => {
     if (!val) return fallback;
@@ -2033,6 +2034,193 @@ export const banLeDichVu = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({
             success: false,
             message: error.message || 'Lỗi khi bán lẻ dịch vụ'
+        });
+    }
+};
+
+/**
+ * =====================================================================
+ * CÁC CONTROLLER QUẢN LÝ LỊCH CỐ ĐỊNH (FIXED / RECURRING BOOKINGS)
+ * =====================================================================
+ */
+
+export const layDanhSachLichCoDinh = async (req: Request, res: Response) => {
+    try {
+        const { trang_thai, ma_san, tu_khoa } = req.query;
+        const list = await datSanService.layDanhSachLichCoDinh({
+            trang_thai: trang_thai ? String(trang_thai) : undefined,
+            ma_san: ma_san ? Number(ma_san) : undefined,
+            tu_khoa: tu_khoa ? String(tu_khoa) : undefined
+        });
+        return res.status(200).json({
+            success: true,
+            data: list
+        });
+    } catch (error: any) {
+        console.error('Lỗi layDanhSachLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách lịch cố định'
+        });
+    }
+};
+
+export const layChiTietLichCoDinh = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const data = await datSanService.layChiTietLichCoDinh(Number(id));
+        return res.status(200).json({
+            success: true,
+            data
+        });
+    } catch (error: any) {
+        console.error('Lỗi layChiTietLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy chi tiết lịch cố định'
+        });
+    }
+};
+
+export const kiemTraTrungLichCoDinh = async (req: Request, res: Response) => {
+    try {
+        const { ma_san, cac_thu_trong_tuan, gio_bat_dau, gio_ket_thuc, tu_ngay, den_ngay, don_gia_moi_buoi } = req.body;
+        if (!ma_san || !cac_thu_trong_tuan || !gio_bat_dau || !gio_ket_thuc || !tu_ngay || !den_ngay) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ thông tin: Sân, thứ trong tuần, khung giờ và khoảng ngày!'
+            });
+        }
+        const data = await datSanService.kiemTraTrungLichCoDinh({
+            ma_san: Number(ma_san),
+            cac_thu_trong_tuan: String(cac_thu_trong_tuan),
+            gio_bat_dau: String(gio_bat_dau),
+            gio_ket_thuc: String(gio_ket_thuc),
+            tu_ngay: String(tu_ngay),
+            den_ngay: String(den_ngay),
+            don_gia_moi_buoi: Number(don_gia_moi_buoi || 0)
+        });
+        return res.status(200).json({
+            success: true,
+            data
+        });
+    } catch (error: any) {
+        console.error('Lỗi kiemTraTrungLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi kiểm tra trùng lịch'
+        });
+    }
+};
+
+export const themLichCoDinh = async (req: any, res: Response) => {
+    try {
+        const {
+            ma_san,
+            ten_doi_bong,
+            so_dien_thoai,
+            cac_thu_trong_tuan,
+            gio_bat_dau,
+            gio_ket_thuc,
+            tu_ngay,
+            den_ngay,
+            don_gia_moi_buoi,
+            tien_coc,
+            bo_qua_ngay_trung,
+            ghi_chu
+        } = req.body;
+
+        if (!ma_san || !ten_doi_bong || !so_dien_thoai || !cac_thu_trong_tuan || !gio_bat_dau || !gio_ket_thuc || !tu_ngay || !den_ngay) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng điền đầy đủ các thông tin bắt buộc của hợp đồng lịch cố định!'
+            });
+        }
+
+        const currentUserId = req.user?.id || req.body.ma_nguoi_dung || null;
+
+        const result = await datSanService.themLichCoDinh({
+            ma_nguoi_dung: currentUserId ? Number(currentUserId) : undefined,
+            ma_san: Number(ma_san),
+            ten_doi_bong: String(ten_doi_bong).trim(),
+            so_dien_thoai: String(so_dien_thoai).trim(),
+            cac_thu_trong_tuan: String(cac_thu_trong_tuan),
+            gio_bat_dau: String(gio_bat_dau),
+            gio_ket_thuc: String(gio_ket_thuc),
+            tu_ngay: String(tu_ngay),
+            den_ngay: String(den_ngay),
+            don_gia_moi_buoi: Number(don_gia_moi_buoi || 0),
+            tien_coc: Number(tien_coc || 0),
+            bo_qua_ngay_trung: Boolean(bo_qua_ngay_trung),
+            ghi_chu: ghi_chu ? String(ghi_chu) : undefined
+        });
+
+        // Bắn Socket.IO cập nhật real-time lịch sân
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: `Tạo hợp đồng lịch cố định cho "${ten_doi_bong}" thành công! Đã tự động sinh ${result.danh_sach_buoi?.length || 0} buổi thi đấu.`,
+            data: result
+        });
+    } catch (error: any) {
+        console.error('Lỗi themLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi tạo hợp đồng lịch cố định'
+        });
+    }
+};
+
+export const doiTrangThaiLichCoDinh = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { trang_thai, ghi_chu } = req.body;
+        if (!trang_thai) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp trạng thái mới!'
+            });
+        }
+        const updated = await datSanService.doiTrangThaiLichCoDinh(Number(id), String(trang_thai), ghi_chu);
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật trạng thái hợp đồng thành công!',
+            data: updated
+        });
+    } catch (error: any) {
+        console.error('Lỗi doiTrangThaiLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi đổi trạng thái lịch cố định'
+        });
+    }
+};
+
+export const huyLichCoDinh = async (req: any, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { ly_do } = req.body;
+        const cancelled = await datSanService.huyLichCoDinh(Number(id), ly_do);
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đã hủy hợp đồng lịch cố định và tự động giải phóng các ca đá chưa diễn ra!',
+            data: cancelled
+        });
+    } catch (error: any) {
+        console.error('Lỗi huyLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi hủy hợp đồng lịch cố định'
         });
     }
 };

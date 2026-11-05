@@ -22,6 +22,7 @@ Nếu yêu cầu mới có thể làm vi phạm mục 2 hoặc 3, AI phải dừ
 - `MUST` giữ tương thích với API, schema và quy trình hiện có trừ khi người dùng yêu cầu phá vỡ tương thích.
 - `MUST` kiểm tra lỗi, chạy test hoặc lệnh kiểm tra phù hợp sau mỗi thay đổi.
 - `MUST` báo rõ giả định, file đã sửa, kiểm tra đã chạy và vấn đề còn tồn tại.
+- `MUST` luôn sử dụng công cụ edit file trực tiếp của IDE để hiển thị bảng duyệt thay đổi (Accept all / Reject all) cho người dùng, tuyệt đối không dùng script terminal ngầm để ghi đè file code.
 - `MUST NOT` tự bịa API, bảng dữ liệu, quyền nghiệp vụ, secret, thông tin kết nối hoặc quy định pháp lý.
 - `MUST NOT` đánh dấu một việc là hoàn thành khi chưa kiểm chứng.
 

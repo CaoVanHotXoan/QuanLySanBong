@@ -30,6 +30,7 @@ IF OBJECT_ID('Dich_Vu', 'U') IS NOT NULL DROP TABLE Dich_Vu;
 IF OBJECT_ID('Lich_Su_Hoan_Tien', 'U') IS NOT NULL DROP TABLE Lich_Su_Hoan_Tien;
 IF OBJECT_ID('Thanh_Toan', 'U') IS NOT NULL DROP TABLE Thanh_Toan;
 IF OBJECT_ID('Don_Dat_San', 'U') IS NOT NULL DROP TABLE Don_Dat_San;
+IF OBJECT_ID('Lich_Co_Dinh', 'U') IS NOT NULL DROP TABLE Lich_Co_Dinh;
 IF OBJECT_ID('San_Bong', 'U') IS NOT NULL DROP TABLE San_Bong;
 IF OBJECT_ID('Khung_Gio', 'U') IS NOT NULL DROP TABLE Khung_Gio;
 IF OBJECT_ID('Khung_Gio_Gia', 'U') IS NOT NULL DROP TABLE Khung_Gio_Gia;
@@ -102,11 +103,36 @@ CREATE TABLE Khung_Gio (
 );
 GO
 
--- 3.6. Bảng Don_Dat_San (Đơn đặt lịch thi đấu & bán lẻ dịch vụ tại quầy)
+-- 3.6. Bảng Lich_Co_Dinh (Hợp đồng thuê sân cố định định kỳ theo tuần/tháng)
+CREATE TABLE Lich_Co_Dinh (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ma_nguoi_dung INT NULL,
+    ma_san INT NOT NULL,
+    ten_doi_bong NVARCHAR(100) NOT NULL,
+    so_dien_thoai VARCHAR(20) NOT NULL,
+    cac_thu_trong_tuan VARCHAR(50) NOT NULL, -- Ví dụ: '2,4,6' (Thứ 2, Thứ 4, Thứ 6) hoặc '3,5'
+    gio_bat_dau TIME NOT NULL,
+    gio_ket_thuc TIME NOT NULL,
+    tu_ngay DATE NOT NULL,
+    den_ngay DATE NOT NULL,
+    tong_so_buoi INT NOT NULL DEFAULT 0,
+    don_gia_moi_buoi DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    tien_coc DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    tong_tien DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    trang_thai VARCHAR(30) CHECK (trang_thai IN ('DANG_HOAT_DONG', 'TAM_DUNG', 'DA_KET_THUC', 'DA_HUY')) DEFAULT 'DANG_HOAT_DONG',
+    ghi_chu NVARCHAR(MAX) NULL,
+    ngay_tao DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE SET NULL,
+    FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE CASCADE
+);
+GO
+
+-- 3.7. Bảng Don_Dat_San (Đơn đặt lịch thi đấu & bán lẻ dịch vụ tại quầy)
 CREATE TABLE Don_Dat_San (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ma_nguoi_dung INT NULL,
     ma_san INT NULL, -- NULL nếu là đơn bán lẻ nước / dịch vụ tại quầy không đặt sân
+    ma_lich_co_dinh INT NULL, -- NULL nếu là khách đặt vãng lai, có giá trị nếu thuộc hợp đồng lịch cố định
     ngay_da DATE NOT NULL,
     gio_bat_dau TIME NOT NULL,
     gio_ket_thuc TIME NULL,
@@ -119,7 +145,8 @@ CREATE TABLE Don_Dat_San (
     gio_vao_san TIME NULL,
     ngay_tao DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
-    FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE CASCADE
+    FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE CASCADE,
+    FOREIGN KEY (ma_lich_co_dinh) REFERENCES Lich_Co_Dinh(id) ON DELETE SET NULL
 );
 GO
 
@@ -281,6 +308,8 @@ GO
 CREATE NONCLUSTERED INDEX IX_DonDatSan_NgayDa_TrangThai ON Don_Dat_San(ngay_da, trang_thai) INCLUDE (ma_san, ma_nguoi_dung, tong_tien);
 CREATE NONCLUSTERED INDEX IX_DonDatSan_MaNguoiDung ON Don_Dat_San(ma_nguoi_dung);
 CREATE NONCLUSTERED INDEX IX_DonDatSan_MaSan ON Don_Dat_San(ma_san);
+CREATE NONCLUSTERED INDEX IX_DonDatSan_MaLichCoDinh ON Don_Dat_San(ma_lich_co_dinh);
+CREATE NONCLUSTERED INDEX IX_LichCoDinh_MaSan_TrangThai ON Lich_Co_Dinh(ma_san, trang_thai);
 CREATE NONCLUSTERED INDEX IX_ThanhToan_MaDonDat ON Thanh_Toan(ma_don_dat);
 CREATE NONCLUSTERED INDEX IX_TinTuc_MaLoaiTin_TrangThai ON Tin_Tuc(ma_loai_tin, trang_thai) INCLUDE (tieu_de, ngay_dang, luot_xem);
 CREATE NONCLUSTERED INDEX IX_LienHe_TrangThai ON Lien_He(trang_thai_xu_ly);
@@ -434,6 +463,15 @@ BEGIN
 END;
 GO
 
-PRINT N'✅ ĐÃ KHỞI TẠO XONG CƠ SỞ DỮ LIỆU, TOÀN BỘ 15 BẢNG VÀ SEED DATA CHO QuanLySanBong!';
+-- 5.11. Dữ liệu Hợp đồng Lịch Cố Định mẫu
+IF NOT EXISTS (SELECT 1 FROM Lich_Co_Dinh)
+BEGIN
+    INSERT INTO Lich_Co_Dinh (ma_nguoi_dung, ma_san, ten_doi_bong, so_dien_thoai, cac_thu_trong_tuan, gio_bat_dau, gio_ket_thuc, tu_ngay, den_ngay, tong_so_buoi, don_gia_moi_buoi, tien_coc, tong_tien, trang_thai, ghi_chu)
+    VALUES 
+    (1, 1, N'FC Bách Khoa', '0912345678', '3,5', '18:30', '20:00', '2026-11-01', '2026-12-31', 18, 300000.00, 1000000.00, 5400000.00, 'DANG_HOAT_DONG', N'Hợp đồng đá cố định thứ 3 và thứ 5 hàng tuần');
+END;
+GO
+
+PRINT N'✅ ĐÃ KHỞI TẠO XONG CƠ SỞ DỮ LIỆU, TOÀN BỘ 16 BẢNG VÀ SEED DATA CHO QuanLySanBong!';
 PRINT N'⚠️ LƯU Ý: File này TUYỆT ĐỐI KHÔNG CHỨA PROCEDURE. Hãy chạy tiếp file ThuTuc.sql để cài đặt toàn bộ thủ tục lưu trữ!';
 GO
