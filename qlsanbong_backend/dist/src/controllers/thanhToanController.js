@@ -192,25 +192,44 @@ const taoThanhToanPayOS = async (req, res) => {
             }
             if (!ma_nd)
                 ma_nd = 1;
-            const gio_bd_clean = (0, datSanController_1.cleanTimeForSql)(gio_bat_dau, '06:00:00');
-            const gio_kt_clean = (0, datSanController_1.cleanTimeForSql)(gio_ket_thuc, '07:30:00');
             const isTraHet = (loai_thanh_toan === 'TRA_HET');
             const initialStatus = 'CHO_THANH_TOAN';
-            // Thực thi Stored Procedure sp_DatSan
-            const datSanResult = await pool.request()
-                .input('ma_nguoi_dung', db_1.sql.Int, ma_nd)
-                .input('ma_san', db_1.sql.Int, parseInt(ma_san, 10))
-                .input('ngay_da', db_1.sql.Date, ngay_da)
-                .input('gio_bat_dau', db_1.sql.VarChar(8), gio_bd_clean)
-                .input('gio_ket_thuc', db_1.sql.VarChar(8), gio_kt_clean)
-                .input('tien_san', db_1.sql.Decimal(10, 2), tien_san ? parseFloat(tien_san) : null)
-                .input('tong_tien', db_1.sql.Decimal(10, 2), tong_tien ? parseFloat(tong_tien) : null)
-                .input('phuong_thuc', db_1.sql.VarChar(20), 'CHUYEN_KHOAN')
-                .input('trang_thai', db_1.sql.VarChar(20), initialStatus)
-                .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || `PayOS VietQR MB Bank - ${isTraHet ? '100%' : '30%'}`)
-                .execute('sp_DatSan');
-            if (datSanResult.recordset && datSanResult.recordset[0]) {
-                finalDonDatId = datSanResult.recordset[0].id;
+            if (req.body.danh_sach_san && Array.isArray(req.body.danh_sach_san) && req.body.danh_sach_san.length > 0) {
+                // Đặt nhiều sân cùng lúc qua sp_DatNhieuSan
+                const datNhieuResult = await pool.request()
+                    .input('ma_nguoi_dung', db_1.sql.Int, ma_nd)
+                    .input('ho_ten', db_1.sql.NVarChar(100), ten_khach || 'Khách đặt nhiều sân')
+                    .input('so_dien_thoai', db_1.sql.VarChar(15), sdt_khach || '0900000000')
+                    .input('tong_tien', db_1.sql.Decimal(10, 2), tong_tien ? parseFloat(tong_tien) : Number(amount))
+                    .input('phuong_thuc', db_1.sql.VarChar(20), 'CHUYEN_KHOAN')
+                    .input('trang_thai', db_1.sql.VarChar(30), initialStatus)
+                    .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || `PayOS VietQR MB Bank Nhiều Sân - ${isTraHet ? '100%' : '30%'}`)
+                    .input('danh_sach_san', db_1.sql.NVarChar(db_1.sql.MAX), JSON.stringify(req.body.danh_sach_san))
+                    .input('dich_vu_chon', db_1.sql.NVarChar(db_1.sql.MAX), req.body.dich_vu_chon ? JSON.stringify(req.body.dich_vu_chon) : null)
+                    .execute('sp_DatNhieuSan');
+                if (datNhieuResult.recordset && datNhieuResult.recordset[0]) {
+                    finalDonDatId = datNhieuResult.recordset[0].id;
+                }
+            }
+            else {
+                const gio_bd_clean = (0, datSanController_1.cleanTimeForSql)(gio_bat_dau, '06:00:00');
+                const gio_kt_clean = (0, datSanController_1.cleanTimeForSql)(gio_ket_thuc, '07:30:00');
+                // Thực thi Stored Procedure sp_DatSan
+                const datSanResult = await pool.request()
+                    .input('ma_nguoi_dung', db_1.sql.Int, ma_nd)
+                    .input('ma_san', db_1.sql.Int, parseInt(ma_san, 10))
+                    .input('ngay_da', db_1.sql.Date, ngay_da)
+                    .input('gio_bat_dau', db_1.sql.VarChar(8), gio_bd_clean)
+                    .input('gio_ket_thuc', db_1.sql.VarChar(8), gio_kt_clean)
+                    .input('tien_san', db_1.sql.Decimal(10, 2), tien_san ? parseFloat(tien_san) : null)
+                    .input('tong_tien', db_1.sql.Decimal(10, 2), tong_tien ? parseFloat(tong_tien) : null)
+                    .input('phuong_thuc', db_1.sql.VarChar(20), 'CHUYEN_KHOAN')
+                    .input('trang_thai', db_1.sql.VarChar(20), initialStatus)
+                    .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || `PayOS VietQR MB Bank - ${isTraHet ? '100%' : '30%'}`)
+                    .execute('sp_DatSan');
+                if (datSanResult.recordset && datSanResult.recordset[0]) {
+                    finalDonDatId = datSanResult.recordset[0].id;
+                }
             }
         }
         // Tạo orderCode độc nhất

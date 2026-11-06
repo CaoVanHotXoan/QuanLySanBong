@@ -11,19 +11,19 @@
   font-size: 14px;
   font-weight: 700;
   font-family: inherit;
-  color: #022c22;
-  background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+  color: #ffffff;
+  background: linear-gradient(135deg, #274F9D 0%, #E0B341 100%);
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+  box-shadow: 0 4px 14px rgba(39, 79, 157, 0.35);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   outline: none;
 }
 
 .login-trigger-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 6px 20px rgba(39, 79, 157, 0.5);
   filter: brightness(1.1);
 }
 
@@ -40,9 +40,9 @@
   font-size: 14px;
   font-weight: 700;
   font-family: inherit;
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #5B90DD;
+  background: rgba(39, 79, 157, 0.12);
+  border: 1px solid rgba(39, 79, 157, 0.35);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -50,11 +50,11 @@
 }
 
 .register-trigger-btn:hover {
-  background: rgba(16, 185, 129, 0.22);
-  border-color: #10b981;
-  color: #6ee7b7;
+  background: rgba(39, 79, 157, 0.22);
+  border-color: #274F9D;
+  color: #E0B341;
   transform: translateY(-2px);
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
+  box-shadow: 0 4px 14px rgba(39, 79, 157, 0.25);
 }
 
 /* Lớp phủ mờ toàn màn hình (Overlay) */
@@ -88,7 +88,7 @@
   border-radius: 24px;
   padding: 28px 28px 24px 28px;
   box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85),
-              0 0 40px rgba(16, 185, 129, 0.15);
+              0 0 40px rgba(39, 79, 157, 0.15);
   color: #f8fafc;
   box-sizing: border-box;
   animation: loginModalScaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -187,9 +187,9 @@
 }
 
 .login-tab-btn.active {
-  color: #022c22;
-  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
-  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35);
+  color: #ffffff;
+  background: linear-gradient(135deg, #5B90DD 0%, #274F9D 100%);
+  box-shadow: 0 2px 10px rgba(39, 79, 157, 0.35);
 }
 
 /* Alert Box Lỗi */
@@ -207,12 +207,12 @@
 
 /* Alert Box Thành Công */
 .login-alert-success {
-  background-color: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  background-color: rgba(39, 79, 157, 0.15);
+  border: 1px solid rgba(39, 79, 157, 0.4);
   border-radius: 12px;
   padding: 10px 14px;
   margin-bottom: 16px;
-  color: #6ee7b7;
+  color: #E0B341;
   font-size: 13px;
   line-height: 1.45;
   text-align: left;
@@ -263,9 +263,9 @@
 }
 
 .login-input:focus {
-  border-color: #34d399;
+  border-color: #5B90DD;
   background-color: rgba(15, 23, 42, 1);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 0 3px rgba(39, 79, 157, 0.2);
 }
 
 /* Ô nhập Email */
@@ -282,9 +282,9 @@
 }
 
 .login-email-box:focus-within {
-  border-color: #34d399;
+  border-color: #5B90DD;
   background-color: rgba(15, 23, 42, 1);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 0 3px rgba(39, 79, 157, 0.2);
 }
 
 .login-email-input {
@@ -311,9 +311,9 @@
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 700;
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.12);
-  border-left: 1px solid rgba(16, 185, 129, 0.2);
+  color: #5B90DD;
+  background: rgba(39, 79, 157, 0.12);
+  border-left: 1px solid rgba(39, 79, 157, 0.2);
   user-select: none;
   white-space: nowrap;
 }
@@ -332,9 +332,9 @@
 }
 
 .login-password-box:focus-within {
-  border-color: #34d399;
+  border-color: #5B90DD;
   background-color: rgba(15, 23, 42, 1);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 0 3px rgba(39, 79, 157, 0.2);
 }
 
 .login-password-input {
@@ -368,7 +368,7 @@
 }
 
 .login-password-toggle-btn:hover {
-  color: #34d399;
+  color: #5B90DD;
 }
 
 /* Nút Submit Form */
@@ -380,19 +380,19 @@
   font-weight: 800;
   letter-spacing: 0.3px;
   font-family: inherit;
-  color: #022c22;
-  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  color: #ffffff;
+  background: linear-gradient(135deg, #5B90DD 0%, #274F9D 100%);
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 4px 16px rgba(39, 79, 157, 0.4);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   outline: none;
 }
 
 .login-submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.55);
+  box-shadow: 0 6px 22px rgba(39, 79, 157, 0.55);
   filter: brightness(1.08);
 }
 
@@ -414,7 +414,7 @@
 }
 
 .login-toggle-link {
-  color: #34d399;
+  color: #5B90DD;
   background: none;
   border: none;
   padding: 0;
@@ -428,7 +428,7 @@
 }
 
 .login-toggle-link:hover {
-  color: #6ee7b7;
+  color: #E0B341;
   text-decoration: underline;
 }
 

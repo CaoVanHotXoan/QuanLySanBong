@@ -100,8 +100,8 @@ export default function DongNaiMap({
           className: 'custom-soccer-marker',
           html: `
             <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; cursor: pointer;">
-              <span style="position: absolute; width: 40px; height: 40px; background: rgba(16, 185, 129, 0.4); border-radius: 50%; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;"></span>
-              <div style="position: relative; width: 34px; height: 34px; background: #059669; border: 2.5px solid #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.5);">
+              <span style="position: absolute; width: 40px; height: 40px; background: rgba(39, 79, 157, 0.4); border-radius: 50%; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;"></span>
+              <div style="position: relative; width: 34px; height: 34px; background: #274F9D; border: 2.5px solid #E0B341; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.5);">
                 <span style="font-size: 18px; line-height: 1;">⚽</span>
               </div>
             </div>
@@ -117,10 +117,10 @@ export default function DongNaiMap({
         const googleMapsDirectUrl = `https://www.google.com/maps/search/?api=1&query=${coords[0]},${coords[1]}`;
         const popupContent = `
           <div style="text-align: center; font-family: system-ui, sans-serif; padding: 6px; min-width: 170px;">
-            <div style="font-weight: 800; font-size: 13px; color: #047857; margin-bottom: 2px;">${tenTrungTam}</div>
+            <div style="font-weight: 800; font-size: 13px; color: #274F9D; margin-bottom: 2px;">${tenTrungTam}</div>
             <div style="font-size: 11px; color: #475569; margin-bottom: 8px;">${diaChi}</div>
             <a href="${googleMapsDirectUrl}" target="_blank" rel="noreferrer" 
-               style="display: inline-block; padding: 5px 12px; background: #059669; color: #ffffff; border-radius: 8px; font-size: 11px; font-weight: 700; text-decoration: none; box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);">
+               style="display: inline-block; padding: 5px 12px; background: #274F9D; color: #ffffff; border-radius: 8px; font-size: 11px; font-weight: 700; text-decoration: none; box-shadow: 0 2px 6px rgba(39, 79, 157, 0.35);">
               Chỉ đường trên Google Maps ↗
             </a>
           </div>

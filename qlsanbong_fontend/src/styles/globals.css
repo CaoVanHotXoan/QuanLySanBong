@@ -2,19 +2,75 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  /* =========================================================================
+     BẢNG MÀU THƯƠNG HIỆU: ĐẠI HỌC LẠC HỒNG (LHU) & ARIZONA STATE UNIVERSITY (ASU)
+     1. Xanh Dương LHU: #274F9D (Chủ đạo chính)
+     2. Vàng Đồng Chim Lạc: #E0B341 (Biểu tượng chim Lạc - Phụ trợ cao quý)
+     3. Đỏ Booc-đô ASU: #8D1D41 (Màu cờ ASU - Điểm nhấn hành động & nổi bật)
+     ========================================================================= */
+
+  /* Ánh xạ hệ màu emerald sang Xanh Dương Lạc Hồng (#274F9D) */
+  --color-emerald-50: #eff4fc;
+  --color-emerald-100: #dbe6f8;
+  --color-emerald-200: #bed3f3;
+  --color-emerald-300: #93b7eb;
+  --color-emerald-400: #6094df;
+  --color-emerald-500: #274f9d;  /* Màu chuẩn LHU Blue */
+  --color-emerald-600: #1d3f82;  /* LHU Blue đậm cho Button hover / Active */
+  --color-emerald-700: #18336a;
+  --color-emerald-800: #162c57;
+  --color-emerald-900: #172748;
+  --color-emerald-950: #0a1120;  /* Nền Dark Mode Deep Navy */
+
+  /* Ánh xạ hệ màu teal sang Vàng Đồng Chim Lạc (#E0B341) */
+  --color-teal-50: #fefcf3;
+  --color-teal-100: #fdf6e2;
+  --color-teal-200: #fbecc5;
+  --color-teal-300: #f7dd9c;
+  --color-teal-400: #f2c76a;
+  --color-teal-500: #e0b341;  /* Màu chuẩn Chim Lạc Gold */
+  --color-teal-600: #c9962e;
+  --color-teal-700: #a77423;
+  --color-teal-800: #885c22;
+  --color-teal-900: #714c20;
+  --color-teal-950: #42280d;
+
+  /* Bảng màu Đỏ ASU Maroon (#8D1D41) */
+  --color-rose-500: #8d1d41;  /* ASU Sun Devil Maroon */
+  --color-rose-600: #761635;
+  --color-rose-700: #610f29;
+
+  /* Định danh độc lập */
+  --color-lhu-blue: #274f9d;
+  --color-lhu-blue-dark: #1d3f82;
+  --color-lhu-blue-light: #6094df;
+
+  --color-lhu-gold: #e0b341;
+  --color-lhu-gold-dark: #c9962e;
+  --color-lhu-gold-light: #f2c76a;
+
+  --color-asu-maroon: #8d1d41;
+  --color-asu-maroon-dark: #610f29;
+  --color-asu-maroon-light: #a82d54;
+}
+
 :root {
-  --background: #f4f7f5;
+  --background: #f4f6fa;
   --foreground: #0f172a;
+  --lhu-blue: #274f9d;
+  --lhu-gold: #e0b341;
+  --asu-maroon: #8d1d41;
 }
 
 body {
-  background-color: #f4f7f5;
+  background-color: #f4f6fa;
   color: #0f172a;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   overflow-x: hidden;
 }
 
-/* Custom Scrollbar - Stadium Green Accent */
+/* Custom Scrollbar - LHU Royal Blue & Gold Accent */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -25,17 +81,17 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(16, 185, 129, 0.4);
+  background: rgba(39, 79, 157, 0.45);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(16, 185, 129, 0.7);
+  background: rgba(224, 179, 65, 0.85);
 }
 
-/* Football Turf Subtle Pattern */
+/* Football Turf Subtle Pattern - LHU Blue Tone */
 .bg-pitch-grid {
-  background-image: radial-gradient(rgba(16, 185, 129, 0.12) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(39, 79, 157, 0.12) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 

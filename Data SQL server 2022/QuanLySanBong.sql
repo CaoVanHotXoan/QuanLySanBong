@@ -24,6 +24,7 @@ GO
 -- =====================================================================
 -- 2. XÓA BẢNG CŨ NẾU ĐÃ TỒN TẠI (THEO THỨ TỰ RÀNG BUỘC KHÓA NGOẠI)
 -- =====================================================================
+IF OBJECT_ID('Chi_Tiet_Don_Dat', 'U') IS NOT NULL DROP TABLE Chi_Tiet_Don_Dat;
 IF OBJECT_ID('Chi_Tiet_Dich_Vu', 'U') IS NOT NULL DROP TABLE Chi_Tiet_Dich_Vu;
 IF OBJECT_ID('Phieu_Nhap_Kho', 'U') IS NOT NULL DROP TABLE Phieu_Nhap_Kho;
 IF OBJECT_ID('Dich_Vu', 'U') IS NOT NULL DROP TABLE Dich_Vu;
@@ -210,7 +211,22 @@ CREATE TABLE Chi_Tiet_Dich_Vu (
 );
 GO
 
--- 3.12. Bảng Banner (Quản lý Banner quảng cáo / Video Slider trang chủ)
+-- 3.12. Bảng Chi_Tiet_Don_Dat (Hỗ trợ đặt nhiều sân cùng lúc trong 1 đơn đặt)
+CREATE TABLE Chi_Tiet_Don_Dat (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ma_don_dat INT NOT NULL,
+    ma_san INT NOT NULL,
+    ngay_da DATE NOT NULL,
+    gio_bat_dau TIME NOT NULL,
+    gio_ket_thuc TIME NOT NULL,
+    tien_san DECIMAL(10, 2) NOT NULL DEFAULT 0,
+    ghi_chu NVARCHAR(255) NULL,
+    FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id) ON DELETE CASCADE,
+    FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE CASCADE
+);
+GO
+
+-- 3.13. Bảng Banner (Quản lý Banner quảng cáo / Video Slider trang chủ)
 CREATE TABLE Banner (
     id INT IDENTITY(1,1) PRIMARY KEY,
     tieu_de NVARCHAR(150) NULL,
@@ -309,7 +325,10 @@ CREATE NONCLUSTERED INDEX IX_DonDatSan_NgayDa_TrangThai ON Don_Dat_San(ngay_da, 
 CREATE NONCLUSTERED INDEX IX_DonDatSan_MaNguoiDung ON Don_Dat_San(ma_nguoi_dung);
 CREATE NONCLUSTERED INDEX IX_DonDatSan_MaSan ON Don_Dat_San(ma_san);
 CREATE NONCLUSTERED INDEX IX_DonDatSan_MaLichCoDinh ON Don_Dat_San(ma_lich_co_dinh);
+CREATE NONCLUSTERED INDEX IX_ChiTiet_DonDat_MaSan_NgayDa ON Chi_Tiet_Don_Dat(ma_san, ngay_da, gio_bat_dau, gio_ket_thuc);
+CREATE NONCLUSTERED INDEX IX_ChiTiet_DonDat_MaDonDat ON Chi_Tiet_Don_Dat(ma_don_dat);
 CREATE NONCLUSTERED INDEX IX_LichCoDinh_MaSan_TrangThai ON Lich_Co_Dinh(ma_san, trang_thai);
+CREATE NONCLUSTERED INDEX IX_SanBong_MaLoaiSan_TrangThai ON San_Bong(ma_loai_san, trang_thai) INCLUDE (ten_san, don_gia_phut);
 CREATE NONCLUSTERED INDEX IX_ThanhToan_MaDonDat ON Thanh_Toan(ma_don_dat);
 CREATE NONCLUSTERED INDEX IX_TinTuc_MaLoaiTin_TrangThai ON Tin_Tuc(ma_loai_tin, trang_thai) INCLUDE (tieu_de, ngay_dang, luot_xem);
 CREATE NONCLUSTERED INDEX IX_LienHe_TrangThai ON Lien_He(trang_thai_xu_ly);
@@ -339,13 +358,17 @@ BEGIN
 END;
 GO
 
--- 5.3. Dữ liệu Loại Sân
+-- 5.3. Dữ liệu Loại Sân (Đa dạng các môn thể thao theo thực tế)
 IF NOT EXISTS (SELECT 1 FROM Loai_San)
 BEGIN
     INSERT INTO Loai_San (ten_loai, mo_ta, trang_thai) VALUES
-    (N'Sân 5 người', N'Sân cỏ nhân tạo mini 5 người, kích thước 20m x 40m', 1),
-    (N'Sân 7 người', N'Sân cỏ nhân tạo bán tiêu chuẩn 7 người, kích thước 30m x 50m', 1),
-    (N'Sân 11 người', N'Sân cỏ nhân tạo tiêu chuẩn thi đấu 11 người, kích thước 60m x 100m', 1);
+    (N'Bóng đá', N'Sân 5, 7, 11 người • Cỏ FIFA', 1),
+    (N'Cầu lông', N'Thảm Taraflex • Sàn gỗ chuẩn', 1),
+    (N'Pickleball', N'Có mái che • Điều hòa mát lạnh', 1),
+    (N'Quần vợt (Tennis)', N'Mặt sân cứng • Đèn LED ban đêm', 1),
+    (N'Bóng rổ', N'Trong nhà & Ngoài trời', 1),
+    (N'Bóng chuyền', N'Mặt sân cao cấp • Lưới chuẩn', 1),
+    (N'Bóng bàn', N'Bàn thi đấu quốc tế', 1);
 END;
 GO
 
@@ -353,12 +376,17 @@ GO
 IF NOT EXISTS (SELECT 1 FROM San_Bong)
 BEGIN
     INSERT INTO San_Bong (ma_loai_san, ten_san, don_gia_phut, trang_thai) VALUES
-    (1, N'Sân 5A', 5000.00, 'SAN_SANG'),
-    (1, N'Sân 5B', 5000.00, 'SAN_SANG'),
-    (1, N'Sân 5C', 5000.00, 'SAN_SANG'),
-    (2, N'Sân 7A', 8000.00, 'SAN_SANG'),
-    (2, N'Sân 7B', 8000.00, 'SAN_SANG'),
-    (3, N'Sân 11A', 15000.00, 'SAN_SANG');
+    (1, N'Sân Bóng Đá 5A', 5000.00, 'SAN_SANG'),
+    (1, N'Sân Bóng Đá 5B', 5000.00, 'SAN_SANG'),
+    (1, N'Sân Bóng Đá 7A', 8000.00, 'SAN_SANG'),
+    (2, N'Sân Cầu Lông VIP 1', 3500.00, 'SAN_SANG'),
+    (2, N'Sân Cầu Lông VIP 2', 3500.00, 'SAN_SANG'),
+    (3, N'Sân Pickleball Pro 1', 4000.00, 'SAN_SANG'),
+    (3, N'Sân Pickleball Pro 2', 4000.00, 'SAN_SANG'),
+    (4, N'Sân Quần Vợt LED 1', 6000.00, 'SAN_SANG'),
+    (5, N'Sân Bóng Rổ Trong Nhà', 5500.00, 'SAN_SANG'),
+    (6, N'Sân Bóng Chuyền Chuẩn', 4500.00, 'SAN_SANG'),
+    (7, N'Bàn Bóng Bàn Số 1', 2500.00, 'SAN_SANG');
 END;
 GO
 

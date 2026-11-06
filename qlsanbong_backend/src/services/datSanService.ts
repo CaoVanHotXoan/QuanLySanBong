@@ -7,16 +7,27 @@
 
 import { sql, poolPromise } from '../config/db';
 
-export const layDanhSachSan = async () => {
+export const layDanhSachSan = async (maLoaiSan?: number, trangThai?: string, tuKhoa?: string) => {
     const pool = await poolPromise;
     try {
-        const result = await pool.request().execute('sp_LayDanhSachSan');
+        const request = pool.request();
+        if (maLoaiSan && maLoaiSan > 0) {
+            request.input('ma_loai_san', sql.Int, maLoaiSan);
+        }
+        if (trangThai && trangThai !== 'ALL') {
+            request.input('trang_thai', sql.VarChar(20), trangThai);
+        }
+        if (tuKhoa && tuKhoa.trim()) {
+            request.input('tu_khoa', sql.NVarChar(100), tuKhoa.trim());
+        }
+        const result = await request.execute('sp_LayDanhSachSan');
         return result.recordset || [];
     } catch (e) {
         const res = await pool.request().query(`
-            SELECT sb.*, ls.ten_loai_san 
+            SELECT sb.*, ls.ten_loai 
             FROM San_Bong sb
             LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+            ORDER BY sb.id ASC
         `);
         return res.recordset || [];
     }
@@ -24,8 +35,13 @@ export const layDanhSachSan = async () => {
 
 export const layDanhSachLoaiSan = async () => {
     const pool = await poolPromise;
-    const res = await pool.request().query(`SELECT * FROM Loai_San ORDER BY id ASC`);
-    return res.recordset || [];
+    try {
+        const res = await pool.request().execute('sp_LayDanhSachLoaiSan');
+        return res.recordset || [];
+    } catch (e) {
+        const res = await pool.request().query(`SELECT * FROM Loai_San WHERE trang_thai = 1 OR trang_thai IS NULL ORDER BY id ASC`);
+        return res.recordset || [];
+    }
 };
 
 export const layDanhSachKhungGio = async () => {
@@ -86,6 +102,33 @@ export const datSanStoredProcedure = async (params: {
         .input('gio_ket_thuc', sql.VarChar(10), params.gio_ket_thuc)
         .input('ghi_chu', sql.NVarChar(255), params.ghi_chu || null)
         .execute('sp_DatSan');
+
+    return result.recordset && result.recordset[0];
+};
+
+export const datNhieuSanStoredProcedure = async (params: {
+    ma_nguoi_dung?: number;
+    ho_ten: string;
+    so_dien_thoai: string;
+    tong_tien?: number;
+    phuong_thuc?: string;
+    trang_thai?: string;
+    ghi_chu?: string;
+    danh_sach_san: any[];
+    dich_vu_chon?: any;
+}) => {
+    const pool = await poolPromise;
+    const result = await pool.request()
+        .input('ma_nguoi_dung', sql.Int, params.ma_nguoi_dung || null)
+        .input('ho_ten', sql.NVarChar(100), params.ho_ten)
+        .input('so_dien_thoai', sql.VarChar(15), params.so_dien_thoai)
+        .input('tong_tien', sql.Decimal(10, 2), params.tong_tien || null)
+        .input('phuong_thuc', sql.VarChar(20), params.phuong_thuc || 'CHUYEN_KHOAN')
+        .input('trang_thai', sql.VarChar(30), params.trang_thai || 'DA_COC')
+        .input('ghi_chu', sql.NVarChar(sql.MAX), params.ghi_chu || null)
+        .input('danh_sach_san', sql.NVarChar(sql.MAX), JSON.stringify(params.danh_sach_san))
+        .input('dich_vu_chon', sql.NVarChar(sql.MAX), params.dich_vu_chon ? JSON.stringify(params.dich_vu_chon) : null)
+        .execute('sp_DatNhieuSan');
 
     return result.recordset && result.recordset[0];
 };

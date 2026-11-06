@@ -55,7 +55,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.huyLichCoDinh = exports.doiTrangThaiLichCoDinh = exports.themLichCoDinh = exports.kiemTraTrungLichCoDinh = exports.layChiTietLichCoDinh = exports.layDanhSachLichCoDinh = exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanDateForSql = exports.cleanTimeForSql = void 0;
+exports.huyLichCoDinh = exports.doiTrangThaiLichCoDinh = exports.themLichCoDinh = exports.kiemTraTrungLichCoDinh = exports.layChiTietLichCoDinh = exports.layDanhSachLichCoDinh = exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.datNhieuSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanDateForSql = exports.cleanTimeForSql = void 0;
 const db_1 = require("../config/db");
 const cacheService_1 = __importDefault(require("../services/cacheService"));
 const datSanService = __importStar(require("../services/datSanService"));
@@ -107,8 +107,8 @@ exports.cleanDateForSql = cleanDateForSql;
  */
 const layDanhSachSan = async (req, res) => {
     try {
-        const { ma_loai_san } = req.query;
-        const cacheKey = `danh_sach_san_${ma_loai_san || 'ALL'}`;
+        const { ma_loai_san, trang_thai, tu_khoa } = req.query;
+        const cacheKey = `danh_sach_san_${ma_loai_san || 'ALL'}_${trang_thai || 'ALL'}_${tu_khoa || 'ALL'}`;
         const cached = cacheService_1.default.get(cacheKey);
         if (cached) {
             return res.status(200).json({
@@ -118,8 +118,14 @@ const layDanhSachSan = async (req, res) => {
         }
         const pool = await db_1.poolPromise;
         const request = pool.request();
-        if (ma_loai_san && ma_loai_san !== 'ALL') {
+        if (ma_loai_san && ma_loai_san !== 'ALL' && Number(ma_loai_san) > 0) {
             request.input('ma_loai_san', db_1.sql.Int, Number(ma_loai_san));
+        }
+        if (trang_thai && trang_thai !== 'ALL') {
+            request.input('trang_thai', db_1.sql.VarChar(20), String(trang_thai));
+        }
+        if (tu_khoa && String(tu_khoa).trim() !== '') {
+            request.input('tu_khoa', db_1.sql.NVarChar(100), String(tu_khoa).trim());
         }
         const result = await request.execute('sp_LayDanhSachSan');
         const data = result.recordset || [];
@@ -609,11 +615,60 @@ const layLichSan = async (req, res) => {
 };
 exports.layLichSan = layLichSan;
 /**
+ * 12A. Đặt nhiều sân bóng cùng lúc (Multi-court Booking)
+ * Procedure: sp_DatNhieuSan
+ * Method: POST /api/dat-san/nhieu-san
+ */
+const datNhieuSan = async (req, res) => {
+    try {
+        const { danh_sach_san, ho_ten, so_dien_thoai, tong_tien, phuong_thuc, loai_thanh_toan, trang_thai, ghi_chu, dich_vu_chon } = req.body;
+        if (!danh_sach_san || !Array.isArray(danh_sach_san) || danh_sach_san.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp danh sách sân cần đặt!'
+            });
+        }
+        const pool = await db_1.poolPromise;
+        const ma_nd = req.user ? req.user.id : (req.body.ma_nguoi_dung || null);
+        const targetStatus = trang_thai || (loai_thanh_toan === 'DAT_COC' ? 'DA_COC' : 'DA_THANH_TOAN');
+        const result = await pool.request()
+            .input('ma_nguoi_dung', db_1.sql.Int, ma_nd)
+            .input('ho_ten', db_1.sql.NVarChar(100), (ho_ten && ho_ten.trim()) || 'Khách đặt nhiều sân')
+            .input('so_dien_thoai', db_1.sql.VarChar(15), (so_dien_thoai && so_dien_thoai.trim()) || '0900000000')
+            .input('tong_tien', db_1.sql.Decimal(10, 2), tong_tien ? parseFloat(tong_tien) : null)
+            .input('phuong_thuc', db_1.sql.VarChar(20), phuong_thuc || 'CHUYEN_KHOAN')
+            .input('trang_thai', db_1.sql.VarChar(30), targetStatus)
+            .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || null)
+            .input('danh_sach_san', db_1.sql.NVarChar(db_1.sql.MAX), JSON.stringify(danh_sach_san))
+            .input('dich_vu_chon', db_1.sql.NVarChar(db_1.sql.MAX), dich_vu_chon ? JSON.stringify(dich_vu_chon) : null)
+            .execute('sp_DatNhieuSan');
+        const donMoi = result.recordset && result.recordset[0];
+        // Xóa cache lịch sân
+        cacheService_1.default.delPrefix('lich_san_');
+        return res.status(201).json({
+            success: true,
+            message: 'Đặt nhiều sân thành công!',
+            data: donMoi
+        });
+    }
+    catch (error) {
+        console.error('Lỗi khi đặt nhiều sân:', error);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi đặt nhiều sân'
+        });
+    }
+};
+exports.datNhieuSan = datNhieuSan;
+/**
  * 12. Đặt sân bóng (Lưu trạng thái DA_COC hoặc DA_THANH_TOAN vào bảng Don_Dat_San)
  * Method: POST /api/dat-san
  */
 const datSan = async (req, res) => {
     try {
+        if (req.body.danh_sach_san && Array.isArray(req.body.danh_sach_san) && req.body.danh_sach_san.length > 0) {
+            return (0, exports.datNhieuSan)(req, res);
+        }
         const { ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, phuong_thuc, loai_thanh_toan, trang_thai, ghi_chu, ho_ten, so_dien_thoai } = req.body;
         if (!ma_san || !ngay_da || !gio_bat_dau || !gio_ket_thuc) {
             return res.status(400).json({

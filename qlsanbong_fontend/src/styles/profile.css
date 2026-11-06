@@ -41,5 +41,5 @@
 
 /* Hiệu ứng viền phát sáng nhẹ khi focus vào input */
 .profile-input-focus:focus {
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+  box-shadow: 0 0 0 2px rgba(39, 79, 157, 0.35);
 }

@@ -370,7 +370,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     groupTitle: 'QUẢN LÝ SÂN BÓNG',
     groupIcon: Trophy,
     items: [
-      { id: 'SAN_BONG', label: 'Danh Sách Sân Bóng', icon: Layers, tableHint: 'San_Bong' },
+      { id: 'SAN_BONG', label: 'Danh Sách Sân', icon: Layers, tableHint: 'San_Bong' },
       { id: 'LOAI_SAN_GIA', label: 'Loại Sân', icon: Layers, tableHint: 'Loai_San' },
       { id: 'KHUNG_GIO', label: 'Bảng Khung Giờ', icon: Clock, tableHint: 'Khung_Gio' }
     ]
@@ -441,7 +441,7 @@ function TablePagination({
     <div
       className={`p-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t text-xs font-bold ${
         isDarkMode
-          ? 'border-emerald-900/40 bg-[#0a150e] text-slate-300'
+          ? 'border-emerald-900/40 bg-[#0b132b] text-slate-300'
           : 'border-slate-200 bg-slate-50 text-slate-700'
       }`}
     >
@@ -1128,6 +1128,8 @@ export default function AdminDashboard() {
   // =====================================================================
 
   const [courtModal, setCourtModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<SanBong> }>({ isOpen: false, mode: 'ADD', data: {} });
+  const [courtCategoryFilter, setCourtCategoryFilter] = useState<string>('ALL');
+  const [courtStatusFilter, setCourtStatusFilter] = useState<string>('ALL');
   const [loaiSanModal, setLoaiSanModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<LoaiSan> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [serviceModal, setServiceModal] = useState<{
     isOpen: boolean;
@@ -3597,7 +3599,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className={`min-h-screen font-sans transition-colors duration-300 ${isDarkMode ? 'dark bg-[#060e09] text-white bg-pitch-grid' : 'bg-[#f4f7f5] text-[#0f172a]'}`}>
+    <div className={`min-h-screen font-sans transition-colors duration-300 ${isDarkMode ? 'dark bg-[#070d1e] text-white bg-pitch-grid' : 'bg-[#f4f7f5] text-[#0f172a]'}`}>
       <Head>
         <title>Sport 247 - Quản Lý Sân Bóng & 11 Bảng CSDL</title>
         <meta name="description" content="Hệ thống điều hành và quản trị sân bóng đá chuyên nghiệp Sport 247: Sơ đồ sân, POS bán nước, phân quyền & báo cáo doanh thu." />
@@ -3645,7 +3647,7 @@ export default function AdminDashboard() {
 
         <aside
           className={`fixed top-0 left-0 bottom-0 z-50 w-72 lg:w-[72px] lg:hover:w-64 xl:hover:w-72 shrink-0 border-r flex flex-col justify-between transition-all duration-300 ease-in-out group/sidebar overflow-hidden shadow-2xl lg:shadow-lg lg:relative lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-            } ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+            } ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
             }`}
         >
           <div className="flex flex-col h-full overflow-hidden">
@@ -3740,7 +3742,7 @@ export default function AdminDashboard() {
             </nav>
 
             {/* Footer Nút Quay Về Trang Chủ & User Info */}
-            <div className={`p-2.5 border-t shrink-0 space-y-2 overflow-hidden ${isDarkMode ? 'border-emerald-900/40 bg-[#060e09]' : 'border-slate-200 bg-slate-50'}`}>
+            <div className={`p-2.5 border-t shrink-0 space-y-2 overflow-hidden ${isDarkMode ? 'border-emerald-900/40 bg-[#070d1e]' : 'border-slate-200 bg-slate-50'}`}>
               {/* Nút Quay Về Trang Chủ */}
               <button
                 type="button"
@@ -3787,7 +3789,7 @@ export default function AdminDashboard() {
             ===================================================================== */}
         <div className="flex-1 flex flex-col h-full overflow-hidden w-full max-w-full min-w-0">
           {/* TOP NAVBAR HEADER VỚI NÚT HAMBURGER MOBILE & TABLET */}
-          <header className={`h-16 px-3 sm:px-4 md:px-6 border-b flex items-center justify-between shrink-0 transition-colors duration-300 z-10 w-full max-w-full min-w-0 ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40' : 'bg-white border-slate-300 shadow-sm'}`}>
+          <header className={`h-16 px-3 sm:px-4 md:px-6 border-b flex items-center justify-between shrink-0 transition-colors duration-300 z-10 w-full max-w-full min-w-0 ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40' : 'bg-white border-slate-300 shadow-sm'}`}>
             <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
               {/* Nút Hamburger Menu: HIỆN TRÊN MOBILE & TABLET (block lg:hidden) */}
               <button
@@ -3813,7 +3815,7 @@ export default function AdminDashboard() {
                 {activeTab === 'LIEN_HE' && 'Quản Lý Phản Hồi & Liên Hệ'}
                 {activeTab === 'LOAI_TIN_TUC' && 'Quản Lý Loại Tin Tức'}
                 {activeTab === 'TIN_TUC' && 'Quản Lý Tin Tức & Bài Viết'}
-                {activeTab === 'SAN_BONG' && 'Danh Sách Sân Bóng'}
+                {activeTab === 'SAN_BONG' && 'Danh Sách Sân'}
                 {activeTab === 'LOAI_SAN_GIA' && 'Danh Sách Loại Sân'}
                 {activeTab === 'DICH_VU' && 'Danh Mục Dịch Vụ'}
                 {activeTab === 'PHIEU_NHAP_KHO' && 'Quản Lý Nhập Kho'}
@@ -3848,7 +3850,7 @@ export default function AdminDashboard() {
               </button>
 
               {/* Ô chọn & hiển thị ngày theo định dạng DD/MM/YYYY chuẩn Việt Nam */}
-              <div className={`relative flex items-center gap-2 px-3 py-1.5 sm:px-3.5 rounded-xl border text-xs font-black shadow-sm transition-all hover:border-emerald-500 cursor-pointer ${isDarkMode ? 'bg-[#0e2116] border-emerald-800/60 text-emerald-200' : 'bg-white border-slate-300 text-[#0f172a]'
+              <div className={`relative flex items-center gap-2 px-3 py-1.5 sm:px-3.5 rounded-xl border text-xs font-black shadow-sm transition-all hover:border-emerald-500 cursor-pointer ${isDarkMode ? 'bg-[#101c3d] border-emerald-800/60 text-emerald-200' : 'bg-white border-slate-300 text-[#0f172a]'
                 }`}>
                 <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span className="font-black tracking-wide font-mono text-xs whitespace-nowrap">
@@ -3876,7 +3878,7 @@ export default function AdminDashboard() {
 
               <button
                 onClick={() => setIsDarkMode(!isDarkMode)}
-                className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'bg-[#0e2116] border-emerald-800/40 text-amber-400 hover:bg-emerald-900/40' : 'bg-white border-slate-300 text-[#0f172a] hover:bg-slate-50'}`}
+                className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'bg-[#101c3d] border-emerald-800/40 text-amber-400 hover:bg-emerald-900/40' : 'bg-white border-slate-300 text-[#0f172a] hover:bg-slate-50'}`}
               >
                 {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-emerald-700" />}
               </button>
@@ -3906,7 +3908,7 @@ export default function AdminDashboard() {
               <div className="space-y-6 animate-fade-in w-full max-w-full min-w-0">
                 {/* 1. 3 THẺ CHỈ SỐ TỔNG QUAN (STAT CARDS) */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mb-6">
-                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#101c3d] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">DOANH THU HÔM NAY</span>
                       <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-800 dark:text-emerald-300">
@@ -3918,7 +3920,7 @@ export default function AdminDashboard() {
                     </h3>
                   </div>
 
-                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#101c3d] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">TỔNG ĐƠN ĐẶT SÂN</span>
                       <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-800 dark:text-emerald-300">
@@ -3933,7 +3935,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
 
-                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#0e2116] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                  <div className={`w-full p-5 rounded-2xl border transition-all hover:shadow-xl ${isDarkMode ? 'bg-[#101c3d] border-emerald-500/30 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-400">SÂN ĐANG ĐÁ</span>
                       <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-emerald-800 dark:text-emerald-300">
@@ -3959,7 +3961,7 @@ export default function AdminDashboard() {
                   {/* -------------------------------------------------------------
                       WIDGET 1: BIỂU ĐỒ DOANH THU (2 CỘT PC, 1 CỘT MOBILE)
                       ------------------------------------------------------------- */}
-                  <div className={`lg:col-span-2 w-full min-w-0 p-4 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  <div className={`lg:col-span-2 w-full min-w-0 p-4 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#101c3d] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
                     }`}>
                     {/* Header Widget 1 */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-emerald-900/30">
@@ -3980,7 +3982,7 @@ export default function AdminDashboard() {
                       {/* Controls: Chọn Ngày / Tuần / Tháng & Chọn Cột / Đường */}
                       <div className="flex flex-wrap items-center gap-2">
                         {/* Period Tabs */}
-                        <div className="p-1 rounded-xl bg-slate-100 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950 flex items-center gap-1 text-xs font-bold">
+                        <div className="p-1 rounded-xl bg-slate-100 dark:bg-[#070d1e] border border-slate-200 dark:border-emerald-950 flex items-center gap-1 text-xs font-bold">
                           {(['NGAY', 'TUAN', 'THANG'] as const).map((p) => (
                             <button
                               key={p}
@@ -3996,7 +3998,7 @@ export default function AdminDashboard() {
                         </div>
 
                         {/* Chart Type Toggle */}
-                        <div className="p-1 rounded-xl bg-slate-100 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950 flex items-center gap-1 text-xs">
+                        <div className="p-1 rounded-xl bg-slate-100 dark:bg-[#070d1e] border border-slate-200 dark:border-emerald-950 flex items-center gap-1 text-xs">
                           <button
                             onClick={() => setRevenueChartType('BAR')}
                             title="Biểu đồ cột"
@@ -4018,7 +4020,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Summary Sub-header */}
-                    <div className="flex flex-wrap items-center justify-between gap-4 my-4 p-3 rounded-xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950/60">
+                    <div className="flex flex-wrap items-center justify-between gap-4 my-4 p-3 rounded-xl bg-slate-50 dark:bg-[#070d1e] border border-slate-200 dark:border-emerald-950/60">
                       <div>
                         <span className="text-[11px] font-bold text-slate-700 dark:text-slate-400 font-medium block uppercase">
                           Tổng doanh thu ({revenuePeriod === 'NGAY' ? '7 ngày' : revenuePeriod === 'TUAN' ? '4 tuần' : '12 tháng'}):
@@ -4121,7 +4123,7 @@ export default function AdminDashboard() {
                                           y={padTop}
                                           width={colWidth - 4}
                                           height={chartH}
-                                          fill={isDarkMode ? '#059669' : '#10b981'}
+                                          fill={isDarkMode ? '#E0B341' : '#274F9D'}
                                           opacity="0.08"
                                           rx="8"
                                         />
@@ -4145,7 +4147,7 @@ export default function AdminDashboard() {
                                         y={yPitch}
                                         width={barWidth}
                                         height={Math.max(2, pitchHeight)}
-                                        fill="#10b981"
+                                        fill="#274F9D"
                                         rx={serviceHeight <= 0 ? 4 : 2}
                                       />
 
@@ -4156,7 +4158,7 @@ export default function AdminDashboard() {
                                         textAnchor="middle"
                                         fontSize="10"
                                         fontWeight={isHovered ? 'bold' : '600'}
-                                        fill={isHovered ? (isDarkMode ? '#34d399' : '#059669') : (isDarkMode ? '#94a3b8' : '#64748b')}
+                                        fill={isHovered ? (isDarkMode ? '#E0B341' : '#1D3F82') : (isDarkMode ? '#94a3b8' : '#64748b')}
                                       >
                                         {item.label}
                                       </text>
@@ -4184,12 +4186,12 @@ export default function AdminDashboard() {
                                     <>
                                       <defs>
                                         <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                                          <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
-                                          <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                                          <stop offset="0%" stopColor="#274F9D" stopOpacity="0.35" />
+                                          <stop offset="100%" stopColor="#274F9D" stopOpacity="0.0" />
                                         </linearGradient>
                                       </defs>
                                       <path d={areaD} fill="url(#revenueGrad)" />
-                                      <path d={pathD} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                                      <path d={pathD} fill="none" stroke="#274F9D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
 
                                       {points.map((p) => {
                                         const isHovered = hoveredBarIndex === p.idx;
@@ -4204,7 +4206,7 @@ export default function AdminDashboard() {
                                               cx={p.cx}
                                               cy={p.cy}
                                               r={isHovered ? 6 : 4}
-                                              fill="#10b981"
+                                              fill="#274F9D"
                                               stroke="#ffffff"
                                               strokeWidth="2"
                                             />
@@ -4214,7 +4216,7 @@ export default function AdminDashboard() {
                                               textAnchor="middle"
                                               fontSize="10"
                                               fontWeight={isHovered ? 'bold' : '600'}
-                                              fill={isHovered ? (isDarkMode ? '#34d399' : '#059669') : (isDarkMode ? '#94a3b8' : '#64748b')}
+                                              fill={isHovered ? (isDarkMode ? '#E0B341' : '#1D3F82') : (isDarkMode ? '#94a3b8' : '#64748b')}
                                             >
                                               {p.item.label}
                                             </text>
@@ -4251,7 +4253,7 @@ export default function AdminDashboard() {
                   {/* -------------------------------------------------------------
                       WIDGET 2: TOP DỊCH VỤ BÁN CHẠY (1 CỘT PC, 1 CỘT MOBILE)
                       ------------------------------------------------------------- */}
-                  <div className={`lg:col-span-1 w-full min-w-0 p-4 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                  <div className={`lg:col-span-1 w-full min-w-0 p-4 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#101c3d] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
                     }`}>
                     {/* Header Widget 2 */}
                     <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
@@ -4270,7 +4272,7 @@ export default function AdminDashboard() {
                       </div>
 
                       {/* View Mode Toggle: List vs Donut */}
-                      <div className="p-1 rounded-xl bg-slate-100 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950 flex items-center gap-1 text-xs">
+                      <div className="p-1 rounded-xl bg-slate-100 dark:bg-[#070d1e] border border-slate-200 dark:border-emerald-950 flex items-center gap-1 text-xs">
                         <button
                           onClick={() => setServiceViewMode('LIST')}
                           title="Dạng danh sách"
@@ -4309,7 +4311,7 @@ export default function AdminDashboard() {
                               </div>
                             </div>
                             {/* Progress bar */}
-                            <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-[#060e09] overflow-hidden">
+                            <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-[#070d1e] overflow-hidden">
                               <div
                                 className="h-full rounded-full transition-all duration-500"
                                 style={{ width: `${item.percentage}%`, backgroundColor: item.color }}
@@ -4383,7 +4385,7 @@ export default function AdminDashboard() {
                 {/* =================================================================
                     3. WIDGET 3: BẢNG ĐƠN ĐẶT SÂN MỚI NHẤT (FULL WIDTH VỚI OVERFLOW-X-AUTO)
                     ================================================================= */}
-                <div className={`w-full min-w-0 p-4 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#0e2116] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                <div className={`w-full min-w-0 p-4 sm:p-6 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${isDarkMode ? 'bg-[#101c3d] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
                   }`}>
                   {/* Header Widget 3 */}
                   <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-emerald-900/30">
@@ -4498,25 +4500,108 @@ export default function AdminDashboard() {
                 TAB 2: BẢNG 1 - SAN_BONG (CÓ ĐẦY ĐỦ THÊM - SỬA - XÓA DẠNG MODAL)
                 ================================================================= */}
             {activeTab === 'SAN_BONG' && (() => {
-              const pagedData = getPaginatedData(courtList, 'SAN_BONG', 10);
+              const filteredCourts = courtList.filter((c) => {
+                if (courtCategoryFilter !== 'ALL' && Number(c.ma_loai_san) !== Number(courtCategoryFilter)) {
+                  return false;
+                }
+                if (courtStatusFilter !== 'ALL' && c.trang_thai !== courtStatusFilter) {
+                  return false;
+                }
+                return true;
+              });
+              const pagedData = getPaginatedData(filteredCourts, 'SAN_BONG', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base sm:text-lg font-black text-[#0f172a] dark:text-white flex items-center gap-2">
                       <Layers className="w-5 h-5 text-emerald-600" />
-                      Danh Sách Sân Bóng
+                      Danh Sách Sân
                     </h3>
                     <p className={`text-xs font-bold mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Quản lý danh sách sân bóng và đơn giá thuê theo từng phút</p>
                   </div>
-                  <button onClick={() => setCourtModal({ isOpen: true, mode: 'ADD', data: { ma_loai_san: categoryList[0]?.id || 1, don_gia_phut: 5000, trang_thai: 'SAN_SANG' } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
-                    <Plus className="w-4 h-4 stroke-[3]" /> Thêm Sân Mới
-                  </button>
+                  
+                  {/* Thanh công cụ: Lọc Loại Sân & Trạng Thái & Nút Thêm Mới */}
+                  <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                    {/* Nút Lọc Loại Sân */}
+                    <div className="relative min-w-[170px] flex-1 sm:flex-none">
+                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-emerald-500">
+                        <Filter className="w-3.5 h-3.5" />
+                      </div>
+                      <select
+                        aria-label="Lọc theo loại sân"
+                        value={courtCategoryFilter}
+                        onChange={(e) => {
+                          setCourtCategoryFilter(e.target.value);
+                          setTabPage('SAN_BONG', 1);
+                        }}
+                        className={`w-full text-xs font-bold pl-8 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
+                          isDarkMode
+                            ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                            : 'bg-white border-slate-300 text-slate-700 shadow-xs hover:border-emerald-500 focus:border-emerald-500'
+                        }`}
+                      >
+                        <option value="ALL">Tất cả loại sân ({courtList.length})</option>
+                        {categoryList.map((loai) => {
+                          const count = courtList.filter((c) => Number(c.ma_loai_san) === Number(loai.id)).length;
+                          return (
+                            <option key={loai.id} value={String(loai.id)}>
+                              {loai.ten_loai} ({count})
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                    </div>
+
+                    {/* Nút Lọc Trạng Thái */}
+                    <div className="relative min-w-[130px] flex-1 sm:flex-none">
+                      <select
+                        aria-label="Lọc theo trạng thái"
+                        value={courtStatusFilter}
+                        onChange={(e) => {
+                          setCourtStatusFilter(e.target.value);
+                          setTabPage('SAN_BONG', 1);
+                        }}
+                        className={`w-full text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
+                          isDarkMode
+                            ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                            : 'bg-white border-slate-300 text-slate-700 shadow-xs hover:border-emerald-500 focus:border-emerald-500'
+                        }`}
+                      >
+                        <option value="ALL">Tất cả trạng thái</option>
+                        <option value="SAN_SANG">Sẵn Sàng</option>
+                        <option value="BAO_TRI">Bảo Trì</option>
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                    </div>
+
+                    {/* Nút Xóa Lọc nhanh */}
+                    {(courtCategoryFilter !== 'ALL' || courtStatusFilter !== 'ALL') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCourtCategoryFilter('ALL');
+                          setCourtStatusFilter('ALL');
+                          setTabPage('SAN_BONG', 1);
+                        }}
+                        className="px-2.5 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-emerald-900/60 hover:bg-slate-100 dark:hover:bg-[#0b132b] text-slate-600 dark:text-slate-300 cursor-pointer transition-all"
+                        title="Xóa bộ lọc"
+                      >
+                        Xóa lọc
+                      </button>
+                    )}
+
+                    {/* Nút Thêm Sân Mới */}
+                    <button onClick={() => setCourtModal({ isOpen: true, mode: 'ADD', data: { ma_loai_san: categoryList[0]?.id || 1, don_gia_phut: 5000, trang_thai: 'SAN_SANG' } })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0">
+                      <Plus className="w-4 h-4 stroke-[3]" /> Thêm Sân Mới
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4 w-20">HÌNH ẢNH</th>
                         <th className="p-4">TÊN SÂN BÓNG</th>
                         <th className="p-4">LOẠI SÂN</th>
@@ -4526,7 +4611,26 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {pagedData.items.map((c) => (
+                      {pagedData.items.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center">
+                            <Layers className="w-8 h-8 mx-auto mb-2 opacity-30 text-emerald-500" />
+                            <p className="font-bold text-slate-600 dark:text-slate-300">Không tìm thấy sân bóng nào phù hợp với bộ lọc!</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCourtCategoryFilter('ALL');
+                                setCourtStatusFilter('ALL');
+                                setTabPage('SAN_BONG', 1);
+                              }}
+                              className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-bold cursor-pointer"
+                            >
+                              Hiển thị tất cả sân bóng
+                            </button>
+                          </td>
+                        </tr>
+                      ) : (
+                        pagedData.items.map((c) => (
                         <tr key={c.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-emerald-50/50'}>
                           <td className="p-4">
                             <div className="w-16 h-12 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 shadow-sm group">
@@ -4545,7 +4649,7 @@ export default function AdminDashboard() {
                             </div>
                           </td>
                           <td className="p-4 font-black text-sm text-[#0f172a] dark:text-white">⚽ {c.ten_san}</td>
-                          <td className="p-4"><span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 font-bold">{c.ten_loai || 'Sân 5 người'}</span></td>
+                          <td className="p-4"><span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 font-bold">{c.ten_loai || categoryList.find(l => l.id === c.ma_loai_san)?.ten_loai || 'Sân 5 người'}</span></td>
                           <td className="p-4">
                             <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
                               {Number(c.don_gia_phut || 5000).toLocaleString('vi-VN')} đ/phút
@@ -4570,7 +4674,7 @@ export default function AdminDashboard() {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
                 </div>
@@ -4593,8 +4697,8 @@ export default function AdminDashboard() {
               return (
               <div className="space-y-6 animate-fade-in">
                 {/* BẢNG LOAI_SAN */}
-                <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                  <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                  <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                     <div>
                       <h3 className="text-base font-black flex items-center gap-2">
                         <Layers className="w-5 h-5 text-emerald-600" /> Bảng Loại Sân (Loai_San)
@@ -4608,7 +4712,7 @@ export default function AdminDashboard() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead>
-                        <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                        <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                           <th className="p-4">TÊN LOẠI SÂN</th>
                           <th className="p-4">SỐ SÂN BÓNG</th>
                           <th className="p-4">MÔ TẢ CHI TIẾT</th>
@@ -4659,8 +4763,8 @@ export default function AdminDashboard() {
             {activeTab === 'DICH_VU' && (() => {
               const pagedData = getPaginatedData(serviceList, 'DICH_VU', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <PackagePlus className="w-5 h-5 text-emerald-600" /> Danh Mục Dịch Vụ & Sản Phẩm
@@ -4687,7 +4791,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4">TÊN DỊCH VỤ / SẢN PHẨM</th>
                         <th className="p-4">ĐƠN VỊ TÍNH</th>
                         <th className="p-4">ĐƠN GIÁ BÁN</th>
@@ -4728,8 +4832,8 @@ export default function AdminDashboard() {
             {activeTab === 'PHIEU_NHAP_KHO' && (() => {
               const pagedData = getPaginatedData(inventoryList, 'PHIEU_NHAP_KHO', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Download className="w-5 h-5 text-emerald-600" /> Quản Lý Nhập Kho
@@ -4742,7 +4846,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4">MẶT HÀNG NHẬP</th>
                         <th className="p-4">SỐ LƯỢNG NHẬP</th>
                         <th className="p-4">GIÁ VỐN NHẬP</th>
@@ -4785,8 +4889,8 @@ export default function AdminDashboard() {
             {activeTab === 'DON_DAT_THANH_TOAN' && (() => {
               const pagedData = getPaginatedData(filteredBookingList, 'DON_DAT_THANH_TOAN', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Receipt className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -4804,7 +4908,7 @@ export default function AdminDashboard() {
                         value={filterPaymentMethod}
                         onChange={(e) => setFilterPaymentMethod(e.target.value as any)}
                         className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${isDarkMode
-                            ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                            ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
                             : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
                           }`}
                         title="Lọc theo phương thức thanh toán"
@@ -4822,7 +4926,7 @@ export default function AdminDashboard() {
                         value={filterBookingStatus}
                         onChange={(e) => setFilterBookingStatus(e.target.value as any)}
                         className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${isDarkMode
-                            ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                            ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
                             : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
                           }`}
                         title="Lọc theo trạng thái đơn"
@@ -4842,7 +4946,7 @@ export default function AdminDashboard() {
                         value={filterCustomerType}
                         onChange={(e) => setFilterCustomerType(e.target.value as any)}
                         className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${isDarkMode
-                            ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                            ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
                             : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
                           }`}
                         title="Lọc theo loại khách hàng"
@@ -4891,7 +4995,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left text-[10px] md:text-xs lg:text-sm min-w-[1050px] border-collapse">
                     <thead>
-                      <tr className={`border-b font-black uppercase text-[10px] md:text-xs tracking-wider ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase text-[10px] md:text-xs tracking-wider ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-3 md:p-4 whitespace-nowrap">KHÁCH HÀNG / SĐT</th>
                         <th className="p-3 md:p-4 whitespace-nowrap">SÂN BÓNG</th>
                         <th className="p-3 md:p-4 whitespace-nowrap">NGÀY & GIỜ ĐÁ</th>
@@ -5143,7 +5247,7 @@ export default function AdminDashboard() {
                   {/* 1. KPI WIDGETS TỔNG QUAN LỊCH CỐ ĐỊNH */}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                     <div className={`p-4 rounded-2xl border shadow-md flex items-center justify-between ${
-                      isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
+                      isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
                     }`}>
                       <div>
                         <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tổng Hợp Đồng</p>
@@ -5155,7 +5259,7 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className={`p-4 rounded-2xl border shadow-md flex items-center justify-between ${
-                      isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
+                      isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
                     }`}>
                       <div>
                         <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Đang Hiệu Lực</p>
@@ -5167,7 +5271,7 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className={`p-4 rounded-2xl border shadow-md flex items-center justify-between ${
-                      isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
+                      isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
                     }`}>
                       <div>
                         <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Tổng Số Buổi Đã Sinh</p>
@@ -5179,7 +5283,7 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className={`p-4 rounded-2xl border shadow-md flex items-center justify-between ${
-                      isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
+                      isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-200 text-slate-900'
                     }`}>
                       <div>
                         <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Doanh Thu Dự Kiến</p>
@@ -5193,11 +5297,11 @@ export default function AdminDashboard() {
 
                   {/* 2. BẢNG DỮ LIỆU HỢP ĐỒNG LỊCH CỐ ĐỊNH */}
                   <div className={`rounded-2xl border overflow-hidden shadow-xl ${
-                    isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
+                    isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'
                   }`}>
                     {/* Header Bảng & Bộ Lọc Nhanh */}
                     <div className={`p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b ${
-                      isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'
+                      isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'
                     }`}>
                       <div>
                         <h3 className="text-base font-black flex items-center gap-2">
@@ -5223,7 +5327,7 @@ export default function AdminDashboard() {
                             placeholder="🔍 Tìm đội bóng, SĐT, sân..."
                             className={`w-full pl-8 pr-7 py-2 rounded-xl text-xs font-semibold outline-none border transition-all ${
                               isDarkMode
-                                ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 placeholder-slate-500 focus:border-emerald-500'
+                                ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 placeholder-slate-500 focus:border-emerald-500'
                                 : 'bg-white border-slate-300 text-slate-700 shadow-sm placeholder-slate-400 focus:border-emerald-500'
                             }`}
                           />
@@ -5251,7 +5355,7 @@ export default function AdminDashboard() {
                             }}
                             className={`w-full text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
                               isDarkMode
-                                ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                                ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
                                 : 'bg-white border-slate-300 text-slate-700 shadow-xs hover:border-emerald-500 focus:border-emerald-500'
                             }`}
                           >
@@ -5274,7 +5378,7 @@ export default function AdminDashboard() {
                             }}
                             className={`w-full text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
                               isDarkMode
-                                ? 'bg-[#060e09] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
+                                ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
                                 : 'bg-white border-slate-300 text-slate-700 shadow-xs hover:border-emerald-500 focus:border-emerald-500'
                             }`}
                           >
@@ -5305,7 +5409,7 @@ export default function AdminDashboard() {
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className={`border-b text-[10px] md:text-xs font-black uppercase tracking-wider ${
-                            isDarkMode ? 'border-emerald-900/30 bg-[#060e09] text-emerald-400' : 'border-slate-200 bg-slate-100 text-slate-700'
+                            isDarkMode ? 'border-emerald-900/30 bg-[#070d1e] text-emerald-400' : 'border-slate-200 bg-slate-100 text-slate-700'
                           }`}>
                             <th className="p-3 md:p-4 whitespace-nowrap">MÃ HĐ</th>
                             <th className="p-3 md:p-4 whitespace-nowrap">ĐỘI BÓNG / LIÊN HỆ</th>
@@ -5495,8 +5599,8 @@ export default function AdminDashboard() {
             {activeTab === 'HOAN_TIEN' && (() => {
               const pagedData = getPaginatedData(refundList, 'HOAN_TIEN', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <RefreshCw className="w-5 h-5 text-rose-500" /> Bảng Lịch Sử Hoàn Tiền
@@ -5519,7 +5623,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs min-w-[750px]">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4">KHÁCH HÀNG</th>
                         <th className="p-4">TIỀN HOÀN</th>
                         <th className="p-4">TỶ LỆ</th>
@@ -5576,8 +5680,8 @@ export default function AdminDashboard() {
             {activeTab === 'KHUNG_GIO' && (() => {
               const pagedData = getPaginatedData(khungGioList, 'KHUNG_GIO', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Clock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -5617,7 +5721,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs min-w-[700px]">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4">NHÃN HIỂN THỊ</th>
                         <th className="p-4">GIỜ BẮT ĐẦU</th>
                         <th className="p-4">GIỜ KẾT THÚC</th>
@@ -5678,8 +5782,8 @@ export default function AdminDashboard() {
               const filteredUsers = userList.filter((u) => userRoleFilter === 'ALL' || u.vai_tro === userRoleFilter);
               const pagedData = getPaginatedData(filteredUsers, 'NGUOI_DUNG', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <User className="w-5 h-5 text-emerald-600" /> Danh Sách Tài Khoản Người Dùng
@@ -5688,7 +5792,7 @@ export default function AdminDashboard() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {/* Bộ lọc vai trò */}
-                    <div className="flex items-center bg-slate-200/70 dark:bg-[#060e09] p-1 rounded-xl gap-1 text-xs">
+                    <div className="flex items-center bg-slate-200/70 dark:bg-[#070d1e] p-1 rounded-xl gap-1 text-xs">
                       {([
                         { key: 'ALL', label: 'Tất cả' },
                         { key: 'ADMIN', label: '🛡️ Admin' },
@@ -5718,7 +5822,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className={`border-b font-black uppercase text-[11px] tracking-wider ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase text-[11px] tracking-wider ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4">ẢNH & HỌ TÊN</th>
                         <th className="p-4">EMAIL ĐĂNG NHẬP</th>
                         <th className="p-4">SỐ ĐIỆN THOẠI</th>
@@ -5749,7 +5853,7 @@ export default function AdminDashboard() {
                                 <div>
                                   <div className="font-black text-slate-900 dark:text-white text-sm">{u.ho_ten}</div>
                                   <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
-                                    <span className="px-1.5 py-0.2 bg-slate-100 dark:bg-[#060e09] rounded border border-slate-200 dark:border-emerald-900/50">ID #{u.id}</span>
+                                    <span className="px-1.5 py-0.2 bg-slate-100 dark:bg-[#070d1e] rounded border border-slate-200 dark:border-emerald-900/50">ID #{u.id}</span>
                                   </div>
                                 </div>
                               </div>
@@ -5757,7 +5861,7 @@ export default function AdminDashboard() {
                             <td className="p-4 font-mono text-slate-600 dark:text-slate-300 font-semibold whitespace-nowrap">{u.email}</td>
                             <td className="p-4 font-bold text-slate-800 dark:text-slate-200 whitespace-nowrap">{u.so_dien_thoai || '—'}</td>
                             <td className="p-4 whitespace-nowrap">
-                              <span className="inline-flex items-center gap-1.5 font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950 px-2.5 py-1 rounded-lg text-xs font-black shadow-inner">
+                              <span className="inline-flex items-center gap-1.5 font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-[#070d1e] border border-slate-200 dark:border-emerald-950 px-2.5 py-1 rounded-lg text-xs font-black shadow-inner">
                                 <Lock className="w-3 h-3 text-slate-400 shrink-0" />
                                 ••••••••
                               </span>
@@ -5776,7 +5880,7 @@ export default function AdminDashboard() {
                             <td className="p-4 text-right whitespace-nowrap space-x-2">
                               <button
                                 onClick={() => setUserModal({ isOpen: true, mode: 'EDIT', data: { ...u, mat_khau: '' } })}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-[#0e2116] dark:hover:bg-emerald-900/50 dark:text-emerald-200 border border-slate-200 dark:border-emerald-900/40 cursor-pointer shadow-sm transition-all"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-[#101c3d] dark:hover:bg-emerald-900/50 dark:text-emerald-200 border border-slate-200 dark:border-emerald-900/40 cursor-pointer shadow-sm transition-all"
                               >
                                 <Edit2 className="w-3.5 h-3.5" /> Sửa
                               </button>
@@ -5814,8 +5918,8 @@ export default function AdminDashboard() {
             {activeTab === 'VAI_TRO' && (() => {
               const pagedData = getPaginatedData(roleList, 'VAI_TRO', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <ShieldCheck className="w-5 h-5 text-emerald-600" /> Phân Quyền & Vai Trò
@@ -5828,7 +5932,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4">TÊN VAI TRÒ</th>
                         <th className="p-4">MÔ TẢ QUYỀN HẠN</th>
                         <th className="p-4 text-right">THAO TÁC</th>
@@ -5866,8 +5970,8 @@ export default function AdminDashboard() {
                 ================================================================= */}
             {activeTab === 'CHUC_NANG' && (
               <div className="space-y-6 animate-fade-in w-full max-w-full min-w-0">
-                <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                  <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+                <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                  <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                     <div>
                       <h3 className="text-base font-black flex items-center gap-2">
                         <SlidersHorizontal className="w-5 h-5 text-emerald-600" /> Quản Lý Chức Năng Hệ Thống (Feature Flags)
@@ -5886,7 +5990,7 @@ export default function AdminDashboard() {
 
                   <div className="p-6 space-y-6">
                     {/* Banner hướng dẫn an toàn */}
-                    <div className={`p-4 rounded-xl border flex items-start gap-3 text-xs leading-relaxed ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-emerald-200' : 'bg-emerald-50 border-emerald-200 text-emerald-900'}`}>
+                    <div className={`p-4 rounded-xl border flex items-start gap-3 text-xs leading-relaxed ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-emerald-200' : 'bg-emerald-50 border-emerald-200 text-emerald-900'}`}>
                       <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                       <div>
                         <strong className="font-bold">Cơ chế bảo vệ & điều khiển thông minh:</strong>
@@ -5907,7 +6011,7 @@ export default function AdminDashboard() {
                             key={cfg.ma_cau_hinh}
                             className={`p-5 rounded-2xl border transition-all ${
                               isDarkMode
-                                ? 'bg-[#0e2116]/80 border-emerald-900/50 hover:border-emerald-600/60'
+                                ? 'bg-[#101c3d]/80 border-emerald-900/50 hover:border-emerald-600/60'
                                 : 'bg-slate-50/80 border-slate-200 hover:border-emerald-300'
                             } flex flex-col md:flex-row md:items-center justify-between gap-5`}
                           >
@@ -5984,7 +6088,7 @@ export default function AdminDashboard() {
                     </div>
 
                     {/* Bảng chi tiết trạng thái nghiệp vụ khi Bật / Tắt */}
-                    <div className={`p-4 rounded-xl border text-xs space-y-2 ${isDarkMode ? 'bg-[#060e09] border-emerald-900/40 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>
+                    <div className={`p-4 rounded-xl border text-xs space-y-2 ${isDarkMode ? 'bg-[#070d1e] border-emerald-900/40 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}>
                       <div className="font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4 text-emerald-500" /> Bảng đối chiếu trạng thái hoạt động:
                       </div>
@@ -6016,8 +6120,8 @@ export default function AdminDashboard() {
                 TAB: ABOUT_US - QUẢN LÝ THÔNG TIN VỀ CHÚNG TÔI
                 ================================================================= */}
             {activeTab === 'ABOUT_US' && (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Sparkles className="w-5 h-5 text-emerald-500" /> Quản Lý Thông Tin Về Chúng Tôi (About Us)
@@ -6066,7 +6170,7 @@ export default function AdminDashboard() {
                           value={aboutUsData.ten_trung_tam || ''}
                           onChange={(e) => setAboutUsData({ ...aboutUsData, ten_trung_tam: e.target.value })}
                           placeholder="Ví dụ: Trung Tâm Thể Thao Sport247"
-                          className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                         />
                       </div>
 
@@ -6081,7 +6185,7 @@ export default function AdminDashboard() {
                             value={aboutUsData.hotline || ''}
                             onChange={(e) => setAboutUsData({ ...aboutUsData, hotline: e.target.value })}
                             placeholder="0816344504"
-                            className={`w-full p-2.5 rounded-xl border font-bold font-mono ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                            className={`w-full p-2.5 rounded-xl border font-bold font-mono ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                           />
                         </div>
                         <div>
@@ -6093,7 +6197,7 @@ export default function AdminDashboard() {
                             value={aboutUsData.email || ''}
                             onChange={(e) => setAboutUsData({ ...aboutUsData, email: e.target.value })}
                             placeholder="sinhvienxoan@gmail.com"
-                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                            className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                           />
                         </div>
                       </div>
@@ -6108,7 +6212,7 @@ export default function AdminDashboard() {
                           value={aboutUsData.dia_chi || ''}
                           onChange={(e) => setAboutUsData({ ...aboutUsData, dia_chi: e.target.value })}
                           placeholder="Biên Hòa - Đồng Nai"
-                          className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                         />
                       </div>
 
@@ -6122,7 +6226,7 @@ export default function AdminDashboard() {
                             value={aboutUsData.link_facebook || ''}
                             onChange={(e) => setAboutUsData({ ...aboutUsData, link_facebook: e.target.value })}
                             placeholder="https://facebook.com/sport247"
-                            className={`w-full p-2.5 rounded-xl border font-medium ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                            className={`w-full p-2.5 rounded-xl border font-medium ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                           />
                         </div>
                         <div>
@@ -6134,7 +6238,7 @@ export default function AdminDashboard() {
                             value={aboutUsData.link_zalo || ''}
                             onChange={(e) => setAboutUsData({ ...aboutUsData, link_zalo: e.target.value })}
                             placeholder="https://zalo.me/0816344504"
-                            className={`w-full p-2.5 rounded-xl border font-medium ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                            className={`w-full p-2.5 rounded-xl border font-medium ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                           />
                         </div>
                       </div>
@@ -6156,7 +6260,7 @@ export default function AdminDashboard() {
                             setAboutUsData({ ...aboutUsData, link_map: val });
                           }}
                           placeholder="Dán mã <iframe src=...> hoặc link embed Google Maps..."
-                          className={`w-full p-2.5 rounded-xl border font-mono text-[11px] ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          className={`w-full p-2.5 rounded-xl border font-mono text-[11px] ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                         />
                         {aboutUsData.link_map && (
                           <div className="mt-2 rounded-xl overflow-hidden border border-slate-700 h-32 bg-slate-900">
@@ -6189,7 +6293,7 @@ export default function AdminDashboard() {
                           value={aboutUsData.gioi_thieu_ngan || ''}
                           onChange={(e) => setAboutUsData({ ...aboutUsData, gioi_thieu_ngan: e.target.value })}
                           placeholder="Mô tả tóm tắt ngắn gọn về trung tâm thể thao..."
-                          className={`w-full p-2.5 rounded-xl border font-medium resize-none ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          className={`w-full p-2.5 rounded-xl border font-medium resize-none ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                         />
                       </div>
 
@@ -6202,11 +6306,11 @@ export default function AdminDashboard() {
                           value={aboutUsData.bai_viet_about_us || ''}
                           onChange={(e) => setAboutUsData({ ...aboutUsData, bai_viet_about_us: e.target.value })}
                           placeholder="Nhập toàn bộ nội dung giới thiệu cơ sở vật chất, mặt sân cỏ, giàn đèn, dịch vụ tiện ích của Sport247..."
-                          className={`w-full p-2.5 rounded-xl border font-medium resize-none ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          className={`w-full p-2.5 rounded-xl border font-medium resize-none ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                         />
                       </div>
 
-                      <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-[#060e09]/60 border-emerald-800/40' : 'bg-slate-50 border-slate-200'} space-y-2`}>
+                      <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-[#070d1e]/60 border-emerald-800/40' : 'bg-slate-50 border-slate-200'} space-y-2`}>
                         <div className="font-bold text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                           <CheckCircle2 className="w-4 h-4" /> Đồng bộ thời gian thực
                         </div>
@@ -6239,8 +6343,8 @@ export default function AdminDashboard() {
             {activeTab === 'BANNER' && (() => {
               const pagedData = getPaginatedData(bannerList, 'BANNER', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <ImageIcon className="w-5 h-5 text-emerald-600" /> Quản Lý Banner Quảng Cáo Trang Chủ
@@ -6257,7 +6361,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4 w-28">HÌNH ẢNH / VIDEO</th>
                         <th className="p-4">TIÊU ĐỀ & LIÊN KẾT</th>
                         <th className="p-4 text-center">LOẠI</th>
@@ -6359,8 +6463,8 @@ export default function AdminDashboard() {
             {activeTab === 'LIEN_HE' && (() => {
               const pagedData = getPaginatedData(lienHeList, 'LIEN_HE', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Mail className="w-5 h-5 text-emerald-600" /> Quản Lý Phản Hồi & Thắc Mắc Từ Khách Hàng
@@ -6379,7 +6483,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left text-[10px] md:text-xs lg:text-sm min-w-[700px] border-collapse">
                     <thead>
-                      <tr className={`border-b font-black uppercase text-[10px] md:text-xs tracking-wider ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase text-[10px] md:text-xs tracking-wider ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-3 md:p-4 whitespace-nowrap">NGƯỜI GỬI</th>
                         <th className="p-3 md:p-4 whitespace-nowrap">THÔNG TIN LIÊN HỆ</th>
                         <th className="p-3 md:p-4 whitespace-nowrap">TIÊU ĐỀ & NỘI DUNG</th>
@@ -6481,8 +6585,8 @@ export default function AdminDashboard() {
             {activeTab === 'LOAI_TIN_TUC' && (() => {
               const pagedData = getPaginatedData(loaiTinList, 'LOAI_TIN_TUC', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <FolderTree className="w-5 h-5 text-emerald-600" /> Quản Lý Loại / Danh Mục Tin Tức
@@ -6499,7 +6603,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4 w-24">MÃ LOẠI</th>
                         <th className="p-4">TÊN LOẠI TIN TỨC</th>
                         <th className="p-4 text-center">SỐ BÀI VIẾT</th>
@@ -6525,7 +6629,7 @@ export default function AdminDashboard() {
                               <span className={`px-2.5 py-1 rounded-lg font-bold text-[11px] inline-flex items-center gap-1 border ${
                                 articleCount > 0
                                   ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-900/40'
-                                  : 'bg-slate-50 dark:bg-[#060e09] text-slate-400 border-slate-200 dark:border-slate-800'
+                                  : 'bg-slate-50 dark:bg-[#070d1e] text-slate-400 border-slate-200 dark:border-slate-800'
                               }`}>
                                 📄 {articleCount} bài viết
                               </span>
@@ -6586,8 +6690,8 @@ export default function AdminDashboard() {
             {activeTab === 'TIN_TUC' && (() => {
               const pagedData = getPaginatedData(newsList, 'TIN_TUC', 10);
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#0e2116]' : 'border-slate-200 bg-slate-50'}`}>
+              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                <div className={`p-5 flex flex-wrap items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
                     <h3 className="text-base font-black flex items-center gap-2">
                       <FileText className="w-5 h-5 text-emerald-600" /> Quản Lý Tin Tức & Bài Viết
@@ -6621,7 +6725,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#060e09] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                         <th className="p-4 w-28">HÌNH ẢNH</th>
                         <th className="p-4">TIÊU ĐỀ & TÓM TẮT</th>
                         <th className="p-4">DANH MỤC</th>
@@ -6729,7 +6833,7 @@ export default function AdminDashboard() {
       {/* 1. Modal Sân Bóng (San_Bong) - Giao diện hình chữ nhật ngang nhỏ gọn */}
       {courtModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
-          <div className={`w-full max-w-2xl sm:max-w-3xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-2xl sm:max-w-3xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-800/60 dark:border-emerald-900/40 mb-4">
               <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
                 <span>{courtModal.mode === 'ADD' ? '⚽ Thêm Sân Bóng Mới' : '✏️ Cập Nhật Sân Bóng'}</span>
@@ -6755,7 +6859,7 @@ export default function AdminDashboard() {
                       value={courtModal.data.ten_san || ''}
                       onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, ten_san: e.target.value } })}
                       placeholder="Ví dụ: Sân 5D Sân VIP"
-                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                     />
                   </div>
 
@@ -6764,7 +6868,7 @@ export default function AdminDashboard() {
                     <select
                       value={courtModal.data.ma_loai_san || categoryList[0]?.id || 1}
                       onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, ma_loai_san: Number(e.target.value) } })}
-                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                     >
                       {categoryList.map((l) => (
                         <option key={l.id} value={l.id}>{l.ten_loai}</option>
@@ -6781,7 +6885,7 @@ export default function AdminDashboard() {
                       value={courtModal.data.don_gia_phut !== undefined ? courtModal.data.don_gia_phut : 5000}
                       onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, don_gia_phut: Number(e.target.value) } })}
                       placeholder="Ví dụ: 5000"
-                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                     />
                     <div className="text-[10px] text-slate-500 mt-1 font-medium">
                       💡 {Number(courtModal.data.don_gia_phut || 5000).toLocaleString('vi-VN')} đ/phút = {(Number(courtModal.data.don_gia_phut || 5000) * 60).toLocaleString('vi-VN')} đ/giờ
@@ -6793,7 +6897,7 @@ export default function AdminDashboard() {
                     <select
                       value={courtModal.data.trang_thai || 'SAN_SANG'}
                       onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, trang_thai: e.target.value as any } })}
-                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                      className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                     >
                       <option value="SAN_SANG">Sẵn Sàng Vận Hành</option>
                       <option value="BAO_TRI">Bảo Trì / Sửa Chữa</option>
@@ -6854,7 +6958,7 @@ export default function AdminDashboard() {
                             setCourtModal({ ...courtModal, data: { ...courtModal.data, hinh_anh: e.target.value } });
                           }}
                           placeholder="Dán link ảnh hoặc bấm chọn file..."
-                          className={`flex-1 px-2.5 py-1.5 text-xs rounded-xl border font-medium ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          className={`flex-1 px-2.5 py-1.5 text-xs rounded-xl border font-medium ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                         />
 
                         <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-xs cursor-pointer transition-all shrink-0">
@@ -6910,7 +7014,7 @@ export default function AdminDashboard() {
       {/* 2. Modal Loại Sân (Loai_San) */}
       {loaiSanModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base">{loaiSanModal.mode === 'ADD' ? '🏟️ Thêm Loại Sân' : '✏️ Cập Nhật Loại Sân'}</h3>
               <button onClick={() => setLoaiSanModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
@@ -6924,7 +7028,7 @@ export default function AdminDashboard() {
                   value={loaiSanModal.data.ten_loai || ''}
                   onChange={(e) => setLoaiSanModal({ ...loaiSanModal, data: { ...loaiSanModal.data, ten_loai: e.target.value } })}
                   placeholder="Ví dụ: Sân 5 người, Sân 7 người, Sân 11..."
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div>
@@ -6934,7 +7038,7 @@ export default function AdminDashboard() {
                   value={loaiSanModal.data.mo_ta || ''}
                   onChange={(e) => setLoaiSanModal({ ...loaiSanModal, data: { ...loaiSanModal.data, mo_ta: e.target.value } })}
                   placeholder="Mô tả chất liệu mặt cỏ, tiêu chuẩn thi đấu..."
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -6949,7 +7053,7 @@ export default function AdminDashboard() {
       {/* 4. Modal Dịch Vụ (Dich_Vu) */}
       {serviceModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base">{serviceModal.mode === 'ADD' ? '🥤 Thêm Dịch Vụ Mới' : '✏️ Cập Nhật Dịch Vụ'}</h3>
               <button onClick={() => setServiceModal({ isOpen: false, mode: 'ADD', data: { don_vi_tinh: 'Chai', ton_kho: 0 } })}><X className="w-5 h-5" /></button>
@@ -6963,7 +7067,7 @@ export default function AdminDashboard() {
                   placeholder="Ví dụ: Nước khoáng Lavie 500ml"
                   value={serviceModal.data.ten_dich_vu || ''}
                   onChange={(e) => setServiceModal({ ...serviceModal, data: { ...serviceModal.data, ten_dich_vu: e.target.value } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -6976,7 +7080,7 @@ export default function AdminDashboard() {
                     placeholder="Ví dụ: 15000"
                     value={serviceModal.data.don_gia !== undefined ? serviceModal.data.don_gia : ''}
                     onChange={(e) => setServiceModal({ ...serviceModal, data: { ...serviceModal.data, don_gia: Number(e.target.value) } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
                 <div>
@@ -6987,14 +7091,14 @@ export default function AdminDashboard() {
                     placeholder="Chai, Lon, Gói, Bộ..."
                     value={serviceModal.data.don_vi_tinh !== undefined ? serviceModal.data.don_vi_tinh : 'Chai'}
                     onChange={(e) => setServiceModal({ ...serviceModal, data: { ...serviceModal.data, don_vi_tinh: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
               </div>
 
               {/* TÙY CHỌN TẠO PHIẾU NHẬP KHO BAN ĐẦU KHI THÊM DỊCH VỤ MỚI */}
               {serviceModal.mode === 'ADD' && (
-                <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40' : 'bg-emerald-50/60 border-emerald-200'} space-y-3`}>
+                <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40' : 'bg-emerald-50/60 border-emerald-200'} space-y-3`}>
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-2 font-black text-xs cursor-pointer select-none text-emerald-700 dark:text-emerald-400">
                       <input
@@ -7030,7 +7134,7 @@ export default function AdminDashboard() {
                               ...serviceModal,
                               data: { ...serviceModal.data, so_luong_nhap: Number(e.target.value) }
                             })}
-                            className={`w-full p-2 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                            className={`w-full p-2 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                           />
                         </div>
                         <div>
@@ -7043,13 +7147,13 @@ export default function AdminDashboard() {
                               ...serviceModal,
                               data: { ...serviceModal.data, gia_nhap: Number(e.target.value) }
                             })}
-                            className={`w-full p-2 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                            className={`w-full p-2 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                           />
                         </div>
                       </div>
                       <div>
                         <label className="block font-black uppercase mb-1 text-[10px] text-slate-700 dark:text-slate-400 font-medium">Ngày Nhập Kho *</label>
-                        <div className={`relative flex items-center justify-between p-2 rounded-xl border font-bold cursor-pointer transition-colors ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white hover:border-emerald-500' : 'bg-white border-slate-300 text-[#0f172a] hover:border-emerald-600'}`}>
+                        <div className={`relative flex items-center justify-between p-2 rounded-xl border font-bold cursor-pointer transition-colors ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white hover:border-emerald-500' : 'bg-white border-slate-300 text-[#0f172a] hover:border-emerald-600'}`}>
                           <span className="font-bold text-xs tracking-wide">
                             {formatVNDate(serviceModal.data.ngay_nhap || new Date().toISOString().split('T')[0])}
                           </span>
@@ -7087,7 +7191,7 @@ export default function AdminDashboard() {
       {/* 5. Modal Nhập Kho (Phieu_Nhap_Kho) */}
       {importStockModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base">{importStockModal.mode === 'ADD' ? '📦 Tạo Phiếu Nhập Kho' : '✏️ Cập Nhật Phiếu Nhập'}</h3>
               <button onClick={() => setImportStockModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
@@ -7098,7 +7202,7 @@ export default function AdminDashboard() {
                 <select
                   value={importStockModal.data.ma_dich_vu || 1}
                   onChange={(e) => setImportStockModal({ ...importStockModal, data: { ...importStockModal.data, ma_dich_vu: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 >
                   {serviceList.map((s) => (
                     <option key={s.id} value={s.id}>{s.ten_dich_vu} ({s.don_vi_tinh})</option>
@@ -7112,7 +7216,7 @@ export default function AdminDashboard() {
                   min="1"
                   value={importStockModal.data.so_luong_nhap || 50}
                   onChange={(e) => setImportStockModal({ ...importStockModal, data: { ...importStockModal.data, so_luong_nhap: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div>
@@ -7122,7 +7226,7 @@ export default function AdminDashboard() {
                   min="0"
                   value={importStockModal.data.gia_nhap || 12000}
                   onChange={(e) => setImportStockModal({ ...importStockModal, data: { ...importStockModal.data, gia_nhap: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -7137,7 +7241,7 @@ export default function AdminDashboard() {
       {/* 6. Modal Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan) */}
       {bookingModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base">{bookingModal.mode === 'ADD' ? '📋 Thêm Đơn Đặt Sân & Thanh Toán' : '✏️ Cập Nhật Đơn Đặt Sân'}</h3>
               <button onClick={() => setBookingModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
@@ -7167,7 +7271,7 @@ export default function AdminDashboard() {
                         }
                       });
                     }}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     {courtList.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -7181,7 +7285,7 @@ export default function AdminDashboard() {
                   <select
                     value={bookingModal.data.ma_nguoi_dung || 1}
                     onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ma_nguoi_dung: Number(e.target.value) } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     {userList.map((u) => (
                       <option key={u.id} value={u.id}>{u.ho_ten} ({u.so_dien_thoai || u.email})</option>
@@ -7193,7 +7297,7 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block font-black uppercase mb-1">Ngày Đá *</label>
-                  <div className={`relative flex items-center justify-between p-2.5 rounded-xl border font-bold cursor-pointer transition-colors ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white hover:border-emerald-500' : 'bg-white border-slate-300 text-[#0f172a] hover:border-emerald-600'}`}>
+                  <div className={`relative flex items-center justify-between p-2.5 rounded-xl border font-bold cursor-pointer transition-colors ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white hover:border-emerald-500' : 'bg-white border-slate-300 text-[#0f172a] hover:border-emerald-600'}`}>
                     <span className="font-bold tracking-wide">
                       {formatVNDate(bookingModal.data.ngay_da ? String(bookingModal.data.ngay_da).split('T')[0] : new Date().toISOString().split('T')[0])}
                     </span>
@@ -7238,7 +7342,7 @@ export default function AdminDashboard() {
                         },
                       });
                     }}
-                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_bat_dau || '').substring(0, 5)) && bookingModal.data.gio_bat_dau && (() => {
                       const customTime = (bookingModal.data.gio_bat_dau || '').substring(0, 5);
@@ -7297,7 +7401,7 @@ export default function AdminDashboard() {
                         },
                       });
                     }}
-                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_ket_thuc || '').substring(0, 5)) && bookingModal.data.gio_ket_thuc && (() => {
                       const customTime = (bookingModal.data.gio_ket_thuc || '').substring(0, 5);
@@ -7333,7 +7437,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* Chú thích trạng thái khung giờ */}
-              <div className="flex flex-wrap items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950/60 text-[11px] font-bold">
+              <div className="flex flex-wrap items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#070d1e] border border-slate-200 dark:border-emerald-950/60 text-[11px] font-bold">
                 <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shadow-sm"></span>
                   <span>🟢 Trống</span>
@@ -7368,7 +7472,7 @@ export default function AdminDashboard() {
                       const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
                       setBookingModal({ ...bookingModal, data: { ...bookingModal.data, tien_san: ts, tong_tien: ts + totalDv } });
                     }}
-                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-emerald-400 ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-emerald-300' : 'bg-white border-slate-300 text-emerald-600'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-emerald-400 ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-emerald-300' : 'bg-white border-slate-300 text-emerald-600'}`}
                   />
                 </div>
                 <div>
@@ -7376,7 +7480,7 @@ export default function AdminDashboard() {
                   <select
                     value={bookingModal.data.phuong_thuc || 'CHUYEN_KHOAN'}
                     onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, phuong_thuc: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     <option value="CHUYEN_KHOAN">Chuyển Khoản</option>
                     <option value="TIEN_MAT">Tiền Mặt</option>
@@ -7385,7 +7489,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* DỊCH VỤ ĐI KÈM (CHI TIẾT DỊCH VỤ) */}
-              <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-[#060e09]/80 border-emerald-800/40' : 'bg-slate-50 border-slate-200'}`}>
+              <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-[#070d1e]/80 border-emerald-800/40' : 'bg-slate-50 border-slate-200'}`}>
                 <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-200 dark:border-emerald-900/30">
                   <label className="font-black uppercase flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
                     <ShoppingCart className="w-3.5 h-3.5" /> Dịch Vụ / Nước Uống (Chi Tiết Dịch Vụ)
@@ -7399,7 +7503,7 @@ export default function AdminDashboard() {
                 {Array.isArray(bookingModal.data.dich_vu_list) && bookingModal.data.dich_vu_list.length > 0 ? (
                   <div className="space-y-1.5 mb-3 max-h-36 overflow-y-auto pr-1">
                     {bookingModal.data.dich_vu_list.map((it: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-[#0a150e] border border-slate-200 dark:border-emerald-800/30 text-xs">
+                      <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-[#0b132b] border border-slate-200 dark:border-emerald-800/30 text-xs">
                         <div className="flex-1 min-w-0 mr-2">
                           <div className="font-bold truncate text-[#0f172a] dark:text-slate-100">🥤 {it.ten_dich_vu}</div>
                           <div className="text-[10px] text-slate-500">{Number(it.don_gia).toLocaleString('vi-VN')} đ / {it.don_vi_tinh || 'Chai'}</div>
@@ -7512,7 +7616,7 @@ export default function AdminDashboard() {
                       });
                       e.target.value = "";
                     }}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     <option value="">+ Chọn mặt hàng dịch vụ thêm vào đơn...</option>
                     {serviceList.map(s => (
@@ -7558,7 +7662,7 @@ export default function AdminDashboard() {
                       }
                     });
                   }}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 >
                   <option value="CHO_THANH_TOAN">Chưa Thanh Toán</option>
                   <option value="DA_COC">Đã Cọc (30%)</option>
@@ -7588,7 +7692,7 @@ export default function AdminDashboard() {
                   placeholder="Ghi chú thêm cho đơn..."
                   value={bookingModal.data.ghi_chu || ''}
                   onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ghi_chu: e.target.value } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
 
@@ -7612,7 +7716,7 @@ export default function AdminDashboard() {
       {/* 6b. Modal Khung Giờ (Khung_Gio) */}
       {khungGioModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base">{khungGioModal.mode === 'ADD' ? '⏰ Thêm Khung Giờ Mới' : '✏️ Cập Nhật Khung Giờ'}</h3>
               <button onClick={() => setKhungGioModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
@@ -7626,7 +7730,7 @@ export default function AdminDashboard() {
                   placeholder="Ví dụ: 19h30"
                   value={khungGioModal.data.nhan_hien_thi || ''}
                   onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, nhan_hien_thi: e.target.value } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -7638,7 +7742,7 @@ export default function AdminDashboard() {
                     placeholder="19:30"
                     value={khungGioModal.data.gio_bat_dau || ''}
                     onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, gio_bat_dau: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
                 <div>
@@ -7649,7 +7753,7 @@ export default function AdminDashboard() {
                     placeholder="20:00"
                     value={khungGioModal.data.gio_ket_thuc || ''}
                     onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, gio_ket_thuc: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
               </div>
@@ -7661,7 +7765,7 @@ export default function AdminDashboard() {
                     min="1"
                     value={khungGioModal.data.thu_tu || 1}
                     onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, thu_tu: Number(e.target.value) } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
                 <div>
@@ -7669,7 +7773,7 @@ export default function AdminDashboard() {
                   <select
                     value={khungGioModal.data.trang_thai === false ? '0' : '1'}
                     onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, trang_thai: e.target.value === '1' } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     <option value="1">🟢 Hoạt động (Hiển thị)</option>
                     <option value="0">🔴 Tạm tắt (Ẩn)</option>
@@ -7688,7 +7792,7 @@ export default function AdminDashboard() {
       {/* 7. Modal Hoàn Tiền (Lich_Su_Hoan_Tien) */}
       {refundModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base">{refundModal.mode === 'ADD' ? '💸 Tạo Phiếu Hoàn Tiền' : '✏️ Cập Nhật Phiếu Hoàn'}</h3>
               <button onClick={() => setRefundModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
@@ -7700,7 +7804,7 @@ export default function AdminDashboard() {
                   type="number"
                   value={refundModal.data.ma_don_dat || 101}
                   onChange={(e) => setRefundModal({ ...refundModal, data: { ...refundModal.data, ma_don_dat: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div>
@@ -7709,7 +7813,7 @@ export default function AdminDashboard() {
                   type="number"
                   value={refundModal.data.so_tien_hoan || 100000}
                   onChange={(e) => setRefundModal({ ...refundModal, data: { ...refundModal.data, so_tien_hoan: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div>
@@ -7718,7 +7822,7 @@ export default function AdminDashboard() {
                   type="number"
                   value={refundModal.data.ty_le_hoan || 100}
                   onChange={(e) => setRefundModal({ ...refundModal, data: { ...refundModal.data, ty_le_hoan: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div>
@@ -7728,7 +7832,7 @@ export default function AdminDashboard() {
                   value={refundModal.data.ly_do_huy || ''}
                   onChange={(e) => setRefundModal({ ...refundModal, data: { ...refundModal.data, ly_do_huy: e.target.value } })}
                   placeholder="Khách báo hủy trước 24h"
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -7743,7 +7847,7 @@ export default function AdminDashboard() {
       {/* 8. Modal Người Dùng (Nguoi_Dung) */}
       {userModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base flex items-center gap-2">
                 <User className="w-5 h-5 text-emerald-600" />
@@ -7753,7 +7857,7 @@ export default function AdminDashboard() {
             </div>
             <form onSubmit={handleSaveUser} className="space-y-4 text-xs">
               {/* Preview & Avatar URL */}
-              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-950 flex items-center gap-4">
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#070d1e] border border-slate-200 dark:border-emerald-950 flex items-center gap-4">
                 <div className="shrink-0">
                   {userModal.data.anh_dai_dien ? (
                     <img
@@ -7777,7 +7881,7 @@ export default function AdminDashboard() {
                     placeholder="https://images.unsplash.com/... hoặc link ảnh"
                     value={userModal.data.anh_dai_dien || ''}
                     onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, anh_dai_dien: e.target.value } })}
-                    className={`w-full p-2 rounded-xl border font-mono text-[11px] ${isDarkMode ? 'bg-[#0a150e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2 rounded-xl border font-mono text-[11px] ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                   <span className="text-[10px] text-slate-400">Có thể dán link ảnh từ Unsplash, Imgur hoặc Google</span>
                 </div>
@@ -7792,7 +7896,7 @@ export default function AdminDashboard() {
                     placeholder="Ví dụ: Nguyễn Văn A"
                     value={userModal.data.ho_ten || ''}
                     onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, ho_ten: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
                 <div>
@@ -7803,7 +7907,7 @@ export default function AdminDashboard() {
                     placeholder="user@example.com"
                     value={userModal.data.email || ''}
                     onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, email: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
               </div>
@@ -7816,7 +7920,7 @@ export default function AdminDashboard() {
                     placeholder="0987654321"
                     value={userModal.data.so_dien_thoai || ''}
                     onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, so_dien_thoai: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
                 <div>
@@ -7824,7 +7928,7 @@ export default function AdminDashboard() {
                   <select
                     value={userModal.data.vai_tro || 'KHACH_HANG'}
                     onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, vai_tro: e.target.value as any } })}
-                    className={`w-full p-2.5 rounded-xl border font-black ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-black ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     <option value="ADMIN">🛡️ ADMIN (Toàn quyền)</option>
                     <option value="NHAN_VIEN">💼 NHÂN VIÊN (Quản lý sân)</option>
@@ -7843,7 +7947,7 @@ export default function AdminDashboard() {
                     placeholder={userModal.mode === 'EDIT' ? 'Nhập mật khẩu mới nếu muốn đổi...' : 'Nhập mật khẩu...'}
                     value={userModal.data.mat_khau !== undefined ? userModal.data.mat_khau : ''}
                     onChange={(e) => setUserModal({ ...userModal, data: { ...userModal.data, mat_khau: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
               </div>
@@ -7860,7 +7964,7 @@ export default function AdminDashboard() {
       {/* 9. Modal Vai Trò (Vai_Tro) */}
       {roleModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base">{roleModal.mode === 'ADD' ? '🛡️ Thêm Vai Trò Mới' : '✏️ Cập Nhật Vai Trò'}</h3>
               <button onClick={() => setRoleModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
@@ -7873,7 +7977,7 @@ export default function AdminDashboard() {
                   value={roleModal.data.TenVaiTro || ''}
                   onChange={(e) => setRoleModal({ ...roleModal, data: { ...roleModal.data, TenVaiTro: e.target.value } })}
                   placeholder="QUAN_LY"
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div>
@@ -7883,7 +7987,7 @@ export default function AdminDashboard() {
                   value={roleModal.data.MoTa || ''}
                   onChange={(e) => setRoleModal({ ...roleModal, data: { ...roleModal.data, MoTa: e.target.value } })}
                   placeholder="Quản lý sân bóng và nhân sự quầy"
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -7898,7 +8002,7 @@ export default function AdminDashboard() {
       {/* 10. Mini POS Bán Nước Modal */}
       {miniPosModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base flex items-center gap-2">🥤 Bán Thêm Nước / Dịch Vụ Cho Đơn #{miniPosModal.booking?.id}</h3>
               <button onClick={() => setMiniPosModal({ isOpen: false, booking: null, maDichVuChon: 1, soLuong: 1 })}><X className="w-5 h-5" /></button>
@@ -7909,7 +8013,7 @@ export default function AdminDashboard() {
                 <select
                   value={miniPosModal.maDichVuChon}
                   onChange={(e) => setMiniPosModal({ ...miniPosModal, maDichVuChon: Number(e.target.value) })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 >
                   {serviceList.map((s) => (
                     <option key={s.id} value={s.id}>{s.ten_dich_vu} - {Number(s.don_gia).toLocaleString('vi-VN')} đ (Còn {s.ton_kho})</option>
@@ -7923,7 +8027,7 @@ export default function AdminDashboard() {
                   min="1"
                   value={miniPosModal.soLuong}
                   onChange={(e) => setMiniPosModal({ ...miniPosModal, soLuong: Number(e.target.value) })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -7938,13 +8042,13 @@ export default function AdminDashboard() {
       {/* 11. Modal Checkout Trả Sân */}
       {checkoutModal.isOpen && checkoutModal.booking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b mb-4">
               <h3 className="font-black text-base flex items-center gap-2">🧾 Trả Sân & Xuất Hóa Đơn #{checkoutModal.booking.id}</h3>
               <button onClick={() => setCheckoutModal({ isOpen: false, booking: null, paymentMethod: 'TIEN_MAT', discount: 0 })}><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleConfirmCheckout} className="space-y-4 text-xs">
-              <div className="p-4 rounded-xl bg-slate-100 dark:bg-[#060e09] space-y-2">
+              <div className="p-4 rounded-xl bg-slate-100 dark:bg-[#070d1e] space-y-2">
                 <div className="flex justify-between"><span>Khách hàng:</span><strong className="font-black">{checkoutModal.booking.ten_khach_hang}</strong></div>
                 <div className="flex justify-between"><span>Sân bóng:</span><strong>{checkoutModal.booking.ten_san}</strong></div>
                 <div className="flex justify-between"><span>Tiền sân:</span><strong>{Number(checkoutModal.booking.tien_san).toLocaleString('vi-VN')} đ</strong></div>
@@ -7982,7 +8086,7 @@ export default function AdminDashboard() {
       {/* 12. Modal Xác Nhận Xóa Chung (Universal Delete Confirmation Modal) */}
       {deleteConfirmModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl transition-all scale-100 ${isDarkMode ? 'bg-[#0a150e] border-rose-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl transition-all scale-100 ${isDarkMode ? 'bg-[#0b132b] border-rose-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-start gap-4 mb-4">
               <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0 text-rose-600 dark:text-rose-400">
                 <Trash2 className="w-6 h-6 stroke-[2.5]" />
@@ -8013,7 +8117,7 @@ export default function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setDeleteConfirmModal((prev) => ({ ...prev, isOpen: false }))}
-                className="px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 dark:bg-[#060e09] dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer transition-colors"
+                className="px-4 py-2.5 rounded-xl font-bold text-xs bg-slate-100 hover:bg-slate-200 dark:bg-[#070d1e] dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer transition-colors"
               >
                 Hủy bỏ
               </button>
@@ -8036,7 +8140,7 @@ export default function AdminDashboard() {
       {/* 13. Modal Banner Quảng Cáo (Banner) */}
       {bannerModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
-          <div className={`w-full max-w-xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
               <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
                 <ImageIcon className="w-5 h-5 text-emerald-600" />
@@ -8058,7 +8162,7 @@ export default function AdminDashboard() {
                   value={bannerModal.data.tieu_de || ''}
                   onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, tieu_de: e.target.value } })}
                   placeholder="Ví dụ: Siêu Khuyến Mãi Giờ Vàng Mùa Hè"
-                  className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
 
@@ -8068,7 +8172,7 @@ export default function AdminDashboard() {
                   <select
                     value={bannerModal.data.loai_banner || 'IMAGE'}
                     onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, loai_banner: e.target.value as any } })}
-                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     <option value="IMAGE">🖼️ Hình Ảnh (Image)</option>
                     <option value="VIDEO">🎥 Video MP4 / WebM</option>
@@ -8081,7 +8185,7 @@ export default function AdminDashboard() {
                     min="1"
                     value={bannerModal.data.thu_tu ?? 1}
                     onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, thu_tu: parseInt(e.target.value) || 1 } })}
-                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
               </div>
@@ -8097,7 +8201,7 @@ export default function AdminDashboard() {
                       value={bannerModal.data.hinh_anh || ''}
                       onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, hinh_anh: e.target.value } })}
                       placeholder="https://... hoặc bấm nút Tải File Ảnh"
-                      className={`flex-1 px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                      className={`flex-1 px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                     />
                     <label className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer flex items-center gap-1.5 shrink-0 shadow-md transition-all hover:scale-105">
                       <Upload className="w-3.5 h-3.5" />
@@ -8118,7 +8222,7 @@ export default function AdminDashboard() {
                     </label>
                   </div>
                   {bannerModal.data.hinh_anh && (
-                    <div className="mt-2 p-2 rounded-xl border border-slate-200 dark:border-emerald-900 bg-slate-50 dark:bg-[#060e09] flex items-center gap-3">
+                    <div className="mt-2 p-2 rounded-xl border border-slate-200 dark:border-emerald-900 bg-slate-50 dark:bg-[#070d1e] flex items-center gap-3">
                       <img src={bannerModal.data.hinh_anh} alt="Preview" className="w-24 h-14 object-cover rounded-lg border border-slate-200 shadow-sm" />
                       <span className="text-[11px] text-slate-400 font-bold">✓ Ảnh xem trước hợp lệ</span>
                     </div>
@@ -8137,7 +8241,7 @@ export default function AdminDashboard() {
                       value={bannerModal.data.video_url || ''}
                       onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, video_url: e.target.value } })}
                       placeholder="https://... hoặc bấm nút Tải File Video (.mp4, .webm, .mov)"
-                      className={`flex-1 px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                      className={`flex-1 px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                     />
                     <label className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs cursor-pointer flex items-center gap-1.5 shrink-0 shadow-md transition-all hover:scale-105">
                       <Upload className="w-3.5 h-3.5" />
@@ -8158,7 +8262,7 @@ export default function AdminDashboard() {
                     </label>
                   </div>
                   {bannerModal.data.video_url && (
-                    <div className="mt-2 p-2 rounded-xl border border-slate-200 dark:border-emerald-900 bg-slate-50 dark:bg-[#060e09] flex items-center gap-3">
+                    <div className="mt-2 p-2 rounded-xl border border-slate-200 dark:border-emerald-900 bg-slate-50 dark:bg-[#070d1e] flex items-center gap-3">
                       <video src={bannerModal.data.video_url} className="w-24 h-14 object-cover rounded-lg bg-black" muted autoPlay loop />
                       <span className="text-[11px] text-purple-400 font-bold">✓ Video xem trước hợp lệ</span>
                     </div>
@@ -8173,7 +8277,7 @@ export default function AdminDashboard() {
                   value={bannerModal.data.link_dieu_huong || ''}
                   onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, link_dieu_huong: e.target.value } })}
                   placeholder="/dat-san hoặc /tin-tuc hoặc https://..."
-                  className={`w-full px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
 
@@ -8225,7 +8329,7 @@ export default function AdminDashboard() {
       {/* 14. Modal Chi Tiết Liên Hệ (Lien_He - Bố cục Ngang Gọn Gàng) */}
       {lienHeDetailModal.isOpen && lienHeDetailModal.data && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
-          <div className={`w-full max-w-4xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto max-h-[90vh] flex flex-col ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-4xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto max-h-[90vh] flex flex-col ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4 shrink-0">
               <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
                 <Mail className="w-5 h-5 text-emerald-600" />
@@ -8244,7 +8348,7 @@ export default function AdminDashboard() {
 
                 {/* CỘT 1: THÔNG TIN VÀ NỘI DUNG YÊU CẦU CỦA KHÁCH */}
                 <div className="space-y-3">
-                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#060e09] border border-slate-200 dark:border-emerald-900/40 space-y-2">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-[#070d1e] border border-slate-200 dark:border-emerald-900/40 space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-slate-400 font-bold">Họ & tên:</span>
                       <span className="font-black text-sm text-slate-900 dark:text-white">{lienHeDetailModal.data.ho_ten}</span>
@@ -8274,14 +8378,14 @@ export default function AdminDashboard() {
 
                   <div>
                     <label className="block font-black uppercase text-[11px] text-slate-400 mb-1">Tiêu Đề Thư</label>
-                    <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-[#060e09] font-black text-slate-900 dark:text-white text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-[#070d1e] font-black text-slate-900 dark:text-white text-xs">
                       {lienHeDetailModal.data.tieu_de || '(Không có tiêu đề)'}
                     </div>
                   </div>
 
                   <div>
                     <label className="block font-black uppercase text-[11px] text-slate-400 mb-1">Nội Dung Tin Nhắn</label>
-                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#060e09] text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-[#070d1e] text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">
                       {lienHeDetailModal.data.noi_dung}
                     </div>
                   </div>
@@ -8333,7 +8437,7 @@ export default function AdminDashboard() {
       {/* 14.1. Modal Soạn Thư Trả Lời Liên Hệ (Gửi Gmail cho Khách hoặc Fallback về Admin) */}
       {replyLienHeModal.isOpen && replyLienHeModal.data && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto">
-          <div className={`w-full max-w-2xl p-5 sm:p-7 rounded-3xl border shadow-2xl my-4 ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-2xl p-5 sm:p-7 rounded-3xl border shadow-2xl my-4 ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
               <div>
                 <h3 className="font-black text-base sm:text-lg flex items-center gap-2 text-blue-600 dark:text-blue-400">
@@ -8352,7 +8456,7 @@ export default function AdminDashboard() {
 
             <form onSubmit={handleReplyLienHeSubmit} className="space-y-4 text-xs">
               {/* Thông tin người nhận */}
-              <div className="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-[#060e09] border border-blue-200/80 dark:border-blue-900/40 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-[#070d1e] border border-blue-200/80 dark:border-blue-900/40 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <span className="text-[11px] text-slate-400 block font-bold">Người nhận:</span>
                   <span className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-1 mt-0.5">
@@ -8441,7 +8545,7 @@ export default function AdminDashboard() {
                   value={replyLienHeModal.tieu_de_tra_loi}
                   onChange={(e) => setReplyLienHeModal({ ...replyLienHeModal, tieu_de_tra_loi: e.target.value })}
                   placeholder="Nhập tiêu đề thư..."
-                  className={`w-full p-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
 
@@ -8456,7 +8560,7 @@ export default function AdminDashboard() {
                   value={replyLienHeModal.noi_dung_tra_loi}
                   onChange={(e) => setReplyLienHeModal({ ...replyLienHeModal, noi_dung_tra_loi: e.target.value })}
                   placeholder="Kính gửi quý khách... (Nhập chi tiết thông tin phản hồi, hướng dẫn hoặc giải đáp yêu cầu của khách hàng)"
-                  className={`w-full p-3 rounded-xl border font-medium text-xs leading-relaxed resize-none ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-3 rounded-xl border font-medium text-xs leading-relaxed resize-none ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
 
@@ -8504,7 +8608,7 @@ export default function AdminDashboard() {
       {/* 15. Modal Loại Tin Tức (Loai_Tin_Tuc) */}
       {loaiTinModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-5 sm:p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-md p-5 sm:p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
               <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
                 <FolderTree className="w-5 h-5 text-emerald-600" />
@@ -8527,7 +8631,7 @@ export default function AdminDashboard() {
                   value={loaiTinModal.data.ten_loai || ''}
                   onChange={(e) => setLoaiTinModal({ ...loaiTinModal, data: { ...loaiTinModal.data, ten_loai: e.target.value } })}
                   placeholder="Ví dụ: Tin Giải Đấu, Khuyến Mãi Sân, Cẩm Nang..."
-                  className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
 
@@ -8578,7 +8682,7 @@ export default function AdminDashboard() {
       {/* 16. Modal Soạn Thảo Tin Tức & Bài Viết (Tin_Tuc) */}
       {newsModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
-          <div className={`w-full max-w-3xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+          <div className={`w-full max-w-3xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
               <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
                 <FileText className="w-5 h-5 text-emerald-600" />
@@ -8602,7 +8706,7 @@ export default function AdminDashboard() {
                     value={newsModal.data.tieu_de || ''}
                     onChange={(e) => setNewsModal({ ...newsModal, data: { ...newsModal.data, tieu_de: e.target.value } })}
                     placeholder="Nhập tiêu đề hấp dẫn cho bài viết..."
-                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
                 <div>
@@ -8610,7 +8714,7 @@ export default function AdminDashboard() {
                   <select
                     value={newsModal.data.ma_loai_tin || (loaiTinList[0]?.id ?? 1)}
                     onChange={(e) => setNewsModal({ ...newsModal, data: { ...newsModal.data, ma_loai_tin: parseInt(e.target.value) } })}
-                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   >
                     {loaiTinList.map((lt) => (
                       <option key={lt.id} value={lt.id}>📁 {lt.ten_loai}</option>
@@ -8628,7 +8732,7 @@ export default function AdminDashboard() {
                     value={newsModal.data.hinh_anh || ''}
                     onChange={(e) => setNewsModal({ ...newsModal, data: { ...newsModal.data, hinh_anh: e.target.value } })}
                     placeholder="https://... hoặc bấm nút Tải File Ảnh"
-                    className={`flex-1 px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                    className={`flex-1 px-3 py-2.5 rounded-xl border font-mono text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                   <label className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer flex items-center gap-1.5 shrink-0 shadow-md transition-all hover:scale-105">
                     <Upload className="w-3.5 h-3.5" />
@@ -8646,7 +8750,7 @@ export default function AdminDashboard() {
                   </label>
                 </div>
                 {newsModal.data.hinh_anh && (
-                  <div className="mt-2 p-2 rounded-xl border border-slate-200 dark:border-emerald-900 bg-slate-50 dark:bg-[#060e09] flex items-center gap-3">
+                  <div className="mt-2 p-2 rounded-xl border border-slate-200 dark:border-emerald-900 bg-slate-50 dark:bg-[#070d1e] flex items-center gap-3">
                     <img src={newsModal.data.hinh_anh} alt="Preview" className="w-24 h-14 object-cover rounded-lg border border-slate-200 shadow-sm" />
                     <span className="text-[11px] text-slate-400 font-bold">✓ Ảnh đại diện hợp lệ</span>
                   </div>
@@ -8660,7 +8764,7 @@ export default function AdminDashboard() {
                   value={newsModal.data.tom_tat || ''}
                   onChange={(e) => setNewsModal({ ...newsModal, data: { ...newsModal.data, tom_tat: e.target.value } })}
                   placeholder="Đoạn mô tả ngắn gọn nội dung hiển thị ở danh sách bài viết..."
-                  className={`w-full px-3 py-2 rounded-xl border text-xs ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full px-3 py-2 rounded-xl border text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
 
@@ -8672,7 +8776,7 @@ export default function AdminDashboard() {
                   value={newsModal.data.noi_dung || ''}
                   onChange={(e) => setNewsModal({ ...newsModal, data: { ...newsModal.data, noi_dung: e.target.value } })}
                   placeholder="Nhập toàn bộ nội dung bài viết tin tức tại đây..."
-                  className={`w-full p-3 rounded-xl border text-xs font-normal leading-relaxed ${isDarkMode ? 'bg-[#060e09] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  className={`w-full p-3 rounded-xl border text-xs font-normal leading-relaxed ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
 
@@ -8727,7 +8831,7 @@ export default function AdminDashboard() {
       {fixedScheduleModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
           <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${
-            isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'
+            isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'
           }`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
               <h3 className="font-black text-sm sm:text-base flex items-center gap-2">
@@ -8764,7 +8868,7 @@ export default function AdminDashboard() {
                     }}
                     required
                     className={`w-full p-2.5 rounded-xl border font-bold outline-none ${
-                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
                     }`}
                   >
                     <option value="">-- Chọn Sân Bóng --</option>
@@ -8793,7 +8897,7 @@ export default function AdminDashboard() {
                     placeholder="VD: FC Tuổi Trẻ, Công ty FPT..."
                     required
                     className={`w-full p-2.5 rounded-xl border font-semibold outline-none ${
-                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
                     }`}
                   />
                 </div>
@@ -8817,7 +8921,7 @@ export default function AdminDashboard() {
                     placeholder="0912345678"
                     required
                     className={`w-full p-2.5 rounded-xl border font-mono font-semibold outline-none ${
-                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
                     }`}
                   />
                 </div>
@@ -8840,7 +8944,7 @@ export default function AdminDashboard() {
                     step={10000}
                     required
                     className={`w-full p-2.5 rounded-xl border font-mono font-bold outline-none ${
-                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
                     }`}
                   />
                 </div>
@@ -8898,7 +9002,7 @@ export default function AdminDashboard() {
                       }))
                     }
                     className={`w-full p-2.5 rounded-xl border font-mono font-bold outline-none ${
-                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
                     }`}
                   >
                     {TIME_OPTIONS_24H.map((t) => (
@@ -8923,7 +9027,7 @@ export default function AdminDashboard() {
                       }))
                     }
                     className={`w-full p-2.5 rounded-xl border font-mono font-bold outline-none ${
-                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
                     }`}
                   >
                     {TIME_OPTIONS_24H.map((t) => (
@@ -8953,7 +9057,7 @@ export default function AdminDashboard() {
                     }
                     required
                     className={`w-full p-2.5 rounded-xl border font-bold outline-none ${
-                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
                     }`}
                   />
                 </div>
@@ -8974,7 +9078,7 @@ export default function AdminDashboard() {
                     }
                     required
                     className={`w-full p-2.5 rounded-xl border font-bold outline-none ${
-                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
                     }`}
                   />
                 </div>
@@ -8997,7 +9101,7 @@ export default function AdminDashboard() {
                     }
                     step={50000}
                     className={`w-full p-2.5 rounded-xl border font-mono font-bold outline-none ${
-                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
                     }`}
                   />
                 </div>
@@ -9017,7 +9121,7 @@ export default function AdminDashboard() {
                     }
                     placeholder="VD: Hợp đồng đá cố định tối T2-T4..."
                     className={`w-full p-2.5 rounded-xl border font-semibold outline-none ${
-                      isDarkMode ? 'bg-[#060e09] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
                     }`}
                   />
                 </div>
@@ -9045,7 +9149,7 @@ export default function AdminDashboard() {
                   ? fixedScheduleModal.checkResult.hop_le_hoan_toan
                     ? isDarkMode ? 'bg-emerald-950/40 border-emerald-500/50' : 'bg-emerald-50 border-emerald-300'
                     : isDarkMode ? 'bg-amber-950/40 border-amber-500/50' : 'bg-amber-50 border-amber-300'
-                  : isDarkMode ? 'bg-[#060e09] border-emerald-900/40' : 'bg-slate-50 border-slate-200'
+                  : isDarkMode ? 'bg-[#070d1e] border-emerald-900/40' : 'bg-slate-50 border-slate-200'
               }`}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-extrabold flex items-center gap-1.5">
@@ -9137,7 +9241,7 @@ export default function AdminDashboard() {
       {viewScheduleSessionsModal.isOpen && viewScheduleSessionsModal.schedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
           <div className={`w-full max-w-2xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${
-            isDarkMode ? 'bg-[#0a150e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'
+            isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'
           }`}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
               <div>
@@ -9170,7 +9274,7 @@ export default function AdminDashboard() {
             ) : (
               <div className="max-h-96 overflow-y-auto rounded-2xl border border-slate-200 dark:border-emerald-900/30">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className={isDarkMode ? 'bg-[#060e09] text-emerald-400' : 'bg-slate-100 text-slate-700'}>
+                  <thead className={isDarkMode ? 'bg-[#070d1e] text-emerald-400' : 'bg-slate-100 text-slate-700'}>
                     <tr className="border-b dark:border-emerald-900/30">
                       <th className="p-3">STT</th>
                       <th className="p-3">MÃ ĐƠN</th>

@@ -65,8 +65,8 @@ export const cleanDateForSql = (val: any): string => {
  */
 export const layDanhSachSan = async (req: AuthRequest, res: Response) => {
     try {
-        const { ma_loai_san } = req.query;
-        const cacheKey = `danh_sach_san_${ma_loai_san || 'ALL'}`;
+        const { ma_loai_san, trang_thai, tu_khoa } = req.query;
+        const cacheKey = `danh_sach_san_${ma_loai_san || 'ALL'}_${trang_thai || 'ALL'}_${tu_khoa || 'ALL'}`;
         const cached = memoryCache.get(cacheKey);
         if (cached) {
             return res.status(200).json({
@@ -77,8 +77,14 @@ export const layDanhSachSan = async (req: AuthRequest, res: Response) => {
 
         const pool = await poolPromise;
         const request = pool.request();
-        if (ma_loai_san && ma_loai_san !== 'ALL') {
+        if (ma_loai_san && ma_loai_san !== 'ALL' && Number(ma_loai_san) > 0) {
             request.input('ma_loai_san', sql.Int, Number(ma_loai_san));
+        }
+        if (trang_thai && trang_thai !== 'ALL') {
+            request.input('trang_thai', sql.VarChar(20), String(trang_thai));
+        }
+        if (tu_khoa && String(tu_khoa).trim() !== '') {
+            request.input('tu_khoa', sql.NVarChar(100), String(tu_khoa).trim());
         }
         const result = await request.execute('sp_LayDanhSachSan');
         const data = result.recordset || [];
@@ -585,11 +591,66 @@ export const layLichSan = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * 12A. Đặt nhiều sân bóng cùng lúc (Multi-court Booking)
+ * Procedure: sp_DatNhieuSan
+ * Method: POST /api/dat-san/nhieu-san
+ */
+export const datNhieuSan = async (req: AuthRequest, res: Response) => {
+    try {
+        const { danh_sach_san, ho_ten, so_dien_thoai, tong_tien, phuong_thuc, loai_thanh_toan, trang_thai, ghi_chu, dich_vu_chon } = req.body;
+
+        if (!danh_sach_san || !Array.isArray(danh_sach_san) || danh_sach_san.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp danh sách sân cần đặt!'
+            });
+        }
+
+        const pool = await poolPromise;
+        const ma_nd = req.user ? req.user.id : (req.body.ma_nguoi_dung || null);
+        const targetStatus = trang_thai || (loai_thanh_toan === 'DAT_COC' ? 'DA_COC' : 'DA_THANH_TOAN');
+
+        const result = await pool.request()
+            .input('ma_nguoi_dung', sql.Int, ma_nd)
+            .input('ho_ten', sql.NVarChar(100), (ho_ten && ho_ten.trim()) || 'Khách đặt nhiều sân')
+            .input('so_dien_thoai', sql.VarChar(15), (so_dien_thoai && so_dien_thoai.trim()) || '0900000000')
+            .input('tong_tien', sql.Decimal(10, 2), tong_tien ? parseFloat(tong_tien) : null)
+            .input('phuong_thuc', sql.VarChar(20), phuong_thuc || 'CHUYEN_KHOAN')
+            .input('trang_thai', sql.VarChar(30), targetStatus)
+            .input('ghi_chu', sql.NVarChar(sql.MAX), ghi_chu || null)
+            .input('danh_sach_san', sql.NVarChar(sql.MAX), JSON.stringify(danh_sach_san))
+            .input('dich_vu_chon', sql.NVarChar(sql.MAX), dich_vu_chon ? JSON.stringify(dich_vu_chon) : null)
+            .execute('sp_DatNhieuSan');
+
+        const donMoi = result.recordset && result.recordset[0];
+
+        // Xóa cache lịch sân
+        memoryCache.delPrefix('lich_san_');
+
+        return res.status(201).json({
+            success: true,
+            message: 'Đặt nhiều sân thành công!',
+            data: donMoi
+        });
+    } catch (error: any) {
+        console.error('Lỗi khi đặt nhiều sân:', error);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi đặt nhiều sân'
+        });
+    }
+};
+
+/**
  * 12. Đặt sân bóng (Lưu trạng thái DA_COC hoặc DA_THANH_TOAN vào bảng Don_Dat_San)
  * Method: POST /api/dat-san
  */
 export const datSan = async (req: AuthRequest, res: Response) => {
     try {
+        if (req.body.danh_sach_san && Array.isArray(req.body.danh_sach_san) && req.body.danh_sach_san.length > 0) {
+            return datNhieuSan(req, res);
+        }
+
         const { ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, phuong_thuc, loai_thanh_toan, trang_thai, ghi_chu, ho_ten, so_dien_thoai } = req.body;
 
         if (!ma_san || !ngay_da || !gio_bat_dau || !gio_ket_thuc) {
