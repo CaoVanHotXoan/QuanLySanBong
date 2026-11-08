@@ -16,11 +16,14 @@ import { sql, poolPromise } from '../config/db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import { OAuth2Client } from 'google-auth-library';
 import { AuthRequest } from '../types';
 import { sendOtpEmail, isMailServiceEnabled } from '../services/emailService';
 import memoryCache from '../services/cacheService';
 
 dotenv.config();
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '728248489856-rcv5fd5ejleg717dqcj1f0oevm3lvn5e.apps.googleusercontent.com');
 
 /**
  * 1. Đăng ký tài khoản người dùng mới (Lưu trực tiếp vào CSDL SQL Server)
@@ -142,7 +145,7 @@ export const dangKy = async (req: AuthRequest, res: Response) => {
  */
 export const dangNhap = async (req: AuthRequest, res: Response) => {
     try {
-        const { email, mat_khau } = req.body;
+        const { email, mat_khau, chi_quan_tri } = req.body;
 
         if (!email || !mat_khau) {
             return res.status(400).json({
@@ -159,17 +162,24 @@ export const dangNhap = async (req: AuthRequest, res: Response) => {
             // Gọi Stored Procedure sp_DangNhap
             const result = await pool.request()
                 .input('email', sql.VarChar(255), normalizedEmail)
+                .input('chi_quan_tri', sql.Bit, chi_quan_tri ? 1 : 0)
                 .execute('sp_DangNhap');
 
             user = result.recordset && result.recordset[0];
         } catch (procErr: any) {
             console.log('sp_DangNhap thông báo:', procErr.message);
+            if (procErr.message && procErr.message.includes('Thông tin đăng nhập không hợp lệ')) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Thông tin đăng nhập không hợp lệ'
+                });
+            }
         }
 
         if (!user) {
             return res.status(400).json({
                 success: false,
-                message: 'Tài khoản hoặc mật khẩu không chính xác!'
+                message: chi_quan_tri ? 'Thông tin đăng nhập không hợp lệ' : 'Tài khoản hoặc mật khẩu không chính xác!'
             });
         }
 
@@ -206,7 +216,7 @@ export const dangNhap = async (req: AuthRequest, res: Response) => {
         if (!isMatch) {
             return res.status(400).json({
                 success: false,
-                message: 'Email hoặc mật khẩu không chính xác!'
+                message: chi_quan_tri ? 'Thông tin đăng nhập không hợp lệ' : 'Email hoặc mật khẩu không chính xác!'
             });
         }
 
@@ -219,6 +229,17 @@ export const dangNhap = async (req: AuthRequest, res: Response) => {
         }
         if (user.email && (user.email.toLowerCase() === 'admin@gmail.com' || user.email.toLowerCase() === 'xoancao2.0@gmail.com')) {
             userRole = 'ADMIN';
+        }
+
+        // Nếu đăng nhập từ Cổng Quản trị mà vai trò không phải Quản trị viên / Nhân viên -> Chặn lập tức
+        if (chi_quan_tri) {
+            const roleUpper = (userRole || '').toUpperCase();
+            if (roleUpper !== 'ADMIN' && roleUpper !== 'QUAN_TRI' && roleUpper !== 'NHAN_VIEN') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Thông tin đăng nhập không hợp lệ'
+                });
+            }
         }
 
         // Tạo JWT Token
@@ -249,6 +270,130 @@ export const dangNhap = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({
             success: false,
             message: error.message || 'Lỗi khi đăng nhập'
+        });
+    }
+};
+
+/**
+ * 2.1. Đăng nhập / Đăng ký nhanh qua Google OAuth 2.0 (Google Sign-In)
+ * Method: POST /api/auth/google
+ * Procedure: sp_DangNhapGoogle
+ */
+export const dangNhapGoogle = async (req: AuthRequest, res: Response) => {
+    try {
+        const { id_token, credential, access_token, userInfo } = req.body;
+        const tokenToVerify = id_token || credential;
+
+        if (!tokenToVerify && !access_token) {
+            return res.status(400).json({
+                success: false,
+                message: 'Thiếu Google Token xác thực (id_token, credential hoặc access_token)!'
+            });
+        }
+
+        const clientId = process.env.GOOGLE_CLIENT_ID || '728248489856-rcv5fd5ejleg717dqcj1f0oevm3lvn5e.apps.googleusercontent.com';
+
+        let googleEmail = '';
+        let googleName = '';
+        let googleAvatar: string | null = null;
+
+        // Trường hợp 1: Sử dụng access_token từ custom button qua useGoogleLogin()
+        if (access_token) {
+            try {
+                const tokenInfo = await googleClient.getTokenInfo(access_token);
+                if (!tokenInfo || !tokenInfo.email) {
+                    return res.status(401).json({
+                        success: false,
+                        message: 'Google Access Token không hợp lệ hoặc đã hết hạn!'
+                    });
+                }
+                googleEmail = tokenInfo.email.toLowerCase().trim();
+                googleName = userInfo?.name || userInfo?.given_name || (tokenInfo.email.split('@')[0]) || 'Khách hàng Google';
+                googleAvatar = userInfo?.picture || null;
+            } catch (tokenErr: any) {
+                console.error('Lỗi getTokenInfo Google:', tokenErr.message);
+                return res.status(401).json({
+                    success: false,
+                    message: 'Xác thực Google Access Token thất bại!'
+                });
+            }
+        } else if (tokenToVerify) {
+            // Trường hợp 2: Xác thực Google ID Token với Google Server (Cryptographic verification)
+            let ticket: any;
+            try {
+                ticket = await googleClient.verifyIdToken({
+                    idToken: tokenToVerify,
+                    audience: clientId,
+                });
+            } catch (verifyErr: any) {
+                console.error('Lỗi xác thực Google Token:', verifyErr.message);
+                return res.status(401).json({
+                    success: false,
+                    message: 'Token Google không hợp lệ hoặc đã hết hạn. Vui lòng thử lại!'
+                });
+            }
+
+            const payload = ticket.getPayload();
+            if (!payload || !payload.email) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Không lấy được thông tin email từ tài khoản Google!'
+                });
+            }
+
+            googleEmail = payload.email.toLowerCase().trim();
+            googleName = payload.name || payload.given_name || 'Khách hàng Google';
+            googleAvatar = payload.picture || null;
+        }
+
+        // 2. Gọi Stored Procedure sp_DangNhapGoogle trong SQL Server
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('email', sql.VarChar(255), googleEmail)
+            .input('ho_ten', sql.NVarChar(100), googleName)
+            .input('anh_dai_dien', sql.VarChar(sql.MAX), googleAvatar)
+            .execute('sp_DangNhapGoogle');
+
+        const user = result.recordset && result.recordset[0];
+        if (!user) {
+            return res.status(500).json({
+                success: false,
+                message: 'Không thể xử lý thông tin người dùng trong cơ sở dữ liệu!'
+            });
+        }
+
+        let userRole = user.vai_tro || user.TenVaiTro || 'KHACH_HANG';
+        if (user.email && (user.email.toLowerCase() === 'admin@gmail.com' || user.email.toLowerCase() === 'xoancao2.0@gmail.com')) {
+            userRole = 'ADMIN';
+        }
+
+        // 3. Ký JWT Token hệ thống Sport247
+        const jwtPayload = {
+            id: user.id,
+            email: user.email,
+            vai_tro: userRole,
+            so_dien_thoai: user.so_dien_thoai
+        };
+
+        const secretKey = process.env.JWT_SECRET || 'super_secret_jwt_key_qlsanbong_2026';
+        const token = jwt.sign(jwtPayload, secretKey, {
+            expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any
+        });
+
+        user.vai_tro = userRole;
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đăng nhập Google thành công!',
+            token,
+            data: user
+        });
+
+    } catch (error: any) {
+        console.error('Lỗi dangNhapGoogle:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Lỗi xử lý đăng nhập Google trên máy chủ'
         });
     }
 };

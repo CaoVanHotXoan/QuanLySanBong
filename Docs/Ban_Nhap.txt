@@ -13,16 +13,13 @@ Làm thêm đặt trực tiếp
 Làm lại giao diện lịch đặt sân giống lịch google
 Thêm cơ thành viên(mã giảm giả, )
 Đặt nhiều sân 1 lúc trong cùng 1 khung giờ, thêm thời gian dùng
-Hủy đơn khi  khách không vào sân
+Hủy đơn khi khách không vào sân
 
 
 
 =================================
 Danh sách test tay
-
-
 Làm thống kế xuất ra file excel, doanh thu hôm nay, tuần này, 
-
 ======================================================
 
 Chức năng nhân viên:
@@ -52,6 +49,8 @@ Có thể tùy chỉnh CSDL nhưng phải dùng procedure và cập nhật vào
 2 file QuanLySanBong.sql và ThuTuc.sql
 File QuanLySanBong.sql thì chứa dữ liệu table không chứa procedure
 File ThuTuc.sql thì chứa toàn bộ procedure 
+Nếu có thay đổi csdl thì cũng nạp qua bên sql server luôn
+
 
 Và deploy fontend trên vercel không bị lỗi
 

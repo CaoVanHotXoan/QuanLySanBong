@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { User, Mail, Phone, Lock, Eye, EyeOff, X, Sparkles, LogIn, UserPlus, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Lock, Eye, EyeOff, X, LogIn, Mail, ShieldCheck, ArrowLeft } from "lucide-react";
+import { useGoogleLogin } from "@react-oauth/google";
 
 // Định nghĩa kiểu dữ liệu người dùng khi xác thực thành công từ CSDL SQL Server
 export interface AuthUser {
@@ -35,7 +36,7 @@ export default function Login({
   onClose,
   initialRegister = false,
   onLoginSuccess,
-  showRegisterButton,
+  showRegisterButton = false,
   isOpenControlled,
   onOpenChange,
   onCloseControlled,
@@ -45,66 +46,31 @@ export default function Login({
   const [internalIsOpen, setInternalIsOpen] = useState<boolean>(false);
   const isOpen = isControlled ? Boolean(isOpenProp ?? isOpenControlled) : internalIsOpen;
 
-  // Trạng thái chuyển đổi form: false = "Đăng nhập", true = "Đăng ký"
-  const [isRegister, setIsRegister] = useState<boolean>(Boolean(initialRegister));
+  // Trạng thái hiển thị Modal riêng biệt dành cho Quản trị viên / Nhân viên
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState<boolean>(false);
 
   // Trạng thái đang gửi yêu cầu lên Backend (Loading spinner)
   const [isLoading, setIsLoading] = useState<boolean>(false);
-
-  // Trạng thái ẩn / hiện mật khẩu
-  const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
-
-  // Khai báo các State lưu trữ dữ liệu người dùng nhập vào
-  const [hoTen, setHoTen] = useState<string>("");
-  const [emailInput, setEmailInput] = useState<string>("");
-  const [soDienThoai, setSoDienThoai] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
-  const [confirmPassword, setConfirmPassword] = useState<string>("");
-
-  // STATE XÁC THỰC MÃ OTP QUA GMAIL KHI ĐĂNG KÝ
-  const [otpCode, setOtpCode] = useState<string>("");
-  const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
-  const [otpCountdown, setOtpCountdown] = useState<number>(0);
-
-  // Đếm ngược thời gian gửi lại mã OTP (60s)
-  useEffect(() => {
-    if (otpCountdown <= 0) return;
-    const timer = setInterval(() => {
-      setOtpCountdown((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [otpCountdown]);
 
   // Thông báo lỗi hoặc thông báo thành công trực tiếp trên form
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [successMessage, setSuccessMessage] = useState<string>("");
 
-  // STATE BẢO MẬT CAPTCHA NGẦM & ANTI-BOT
-  const [honeypotVal, setHoneypotVal] = useState<string>("");
-  const [formInitTime, setFormInitTime] = useState<number>(Date.now());
-  const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI";
+  // Dữ liệu đăng nhập Quản trị viên
+  const [emailInput, setEmailInput] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
-  // Đồng bộ initialRegister mỗi khi mở Modal
+  // Reset trạng thái mỗi khi mở Modal
   useEffect(() => {
     if (isOpen) {
-      setIsRegister(Boolean(initialRegister));
       setErrorMessage("");
       setSuccessMessage("");
-      setFormInitTime(Date.now());
-      setHoneypotVal("");
-
-      // Nạp script Google reCAPTCHA v3 ngầm nếu chưa có
-      if (typeof window !== "undefined" && !document.getElementById("recaptcha-v3-script")) {
-        const script = document.createElement("script");
-        script.id = "recaptcha-v3-script";
-        script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`;
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-      }
+      setIsAdminModalOpen(false);
+      setEmailInput("");
+      setPassword("");
     }
-  }, [isOpen, initialRegister]);
+  }, [isOpen]);
 
   // Lắng nghe phím ESC để đóng Modal
   useEffect(() => {
@@ -118,21 +84,11 @@ export default function Login({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
-  // Hàm chuẩn hóa email và ghép nối với đuôi @gmail.com nếu người dùng chỉ nhập username
-  const getFullEmail = (input: string): string => {
-    const clean = (input || "").trim();
-    if (!clean) return "";
-    if (clean.includes("@")) {
-      return clean;
-    }
-    return `${clean}@gmail.com`;
-  };
-
   // Hàm mở Modal từ trigger nội bộ (nếu có dùng nút kích hoạt nội bộ)
-  const handleOpenModal = (registerMode: boolean = false) => {
-    setIsRegister(registerMode);
+  const handleOpenModal = () => {
     setErrorMessage("");
     setSuccessMessage("");
+    setIsAdminModalOpen(false);
     setInternalIsOpen(true);
     if (onOpenChange) onOpenChange(true);
   };
@@ -140,6 +96,7 @@ export default function Login({
   // Hàm đóng Modal an toàn
   const handleCloseModal = () => {
     setInternalIsOpen(false);
+    setIsAdminModalOpen(false);
     if (onClose) onClose();
     if (onCloseControlled) onCloseControlled();
     if (onOpenChange) onOpenChange(false);
@@ -148,186 +105,56 @@ export default function Login({
     setIsLoading(false);
   };
 
-  // Hàm chuyển đổi qua lại giữa form Đăng nhập và Đăng ký
-  const switchFormTab = (registerMode: boolean) => {
-    setIsRegister(registerMode);
-    setErrorMessage("");
-    setSuccessMessage("");
-    setPassword("");
-    setConfirmPassword("");
-    setOtpCode("");
-  };
-
-  // Hàm yêu cầu gửi mã OTP về Gmail để đăng ký tài khoản
-  const handleSendOtpRegister = async () => {
-    const fullEmail = getFullEmail(emailInput);
-    if (!fullEmail) {
-      setErrorMessage("⚠️ Vui lòng nhập địa chỉ Email hoặc tên tài khoản trước khi nhận mã OTP!");
-      return;
-    }
-
-    setIsSendingOtp(true);
-    setErrorMessage("");
-    setSuccessMessage("");
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/send-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: fullEmail,
-          loai_otp: "DANG_KY",
-          ho_ten: hoTen.trim() || undefined,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        setErrorMessage(data.message || "⚠️ Không thể gửi mã OTP. Vui lòng thử lại!");
-        setIsSendingOtp(false);
-        return;
-      }
-
-      setSuccessMessage(`📩 ${data.message || "Mã OTP đã được gửi về Gmail của bạn!"}`);
-      setOtpCountdown(60);
-    } catch (err: any) {
-      console.error("Lỗi khi gửi mã OTP:", err);
-      setErrorMessage("❌ Lỗi kết nối máy chủ gửi OTP. Vui lòng kiểm tra lại dịch vụ Backend!");
-    } finally {
-      setIsSendingOtp(false);
-    }
-  };
-
-  // Xử lý gửi Form (Đăng ký / Đăng nhập trực tiếp với Cơ sở dữ liệu SQL Server)
-  // Hàm lấy Token reCAPTCHA v3 chạy ngầm (Không làm phiền người dùng)
-  const getInvisibleCaptchaToken = async (actionName: string): Promise<string> => {
-    if (typeof window === "undefined") return "";
-    try {
-      const grecaptcha = (window as any).grecaptcha;
-      if (grecaptcha && grecaptcha.execute) {
-        await new Promise((resolve) => grecaptcha.ready(resolve));
-        const token = await grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: actionName });
-        return token || "";
-      }
-    } catch (err) {
-      console.warn("[Captcha Ngầm] Không thể lấy token reCAPTCHA, kích hoạt tầng bảo vệ Honeypot & Timing:", err);
-    }
-    return "";
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setErrorMessage("");
-    setSuccessMessage("");
-
-    const fullEmail = getFullEmail(emailInput);
-
-    // 1. Kiểm tra Email
-    if (!emailInput.trim()) {
-      setErrorMessage("⚠️ Vui lòng nhập tên tài khoản hoặc địa chỉ Email.");
-      return;
-    }
-
-    // 2. Kiểm tra Mật khẩu tối thiểu 6 ký tự
-    if (password.length < 6) {
-      setErrorMessage("⚠️ Mật khẩu bắt buộc phải có tối thiểu 6 ký tự.");
-      return;
-    }
-
-    // 3. Xử lý ĐĂNG KÝ
-    if (isRegister) {
-      if (!hoTen.trim()) {
-        setErrorMessage("⚠️ Vui lòng nhập họ và tên của bạn.");
-        return;
-      }
-
-      if (password !== confirmPassword) {
-        setErrorMessage("⚠️ Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại!");
-        return;
-      }
-
-      if (!otpCode.trim() || otpCode.trim().length !== 6) {
-        setErrorMessage("⚠️ Vui lòng nhập đúng 6 chữ số mã OTP xác thực đã gửi về Gmail của bạn!");
-        return;
-      }
-
+  // =====================================================================
+  // 1. XỬ LÝ ĐĂNG NHẬP KHÁCH HÀNG / TIẾP TỤC VỚI GOOGLE (OAUTH 2.0)
+  // Sử dụng hook useGoogleLogin cho nút bấm tùy chỉnh siêu đẹp, đẳng cấp
+  // =====================================================================
+  const triggerGoogleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
       setIsLoading(true);
+      setErrorMessage("");
+      setSuccessMessage("");
 
       try {
-        const response = await fetch(`${API_BASE_URL}/register`, {
+        // 1. Lấy thông tin tài khoản Google của người dùng
+        const userInfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: {
+            Authorization: `Bearer ${tokenResponse.access_token}`,
+          },
+        });
+
+        let userInfo: any = null;
+        if (userInfoRes.ok) {
+          userInfo = await userInfoRes.json();
+        }
+
+        // 2. Gửi Access Token và User Info lên Backend (sp_DangNhapGoogle)
+        const response = await fetch(`${API_BASE_URL}/google`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            ho_ten: hoTen.trim(),
-            email: fullEmail,
-            so_dien_thoai: soDienThoai.trim() || null,
-            mat_khau: password,
-            vai_tro: "KHACH_HANG",
-            ma_otp: otpCode.trim(),
-            // Payload bảo mật Captcha ngầm đa tầng
-            website_url_hp: honeypotVal,
-            captchaToken: await getInvisibleCaptchaToken("register"),
+            access_token: tokenResponse.access_token,
+            userInfo: userInfo,
           }),
         });
 
         const data = await response.json();
 
         if (!response.ok || !data.success) {
-          setErrorMessage(data.message || "⚠️ Đăng ký thất bại. Email có thể đã được sử dụng!");
+          setErrorMessage(data.message || "⚠️ Đăng nhập Google thất bại!");
           setIsLoading(false);
           return;
         }
 
-        // Đăng ký thành công -> Chuyển sang form Đăng nhập để người dùng đăng nhập
-        setSuccessMessage(`🎉 Đăng ký thành công tài khoản "${fullEmail}"! Bạn có thể nhập mật khẩu để đăng nhập ngay.`);
-        setIsLoading(false);
-        setIsRegister(false);
-        setPassword("");
-        setConfirmPassword("");
-        setOtpCode("");
-
-      } catch (error) {
-        console.error("Lỗi khi kết nối máy chủ SQL Server:", error);
-        setErrorMessage("❌ Không thể kết nối đến máy chủ Backend SQL Server. Vui lòng kiểm tra lại kết nối!");
-        setIsLoading(false);
-      }
-    } else {
-      // 4. Xử lý ĐĂNG NHẬP
-      setIsLoading(true);
-
-      try {
-        const response = await fetch(`${API_BASE_URL}/login`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: fullEmail,
-            mat_khau: password,
-            // Payload bảo mật Captcha ngầm đa tầng
-            website_url_hp: honeypotVal,
-            captchaToken: await getInvisibleCaptchaToken("login"),
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          setErrorMessage(data.message || "⚠️ Đăng nhập thất bại. Vui lòng kiểm tra lại email hoặc mật khẩu!");
-          setIsLoading(false);
-          return;
-        }
-
-        // Xóa sạch phiên đăng nhập cũ trong localStorage để tránh dính quyền tài khoản trước
+        // 3. Xóa sạch phiên đăng nhập cũ
         localStorage.removeItem("auth_token");
         localStorage.removeItem("token");
         localStorage.removeItem("auth_user");
         localStorage.removeItem("soccer_current_user");
 
-        // Lưu JWT Token và thông tin người dùng từ SQL Server vào LocalStorage
+        // 4. Lưu JWT Token và User Info từ SQL Server
         if (data.token) {
           localStorage.setItem("auth_token", data.token);
         }
@@ -347,23 +174,134 @@ export default function Login({
           hoTen: userFromDb.ho_ten,
           email: userFromDb.email,
           soDienThoai: userFromDb.so_dien_thoai,
-          diaChi: "Hà Nội",
+          diaChi: "Việt Nam",
           avatarUrl: userFromDb.anh_dai_dien || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250&auto=format&fit=crop",
         }));
 
         setIsLoading(false);
 
-        // Kích hoạt callback thông báo đăng nhập thành công
         if (onLoginSuccess) {
           onLoginSuccess(userFromDb);
         }
 
+        // Phát sự kiện toàn cục để Header / Navbar cập nhật thông tin ngay lập tức
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("storage"));
+          window.dispatchEvent(new CustomEvent("auth-change", { detail: userFromDb }));
+        }
+
         handleCloseModal();
-      } catch (error) {
-        console.error("Lỗi khi kết nối đăng nhập:", error);
-        setErrorMessage("❌ Không thể kết nối tới máy chủ SQL Server. Vui lòng kiểm tra lại dịch vụ Backend!");
+
+      } catch (err: any) {
+        console.error("Lỗi xác thực Google:", err);
+        setErrorMessage("❌ Lỗi kết nối máy chủ khi đăng nhập Google. Vui lòng thử lại!");
         setIsLoading(false);
       }
+    },
+    onError: (err) => {
+      console.error("Lỗi Google Login:", err);
+      setErrorMessage("⚠️ Đăng nhập Google bị gián đoạn hoặc cửa sổ đã bị đóng!");
+      setIsLoading(false);
+    },
+  });
+
+  // =====================================================================
+  // 2. XỬ LÝ ĐĂNG NHẬP MODAL QUẢN TRỊ VIÊN / NHÂN VIÊN (MẬT KHẨU SQL SERVER)
+  // Thực thi sp_DangNhap trong SQL Server với Try...Catch & Transactions
+  // =====================================================================
+  const handleAdminSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!emailInput.trim()) {
+      setErrorMessage("⚠️ Vui lòng nhập tài khoản hoặc email Quản trị.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage("⚠️ Mật khẩu bắt buộc phải có tối thiểu 6 ký tự.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: emailInput.trim(),
+          mat_khau: password,
+          chi_quan_tri: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setErrorMessage(data.message || "Thông tin đăng nhập không hợp lệ");
+        setIsLoading(false);
+        return;
+      }
+
+      // Kiểm tra chặn tài khoản Khách hàng ở Cổng Quản trị
+      const userRoleUpper = (data.data?.vai_tro || data.data?.TenVaiTro || "").toUpperCase();
+      if (userRoleUpper !== "ADMIN" && userRoleUpper !== "QUAN_TRI" && userRoleUpper !== "NHAN_VIEN") {
+        setErrorMessage("Thông tin đăng nhập không hợp lệ");
+        setIsLoading(false);
+        return;
+      }
+
+      // Xóa phiên đăng nhập cũ
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("token");
+      localStorage.removeItem("auth_user");
+      localStorage.removeItem("soccer_current_user");
+
+      // Lưu JWT Token và User Info
+      if (data.token) {
+        localStorage.setItem("auth_token", data.token);
+      }
+
+      const userFromDb: AuthUser = {
+        id: data.data.id,
+        ho_ten: data.data.ho_ten,
+        email: data.data.email,
+        so_dien_thoai: data.data.so_dien_thoai || "",
+        vai_tro: data.data.vai_tro || "QUAN_TRI",
+        anh_dai_dien: data.data.anh_dai_dien,
+      };
+
+      localStorage.setItem("auth_user", JSON.stringify(userFromDb));
+      localStorage.setItem("soccer_current_user", JSON.stringify({
+        id: userFromDb.id,
+        hoTen: userFromDb.ho_ten,
+        email: userFromDb.email,
+        soDienThoai: userFromDb.so_dien_thoai,
+        diaChi: "Hà Nội",
+        avatarUrl: userFromDb.anh_dai_dien || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250&auto=format&fit=crop",
+      }));
+
+      setIsLoading(false);
+
+      if (onLoginSuccess) {
+        onLoginSuccess(userFromDb);
+      }
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new CustomEvent("auth-change", { detail: userFromDb }));
+      }
+
+      handleCloseModal();
+    } catch (error) {
+      console.error("Lỗi khi kết nối đăng nhập:", error);
+      setErrorMessage("❌ Không thể kết nối tới máy chủ SQL Server. Vui lòng kiểm tra lại Backend!");
+      setIsLoading(false);
     }
   };
 
@@ -375,28 +313,18 @@ export default function Login({
           <button
             type="button"
             className="login-trigger-btn"
-            onClick={() => handleOpenModal(false)}
+            onClick={handleOpenModal}
           >
             Đăng nhập
           </button>
-          {showRegisterButton !== false && (
-            <button
-              type="button"
-              className="register-trigger-btn"
-              onClick={() => handleOpenModal(true)}
-            >
-              Đăng ký
-            </button>
-          )}
         </div>
       )}
 
-      {/* Khung Modal Popup & Lớp phủ mờ (Overlay) */}
+      {/* Lớp phủ mờ toàn màn hình (Overlay) khi một trong các Modal đang mở */}
       {isOpen && (
         <div
           className="login-modal-overlay"
           onMouseDown={(e) => {
-            // Chỉ đóng khi click chuột trực tiếp vào nền mờ bên ngoài
             if (e.target === e.currentTarget) {
               handleCloseModal();
             }
@@ -404,312 +332,243 @@ export default function Login({
           role="dialog"
           aria-modal="true"
         >
-          {/* Khung nội dung Modal (Chặn nổi bọt mọi sự kiện chuột & phím) */}
-          <div
-            className="login-modal-container"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Nút X ở góc trên cùng để đóng popup */}
-            <button
-              type="button"
-              className="login-close-btn"
-              onClick={handleCloseModal}
-              aria-label="Đóng popup"
+          {/* ========================================================================= */}
+          {/* CASE 1: MODAL ĐĂNG NHẬP DÀNH RIÊNG CHO QUẢN TRỊ VIÊN & NHÂN VIÊN          */}
+          {/* ========================================================================= */}
+          {isAdminModalOpen ? (
+            <div
+              className="admin-modal-container max-w-[440px]"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
-              <X className="w-4 h-4" />
-            </button>
-
-            {/* Header Modal */}
-            <div className="login-header">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-3 shadow-lg shadow-emerald-500/10">
-                {isRegister ? <UserPlus className="w-6 h-6" /> : <LogIn className="w-6 h-6" />}
-              </div>
-              <h2 className="login-title">
-                {isRegister ? "Đăng Ký Tài Khoản" : "Đăng Nhập"}
-              </h2>
-              <p className="login-subtitle">
-                {isRegister
-                  ? "Tạo tài khoản thành viên để đặt sân nhanh chóng & quản lý lịch đá"
-                  : "Chào mừng bạn quay trở lại với Hệ thống Quản lý Sân Bóng"}
-              </p>
-            </div>
-
-            {/* Tabs chuyển đổi giữa Đăng Nhập & Đăng Ký */}
-            <div className="login-tab-container">
+              {/* Nút X đóng popup */}
               <button
                 type="button"
-                className={`login-tab-btn ${!isRegister ? "active" : ""}`}
-                onClick={() => switchFormTab(false)}
+                className="login-close-btn"
+                onClick={handleCloseModal}
+                aria-label="Đóng popup quản trị"
               >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Đăng Nhập</span>
+                <X className="w-4 h-4" />
               </button>
-              <button
-                type="button"
-                className={`login-tab-btn ${isRegister ? "active" : ""}`}
-                onClick={() => switchFormTab(true)}
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Đăng Ký</span>
-              </button>
-            </div>
 
-            {/* Thông báo lỗi nếu có */}
-            {errorMessage && (
-              <div className="login-alert-error">
-                {errorMessage}
+              {/* Header Modal Quản Trị */}
+              <div className="login-header">
+                <div>
+                  <span className="admin-header-badge">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    CỔNG QUẢN TRỊ HỆ THỐNG
+                  </span>
+                </div>
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#274F9D]/30 to-[#E0B341]/25 border border-[#E0B341]/40 text-[#E0B341] mb-2 shadow-lg shadow-[#E0B341]/20">
+                  <Lock className="w-6 h-6 text-[#E0B341]" />
+                </div>
+                <h2 className="login-title text-white">Đăng Nhập Quản Trị</h2>
+                <p className="login-subtitle">
+                  Dành riêng cho Ban Quản trị & Nhân viên vận hành Sport247
+                </p>
               </div>
-            )}
 
-            {/* Thông báo thành công nếu có */}
-            {successMessage && (
-              <div className="login-alert-success">
-                {successMessage}
-              </div>
-            )}
-
-            {/* Form thao tác Đăng nhập / Đăng ký */}
-            <form className="login-form" onSubmit={handleSubmit}>
-              {/* Trường Họ tên (Chỉ hiển thị khi ở form Đăng ký) */}
-              {isRegister && (
-                <div className="login-input-group">
-                  <label className="login-label" htmlFor="input-hoten">
-                    <User className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Họ và tên <span className="text-rose-500">*</span></span>
-                  </label>
-                  <input
-                    id="input-hoten"
-                    type="text"
-                    className="login-input"
-                    placeholder="Ví dụ: Nguyễn Văn An"
-                    value={hoTen}
-                    autoComplete="name"
-                    onChange={(e) => {
-                      setHoTen(e.target.value);
-                      if (errorMessage) setErrorMessage("");
-                    }}
-                    required
-                  />
+              {/* Thông báo lỗi nếu có */}
+              {errorMessage && (
+                <div className="login-alert-error">
+                  {errorMessage}
                 </div>
               )}
 
-              {/* Trường Số điện thoại (Chỉ hiển thị khi Đăng ký) */}
-              {isRegister && (
-                <div className="login-input-group">
-                  <label className="login-label" htmlFor="input-phone">
-                    <Phone className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Số điện thoại</span>
-                  </label>
-                  <input
-                    id="input-phone"
-                    type="tel"
-                    className="login-input"
-                    placeholder="Ví dụ: 0912345678"
-                    value={soDienThoai}
-                    autoComplete="tel"
-                    onChange={(e) => {
-                      setSoDienThoai(e.target.value);
-                      if (errorMessage) setErrorMessage("");
-                    }}
-                  />
+              {/* Thông báo thành công nếu có */}
+              {successMessage && (
+                <div className="login-alert-success">
+                  {successMessage}
                 </div>
               )}
 
-              {/* Trường Địa chỉ Email */}
-              <div className="login-input-group">
-                <label className="login-label" htmlFor="input-email">
-                  <Mail className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Địa chỉ Email hoặc Tên tài khoản <span className="text-rose-500">*</span></span>
-                </label>
-                <div className="login-email-box">
+              {/* Form Đăng Nhập Quản Trị */}
+              <form onSubmit={handleAdminSubmit} className="flex flex-col gap-3.5 mt-2">
+                <div className="login-input-group">
+                  <label className="login-label" htmlFor="admin-email-input">
+                    <Mail className="w-3.5 h-3.5 text-[#5B90DD]" />
+                    <span>Tài khoản / Email Quản trị <span className="text-rose-500">*</span></span>
+                  </label>
                   <input
-                    id="input-email"
+                    id="admin-email-input"
                     type="text"
-                    className="login-email-input"
-                    placeholder="Nhập tên tài khoản hoặc email..."
+                    className="login-input"
+                    placeholder="admin@gmail.com"
                     value={emailInput}
-                    autoComplete="email"
                     onChange={(e) => {
                       setEmailInput(e.target.value);
                       if (errorMessage) setErrorMessage("");
                     }}
                     required
                   />
-                  {isRegister && !emailInput.includes("@") && emailInput.trim().length > 0 && (
-                    <span className="login-email-addon">@gmail.com</span>
-                  )}
                 </div>
-              </div>
 
-              {/* Trường Mã xác thực OTP qua Gmail (Chỉ hiển thị khi Đăng ký) */}
-              {isRegister && (
                 <div className="login-input-group">
-                  <label className="login-label" htmlFor="input-otp">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Mã xác thực OTP (Gửi về Gmail) <span className="text-rose-500">*</span></span>
-                  </label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      id="input-otp"
-                      type="text"
-                      maxLength={6}
-                      className="login-input font-mono tracking-widest font-bold text-center text-emerald-400 placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-500"
-                      placeholder="6 số OTP"
-                      value={otpCode}
-                      onChange={(e) => {
-                        setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6));
-                        if (errorMessage) setErrorMessage("");
-                      }}
-                      required
-                    />
-                    <button
-                      type="button"
-                      disabled={isSendingOtp || otpCountdown > 0}
-                      onClick={handleSendOtpRegister}
-                      className="px-3 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-emerald-500/20 active:scale-95 flex items-center gap-1.5"
-                    >
-                      {isSendingOtp ? (
-                        <>
-                          <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                          <span>Đang gửi...</span>
-                        </>
-                      ) : otpCountdown > 0 ? (
-                        <span>Gửi lại ({otpCountdown}s)</span>
-                      ) : (
-                        <>
-                          <Mail className="w-3.5 h-3.5" />
-                          <span>Gửi mã OTP</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Nhập email ở trên rồi bấm <strong>"Gửi mã OTP"</strong> để nhận mã xác thực qua hòm thư Gmail của bạn.
-                  </p>
-                </div>
-              )}
-
-              {/* Trường Mật khẩu: Tối thiểu 6 ký tự */}
-              <div className="login-input-group">
-                <label className="login-label" htmlFor="input-password">
-                  <Lock className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Mật khẩu (Tối thiểu 6 ký tự) <span className="text-rose-500">*</span></span>
-                </label>
-                <div className="login-password-box">
-                  <input
-                    id="input-password"
-                    type={showPassword ? "text" : "password"}
-                    className="login-password-input"
-                    placeholder="Nhập mật khẩu..."
-                    minLength={6}
-                    value={password}
-                    autoComplete={isRegister ? "new-password" : "current-password"}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (errorMessage) setErrorMessage("");
-                    }}
-                    required
-                  />
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    className="login-password-toggle-btn"
-                    onClick={() => setShowPassword(!showPassword)}
-                    aria-label="Ẩn hiện mật khẩu"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Trường Nhập lại mật khẩu (Chỉ hiển thị khi ở form Đăng ký) */}
-              {isRegister && (
-                <div className="login-input-group">
-                  <label className="login-label" htmlFor="input-confirm-password">
-                    <Lock className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Nhập lại mật khẩu <span className="text-rose-500">*</span></span>
+                  <label className="login-label" htmlFor="admin-password-input">
+                    <Lock className="w-3.5 h-3.5 text-[#5B90DD]" />
+                    <span>Mật khẩu hệ thống <span className="text-rose-500">*</span></span>
                   </label>
                   <div className="login-password-box">
                     <input
-                      id="input-confirm-password"
-                      type={showConfirmPassword ? "text" : "password"}
+                      id="admin-password-input"
+                      type={showPassword ? "text" : "password"}
                       className="login-password-input"
-                      placeholder="Xác nhận lại mật khẩu..."
-                      minLength={6}
-                      value={confirmPassword}
-                      autoComplete="new-password"
+                      placeholder="Nhập mật khẩu quản trị..."
+                      value={password}
                       onChange={(e) => {
-                        setConfirmPassword(e.target.value);
+                        setPassword(e.target.value);
                         if (errorMessage) setErrorMessage("");
                       }}
                       required
                     />
                     <button
                       type="button"
-                      tabIndex={-1}
                       className="login-password-toggle-btn"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      aria-label="Ẩn hiện xác nhận mật khẩu"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label="Ẩn hiện mật khẩu"
                     >
-                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
-              )}
 
-              {/* Nút Submit Form */}
-              <button 
-                type="submit" 
-                className="login-submit-btn" 
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                    <span>Đang xử lý kết nối SQL Server...</span>
-                  </span>
-                ) : isRegister ? (
-                  <span className="flex items-center justify-center gap-1.5">
-                    <UserPlus className="w-4 h-4" />
-                    <span>ĐĂNG KÝ TÀI KHOẢN NGAY</span>
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-1.5">
-                    <LogIn className="w-4 h-4" />
-                    <span>ĐĂNG NHẬP HỆ THỐNG</span>
-                  </span>
-                )}
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  className="admin-submit-btn !mt-2"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Đang xác thực hệ thống...</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-[#E0B341]" />
+                      <span>ĐĂNG NHẬP HỆ THỐNG QUẢN TRỊ</span>
+                    </span>
+                  )}
+                </button>
+              </form>
 
-            {/* Chuyển đổi chân trang giữa Đăng nhập và Đăng ký */}
-            <div className="login-footer">
-              {!isRegister ? (
-                <span>
-                  Chưa có tài khoản thành viên?{" "}
-                  <button
-                    type="button"
-                    className="login-toggle-link"
-                    onClick={() => switchFormTab(true)}
-                  >
-                    Đăng ký ngay
-                  </button>
-                </span>
-              ) : (
-                <span>
-                  Đã có tài khoản hệ thống?{" "}
-                  <button
-                    type="button"
-                    className="login-toggle-link"
-                    onClick={() => switchFormTab(false)}
-                  >
-                    Đăng nhập tại đây
-                  </button>
-                </span>
-              )}
+              {/* Nút Quay Lại Modal Đăng Nhập Khách Hàng */}
+              <div className="mt-5 pt-3 border-t border-slate-800/80 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminModalOpen(false);
+                    setErrorMessage("");
+                    setSuccessMessage("");
+                  }}
+                  className="admin-back-btn"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Quay lại đăng nhập Khách hàng</span>
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* ========================================================================= */
+            /* CASE 2: MODAL ĐĂNG NHẬP CHÍNH DÀNH CHO KHÁCH HÀNG (GOOGLE 1-CHẠM)         */
+            /* ========================================================================= */
+            <div
+              className="login-modal-container max-w-[440px]"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Nút X ở góc trên cùng để đóng popup */}
+              <button
+                type="button"
+                className="login-close-btn"
+                onClick={handleCloseModal}
+                aria-label="Đóng popup"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* Header Modal Khách Hàng */}
+              <div className="login-header">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#274F9D]/20 text-[#5B90DD] border border-[#274F9D]/35 mb-3 shadow-lg shadow-[#274F9D]/15">
+                  <LogIn className="w-6 h-6 text-[#5B90DD]" />
+                </div>
+                <h2 className="login-title">Đăng Nhập</h2>
+                <p className="login-subtitle">
+                  Chào mừng bạn quay trở lại với Hệ thống Thể Thao Sport247
+                </p>
+              </div>
+
+              {/* Thông báo lỗi nếu có */}
+              {errorMessage && (
+                <div className="login-alert-error">
+                  {errorMessage}
+                </div>
+              )}
+
+              {/* Thông báo thành công nếu có */}
+              {successMessage && (
+                <div className="login-alert-success">
+                  {successMessage}
+                </div>
+              )}
+
+              {/* ========================================================= */}
+              {/* NÚT TIẾP TỤC VỚI GOOGLE THIẾT KẾ MỚI SANG TRỌNG & NỔI BẬT */}
+              {/* ========================================================= */}
+              <div className="w-full flex flex-col items-center mt-2 mb-1">
+                <button
+                  type="button"
+                  onClick={() => triggerGoogleLogin()}
+                  disabled={isLoading}
+                  className="google-luxury-button"
+                  title="Đăng nhập 1 chạm an toàn với tài khoản Google"
+                >
+                  {/* Official 4-color Google SVG Icon */}
+                  <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3h3.88c2.27-2.09 3.665-5.17 3.665-9.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.1C3.27 21.43 7.33 24 12 24z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.28 14.32c-.25-.72-.38-1.49-.38-2.32s.13-1.6.38-2.32V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.1z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.27 2.57 1.25 6.58l4.03 3.1c.95-2.83 3.6-4.93 6.72-4.93z"
+                      />
+                    </svg>
+                  </div>
+
+                  <span className="text-[15px] font-bold tracking-tight text-slate-800">
+                    {isLoading ? "Đang xác thực Google..." : "Tiếp tục với Google"}
+                  </span>
+                </button>
+              </div>
+
+              {/* ========================================================= */}
+              {/* LIÊN KẾT CHUYỂN SANG MODAL ĐĂNG NHẬP QUẢN TRỊ VIÊN        */}
+              {/* ========================================================= */}
+              <div className="mt-5 pt-3.5 flex flex-col items-center border-t border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminModalOpen(true);
+                    setErrorMessage("");
+                    setSuccessMessage("");
+                  }}
+                  className="text-[12px] text-slate-400 hover:text-[#5B90DD] flex items-center gap-1.5 transition-colors py-1 cursor-pointer font-medium group"
+                >
+                  <Lock className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#5B90DD] transition-colors" />
+                  <span>Đăng nhập dành cho Quản trị viên / Nhân viên</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>

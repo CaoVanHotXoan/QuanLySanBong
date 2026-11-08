@@ -2286,3 +2286,60 @@ export const huyLichCoDinh = async (req: any, res: Response) => {
     }
 };
 
+export const capNhatLichCoDinh = async (req: any, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { ten_doi_bong, so_dien_thoai, don_gia_moi_buoi, tien_coc, trang_thai, ghi_chu } = req.body;
+        const updated = await datSanService.capNhatLichCoDinh({
+            id: Number(id),
+            ten_doi_bong,
+            so_dien_thoai,
+            don_gia_moi_buoi: don_gia_moi_buoi !== undefined ? Number(don_gia_moi_buoi) : undefined,
+            tien_coc: tien_coc !== undefined ? Number(tien_coc) : undefined,
+            trang_thai,
+            ghi_chu
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đã cập nhật hợp đồng lịch cố định thành công!',
+            data: updated
+        });
+    } catch (error: any) {
+        console.error('Lỗi capNhatLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi cập nhật hợp đồng lịch cố định'
+        });
+    }
+};
+
+export const xoaLichCoDinh = async (req: any, res: Response) => {
+    try {
+        const { id } = req.params;
+        const result = await datSanService.xoaLichCoDinh(Number(id));
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đã xóa vĩnh viễn hợp đồng lịch cố định thành công!',
+            data: result
+        });
+    } catch (error: any) {
+        console.error('Lỗi xoaLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xóa hợp đồng lịch cố định'
+        });
+    }
+};
+

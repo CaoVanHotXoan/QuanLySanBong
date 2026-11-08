@@ -79,7 +79,8 @@ END;
 GO
 
 CREATE OR ALTER PROCEDURE sp_DangNhap
-    @email VARCHAR(255)
+    @email VARCHAR(255),
+    @chi_quan_tri BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -101,13 +102,21 @@ BEGIN
             nd.anh_dai_dien, CAST(GETDATE() AS DATETIME) AS ngay_tao
         FROM Nguoi_Dung nd
         LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
-        WHERE LOWER(nd.email) = LOWER(@cleanIden)
-           OR LOWER(nd.ho_ten) = LOWER(@cleanName)
-           OR nd.so_dien_thoai = @cleanIden
-           OR LOWER(nd.email) = LOWER(@emailWithDomain)
-           OR (CHARINDEX('@', nd.email) > 0 AND LOWER(SUBSTRING(nd.email, 1, CHARINDEX('@', nd.email) - 1)) = LOWER(@usernameOnly))
-           OR LOWER(nd.ho_ten) = LOWER(@usernameOnly)
-           OR (LOWER(@cleanIden) IN ('admin', 'admin@gmail.com') AND (vt.TenVaiTro = 'ADMIN' OR nd.MaVaiTro = 1))
+        WHERE (
+            LOWER(nd.email) = LOWER(@cleanIden)
+            OR LOWER(nd.ho_ten) = LOWER(@cleanName)
+            OR nd.so_dien_thoai = @cleanIden
+            OR LOWER(nd.email) = LOWER(@emailWithDomain)
+            OR (CHARINDEX('@', nd.email) > 0 AND LOWER(SUBSTRING(nd.email, 1, CHARINDEX('@', nd.email) - 1)) = LOWER(@usernameOnly))
+            OR LOWER(nd.ho_ten) = LOWER(@usernameOnly)
+            OR (LOWER(@cleanIden) IN ('admin', 'admin@gmail.com') AND (vt.TenVaiTro = 'ADMIN' OR nd.MaVaiTro = 1))
+        )
+        AND (
+            @chi_quan_tri = 0
+            OR vt.TenVaiTro IN ('ADMIN', 'QUAN_TRI', 'NHAN_VIEN')
+            OR nd.MaVaiTro IN (1, 2)
+            OR LOWER(nd.email) IN ('admin@gmail.com', 'xoancao2.0@gmail.com')
+        )
         ORDER BY 
             CASE 
                 WHEN LOWER(nd.email) = LOWER(@cleanIden) THEN 1
@@ -122,7 +131,7 @@ BEGIN
 
         IF @@ROWCOUNT = 0
         BEGIN
-            ;THROW 50002, N'Tài khoản email hoặc tên đăng nhập không tồn tại trong hệ thống.', 1;
+            ;THROW 50002, N'Thông tin đăng nhập không hợp lệ', 1;
         END;
     END TRY
     BEGIN CATCH
@@ -5872,6 +5881,180 @@ BEGIN
     BEGIN CATCH
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- CẬP NHẬT THÔNG TIN HỢP ĐỒNG LỊCH CỐ ĐỊNH (SỬA LỊCH CỐ ĐỊNH)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_CapNhatLichCoDinh
+    @id INT,
+    @ten_doi_bong NVARCHAR(100) = NULL,
+    @so_dien_thoai VARCHAR(20) = NULL,
+    @don_gia_moi_buoi DECIMAL(10, 2) = NULL,
+    @tien_coc DECIMAL(10, 2) = NULL,
+    @trang_thai VARCHAR(30) = NULL,
+    @ghi_chu NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Lich_Co_Dinh WHERE id = @id)
+        BEGIN
+            ;THROW 50007, N'Không tìm thấy hợp đồng lịch cố định cần cập nhật.', 1;
+        END;
+
+        DECLARE @currentDonGia DECIMAL(10, 2);
+        DECLARE @currentTongSoBuoi INT;
+
+        SELECT 
+            @currentDonGia = ISNULL(@don_gia_moi_buoi, don_gia_moi_buoi),
+            @currentTongSoBuoi = ISNULL(tong_so_buoi, 0)
+        FROM Lich_Co_Dinh
+        WHERE id = @id;
+
+        UPDATE Lich_Co_Dinh
+        SET 
+            ten_doi_bong = ISNULL(@ten_doi_bong, ten_doi_bong),
+            so_dien_thoai = ISNULL(@so_dien_thoai, so_dien_thoai),
+            don_gia_moi_buoi = @currentDonGia,
+            tien_coc = ISNULL(@tien_coc, tien_coc),
+            tong_tien = @currentTongSoBuoi * @currentDonGia,
+            trang_thai = ISNULL(@trang_thai, trang_thai),
+            ghi_chu = ISNULL(@ghi_chu, ghi_chu)
+        WHERE id = @id;
+
+        -- Nếu chuyển trạng thái sang DA_HUY, tự động hủy các buổi chưa diễn ra
+        IF @trang_thai = 'DA_HUY'
+        BEGIN
+            UPDATE Don_Dat_San
+            SET trang_thai = 'DA_HUY',
+                ghi_chu = CONCAT(ISNULL(ghi_chu, ''), N' [Hủy theo HĐ #', @id, N']')
+            WHERE ma_lich_co_dinh = @id
+              AND ngay_da >= CAST(GETDATE() AS DATE)
+              AND trang_thai NOT IN ('HOAN_THANH', 'DA_THANH_TOAN', 'Da Thanh Toan');
+        END;
+
+        COMMIT TRANSACTION;
+
+        EXEC sp_LayChiTietLichCoDinh @id = @id;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- XÓA HỢP ĐỒNG LỊCH CỐ ĐỊNH (XÓA VĨNH VIỄN)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_XoaLichCoDinh
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Lich_Co_Dinh WHERE id = @id)
+        BEGIN
+            ;THROW 50006, N'Không tìm thấy hợp đồng lịch cố định cần xóa.', 1;
+        END;
+
+        -- 1. Xóa chi tiết dịch vụ của các đơn đặt sân thuộc lịch cố định này
+        DELETE ctdv
+        FROM Chi_Tiet_Dich_Vu ctdv
+        INNER JOIN Don_Dat_San dds ON ctdv.ma_don_dat = dds.id
+        WHERE dds.ma_lich_co_dinh = @id;
+
+        -- 2. Xóa các đơn đặt sân thuộc hợp đồng lịch cố định này
+        DELETE FROM Don_Dat_San
+        WHERE ma_lich_co_dinh = @id;
+
+        -- 3. Xóa hợp đồng lịch cố định
+        DELETE FROM Lich_Co_Dinh
+        WHERE id = @id;
+
+        COMMIT TRANSACTION;
+
+        SELECT 1 AS success, N'Đã xóa vĩnh viễn hợp đồng lịch cố định' AS message;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 29. THỦ TỤC XÁC THỰC VÀ ĐĂNG NHẬP BẰNG GOOGLE (OAUTH 2.0)
+-- Tự động tra cứu email hoặc tạo tài khoản mới với vai trò Khách Hàng (MaVaiTro = 3)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_DangNhapGoogle
+    @email VARCHAR(255),
+    @ho_ten NVARCHAR(100),
+    @anh_dai_dien VARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF @email IS NULL OR LTRIM(RTRIM(@email)) = ''
+        BEGIN
+            ;THROW 50030, N'Email Google không được để trống.', 1;
+        END;
+
+        DECLARE @user_id INT;
+        DECLARE @clean_email VARCHAR(255) = LOWER(LTRIM(RTRIM(@email)));
+
+        -- 1. Tìm người dùng theo email
+        SELECT TOP 1 @user_id = id 
+        FROM Nguoi_Dung 
+        WHERE LOWER(email) = @clean_email;
+
+        -- 2. Nếu người dùng chưa tồn tại -> Tự động tạo mới với vai trò Khách Hàng (MaVaiTro = 3)
+        IF @user_id IS NULL
+        BEGIN
+            INSERT INTO Nguoi_Dung (ho_ten, email, mat_khau, anh_dai_dien, MaVaiTro)
+            VALUES (@ho_ten, @clean_email, NULL, @anh_dai_dien, 3);
+
+            SET @user_id = SCOPE_IDENTITY();
+        END
+        ELSE
+        BEGIN
+            -- Nếu đã tồn tại nhưng chưa có ảnh đại diện -> Cập nhật ảnh đại diện từ Google
+            UPDATE Nguoi_Dung
+            SET anh_dai_dien = ISNULL(anh_dai_dien, @anh_dai_dien),
+                ho_ten = ISNULL(ho_ten, @ho_ten)
+            WHERE id = @user_id;
+        END;
+
+        COMMIT TRANSACTION;
+
+        -- 3. Trả về thông tin người dùng chuẩn xác
+        SELECT TOP 1
+            nd.id, 
+            nd.ho_ten, 
+            nd.email, 
+            nd.so_dien_thoai, 
+            nd.MaVaiTro, 
+            ISNULL(vt.TenVaiTro, 'KHACH_HANG') AS vai_tro, 
+            vt.TenVaiTro, 
+            vt.MoTa AS ten_vai_tro_mota,
+            nd.anh_dai_dien, 
+            CAST(GETDATE() AS DATETIME) AS ngay_tao
+        FROM Nguoi_Dung nd
+        LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+        WHERE nd.id = @user_id;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
         ;THROW;
     END CATCH;
 END;

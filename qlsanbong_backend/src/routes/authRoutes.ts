@@ -17,6 +17,9 @@ router.post('/register', invisibleCaptchaGuard, authController.dangKy);
 // Đăng nhập (Bảo vệ bởi Captcha ngầm & Anti-Bot Guard)
 router.post('/login', invisibleCaptchaGuard, authController.dangNhap);
 
+// Đăng nhập / Đăng ký nhanh qua Google OAuth 2.0
+router.post('/google', authController.dangNhapGoogle);
+
 // Gửi mã OTP qua Gmail (Bảo vệ chống spam/bom OTP bằng OtpSecurityGuard: Rate Limit IP + Cooldown 60s theo Email + Anti-Bot)
 router.post('/send-otp', otpSecurityGuard, authController.guiMaOTP);
 

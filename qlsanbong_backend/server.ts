@@ -138,46 +138,89 @@ app.set('io', io);
  * SOCKET.IO: HỆ THỐNG GIỮ CHỖ THỜI GIAN THỰC (REAL-TIME COURT LOCKING)
  * In-memory Map lưu danh sách các ô slot đang bị giữ chỗ tạm thời trên RAM
  * Key: slotId (Ví dụ: "2026-10-16_1_17:30")
- * Value: socket.id của khách hàng đang thao tác
+ * Value: { socketId: string, timestamp: number }
  * - Khách click chọn sân -> emit('lock_slots') -> Server broadcast 'slots_updated'
- *   -> Khách khác nhìn thấy ô slot chuyển sang màu TÍM/CAM và bị khóa, không thể click.
- * - Khách hủy / ngắt kết nối -> Tự động xóa khỏi Map và broadcast nhả slot ngay lập tức!
+ *   -> Khách khác nhìn thấy ô slot chuyển sang màu CAM và bị khóa, không thể click.
+ * - Tự động dọn dẹp các socket đã ngắt kết nối hoặc các slot giữ quá 10 phút.
  * =====================================================================
  */
-const lockedSlots = new Map<string, string>();
+interface LockRecord {
+    socketId: string;
+    timestamp: number;
+}
+const lockedSlots = new Map<string, LockRecord>();
+
+const cleanDeadAndExpiredLocks = (ioInstance: Server) => {
+    const now = Date.now();
+    let hasChanges = false;
+    for (const [slotId, record] of lockedSlots.entries()) {
+        const isSocketAlive = ioInstance.sockets?.sockets?.has(record.socketId);
+        const isExpired = now - record.timestamp > 10 * 60 * 1000; // 10 phút giữ sân
+        if (!isSocketAlive || isExpired) {
+            lockedSlots.delete(slotId);
+            hasChanges = true;
+            console.log(`🧹 [Auto-Release]: Đã tự động nhả slot ${slotId} (socket sống: ${isSocketAlive}, hết hạn: ${isExpired})`);
+        }
+    }
+    if (hasChanges) {
+        ioInstance.emit('slots_updated', Array.from(lockedSlots.keys()));
+    }
+};
+
+// Định kỳ quét dọn slot rác / socket chết mỗi 5 giây
+setInterval(() => {
+    cleanDeadAndExpiredLocks(io);
+}, 5000);
+
+// Endpoint API dự phòng giải phóng toàn bộ ô giữ chỗ
+app.post('/api/thanh-toan/force-unlock-all', (req: Request, res: Response) => {
+    lockedSlots.clear();
+    io.emit('slots_updated', []);
+    console.log('🧹 [API force-unlock-all]: Toàn bộ ô giữ chỗ đã được giải phóng');
+    res.json({ success: true, message: 'Đã giải phóng toàn bộ ô giữ chỗ' });
+});
 
 io.on('connection', (socket) => {
     console.log(`⚡ [Socket Connected]: ${socket.id}`);
+
+    // Dọn dẹp socket chết trước khi gửi danh sách
+    cleanDeadAndExpiredLocks(io);
 
     // Gửi danh sách toàn bộ các ô đang bị khóa cho Client vừa kết nối
     socket.emit('slots_updated', Array.from(lockedSlots.keys()));
 
     // 1. SỰ KIỆN KHÓA NHIỀU Ô CÙNG LÚC (lock_slots)
     socket.on('lock_slots', (slotIds: string[]) => {
-        if (!Array.isArray(slotIds) || slotIds.length === 0) return;
+        if (!Array.isArray(slotIds)) return;
+
+        cleanDeadAndExpiredLocks(io);
 
         // Xóa các ô cũ do chính socket này đang giữ trước đó
-        for (const [id, holderId] of lockedSlots.entries()) {
-            if (holderId === socket.id) {
+        for (const [id, record] of lockedSlots.entries()) {
+            if (record.socketId === socket.id) {
                 lockedSlots.delete(id);
             }
         }
 
-        slotIds.forEach((slotId) => {
-            if (slotId && !lockedSlots.has(slotId)) {
-                lockedSlots.set(slotId, socket.id);
-            }
-        });
+        const now = Date.now();
+        if (slotIds.length > 0) {
+            slotIds.forEach((slotId) => {
+                if (slotId && !lockedSlots.has(slotId)) {
+                    lockedSlots.set(slotId, { socketId: socket.id, timestamp: now });
+                }
+            });
+        }
 
-        console.log(`🔒 [Lock Slots Multi]: Socket ${socket.id} đang giữ các ô:`, slotIds);
+        console.log(`🔒 [Lock Slots Multi]: Socket ${socket.id} cập nhật các ô:`, slotIds);
         io.emit('slots_updated', Array.from(lockedSlots.keys()));
     });
 
     // 2. SỰ KIỆN KHÓA 1 Ô ĐƠN LẺ (lock_slot)
     socket.on('lock_slot', (slotId: string) => {
         if (!slotId) return;
+        cleanDeadAndExpiredLocks(io);
         if (!lockedSlots.has(slotId)) {
-            lockedSlots.set(slotId, socket.id);
+            lockedSlots.set(slotId, { socketId: socket.id, timestamp: Date.now() });
             console.log(`🔒 [Lock Slot]: Slot ${slotId} được giữ bởi ${socket.id}`);
             io.emit('slots_updated', Array.from(lockedSlots.keys()));
         }
@@ -186,8 +229,8 @@ io.on('connection', (socket) => {
     // 3. SỰ KIỆN GIẢI PHÓNG TOÀN BỘ Ô CỦA USER NÀY (unlock_all)
     socket.on('unlock_all', () => {
         let hasChanges = false;
-        for (const [slotId, holderId] of lockedSlots.entries()) {
-            if (holderId === socket.id) {
+        for (const [slotId, record] of lockedSlots.entries()) {
+            if (record.socketId === socket.id) {
                 lockedSlots.delete(slotId);
                 hasChanges = true;
             }
@@ -217,6 +260,12 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('force_unlock_all', () => {
+        lockedSlots.clear();
+        console.log(`🔓 [Force Unlock All]: Đã xóa toàn bộ khóa giữ chỗ trên hệ thống`);
+        io.emit('slots_updated', []);
+    });
+
     // 5. SỰ KIỆN ĐỒNG BỘ ĐƠN ĐẶT SÂN REAL-TIME (Relay giữa POS Management System và Trang Chủ)
     socket.on('booking_updated', (data: any) => {
         console.log(`📢 [Socket Relay]: Nhận booking_updated từ ${socket.id}, broadcast tới toàn bộ client.`);
@@ -233,8 +282,8 @@ io.on('connection', (socket) => {
         console.log(`❌ [Socket Disconnected]: ${socket.id}`);
         let hasChanges = false;
 
-        for (const [slotId, holderId] of lockedSlots.entries()) {
-            if (holderId === socket.id) {
+        for (const [slotId, record] of lockedSlots.entries()) {
+            if (record.socketId === socket.id) {
                 lockedSlots.delete(slotId);
                 hasChanges = true;
                 console.log(`🧹 [Auto-Release]: Đã nhả slot ${slotId} do ${socket.id} ngắt kết nối.`);

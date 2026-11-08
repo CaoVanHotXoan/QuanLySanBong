@@ -55,7 +55,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.huyLichCoDinh = exports.doiTrangThaiLichCoDinh = exports.themLichCoDinh = exports.kiemTraTrungLichCoDinh = exports.layChiTietLichCoDinh = exports.layDanhSachLichCoDinh = exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.datNhieuSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanDateForSql = exports.cleanTimeForSql = void 0;
+exports.xoaLichCoDinh = exports.capNhatLichCoDinh = exports.huyLichCoDinh = exports.doiTrangThaiLichCoDinh = exports.themLichCoDinh = exports.kiemTraTrungLichCoDinh = exports.layChiTietLichCoDinh = exports.layDanhSachLichCoDinh = exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.datNhieuSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanDateForSql = exports.cleanTimeForSql = void 0;
 const db_1 = require("../config/db");
 const cacheService_1 = __importDefault(require("../services/cacheService"));
 const datSanService = __importStar(require("../services/datSanService"));
@@ -2224,3 +2224,58 @@ const huyLichCoDinh = async (req, res) => {
     }
 };
 exports.huyLichCoDinh = huyLichCoDinh;
+const capNhatLichCoDinh = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { ten_doi_bong, so_dien_thoai, don_gia_moi_buoi, tien_coc, trang_thai, ghi_chu } = req.body;
+        const updated = await datSanService.capNhatLichCoDinh({
+            id: Number(id),
+            ten_doi_bong,
+            so_dien_thoai,
+            don_gia_moi_buoi: don_gia_moi_buoi !== undefined ? Number(don_gia_moi_buoi) : undefined,
+            tien_coc: tien_coc !== undefined ? Number(tien_coc) : undefined,
+            trang_thai,
+            ghi_chu
+        });
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+        }
+        return res.status(200).json({
+            success: true,
+            message: 'Đã cập nhật hợp đồng lịch cố định thành công!',
+            data: updated
+        });
+    }
+    catch (error) {
+        console.error('Lỗi capNhatLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi cập nhật hợp đồng lịch cố định'
+        });
+    }
+};
+exports.capNhatLichCoDinh = capNhatLichCoDinh;
+const xoaLichCoDinh = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await datSanService.xoaLichCoDinh(Number(id));
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+        }
+        return res.status(200).json({
+            success: true,
+            message: 'Đã xóa vĩnh viễn hợp đồng lịch cố định thành công!',
+            data: result
+        });
+    }
+    catch (error) {
+        console.error('Lỗi xoaLichCoDinh:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xóa hợp đồng lịch cố định'
+        });
+    }
+};
+exports.xoaLichCoDinh = xoaLichCoDinh;

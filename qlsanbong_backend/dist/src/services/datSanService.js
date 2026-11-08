@@ -6,7 +6,7 @@
  * =====================================================================
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.huyLichCoDinh = exports.doiTrangThaiLichCoDinh = exports.themLichCoDinh = exports.kiemTraTrungLichCoDinh = exports.layChiTietLichCoDinh = exports.layDanhSachLichCoDinh = exports.huyDonVaHoanCoc = exports.datNhieuSanStoredProcedure = exports.datSanStoredProcedure = exports.layTatCaDonDatSan = exports.layLichSanTheoNgay = exports.layDanhSachKhungGio = exports.layDanhSachLoaiSan = exports.layDanhSachSan = void 0;
+exports.xoaLichCoDinh = exports.capNhatLichCoDinh = exports.huyLichCoDinh = exports.doiTrangThaiLichCoDinh = exports.themLichCoDinh = exports.kiemTraTrungLichCoDinh = exports.layChiTietLichCoDinh = exports.layDanhSachLichCoDinh = exports.huyDonVaHoanCoc = exports.datNhieuSanStoredProcedure = exports.datSanStoredProcedure = exports.layTatCaDonDatSan = exports.layLichSanTheoNgay = exports.layDanhSachKhungGio = exports.layDanhSachLoaiSan = exports.layDanhSachSan = void 0;
 const db_1 = require("../config/db");
 const layDanhSachSan = async (maLoaiSan, trangThai, tuKhoa) => {
     const pool = await db_1.poolPromise;
@@ -225,3 +225,28 @@ const huyLichCoDinh = async (id, ly_do) => {
     return result.recordset?.[0] || null;
 };
 exports.huyLichCoDinh = huyLichCoDinh;
+const capNhatLichCoDinh = async (params) => {
+    const pool = await db_1.poolPromise;
+    const result = await pool.request()
+        .input('id', db_1.sql.Int, params.id)
+        .input('ten_doi_bong', db_1.sql.NVarChar(100), params.ten_doi_bong || null)
+        .input('so_dien_thoai', db_1.sql.VarChar(20), params.so_dien_thoai || null)
+        .input('don_gia_moi_buoi', db_1.sql.Decimal(10, 2), params.don_gia_moi_buoi !== undefined ? params.don_gia_moi_buoi : null)
+        .input('tien_coc', db_1.sql.Decimal(10, 2), params.tien_coc !== undefined ? params.tien_coc : null)
+        .input('trang_thai', db_1.sql.VarChar(30), params.trang_thai || null)
+        .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), params.ghi_chu || null)
+        .execute('sp_CapNhatLichCoDinh');
+    return {
+        hop_dong: result.recordsets[0]?.[0] || null,
+        danh_sach_buoi: result.recordsets[1] || []
+    };
+};
+exports.capNhatLichCoDinh = capNhatLichCoDinh;
+const xoaLichCoDinh = async (id) => {
+    const pool = await db_1.poolPromise;
+    const result = await pool.request()
+        .input('id', db_1.sql.Int, id)
+        .execute('sp_XoaLichCoDinh');
+    return result.recordset?.[0] || null;
+};
+exports.xoaLichCoDinh = xoaLichCoDinh;

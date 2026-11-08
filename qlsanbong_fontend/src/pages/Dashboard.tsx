@@ -624,6 +624,38 @@ export default function AdminDashboard() {
     sessions: [],
     loading: false
   });
+  const [editFixedScheduleModal, setEditFixedScheduleModal] = useState<{
+    isOpen: boolean;
+    submitting: boolean;
+    data: {
+      id: number;
+      ten_doi_bong: string;
+      so_dien_thoai: string;
+      don_gia_moi_buoi: number;
+      tien_coc: number;
+      trang_thai: string;
+      ghi_chu: string;
+      ten_san?: string;
+      gio_bat_dau?: string;
+      gio_ket_thuc?: string;
+      cac_thu_trong_tuan?: string;
+      tu_ngay?: string;
+      den_ngay?: string;
+      tong_so_buoi?: number;
+    };
+  }>({
+    isOpen: false,
+    submitting: false,
+    data: {
+      id: 0,
+      ten_doi_bong: '',
+      so_dien_thoai: '',
+      don_gia_moi_buoi: 0,
+      tien_coc: 0,
+      trang_thai: 'DANG_HIEU_LUC',
+      ghi_chu: ''
+    }
+  });
   const [fixedScheduleSearch, setFixedScheduleSearch] = useState<string>('');
   const [fixedScheduleStatusFilter, setFixedScheduleStatusFilter] = useState<string>('ALL');
   const [fixedScheduleCourtFilter, setFixedScheduleCourtFilter] = useState<string>('ALL');
@@ -3593,6 +3625,90 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleOpenEditFixedSchedule = (lcd: any) => {
+    setEditFixedScheduleModal({
+      isOpen: true,
+      submitting: false,
+      data: {
+        id: lcd.id,
+        ten_doi_bong: lcd.ten_doi_bong || '',
+        so_dien_thoai: lcd.so_dien_thoai || '',
+        don_gia_moi_buoi: Number(lcd.don_gia_moi_buoi || 0),
+        tien_coc: Number(lcd.tien_coc || 0),
+        trang_thai: lcd.trang_thai || 'DANG_HIEU_LUC',
+        ghi_chu: lcd.ghi_chu || '',
+        ten_san: lcd.ten_san || `Sân #${lcd.ma_san}`,
+        gio_bat_dau: lcd.gio_bat_dau,
+        gio_ket_thuc: lcd.gio_ket_thuc,
+        cac_thu_trong_tuan: lcd.cac_thu_trong_tuan,
+        tu_ngay: lcd.tu_ngay,
+        den_ngay: lcd.den_ngay,
+        tong_so_buoi: lcd.tong_so_buoi
+      }
+    });
+  };
+
+  const handleSaveEditFixedSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { id, ten_doi_bong, so_dien_thoai, don_gia_moi_buoi, tien_coc, trang_thai, ghi_chu } = editFixedScheduleModal.data;
+    if (!ten_doi_bong.trim() || !so_dien_thoai.trim()) {
+      setToastMessage({ type: 'error', message: 'Vui lòng nhập tên đội bóng và số điện thoại!' });
+      return;
+    }
+    setEditFixedScheduleModal((prev) => ({ ...prev, submitting: true }));
+    try {
+      const res = await fetch(`${API_BASE}/dat-san/lich-co-dinh/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ten_doi_bong: ten_doi_bong.trim(),
+          so_dien_thoai: so_dien_thoai.trim(),
+          don_gia_moi_buoi: Number(don_gia_moi_buoi),
+          tien_coc: Number(tien_coc),
+          trang_thai,
+          ghi_chu
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToastMessage({ type: 'success', message: '✅ Cập nhật hợp đồng lịch cố định thành công!' });
+        setEditFixedScheduleModal((prev) => ({ ...prev, isOpen: false, submitting: false }));
+        loadAllDataFromBackend();
+      } else {
+        setToastMessage({ type: 'error', message: data.message || 'Lỗi khi cập nhật hợp đồng' });
+        setEditFixedScheduleModal((prev) => ({ ...prev, submitting: false }));
+      }
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối máy chủ' });
+      setEditFixedScheduleModal((prev) => ({ ...prev, submitting: false }));
+    }
+  };
+
+  const handleDeleteFixedSchedulePermanent = (id: number, teamName?: string) => {
+    openDeleteConfirm(
+      'Xóa Vĩnh Viễn Hợp Đồng Lịch Cố Định',
+      `Bạn có chắc chắn muốn XÓA VĨNH VIỄN hợp đồng của "${teamName || `HĐ #${id}`}"?`,
+      'CẢNH BÁO: Thao tác này sẽ xóa hoàn toàn hợp đồng cùng toàn bộ các buổi thi đấu liên quan khỏi hệ thống và không thể khôi phục!',
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dat-san/lich-co-dinh/${id}/vinh-vien`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã xóa vĩnh viễn hợp đồng lịch cố định thành công!' });
+            loadAllDataFromBackend();
+          } else {
+            setToastMessage({ type: 'error', message: data.message || 'Lỗi khi xóa hợp đồng' });
+          }
+        } catch (err: any) {
+          setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối máy chủ' });
+        }
+      }
+    );
+  };
+
   // 1. Màn hình đang kiểm tra quyền Admin hoặc chuyển hướng về Trang chủ
   if (isAuthChecking || !isAuthorized) {
     return <SoccerLoader message="Đang kiểm tra quyền Quản trị viên..." fullScreen={true} />;
@@ -5420,7 +5536,9 @@ export default function AdminDashboard() {
                             <th className="p-3 md:p-4 whitespace-nowrap">TIẾN ĐỘ BUỔI</th>
                             <th className="p-3 md:p-4 whitespace-nowrap">TỔNG TIỀN / CỌC</th>
                             <th className="p-3 md:p-4 whitespace-nowrap">TRẠNG THÁI</th>
-                            <th className="p-3 md:p-4 text-right whitespace-nowrap">THAO TÁC</th>
+                            <th className={`p-3 md:p-4 text-center whitespace-nowrap sticky right-0 z-10 ${
+                              isDarkMode ? 'bg-[#070d1e] text-emerald-400' : 'bg-slate-100 text-slate-700'
+                            }`}>THAO TÁC</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30 text-[10px] md:text-xs lg:text-sm">
@@ -5530,16 +5648,29 @@ export default function AdminDashboard() {
                                       </span>
                                     )}
                                   </td>
-                                  <td className="p-3 md:p-4 text-right space-x-1.5 whitespace-nowrap">
+                                  <td className={`p-3 md:p-4 text-center space-x-1.5 whitespace-nowrap sticky right-0 z-10 ${
+                                    isDarkMode ? 'bg-[#0b132b]/95' : 'bg-white/95'
+                                  } backdrop-blur-xs shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.15)]`}>
                                     {/* Xem danh sách buổi đá */}
                                     <button
                                       type="button"
                                       onClick={() => handleViewScheduleSessions(lcd)}
-                                      className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 font-bold text-xs inline-flex items-center gap-1 cursor-pointer"
+                                      className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 font-bold text-xs inline-flex items-center gap-1 cursor-pointer transition-colors"
                                       title="Xem danh sách các buổi thi đấu đã sinh"
                                     >
                                       <Eye className="w-3.5 h-3.5" />
                                       <span className="hidden sm:inline">Buổi Đá</span>
+                                    </button>
+
+                                    {/* Sửa hợp đồng */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditFixedSchedule(lcd)}
+                                      className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-sky-100 hover:bg-sky-200 dark:bg-sky-950/60 dark:hover:bg-sky-900 text-sky-700 dark:text-sky-300 font-bold text-xs inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                      title="Chỉnh sửa thông tin hợp đồng"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Sửa</span>
                                     </button>
 
                                     {/* Bật / Tắt trạng thái */}
@@ -5547,7 +5678,7 @@ export default function AdminDashboard() {
                                       <button
                                         type="button"
                                         onClick={() => handleToggleStatusFixedSchedule(lcd.id, lcd.trang_thai)}
-                                        className={`p-1.5 sm:px-2 sm:py-1 rounded-lg font-bold text-xs inline-flex items-center gap-1 cursor-pointer ${
+                                        className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg font-bold text-xs inline-flex items-center gap-1 cursor-pointer transition-colors ${
                                           isPaused
                                             ? 'bg-teal-100 hover:bg-teal-200 dark:bg-teal-950/60 dark:hover:bg-teal-900 text-teal-700 dark:text-teal-300'
                                             : 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-700 dark:text-amber-300'
@@ -5564,13 +5695,24 @@ export default function AdminDashboard() {
                                       <button
                                         type="button"
                                         onClick={() => handleCancelFixedSchedule(lcd.id, lcd.ten_doi_bong)}
-                                        className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/60 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 font-bold text-xs inline-flex items-center gap-1 cursor-pointer"
+                                        className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-700 dark:text-amber-300 font-bold text-xs inline-flex items-center gap-1 cursor-pointer transition-colors"
                                         title="Hủy hợp đồng và giải phóng các ca đá tương lai"
                                       >
-                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <XCircle className="w-3.5 h-3.5" />
                                         <span className="hidden sm:inline">Hủy HĐ</span>
                                       </button>
                                     )}
+
+                                    {/* Xóa vĩnh viễn */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteFixedSchedulePermanent(lcd.id, lcd.ten_doi_bong)}
+                                      className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/60 dark:hover:bg-rose-900 text-rose-700 dark:text-rose-300 font-bold text-xs inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                      title="Xóa vĩnh viễn hợp đồng khỏi hệ thống"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Xóa</span>
+                                    </button>
                                   </td>
                                 </tr>
                               );
@@ -9337,6 +9479,220 @@ export default function AdminDashboard() {
                 Đóng
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          19. MODAL CHỈNH SỬA HỢP ĐỒNG LỊCH CỐ ĐỊNH (FIXED / RECURRING)
+          ===================================================================== */}
+      {editFixedScheduleModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto ${
+            isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'
+          }`}>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-emerald-900/40 mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                  <Edit2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm sm:text-base">Chỉnh Sửa Hợp Đồng Lịch Cố Định</h3>
+                  <p className="text-xs text-slate-400">
+                    Mã hợp đồng: <span className="font-mono font-bold text-emerald-400">#LCD{editFixedScheduleModal.data.id}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditFixedScheduleModal((prev) => ({ ...prev, isOpen: false }))}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Readonly info bar */}
+            <div className="p-3 mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs flex flex-wrap gap-x-4 gap-y-1 text-slate-300">
+              <div>Sân: <strong className="text-emerald-400">{editFixedScheduleModal.data.ten_san}</strong></div>
+              <div>Giờ: <strong className="font-mono text-emerald-400">{editFixedScheduleModal.data.gio_bat_dau} - {editFixedScheduleModal.data.gio_ket_thuc}</strong></div>
+              <div>Thứ: <strong className="text-emerald-400">{editFixedScheduleModal.data.cac_thu_trong_tuan}</strong></div>
+              {editFixedScheduleModal.data.tong_so_buoi && (
+                <div>Tổng: <strong className="text-emerald-400">{editFixedScheduleModal.data.tong_so_buoi} buổi</strong></div>
+              )}
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveEditFixedSchedule} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-slate-400">
+                    Tên Đội Bóng / Khách Hàng <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editFixedScheduleModal.data.ten_doi_bong}
+                    onChange={(e) =>
+                      setEditFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, ten_doi_bong: e.target.value }
+                      }))
+                    }
+                    className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden ${
+                      isDarkMode
+                        ? 'bg-slate-900/60 border-slate-700 text-white focus:border-emerald-500'
+                        : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-emerald-500'
+                    }`}
+                    placeholder="VD: FC Barcelona..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-slate-400">
+                    Số Điện Thoại Liên Hệ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editFixedScheduleModal.data.so_dien_thoai}
+                    onChange={(e) =>
+                      setEditFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, so_dien_thoai: e.target.value }
+                      }))
+                    }
+                    className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden font-mono ${
+                      isDarkMode
+                        ? 'bg-slate-900/60 border-slate-700 text-white focus:border-emerald-500'
+                        : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-emerald-500'
+                    }`}
+                    placeholder="VD: 0912345678"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-slate-400">
+                    Đơn Giá Mỗi Buổi (VNĐ)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={editFixedScheduleModal.data.don_gia_moi_buoi}
+                    onChange={(e) =>
+                      setEditFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, don_gia_moi_buoi: Math.max(0, Number(e.target.value) || 0) }
+                      }))
+                    }
+                    className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden font-mono font-bold ${
+                      isDarkMode
+                        ? 'bg-slate-900/60 border-slate-700 text-emerald-400 focus:border-emerald-500'
+                        : 'bg-slate-50 border-slate-300 text-emerald-600 focus:border-emerald-500'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-slate-400">
+                    Tiền Cọc (VNĐ)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value={editFixedScheduleModal.data.tien_coc}
+                    onChange={(e) =>
+                      setEditFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, tien_coc: Math.max(0, Number(e.target.value) || 0) }
+                      }))
+                    }
+                    className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden font-mono font-bold ${
+                      isDarkMode
+                        ? 'bg-slate-900/60 border-slate-700 text-amber-400 focus:border-emerald-500'
+                        : 'bg-slate-50 border-slate-300 text-amber-600 focus:border-emerald-500'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold mb-1 text-slate-400">
+                    Trạng Thái Hợp Đồng
+                  </label>
+                  <select
+                    value={editFixedScheduleModal.data.trang_thai}
+                    onChange={(e) =>
+                      setEditFixedScheduleModal((prev) => ({
+                        ...prev,
+                        data: { ...prev.data, trang_thai: e.target.value }
+                      }))
+                    }
+                    className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden font-bold ${
+                      isDarkMode
+                        ? 'bg-slate-900 border-slate-700 text-white focus:border-emerald-500'
+                        : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-emerald-500'
+                    }`}
+                  >
+                    <option value="DANG_HIEU_LUC">Đang hiệu lực</option>
+                    <option value="TAM_DUNG">Tạm dừng</option>
+                    <option value="DA_KET_THUC">Đã kết thúc</option>
+                    <option value="DA_HUY">Đã hủy</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1 text-slate-400">
+                  Ghi Chú Hợp Đồng
+                </label>
+                <textarea
+                  rows={2}
+                  value={editFixedScheduleModal.data.ghi_chu}
+                  onChange={(e) =>
+                    setEditFixedScheduleModal((prev) => ({
+                      ...prev,
+                      data: { ...prev.data, ghi_chu: e.target.value }
+                    }))
+                  }
+                  className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden resize-none ${
+                    isDarkMode
+                      ? 'bg-slate-900/60 border-slate-700 text-white focus:border-emerald-500'
+                      : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-emerald-500'
+                  }`}
+                  placeholder="Ghi chú thêm về yêu cầu của đội bóng..."
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-emerald-900/40">
+                <button
+                  type="button"
+                  onClick={() => setEditFixedScheduleModal((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 rounded-xl font-bold text-xs bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={editFixedScheduleModal.submitting}
+                  className="px-5 py-2 rounded-xl font-bold text-xs bg-gradient-to-r from-sky-500 to-emerald-500 hover:from-sky-600 hover:to-emerald-600 text-white cursor-pointer shadow-lg shadow-sky-500/20 inline-flex items-center gap-1.5"
+                >
+                  {editFixedScheduleModal.submitting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Lưu Cập Nhật</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

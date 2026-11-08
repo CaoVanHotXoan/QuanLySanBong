@@ -266,3 +266,36 @@ export const huyLichCoDinh = async (id: number, ly_do?: string) => {
         .execute('sp_HuyLichCoDinh');
     return result.recordset?.[0] || null;
 };
+
+export const capNhatLichCoDinh = async (params: {
+    id: number;
+    ten_doi_bong?: string;
+    so_dien_thoai?: string;
+    don_gia_moi_buoi?: number;
+    tien_coc?: number;
+    trang_thai?: string;
+    ghi_chu?: string;
+}) => {
+    const pool = await poolPromise;
+    const result = await pool.request()
+        .input('id', sql.Int, params.id)
+        .input('ten_doi_bong', sql.NVarChar(100), params.ten_doi_bong || null)
+        .input('so_dien_thoai', sql.VarChar(20), params.so_dien_thoai || null)
+        .input('don_gia_moi_buoi', sql.Decimal(10, 2), params.don_gia_moi_buoi !== undefined ? params.don_gia_moi_buoi : null)
+        .input('tien_coc', sql.Decimal(10, 2), params.tien_coc !== undefined ? params.tien_coc : null)
+        .input('trang_thai', sql.VarChar(30), params.trang_thai || null)
+        .input('ghi_chu', sql.NVarChar(sql.MAX), params.ghi_chu || null)
+        .execute('sp_CapNhatLichCoDinh');
+    return {
+        hop_dong: result.recordsets[0]?.[0] || null,
+        danh_sach_buoi: result.recordsets[1] || []
+    };
+};
+
+export const xoaLichCoDinh = async (id: number) => {
+    const pool = await poolPromise;
+    const result = await pool.request()
+        .input('id', sql.Int, id)
+        .execute('sp_XoaLichCoDinh');
+    return result.recordset?.[0] || null;
+};

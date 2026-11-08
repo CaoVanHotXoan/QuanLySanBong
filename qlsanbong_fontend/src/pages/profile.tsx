@@ -79,8 +79,9 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
       "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250&auto=format&fit=crop",
   });
 
-  // 4. STATE QUẢN LÝ MODAL "CẬP NHẬT THÔNG TIN"
+  // 4. STATE QUẢN LÝ MODAL "CẬP NHẬT THÔNG TIN" VÀ "XÁC NHẬN ĐĂNG XUẤT"
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState<boolean>(false);
   const [editForm, setEditForm] = useState<UserProfileData>({ ...userData });
   const [modalSuccessMsg, setModalSuccessMsg] = useState<string>("");
 
@@ -534,10 +535,9 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
     }
   };
 
-  // Xử lý Đăng xuất
-  const handleLogout = () => {
-    const isConfirm = window.confirm("Bạn có chắc chắn muốn đăng xuất không?");
-    if (!isConfirm) return;
+  // Xử lý xác nhận Đăng xuất
+  const handleConfirmLogout = () => {
+    setIsLogoutModalOpen(false);
 
     try {
       localStorage.removeItem("soccer_current_user");
@@ -545,6 +545,10 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
       localStorage.removeItem("auth_token");
     } catch {
       // Ignored
+    }
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("app:logout"));
     }
 
     if (onLogout) {
@@ -790,7 +794,7 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                 <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
                   <button
                     type="button"
-                    onClick={handleLogout}
+                    onClick={() => setIsLogoutModalOpen(true)}
                     className="px-3.5 py-2 rounded-xl border border-rose-500/30 text-rose-400 bg-rose-500/10 hover:bg-rose-500 hover:text-white font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                   >
                     <LogOut className="w-3.5 h-3.5" />
@@ -1246,6 +1250,50 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL XÁC NHẬN ĐĂNG XUẤT CHUYÊN NGHIỆP */}
+        {isLogoutModalOpen && (
+          <div
+            className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200"
+            onClick={() => setIsLogoutModalOpen(false)}
+          >
+            <div
+              className="relative w-full max-w-sm rounded-3xl border border-slate-700/80 bg-slate-900/95 p-6 shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* ICON ĐĂNG XUẤT */}
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                <LogOut className="w-8 h-8 stroke-[2.2]" />
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-black text-white">Xác nhận đăng xuất</h3>
+                <p className="text-xs text-slate-300">
+                  Bạn có chắc chắn muốn đăng xuất khỏi tài khoản{' '}
+                  <strong className="text-emerald-400">{userData.hoTen}</strong> không?
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsLogoutModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmLogout}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black text-xs shadow-lg shadow-rose-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Đăng xuất</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

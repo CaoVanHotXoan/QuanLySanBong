@@ -6,7 +6,10 @@ import "leaflet/dist/leaflet.css";
 import type { AppProps } from "next/app";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import SoccerLoader from "@/components/SoccerLoader";
+
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "728248489856-rcv5fd5ejleg717dqcj1f0oevm3lvn5e.apps.googleusercontent.com";
 
 export default function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -71,9 +74,9 @@ export default function App({ Component, pageProps }: AppProps) {
   }, [router]);
 
   return (
-    <>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       {isPageChanging && <SoccerLoader message="Đang chuyển trang & tải dữ liệu..." fullScreen={true} />}
       <Component {...pageProps} />
-    </>
+    </GoogleOAuthProvider>
   );
 }

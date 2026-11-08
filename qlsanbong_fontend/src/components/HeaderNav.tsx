@@ -114,6 +114,9 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
     localStorage.removeItem('soccer_current_user');
     setCurrentUser(null);
     setUserDropdownOpen(false);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('app:logout'));
+    }
   };
 
   // Xác định quyền quản trị viên / nhân viên
@@ -297,16 +300,6 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
                     className="login-trigger-btn cursor-pointer"
                   >
                     Đăng nhập
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginInitialRegister(true);
-                      setIsLoginModalOpen(true);
-                    }}
-                    className="register-trigger-btn cursor-pointer"
-                  >
-                    Đăng ký
                   </button>
                 </div>
               )}
@@ -501,26 +494,16 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
               Đăng xuất ({currentUser.ho_ten})
             </button>
           ) : (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
                   setIsMobileMenuOpen(false);
                   setLoginInitialRegister(false);
                   setIsLoginModalOpen(true);
                 }}
-                className="py-2.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-center"
+                className="w-full py-2.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-center"
               >
                 Đăng nhập
-              </button>
-              <button
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  setLoginInitialRegister(true);
-                  setIsLoginModalOpen(true);
-                }}
-                className="py-2.5 rounded-xl text-xs font-bold bg-emerald-500 text-white shadow-md shadow-emerald-500/20 text-center"
-              >
-                Đăng ký
               </button>
             </div>
           )}

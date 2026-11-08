@@ -50,6 +50,8 @@ const router = express_1.default.Router();
 router.post('/register', captchaGuard_1.invisibleCaptchaGuard, authController.dangKy);
 // Đăng nhập (Bảo vệ bởi Captcha ngầm & Anti-Bot Guard)
 router.post('/login', captchaGuard_1.invisibleCaptchaGuard, authController.dangNhap);
+// Đăng nhập / Đăng ký nhanh qua Google OAuth 2.0
+router.post('/google', authController.dangNhapGoogle);
 // Gửi mã OTP qua Gmail (Bảo vệ chống spam/bom OTP bằng OtpSecurityGuard: Rate Limit IP + Cooldown 60s theo Email + Anti-Bot)
 router.post('/send-otp', captchaGuard_1.otpSecurityGuard, authController.guiMaOTP);
 // Xác thực mã OTP (Chống brute-force dò mã 6 số)

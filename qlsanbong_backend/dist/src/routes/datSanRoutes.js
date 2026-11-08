@@ -101,5 +101,7 @@ router.get('/lich-co-dinh/:id', datSanController.layChiTietLichCoDinh);
 router.post('/lich-co-dinh/kiem-tra', datSanController.kiemTraTrungLichCoDinh);
 router.post('/lich-co-dinh', datSanController.themLichCoDinh);
 router.put('/lich-co-dinh/:id/trang-thai', datSanController.doiTrangThaiLichCoDinh);
+router.put('/lich-co-dinh/:id', datSanController.capNhatLichCoDinh);
+router.delete('/lich-co-dinh/:id/vinh-vien', datSanController.xoaLichCoDinh);
 router.delete('/lich-co-dinh/:id', datSanController.huyLichCoDinh);
 exports.default = router;
