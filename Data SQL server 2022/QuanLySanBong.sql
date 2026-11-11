@@ -65,6 +65,7 @@ CREATE TABLE Nguoi_Dung (
     ho_ten NVARCHAR(100) NULL,
     email VARCHAR(255) UNIQUE NULL,
     so_dien_thoai VARCHAR(20) NULL,
+    dia_chi NVARCHAR(255) NULL,
     mat_khau VARCHAR(255) NULL,
     anh_dai_dien VARCHAR(255) NULL,
     MaVaiTro INT NOT NULL DEFAULT 3,

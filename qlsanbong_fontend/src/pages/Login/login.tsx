@@ -10,6 +10,8 @@ export interface AuthUser {
   ho_ten: string;
   email: string;
   so_dien_thoai?: string;
+  dia_chi?: string;
+  diaChi?: string;
   vai_tro?: string;
   anh_dai_dien?: string;
 }
@@ -164,6 +166,8 @@ export default function Login({
           ho_ten: data.data.ho_ten,
           email: data.data.email,
           so_dien_thoai: data.data.so_dien_thoai || "",
+          dia_chi: data.data.dia_chi || "",
+          diaChi: data.data.dia_chi || "",
           vai_tro: data.data.vai_tro || "KHACH_HANG",
           anh_dai_dien: data.data.anh_dai_dien,
         };
@@ -173,8 +177,8 @@ export default function Login({
           id: userFromDb.id,
           hoTen: userFromDb.ho_ten,
           email: userFromDb.email,
-          soDienThoai: userFromDb.so_dien_thoai,
-          diaChi: "Việt Nam",
+          soDienThoai: userFromDb.so_dien_thoai || "",
+          diaChi: userFromDb.dia_chi || "",
           avatarUrl: userFromDb.anh_dai_dien || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250&auto=format&fit=crop",
         }));
 
@@ -272,6 +276,8 @@ export default function Login({
         ho_ten: data.data.ho_ten,
         email: data.data.email,
         so_dien_thoai: data.data.so_dien_thoai || "",
+        dia_chi: data.data.dia_chi || "",
+        diaChi: data.data.dia_chi || "",
         vai_tro: data.data.vai_tro || "QUAN_TRI",
         anh_dai_dien: data.data.anh_dai_dien,
       };
@@ -281,8 +287,8 @@ export default function Login({
         id: userFromDb.id,
         hoTen: userFromDb.ho_ten,
         email: userFromDb.email,
-        soDienThoai: userFromDb.so_dien_thoai,
-        diaChi: "Hà Nội",
+        soDienThoai: userFromDb.so_dien_thoai || "",
+        diaChi: userFromDb.dia_chi || "",
         avatarUrl: userFromDb.anh_dai_dien || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250&auto=format&fit=crop",
       }));
 

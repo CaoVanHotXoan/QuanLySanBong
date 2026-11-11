@@ -512,8 +512,8 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
 
       {/* Profile Modal */}
       {isProfileModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-          <div className="relative w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200 my-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
+          <div className="relative w-full max-w-2xl max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <Profile
               onClose={() => setIsProfileModalOpen(false)}
               onLogout={handleLogout}
@@ -521,7 +521,7 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
                 hoTen: currentUser?.ho_ten || '',
                 email: currentUser?.email || '',
                 soDienThoai: currentUser?.so_dien_thoai || '',
-                diaChi: 'Hà Nội',
+                diaChi: currentUser?.dia_chi || currentUser?.diaChi || '',
                 avatarUrl: currentUser?.anh_dai_dien,
               }}
             />

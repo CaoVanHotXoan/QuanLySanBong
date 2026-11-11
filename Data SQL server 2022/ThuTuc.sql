@@ -97,7 +97,7 @@ BEGIN
             SET @usernameOnly = SUBSTRING(@cleanIden, 1, CHARINDEX('@', @cleanIden) - 1);
 
         SELECT TOP 1 
-            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.mat_khau, 
+            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.dia_chi, nd.mat_khau, 
             nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
             nd.anh_dai_dien, CAST(GETDATE() AS DATETIME) AS ngay_tao
         FROM Nguoi_Dung nd
@@ -152,7 +152,7 @@ BEGIN
         END;
 
         SELECT 
-            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, 
+            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.dia_chi,
             nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
             nd.anh_dai_dien, CAST(GETDATE() AS DATETIME) AS ngay_tao
         FROM Nguoi_Dung nd
@@ -171,7 +171,7 @@ BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         SELECT 
-            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, 
+            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.dia_chi,
             nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
             nd.anh_dai_dien, CAST(GETDATE() AS DATETIME) AS ngay_tao
         FROM Nguoi_Dung nd
@@ -191,7 +191,8 @@ CREATE OR ALTER PROCEDURE sp_SuaNguoiDung
     @so_dien_thoai VARCHAR(15),
     @vai_tro VARCHAR(50) = NULL,
     @MaVaiTro INT = NULL,
-    @mat_khau VARCHAR(255) = NULL
+    @mat_khau VARCHAR(255) = NULL,
+    @dia_chi NVARCHAR(255) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -221,12 +222,13 @@ IF NOT EXISTS (SELECT 1 FROM Nguoi_Dung WHERE id = @id)
         SET ho_ten = @ho_ten,
             email = @email,
             so_dien_thoai = @so_dien_thoai,
+            dia_chi = CASE WHEN @dia_chi IS NOT NULL THEN @dia_chi ELSE dia_chi END,
             MaVaiTro = ISNULL(@v_MaVaiTro, MaVaiTro),
             mat_khau = CASE WHEN @mat_khau IS NOT NULL AND LEN(@mat_khau) > 0 THEN @mat_khau ELSE mat_khau END
         WHERE id = @id;
 
         SELECT 
-            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, 
+            nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.dia_chi,
             nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS ten_vai_tro_mota,
             nd.anh_dai_dien, CAST(GETDATE() AS DATETIME) AS ngay_tao
         FROM Nguoi_Dung nd
@@ -5985,7 +5987,8 @@ GO
 CREATE OR ALTER PROCEDURE sp_DangNhapGoogle
     @email VARCHAR(255),
     @ho_ten NVARCHAR(100),
-    @anh_dai_dien VARCHAR(MAX) = NULL
+    @anh_dai_dien VARCHAR(MAX) = NULL,
+    @so_dien_thoai VARCHAR(20) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -6007,17 +6010,22 @@ BEGIN
         -- 2. Nếu người dùng chưa tồn tại -> Tự động tạo mới với vai trò Khách Hàng (MaVaiTro = 3)
         IF @user_id IS NULL
         BEGIN
-            INSERT INTO Nguoi_Dung (ho_ten, email, mat_khau, anh_dai_dien, MaVaiTro)
-            VALUES (@ho_ten, @clean_email, NULL, @anh_dai_dien, 3);
+            INSERT INTO Nguoi_Dung (ho_ten, email, mat_khau, anh_dai_dien, so_dien_thoai, MaVaiTro)
+            VALUES (@ho_ten, @clean_email, NULL, @anh_dai_dien, @so_dien_thoai, 3);
 
             SET @user_id = SCOPE_IDENTITY();
         END
         ELSE
         BEGIN
-            -- Nếu đã tồn tại nhưng chưa có ảnh đại diện -> Cập nhật ảnh đại diện từ Google
+            -- Nếu đã tồn tại nhưng chưa có ảnh đại diện hoặc số điện thoại -> Cập nhật nếu có
             UPDATE Nguoi_Dung
             SET anh_dai_dien = ISNULL(anh_dai_dien, @anh_dai_dien),
-                ho_ten = ISNULL(ho_ten, @ho_ten)
+                ho_ten = ISNULL(ho_ten, @ho_ten),
+                so_dien_thoai = CASE 
+                    WHEN (so_dien_thoai IS NULL OR LTRIM(RTRIM(so_dien_thoai)) = '') AND @so_dien_thoai IS NOT NULL 
+                    THEN @so_dien_thoai 
+                    ELSE so_dien_thoai 
+                END
             WHERE id = @user_id;
         END;
 
@@ -6029,6 +6037,7 @@ BEGIN
             nd.ho_ten, 
             nd.email, 
             nd.so_dien_thoai, 
+            nd.dia_chi,
             nd.MaVaiTro, 
             ISNULL(vt.TenVaiTro, 'KHACH_HANG') AS vai_tro, 
             vt.TenVaiTro, 
