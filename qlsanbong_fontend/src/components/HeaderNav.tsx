@@ -412,14 +412,14 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
                   key={link.key}
                   href={link.href}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-extrabold transition-all ${
                     isActive
                       ? isDarkMode
                         ? 'text-emerald-400 bg-emerald-950/50 border border-emerald-500/30'
                         : 'text-emerald-700 bg-emerald-100/90 border border-emerald-300'
                       : isDarkMode
-                      ? 'text-slate-300 hover:text-emerald-400 hover:bg-slate-900'
-                      : 'text-slate-700 hover:text-emerald-600 hover:bg-slate-100'
+                      ? 'text-slate-100 hover:text-emerald-400 hover:bg-slate-900'
+                      : 'text-slate-900 hover:text-emerald-600 hover:bg-slate-100'
                   }`}
                 >
                   {link.label}

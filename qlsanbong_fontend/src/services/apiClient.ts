@@ -96,6 +96,23 @@ export const apiClient = async <T = any>(
         if (error instanceof ApiError) {
             throw error;
         }
+
+        // Bắt lỗi mạng khi Backend chưa chạy hoặc ngoại tuyến để tránh làm sập Frontend (Không hiện popup Runtime Error)
+        const isOfflineOrNetworkError =
+            error?.name === 'TypeError' ||
+            (typeof navigator !== 'undefined' && !navigator.onLine) ||
+            /failed to fetch|networkerror|econnrefused|load failed|connection refused|failed to execute 'fetch'/i.test(error?.message || '');
+
+        if (isOfflineOrNetworkError) {
+            console.warn(`[Sport247 Offline Mode] Máy chủ backend chưa khởi động (${url}). Frontend tiếp tục hoạt động ở chế độ chờ dữ liệu.`);
+            return {
+                success: false,
+                data: null,
+                message: 'Chưa thể kết nối tới máy chủ backend. Frontend đang hoạt động ở chế độ chờ dữ liệu.',
+                isOffline: true,
+            } as unknown as T;
+        }
+
         throw new ApiError(error.message || 'Lỗi mạng hoặc không thể kết nối tới máy chủ', 500);
     }
 };

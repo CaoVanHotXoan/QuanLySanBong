@@ -184,26 +184,15 @@ export interface POSNotification {
   type: 'payment' | 'booking';
 }
 
-// Danh sách khung giờ chuẩn từ 06:00 đến 19:30 (chuẩn CSDL)
+// Danh sách khung giờ chuẩn theo giờ từ 06:00 đến 20:00 (6h, 7h, 8h .. 19h)
 const DEFAULT_TIME_SLOTS: KhungGioItem[] = [];
-for (let h = 6; h <= 18; h++) {
+for (let h = 6; h <= 19; h++) {
   DEFAULT_TIME_SLOTS.push({
     start: `${String(h).padStart(2, '0')}:00`,
-    end: `${String(h).padStart(2, '0')}:30`,
+    end: `${String(h + 1).padStart(2, '0')}:00`,
     label: `${h}h`,
   });
-  const nextH = h + 1;
-  DEFAULT_TIME_SLOTS.push({
-    start: `${String(h).padStart(2, '0')}:30`,
-    end: `${String(nextH).padStart(2, '0')}:00`,
-    label: `${h}h30`,
-  });
 }
-DEFAULT_TIME_SLOTS.push({
-  start: '19:00',
-  end: '19:30',
-  label: '19h',
-});
 
 export interface DichVuCSDL {
   id: number;
