@@ -196,7 +196,7 @@ export const suaLoaiSan = async (req: AuthRequest, res: Response) => {
         const result = await pool.request()
             .input('id', sql.Int, parseInt(id, 10))
             .input('ten_loai', sql.NVarChar(50), ten_loai.trim())
-            .input('mo_ta', sql.NVarChar(sql.MAX), mo_ta || null)
+            .input('mo_ta', sql.NVarChar(sql.MAX), mo_ta !== undefined ? (mo_ta ? mo_ta.trim() : null) : null)
             .input('trang_thai', sql.Bit, trang_thai !== false ? 1 : 0)
             .execute('sp_SuaLoaiSan');
 
@@ -306,7 +306,7 @@ export const suaSanBong = async (req: AuthRequest, res: Response) => {
             .input('id', sql.Int, parseInt(id, 10))
             .input('ten_san', sql.NVarChar(50), ten_san.trim())
             .input('ma_loai_san', sql.Int, ma_loai_san ? parseInt(String(ma_loai_san), 10) : null)
-            .input('hinh_anh', sql.VarChar(255), hinh_anh || null)
+            .input('hinh_anh', sql.VarChar(255), hinh_anh !== undefined ? (hinh_anh ? hinh_anh.trim() : null) : null)
             .input('don_gia_phut', sql.Decimal(10, 2), don_gia_phut ? parseFloat(String(don_gia_phut)) : null)
             .input('trang_thai', sql.VarChar(20), trang_thai || 'SAN_SANG')
             .execute('sp_SuaSanBong');
@@ -2342,4 +2342,38 @@ export const xoaLichCoDinh = async (req: any, res: Response) => {
         });
     }
 };
+
+/**
+ * Tìm kiếm ngày và ca trống cho khách hàng (7 - 30 ngày)
+ * Method: GET /api/dat-san/tim-ca-trong
+ * Procedure: sp_TimKiemCaTrong
+ */
+export const timKiemCaTrong = async (req: Request, res: Response) => {
+    try {
+        const { ma_san, ma_loai_san, tu_ngay, so_ngay, buoi } = req.query;
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_san', sql.Int, ma_san && ma_san !== 'ALL' ? parseInt(String(ma_san), 10) : null)
+            .input('ma_loai_san', sql.Int, ma_loai_san && ma_loai_san !== 'ALL' ? parseInt(String(ma_loai_san), 10) : null)
+            .input('tu_ngay', sql.Date, tu_ngay ? String(tu_ngay) : null)
+            .input('so_ngay', sql.Int, so_ngay ? parseInt(String(so_ngay), 10) : 7)
+            .input('buoi', sql.VarChar(10), buoi && buoi !== 'ALL' ? String(buoi) : null)
+            .execute('sp_TimKiemCaTrong');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Lấy danh sách ca trống thành công!',
+            total: result.recordset.length,
+            data: result.recordset
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_TimKiemCaTrong:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Lỗi khi tìm kiếm ca trống'
+        });
+    }
+};
+
 

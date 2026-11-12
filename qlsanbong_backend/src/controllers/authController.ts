@@ -523,7 +523,8 @@ export const suaNguoiDung = async (req: AuthRequest, res: Response) => {
     try {
         const id = String(req.params.id);
         const { ho_ten, email, so_dien_thoai, vai_tro, mat_khau, anh_dai_dien, diaChi, dia_chi } = req.body;
-        const userDiaChi = dia_chi !== undefined ? dia_chi : (diaChi !== undefined ? diaChi : null);
+        const rawDiaChi = dia_chi !== undefined ? dia_chi : diaChi;
+        const userDiaChi = rawDiaChi !== undefined ? (rawDiaChi ? String(rawDiaChi).trim() : null) : null;
 
         let hashedPassword: string | null = null;
         if (mat_khau && mat_khau.trim() !== '') {

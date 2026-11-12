@@ -319,6 +319,22 @@ CREATE TABLE Cau_Hinh_He_Thong (
 );
 GO
 
+-- 3.19. Bảng Danh_Gia_San (Đánh giá, nhận xét và trả lời bình luận theo sân)
+CREATE TABLE Danh_Gia_San (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ma_san INT NOT NULL,
+    ma_nguoi_dung INT NOT NULL,
+    binh_luan_cha_id INT NULL,
+    so_sao INT NULL CHECK (so_sao BETWEEN 1 AND 5),
+    noi_dung NVARCHAR(1000) NOT NULL,
+    ngay_tao DATETIME DEFAULT GETDATE(),
+    trang_thai BIT DEFAULT 1,
+    FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE CASCADE,
+    FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
+    FOREIGN KEY (binh_luan_cha_id) REFERENCES Danh_Gia_San(id)
+);
+GO
+
 -- =====================================================================
 -- 4. CHỈ MỤC TỐI ƯU HIỆU NĂNG TRUY VẤN (PERFORMANCE INDEXES)
 -- =====================================================================
@@ -335,6 +351,8 @@ CREATE NONCLUSTERED INDEX IX_TinTuc_MaLoaiTin_TrangThai ON Tin_Tuc(ma_loai_tin, 
 CREATE NONCLUSTERED INDEX IX_LienHe_TrangThai ON Lien_He(trang_thai_xu_ly);
 CREATE NONCLUSTERED INDEX IX_XacThucOTP_Email_Loai ON Xac_Thuc_OTP(email, loai_otp, da_xac_thuc, het_han_luc);
 CREATE NONCLUSTERED INDEX IX_XacThucOTP_IP_NgayTao ON Xac_Thuc_OTP(ip_gui, ngay_tao);
+CREATE NONCLUSTERED INDEX IX_DanhGiaSan_MaSan_TrangThai ON Danh_Gia_San(ma_san, trang_thai) INCLUDE (so_sao, ngay_tao);
+CREATE NONCLUSTERED INDEX IX_DanhGiaSan_BinhLuanCha ON Danh_Gia_San(binh_luan_cha_id);
 GO
 
 -- =====================================================================
@@ -356,6 +374,13 @@ IF NOT EXISTS (SELECT 1 FROM Nguoi_Dung WHERE email = 'admin@soccer247.vn')
 BEGIN
     INSERT INTO Nguoi_Dung (ho_ten, email, so_dien_thoai, mat_khau, MaVaiTro)
     VALUES (N'Quản Trị Viên', 'admin@soccer247.vn', '0901234567', '$2a$10$w3U6sJc8m3iK7M9p3Q9q2e9U9U9U9U9U9U9U9U9U9U9U9U9U9U9U9', 1);
+END;
+GO
+
+-- Đảm bảo tài khoản Quản Trị Viên Hệ Thống (xoancao2.0@gmail.com) luôn có vai trò ADMIN (MaVaiTro = 1)
+IF EXISTS (SELECT 1 FROM Nguoi_Dung WHERE email = 'xoancao2.0@gmail.com' OR id = 1)
+BEGIN
+    UPDATE Nguoi_Dung SET MaVaiTro = 1 WHERE email = 'xoancao2.0@gmail.com' OR id = 1;
 END;
 GO
 
@@ -480,6 +505,19 @@ BEGIN
 END;
 GO
 
-PRINT N'✅ ĐÃ KHỞI TẠO XONG CƠ SỞ DỮ LIỆU, TOÀN BỘ 16 BẢNG VÀ SEED DATA CHO QuanLySanBong!';
+-- 5.12. Dữ liệu Đánh giá & Bình luận mẫu cho sân
+IF NOT EXISTS (SELECT 1 FROM Danh_Gia_San)
+BEGIN
+    INSERT INTO Danh_Gia_San (ma_san, ma_nguoi_dung, binh_luan_cha_id, so_sao, noi_dung, ngay_tao)
+    VALUES (1, 1, NULL, 5, N'Mặt cỏ nhân tạo rất êm, đèn chiếu sáng ban đêm rõ nét, giá cả hợp lý!', DATEADD(HOUR, -5, GETDATE()));
+
+    DECLARE @parent_cm1 INT = SCOPE_IDENTITY();
+
+    INSERT INTO Danh_Gia_San (ma_san, ma_nguoi_dung, binh_luan_cha_id, so_sao, noi_dung, ngay_tao)
+    VALUES (1, 1, @parent_cm1, NULL, N'Cảm ơn bạn đã tin tưởng và ủng hộ sân bóng! Chúc đội bóng của bạn luôn có những trận đấu thăng hoa.', DATEADD(HOUR, -3, GETDATE()));
+END;
+GO
+
+PRINT N'✅ ĐÃ KHỞI TẠO XONG CƠ SỞ DỮ LIỆU, TOÀN BỘ CÁC BẢNG VÀ SEED DATA CHO QuanLySanBong!';
 PRINT N'⚠️ LƯU Ý: File này TUYỆT ĐỐI KHÔNG CHỨA PROCEDURE. Hãy chạy tiếp file ThuTuc.sql để cài đặt toàn bộ thủ tục lưu trữ!';
 GO

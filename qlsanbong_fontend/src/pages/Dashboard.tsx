@@ -1802,9 +1802,10 @@ export default function AdminDashboard() {
 
         const formData = new FormData();
         formData.append('image', pendingCourtImageFile);
+        const token = typeof window !== 'undefined' ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '') : '';
         const uploadRes = await fetch(`${API_BASE}/upload`, {
           method: 'POST',
-          headers: getAuthHeaders(),
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: formData
         });
         const uploadData = await uploadRes.json();
@@ -1860,8 +1861,8 @@ export default function AdminDashboard() {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
-            ten_san,
-            ma_loai_san: Number(ma_loai_san),
+            ten_san: ten_san.trim(),
+            ma_loai_san: Number(effectiveMaLoaiSan),
             don_gia_phut: Number(don_gia_phut || 5000),
             hinh_anh: finalImageUrl,
             trang_thai: trang_thai || 'SAN_SANG'
@@ -1873,14 +1874,18 @@ export default function AdminDashboard() {
           loadAllDataFromBackend();
           setCourtModal({ isOpen: false, mode: 'ADD', data: {} });
           return;
+        } else {
+          setToastMessage({ type: 'error', message: data.message || 'Lỗi khi thêm sân bóng' });
+          setIsUploadingImage(false);
+          return;
         }
       } else {
         const res = await fetch(`${API_BASE}/dat-san/san-bong/${id}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
           body: JSON.stringify({
-            ten_san,
-            ma_loai_san: Number(ma_loai_san),
+            ten_san: ten_san.trim(),
+            ma_loai_san: Number(effectiveMaLoaiSan),
             don_gia_phut: Number(don_gia_phut || 5000),
             hinh_anh: finalImageUrl,
             trang_thai: trang_thai || 'SAN_SANG'
@@ -1892,10 +1897,15 @@ export default function AdminDashboard() {
           loadAllDataFromBackend();
           setCourtModal({ isOpen: false, mode: 'ADD', data: {} });
           return;
+        } else {
+          setToastMessage({ type: 'error', message: data.message || 'Lỗi khi cập nhật sân bóng' });
+          setIsUploadingImage(false);
+          return;
         }
       }
     } catch (err: any) {
       console.error('Lỗi lưu sân bóng:', err);
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi hệ thống khi lưu sân bóng!' });
     } finally {
       setIsUploadingImage(false);
     }
@@ -7380,474 +7390,878 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* 6. Modal Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan) */}
+      {/* 6. Modal Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan) - Thiết kế giao diện ngang rộng rãi & hiện đại */}
       {bookingModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
-            <div className="flex items-center justify-between pb-3 border-b mb-4">
-              <h3 className="font-black text-base">{bookingModal.mode === 'ADD' ? '📋 Thêm Đơn Đặt Sân & Thanh Toán' : '✏️ Cập Nhật Đơn Đặt Sân'}</h3>
-              <button onClick={() => setBookingModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
-            </div>
-            <form onSubmit={handleSaveDonDatThanhToan} className="space-y-3.5 text-xs max-h-[80vh] overflow-y-auto pr-1">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-black uppercase mb-1">Chọn Sân Bóng *</label>
-                  <select
-                    value={bookingModal.data.ma_san || 1}
-                    onChange={(e) => {
-                      const ms = Number(e.target.value);
-                      const s = courtList.find(c => c.id === ms);
-                      const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
-                      const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
-                      const autoPrice = calculateBookingPitchPrice(ms, curStart, curEnd);
-                      const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
-                      const finalPrice = autoPrice > 0 ? autoPrice : (bookingModal.data.tien_san || 0);
-                      setBookingModal({
-                        ...bookingModal,
-                        data: {
-                          ...bookingModal.data,
-                          ma_san: ms,
-                          ten_san: s?.ten_san,
-                          tien_san: finalPrice,
-                          tong_tien: finalPrice + totalDv,
-                        }
-                      });
-                    }}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  >
-                    {courtList.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.ten_san} ({Number(c.don_gia_phut || 0).toLocaleString('vi-VN')} đ/phút)
-                      </option>
-                    ))}
-                  </select>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-md animate-fade-in">
+          <div
+            className={`w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden animate-zoom-in ${
+              isDarkMode
+                ? 'bg-[#0b132b] border-emerald-900/60 text-white shadow-black/80'
+                : 'bg-white border-slate-200 text-[#0f172a] shadow-2xl'
+            }`}
+          >
+            {/* HEADER MODAL CỐ ĐỊNH */}
+            <div
+              className={`px-5 py-4 border-b flex items-center justify-between gap-4 shrink-0 ${
+                isDarkMode ? 'bg-[#070d1e]/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-md shadow-emerald-500/20 shrink-0">
+                  <Receipt className="w-5 h-5 stroke-[2.2]" />
                 </div>
-                <div>
-                  <label className="block font-black uppercase mb-1">Người Đặt (Tài Khoản) *</label>
-                  <select
-                    value={bookingModal.data.ma_nguoi_dung || 1}
-                    onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ma_nguoi_dung: Number(e.target.value) } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  >
-                    {userList.map((u) => (
-                      <option key={u.id} value={u.id}>{u.ho_ten} ({u.so_dien_thoai || u.email})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-black uppercase mb-1">Ngày Đá *</label>
-                  <div className={`relative flex items-center justify-between p-2.5 rounded-xl border font-bold cursor-pointer transition-colors ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white hover:border-emerald-500' : 'bg-white border-slate-300 text-[#0f172a] hover:border-emerald-600'}`}>
-                    <span className="font-bold tracking-wide">
-                      {formatVNDate(bookingModal.data.ngay_da ? String(bookingModal.data.ngay_da).split('T')[0] : new Date().toISOString().split('T')[0])}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-black text-base sm:text-lg leading-tight truncate">
+                      {bookingModal.mode === 'ADD'
+                        ? '📋 Thêm Đơn Đặt Sân & Thanh Toán'
+                        : `✏️ Cập Nhật Đơn Đặt Sân #${bookingModal.data.id || ''}`}
+                    </h3>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                        bookingModal.mode === 'ADD'
+                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-500 dark:text-emerald-400'
+                          : 'bg-sky-500/15 border-sky-500/30 text-sky-500 dark:text-sky-400'
+                      }`}
+                    >
+                      {bookingModal.mode === 'ADD' ? 'Tạo mới' : 'Chỉnh sửa'}
                     </span>
-                    <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 pointer-events-none" />
-                    <input
-                      type="date"
-                      required
-                      value={bookingModal.data.ngay_da ? String(bookingModal.data.ngay_da).split('T')[0] : new Date().toISOString().split('T')[0]}
-                      onClick={(e) => {
-                        try {
-                          (e.target as any).showPicker?.();
-                        } catch (_) { }
-                      }}
-                      onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ngay_da: e.target.value } })}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    />
                   </div>
-                </div>
-                <div>
-                  <label className="block font-black uppercase mb-1 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Giờ Bắt Đầu (24h) *</span>
-                  </label>
-                  <select
-                    id="modal_gio_bat_dau"
-                    required
-                    value={(bookingModal.data.gio_bat_dau || '17:00').substring(0, 5)}
-                    onChange={(e) => {
-                      const newStart = e.target.value;
-                      const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
-                      const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
-                      const autoPrice = calculateBookingPitchPrice(curSanId, newStart, curEnd);
-                      const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
-                      const finalPrice = autoPrice > 0 ? autoPrice : (bookingModal.data.tien_san || 0);
-                      setBookingModal({
-                        ...bookingModal,
-                        data: {
-                          ...bookingModal.data,
-                          gio_bat_dau: newStart,
-                          tien_san: finalPrice,
-                          tong_tien: finalPrice + totalDv,
-                        },
-                      });
-                    }}
-                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  >
-                    {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_bat_dau || '').substring(0, 5)) && bookingModal.data.gio_bat_dau && (() => {
-                      const customTime = (bookingModal.data.gio_bat_dau || '').substring(0, 5);
-                      const status = getBookingModalSlotStatus(customTime, false);
-                      return (
-                        <option
-                          value={customTime}
-                          disabled={status.disabled}
-                          className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
-                          style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
-                        >
-                          {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
-                        </option>
-                      );
-                    })()}
-                    {TIME_OPTIONS_24H.map((t) => {
-                      const status = getBookingModalSlotStatus(t, false);
-                      if (status.isHidden) return null; // Ẩn giờ đã qua
-                      return (
-                        <option
-                          key={`start_${t}`}
-                          value={t}
-                          disabled={status.disabled}
-                          className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
-                          style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
-                        >
-                          {status.label}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-black uppercase mb-1 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Giờ Kết Thúc (24h) *</span>
-                  </label>
-                  <select
-                    id="modal_gio_ket_thuc"
-                    required
-                    value={(bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5)}
-                    onChange={(e) => {
-                      const newEnd = e.target.value;
-                      const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
-                      const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
-                      const autoPrice = calculateBookingPitchPrice(curSanId, curStart, newEnd);
-                      const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
-                      const finalPrice = autoPrice > 0 ? autoPrice : (bookingModal.data.tien_san || 0);
-                      setBookingModal({
-                        ...bookingModal,
-                        data: {
-                          ...bookingModal.data,
-                          gio_ket_thuc: newEnd,
-                          tien_san: finalPrice,
-                          tong_tien: finalPrice + totalDv,
-                        },
-                      });
-                    }}
-                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  >
-                    {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_ket_thuc || '').substring(0, 5)) && bookingModal.data.gio_ket_thuc && (() => {
-                      const customTime = (bookingModal.data.gio_ket_thuc || '').substring(0, 5);
-                      const status = getBookingModalSlotStatus(customTime, true);
-                      return (
-                        <option
-                          value={customTime}
-                          disabled={status.disabled}
-                          className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
-                          style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
-                        >
-                          {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
-                        </option>
-                      );
-                    })()}
-                    {TIME_OPTIONS_24H.map((t) => {
-                      const status = getBookingModalSlotStatus(t, true);
-                      if (status.isHidden) return null; // Ẩn giờ đã qua và giờ <= giờ bắt đầu
-                      return (
-                        <option
-                          key={`end_${t}`}
-                          value={t}
-                          disabled={status.disabled}
-                          className={status.isOccupied ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold' : ''}
-                          style={status.isOccupied ? { color: '#d97706', backgroundColor: isDarkMode ? '#291805' : '#fffbeb', fontWeight: 'bold' } : undefined}
-                        >
-                          {status.label}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  <p className={`text-xs truncate mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Cấu hình sân bóng, thời gian thi đấu 24h, dịch vụ nước giải khát và kiểm soát hóa đơn
+                  </p>
                 </div>
               </div>
 
-              {/* Chú thích trạng thái khung giờ */}
-              <div className="flex flex-wrap items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-[#070d1e] border border-slate-200 dark:border-emerald-950/60 text-[11px] font-bold">
-                <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shadow-sm"></span>
-                  <span>🟢 Trống</span>
-                </span>
-                <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-black">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block shadow-sm animate-pulse"></span>
-                  <span>🟠 Đang có người chọn / Đã đặt (Màu cam)</span>
-                </span>
-                <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-400 font-medium">
-                  <span className="w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700 inline-block"></span>
-                  <span>⚪ Đã qua giờ (Tự động ẩn)</span>
-                </span>
-              </div>
+              <button
+                type="button"
+                onClick={() => setBookingModal({ isOpen: false, mode: 'ADD', data: {} })}
+                className={`p-2 rounded-xl transition-colors cursor-pointer shrink-0 ${
+                  isDarkMode
+                    ? 'hover:bg-slate-800 text-slate-400 hover:text-white'
+                    : 'hover:bg-slate-200 text-slate-500 hover:text-slate-900'
+                }`}
+                title="Đóng modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block font-black uppercase">Tiền Sân (VNĐ) *</label>
-                    {bookingModal.data.ma_san && (
-                      <span className="text-[10px] text-emerald-400 font-mono font-bold">
-                        ⚡ Tự động tính
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={bookingModal.data.tien_san !== undefined ? bookingModal.data.tien_san : ''}
-                    onChange={(e) => {
-                      const ts = Number(e.target.value);
-                      const totalDv = (bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0);
-                      setBookingModal({ ...bookingModal, data: { ...bookingModal.data, tien_san: ts, tong_tien: ts + totalDv } });
-                    }}
-                    className={`w-full p-2.5 rounded-xl border font-bold font-mono text-emerald-400 ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-emerald-300' : 'bg-white border-slate-300 text-emerald-600'}`}
-                  />
-                </div>
-                <div>
-                  <label className="block font-black uppercase mb-1">Phương Thức Thanh Toán</label>
-                  <select
-                    value={bookingModal.data.phuong_thuc || 'CHUYEN_KHOAN'}
-                    onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, phuong_thuc: e.target.value } })}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  >
-                    <option value="CHUYEN_KHOAN">Chuyển Khoản</option>
-                    <option value="TIEN_MAT">Tiền Mặt</option>
-                  </select>
-                </div>
-              </div>
+            {/* FORM NỘI DUNG CHÍNH (GIAO DIỆN HÌNH NGANG 2 CỘT RỘNG RÃI) */}
+            <form onSubmit={handleSaveDonDatThanhToan} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 text-xs">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+                  {/* ================= CỘT TRÁI (7 PHẦN): THÔNG TIN SÂN & THỜI GIAN ================= */}
+                  <div className="lg:col-span-7 space-y-4">
+                    {/* KHỐI 1: SÂN BÓNG VÀ NGƯỜI ĐẶT */}
+                    <div
+                      className={`p-4 rounded-2xl border space-y-3.5 ${
+                        isDarkMode ? 'bg-[#070d1e]/60 border-emerald-950/80' : 'bg-slate-50/70 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-800">
+                        <Trophy className="w-4 h-4 text-emerald-500" />
+                        <h4 className="font-black text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                          1. Thông Tin Sân Bóng & Khách Hàng
+                        </h4>
+                      </div>
 
-              {/* DỊCH VỤ ĐI KÈM (CHI TIẾT DỊCH VỤ) */}
-              <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-[#070d1e]/80 border-emerald-800/40' : 'bg-slate-50 border-slate-200'}`}>
-                <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-200 dark:border-emerald-900/30">
-                  <label className="font-black uppercase flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                    <ShoppingCart className="w-3.5 h-3.5" /> Dịch Vụ / Nước Uống (Chi Tiết Dịch Vụ)
-                  </label>
-                  <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400">
-                    + {((bookingModal.data.dich_vu_list || []).reduce((sum: number, it: any) => sum + (Number(it.so_luong || 0) * Number(it.don_gia || 0)), 0)).toLocaleString('vi-VN')} đ
-                  </span>
-                </div>
-
-                {/* Danh sách dịch vụ đã chọn trong đơn */}
-                {Array.isArray(bookingModal.data.dich_vu_list) && bookingModal.data.dich_vu_list.length > 0 ? (
-                  <div className="space-y-1.5 mb-3 max-h-36 overflow-y-auto pr-1">
-                    {bookingModal.data.dich_vu_list.map((it: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-[#0b132b] border border-slate-200 dark:border-emerald-800/30 text-xs">
-                        <div className="flex-1 min-w-0 mr-2">
-                          <div className="font-bold truncate text-[#0f172a] dark:text-slate-100">🥤 {it.ten_dich_vu}</div>
-                          <div className="text-[10px] text-slate-500">{Number(it.don_gia).toLocaleString('vi-VN')} đ / {it.don_vi_tinh || 'Chai'}</div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="flex items-center border border-slate-300 dark:border-emerald-800/50 rounded-lg overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const list = [...(bookingModal.data.dich_vu_list || [])];
-                                if (list[idx].so_luong > 1) {
-                                  list[idx].so_luong -= 1;
-                                } else {
-                                  list.splice(idx, 1);
-                                }
-                                const totalDv = list.reduce((s: number, d: any) => s + (Number(d.so_luong) * Number(d.don_gia)), 0);
-                                setBookingModal({
-                                  ...bookingModal,
-                                  data: {
-                                    ...bookingModal.data,
-                                    dich_vu_list: list,
-                                    tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv
-                                  }
-                                });
-                              }}
-                              className="px-2 py-0.5 hover:bg-slate-200 dark:hover:bg-emerald-950 font-bold"
-                            >
-                              -
-                            </button>
-                            <span className="px-2 font-mono font-black">{it.so_luong}</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const list = [...(bookingModal.data.dich_vu_list || [])];
-                                list[idx].so_luong += 1;
-                                const totalDv = list.reduce((s: number, d: any) => s + (Number(d.so_luong) * Number(d.don_gia)), 0);
-                                setBookingModal({
-                                  ...bookingModal,
-                                  data: {
-                                    ...bookingModal.data,
-                                    dich_vu_list: list,
-                                    tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv
-                                  }
-                                });
-                              }}
-                              className="px-2 py-0.5 hover:bg-slate-200 dark:hover:bg-emerald-950 font-bold"
-                            >
-                              +
-                            </button>
-                          </div>
-                          <div className="font-black text-emerald-600 dark:text-emerald-400 w-16 text-right font-mono text-[11px]">
-                            {(Number(it.so_luong) * Number(it.don_gia)).toLocaleString('vi-VN')} đ
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const list = bookingModal.data.dich_vu_list.filter((_: any, i: number) => i !== idx);
-                              const totalDv = list.reduce((s: number, d: any) => s + (Number(d.so_luong) * Number(d.don_gia)), 0);
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-black uppercase mb-1">Chọn Sân Bóng *</label>
+                          <select
+                            value={bookingModal.data.ma_san || 1}
+                            onChange={(e) => {
+                              const ms = Number(e.target.value);
+                              const s = courtList.find((c) => c.id === ms);
+                              const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
+                              const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
+                              const autoPrice = calculateBookingPitchPrice(ms, curStart, curEnd);
+                              const totalDv = (bookingModal.data.dich_vu_list || []).reduce(
+                                (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
+                                0
+                              );
+                              const finalPrice = autoPrice > 0 ? autoPrice : bookingModal.data.tien_san || 0;
                               setBookingModal({
                                 ...bookingModal,
                                 data: {
                                   ...bookingModal.data,
-                                  dich_vu_list: list,
-                                  tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv
-                                }
+                                  ma_san: ms,
+                                  ten_san: s?.ten_san,
+                                  tien_san: finalPrice,
+                                  tong_tien: finalPrice + totalDv,
+                                },
                               });
                             }}
-                            className="text-rose-500 hover:text-rose-700 p-1"
+                            className={`w-full p-2.5 rounded-xl border font-bold text-xs cursor-pointer ${
+                              isDarkMode
+                                ? 'bg-[#0b132b] border-emerald-800/40 text-white'
+                                : 'bg-white border-slate-300 text-[#0f172a]'
+                            }`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            {courtList.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.ten_san} ({Number(c.don_gia_phut || 0).toLocaleString('vi-VN')} đ/phút)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block font-black uppercase mb-1">Người Đặt (Tài Khoản) *</label>
+                          <select
+                            value={bookingModal.data.ma_nguoi_dung || 1}
+                            onChange={(e) =>
+                              setBookingModal({
+                                ...bookingModal,
+                                data: { ...bookingModal.data, ma_nguoi_dung: Number(e.target.value) },
+                              })
+                            }
+                            className={`w-full p-2.5 rounded-xl border font-bold text-xs cursor-pointer ${
+                              isDarkMode
+                                ? 'bg-[#0b132b] border-emerald-800/40 text-white'
+                                : 'bg-white border-slate-300 text-[#0f172a]'
+                            }`}
+                          >
+                            {userList.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.ho_ten} ({u.so_dien_thoai || u.email})
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-slate-400 italic mb-2">Chưa thêm dịch vụ nào vào đơn đặt sân này.</p>
-                )}
+                    </div>
 
-                {/* Dropdown chọn thêm dịch vụ */}
-                <div className="flex gap-2">
-                  <select
-                    defaultValue=""
-                    onChange={(e) => {
-                      const sId = Number(e.target.value);
-                      if (!sId) return;
-                      const s = serviceList.find(item => item.id === sId);
-                      if (!s) return;
-                      const currentList = [...(bookingModal.data.dich_vu_list || [])];
-                      const existIdx = currentList.findIndex((item: any) => Number(item.ma_dich_vu) === sId);
-                      if (existIdx >= 0) {
-                        currentList[existIdx].so_luong += 1;
-                      } else {
-                        currentList.push({
-                          ma_dich_vu: s.id,
-                          ten_dich_vu: s.ten_dich_vu,
-                          so_luong: 1,
-                          don_gia: s.don_gia,
-                          don_vi_tinh: s.don_vi_tinh
-                        });
-                      }
-                      const totalDv = currentList.reduce((sum: number, d: any) => sum + (Number(d.so_luong) * Number(d.don_gia)), 0);
-                      setBookingModal({
-                        ...bookingModal,
-                        data: {
-                          ...bookingModal.data,
-                          dich_vu_list: currentList,
-                          tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv
-                        }
-                      });
-                      e.target.value = "";
-                    }}
-                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                  >
-                    <option value="">+ Chọn mặt hàng dịch vụ thêm vào đơn...</option>
-                    {serviceList.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.ten_dich_vu} — {Number(s.don_gia).toLocaleString('vi-VN')} đ (Còn: {s.ton_kho} {s.don_vi_tinh})
-                      </option>
-                    ))}
-                  </select>
+                    {/* KHỐI 2: THỜI GIAN ĐÁ & KHUNG GIỜ 24H */}
+                    <div
+                      className={`p-4 rounded-2xl border space-y-3.5 ${
+                        isDarkMode ? 'bg-[#070d1e]/60 border-emerald-950/80' : 'bg-slate-50/70 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200/80 dark:border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <CalendarClock className="w-4 h-4 text-emerald-500" />
+                          <h4 className="font-black text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                            2. Lịch Đá & Khung Giờ Hoạt Động (24h)
+                          </h4>
+                        </div>
+                        {bookingModal.data.gio_bat_dau && bookingModal.data.gio_ket_thuc && (
+                          <span className="font-mono text-[11px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                            {(bookingModal.data.gio_bat_dau || '').substring(0, 5)} - {(bookingModal.data.gio_ket_thuc || '').substring(0, 5)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* NGÀY ĐÁ */}
+                        <div>
+                          <label className="block font-black uppercase mb-1">Ngày Đá *</label>
+                          <div
+                            className={`relative flex items-center justify-between p-2.5 rounded-xl border font-bold cursor-pointer transition-colors ${
+                              isDarkMode
+                                ? 'bg-[#0b132b] border-emerald-800/40 text-white hover:border-emerald-500'
+                                : 'bg-white border-slate-300 text-[#0f172a] hover:border-emerald-600'
+                            }`}
+                          >
+                            <span className="font-bold tracking-wide">
+                              {formatVNDate(
+                                bookingModal.data.ngay_da
+                                  ? String(bookingModal.data.ngay_da).split('T')[0]
+                                  : new Date().toISOString().split('T')[0]
+                              )}
+                            </span>
+                            <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 pointer-events-none" />
+                            <input
+                              type="date"
+                              required
+                              value={
+                                bookingModal.data.ngay_da
+                                  ? String(bookingModal.data.ngay_da).split('T')[0]
+                                  : new Date().toISOString().split('T')[0]
+                              }
+                              onClick={(e) => {
+                                try {
+                                  (e.target as any).showPicker?.();
+                                } catch (_) {}
+                              }}
+                              onChange={(e) =>
+                                setBookingModal({
+                                  ...bookingModal,
+                                  data: { ...bookingModal.data, ngay_da: e.target.value },
+                                })
+                              }
+                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                            />
+                          </div>
+                        </div>
+
+                        {/* GIỜ BẮT ĐẦU */}
+                        <div>
+                          <label className="block font-black uppercase mb-1 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Giờ Bắt Đầu (24h) *</span>
+                          </label>
+                          <select
+                            id="modal_gio_bat_dau"
+                            required
+                            value={(bookingModal.data.gio_bat_dau || '17:00').substring(0, 5)}
+                            onChange={(e) => {
+                              const newStart = e.target.value;
+                              const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
+                              const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
+                              const autoPrice = calculateBookingPitchPrice(curSanId, newStart, curEnd);
+                              const totalDv = (bookingModal.data.dich_vu_list || []).reduce(
+                                (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
+                                0
+                              );
+                              const finalPrice = autoPrice > 0 ? autoPrice : bookingModal.data.tien_san || 0;
+                              setBookingModal({
+                                ...bookingModal,
+                                data: {
+                                  ...bookingModal.data,
+                                  gio_bat_dau: newStart,
+                                  tien_san: finalPrice,
+                                  tong_tien: finalPrice + totalDv,
+                                },
+                              });
+                            }}
+                            className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${
+                              isDarkMode
+                                ? 'bg-[#0b132b] border-emerald-800/40 text-white'
+                                : 'bg-white border-slate-300 text-[#0f172a]'
+                            }`}
+                          >
+                            {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_bat_dau || '').substring(0, 5)) &&
+                              bookingModal.data.gio_bat_dau &&
+                              (() => {
+                                const customTime = (bookingModal.data.gio_bat_dau || '').substring(0, 5);
+                                const status = getBookingModalSlotStatus(customTime, false);
+                                return (
+                                  <option
+                                    value={customTime}
+                                    disabled={status.disabled}
+                                    className={
+                                      status.isOccupied
+                                        ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
+                                        : ''
+                                    }
+                                    style={
+                                      status.isOccupied
+                                        ? {
+                                            color: '#d97706',
+                                            backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
+                                            fontWeight: 'bold',
+                                          }
+                                        : undefined
+                                    }
+                                  >
+                                    {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
+                                  </option>
+                                );
+                              })()}
+                            {TIME_OPTIONS_24H.map((t) => {
+                              const status = getBookingModalSlotStatus(t, false);
+                              if (status.isHidden) return null;
+                              return (
+                                <option
+                                  key={`start_${t}`}
+                                  value={t}
+                                  disabled={status.disabled}
+                                  className={
+                                    status.isOccupied
+                                      ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
+                                      : ''
+                                  }
+                                  style={
+                                    status.isOccupied
+                                      ? {
+                                          color: '#d97706',
+                                          backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
+                                          fontWeight: 'bold',
+                                        }
+                                      : undefined
+                                  }
+                                >
+                                  {status.label}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        {/* GIỜ KẾT THÚC */}
+                        <div>
+                          <label className="block font-black uppercase mb-1 flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Giờ Kết Thúc (24h) *</span>
+                          </label>
+                          <select
+                            id="modal_gio_ket_thuc"
+                            required
+                            value={(bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5)}
+                            onChange={(e) => {
+                              const newEnd = e.target.value;
+                              const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
+                              const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
+                              const autoPrice = calculateBookingPitchPrice(curSanId, curStart, newEnd);
+                              const totalDv = (bookingModal.data.dich_vu_list || []).reduce(
+                                (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
+                                0
+                              );
+                              const finalPrice = autoPrice > 0 ? autoPrice : bookingModal.data.tien_san || 0;
+                              setBookingModal({
+                                ...bookingModal,
+                                data: {
+                                  ...bookingModal.data,
+                                  gio_ket_thuc: newEnd,
+                                  tien_san: finalPrice,
+                                  tong_tien: finalPrice + totalDv,
+                                },
+                              });
+                            }}
+                            className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${
+                              isDarkMode
+                                ? 'bg-[#0b132b] border-emerald-800/40 text-white'
+                                : 'bg-white border-slate-300 text-[#0f172a]'
+                            }`}
+                          >
+                            {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_ket_thuc || '').substring(0, 5)) &&
+                              bookingModal.data.gio_ket_thuc &&
+                              (() => {
+                                const customTime = (bookingModal.data.gio_ket_thuc || '').substring(0, 5);
+                                const status = getBookingModalSlotStatus(customTime, true);
+                                return (
+                                  <option
+                                    value={customTime}
+                                    disabled={status.disabled}
+                                    className={
+                                      status.isOccupied
+                                        ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
+                                        : ''
+                                    }
+                                    style={
+                                      status.isOccupied
+                                        ? {
+                                            color: '#d97706',
+                                            backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
+                                            fontWeight: 'bold',
+                                          }
+                                        : undefined
+                                    }
+                                  >
+                                    {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
+                                  </option>
+                                );
+                              })()}
+                            {TIME_OPTIONS_24H.map((t) => {
+                              const status = getBookingModalSlotStatus(t, true);
+                              if (status.isHidden) return null;
+                              return (
+                                <option
+                                  key={`end_${t}`}
+                                  value={t}
+                                  disabled={status.disabled}
+                                  className={
+                                    status.isOccupied
+                                      ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
+                                      : ''
+                                  }
+                                  style={
+                                    status.isOccupied
+                                      ? {
+                                          color: '#d97706',
+                                          backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
+                                          fontWeight: 'bold',
+                                        }
+                                      : undefined
+                                  }
+                                >
+                                  {status.label}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* CHÚ THÍCH TRẠNG THÁI KHUNG GIỜ */}
+                      <div className="flex flex-wrap items-center gap-3 px-3 py-2 rounded-xl bg-white dark:bg-[#0b132b] border border-slate-200 dark:border-emerald-950/60 text-[11px] font-bold">
+                        <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-sm"></span>
+                          <span>🟢 Trống</span>
+                        </span>
+                        <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-black">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block shadow-sm animate-pulse"></span>
+                          <span>🟠 Đang có người chọn / Đã đặt</span>
+                        </span>
+                        <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-medium">
+                          <span className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700 inline-block"></span>
+                          <span>⚪ Đã qua giờ (Tự ẩn)</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* KHỐI 3: TIỀN SÂN VÀ GHI CHÚ */}
+                    <div
+                      className={`p-4 rounded-2xl border space-y-3.5 ${
+                        isDarkMode ? 'bg-[#070d1e]/60 border-emerald-950/80' : 'bg-slate-50/70 border-slate-200'
+                      }`}
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block font-black uppercase">Tiền Sân (VNĐ) *</label>
+                            {bookingModal.data.ma_san && (
+                              <span className="text-[10px] text-emerald-500 font-mono font-bold flex items-center gap-1">
+                                <Zap className="w-3 h-3 text-amber-400 fill-amber-400" />
+                                <span>Tự động tính</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={bookingModal.data.tien_san !== undefined ? bookingModal.data.tien_san : ''}
+                              onChange={(e) => {
+                                const ts = Number(e.target.value);
+                                const totalDv = (bookingModal.data.dich_vu_list || []).reduce(
+                                  (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
+                                  0
+                                );
+                                setBookingModal({
+                                  ...bookingModal,
+                                  data: { ...bookingModal.data, tien_san: ts, tong_tien: ts + totalDv },
+                                });
+                              }}
+                              className={`w-full p-2.5 rounded-xl border font-black font-mono text-sm ${
+                                isDarkMode
+                                  ? 'bg-[#0b132b] border-emerald-800/40 text-emerald-400'
+                                  : 'bg-white border-slate-300 text-emerald-600'
+                              }`}
+                            />
+                            <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400 pointer-events-none">
+                              đ
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block font-black uppercase mb-1">Ghi Chú Đơn</label>
+                          <input
+                            type="text"
+                            placeholder="Ghi chú thêm cho đơn..."
+                            value={bookingModal.data.ghi_chu || ''}
+                            onChange={(e) =>
+                              setBookingModal({
+                                ...bookingModal,
+                                data: { ...bookingModal.data, ghi_chu: e.target.value },
+                              })
+                            }
+                            className={`w-full p-2.5 rounded-xl border font-bold text-xs ${
+                              isDarkMode
+                                ? 'bg-[#0b132b] border-emerald-800/40 text-white placeholder-slate-500'
+                                : 'bg-white border-slate-300 text-[#0f172a] placeholder-slate-400'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ================= CỘT PHẢI (5 PHẦN): DỊCH VỤ & HÓA ĐƠN THANH TOÁN ================= */}
+                  <div className="lg:col-span-5 space-y-4">
+                    {/* KHỐI 4: DỊCH VỤ & NƯỚC UỐNG */}
+                    <div
+                      className={`p-4 rounded-2xl border space-y-3 ${
+                        isDarkMode ? 'bg-[#070d1e]/60 border-emerald-950/80' : 'bg-slate-50/70 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200/80 dark:border-slate-800">
+                        <label className="font-black uppercase flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs">
+                          <ShoppingCart className="w-4 h-4 text-emerald-500" />
+                          <span>3. Dịch Vụ / Nước Uống</span>
+                        </label>
+                        <span className="text-[11px] font-black font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                          +{' '}
+                          {(
+                            (bookingModal.data.dich_vu_list || []).reduce(
+                              (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
+                              0
+                            )
+                          ).toLocaleString('vi-VN')}{' '}
+                          đ
+                        </span>
+                      </div>
+
+                      {/* Dropdown chọn thêm dịch vụ */}
+                      <div>
+                        <select
+                          defaultValue=""
+                          onChange={(e) => {
+                            const sId = Number(e.target.value);
+                            if (!sId) return;
+                            const s = serviceList.find((item) => item.id === sId);
+                            if (!s) return;
+                            const currentList = [...(bookingModal.data.dich_vu_list || [])];
+                            const existIdx = currentList.findIndex((item: any) => Number(item.ma_dich_vu) === sId);
+                            if (existIdx >= 0) {
+                              currentList[existIdx].so_luong += 1;
+                            } else {
+                              currentList.push({
+                                ma_dich_vu: s.id,
+                                ten_dich_vu: s.ten_dich_vu,
+                                so_luong: 1,
+                                don_gia: s.don_gia,
+                                don_vi_tinh: s.don_vi_tinh,
+                              });
+                            }
+                            const totalDv = currentList.reduce(
+                              (sum: number, d: any) => sum + Number(d.so_luong) * Number(d.don_gia),
+                              0
+                            );
+                            setBookingModal({
+                              ...bookingModal,
+                              data: {
+                                ...bookingModal.data,
+                                dich_vu_list: currentList,
+                                tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv,
+                              },
+                            });
+                            e.target.value = '';
+                          }}
+                          className={`w-full p-2.5 rounded-xl border font-bold text-xs cursor-pointer ${
+                            isDarkMode
+                              ? 'bg-[#0b132b] border-emerald-800/40 text-white'
+                              : 'bg-white border-slate-300 text-[#0f172a]'
+                          }`}
+                        >
+                          <option value="">+ Thêm dịch vụ / nước uống...</option>
+                          {serviceList.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.ten_dich_vu} — {Number(s.don_gia).toLocaleString('vi-VN')} đ (Còn: {s.ton_kho}{' '}
+                              {s.don_vi_tinh})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Danh sách dịch vụ đã chọn trong đơn */}
+                      {Array.isArray(bookingModal.data.dich_vu_list) && bookingModal.data.dich_vu_list.length > 0 ? (
+                        <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                          {bookingModal.data.dich_vu_list.map((it: any, idx: number) => (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-[#0b132b] border border-slate-200 dark:border-emerald-800/30 text-xs shadow-sm"
+                            >
+                              <div className="flex-1 min-w-0 mr-2">
+                                <div className="font-bold truncate text-[#0f172a] dark:text-slate-100">
+                                  🥤 {it.ten_dich_vu}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-mono">
+                                  {Number(it.don_gia).toLocaleString('vi-VN')} đ / {it.don_vi_tinh || 'Chai'}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center border border-slate-300 dark:border-emerald-800/50 rounded-lg overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const list = [...(bookingModal.data.dich_vu_list || [])];
+                                      if (list[idx].so_luong > 1) {
+                                        list[idx].so_luong -= 1;
+                                      } else {
+                                        list.splice(idx, 1);
+                                      }
+                                      const totalDv = list.reduce(
+                                        (s: number, d: any) => s + Number(d.so_luong) * Number(d.don_gia),
+                                        0
+                                      );
+                                      setBookingModal({
+                                        ...bookingModal,
+                                        data: {
+                                          ...bookingModal.data,
+                                          dich_vu_list: list,
+                                          tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv,
+                                        },
+                                      });
+                                    }}
+                                    className="px-2 py-0.5 hover:bg-slate-200 dark:hover:bg-emerald-950 font-bold transition-colors cursor-pointer"
+                                  >
+                                    -
+                                  </button>
+                                  <span className="px-2 font-mono font-black">{it.so_luong}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const list = [...(bookingModal.data.dich_vu_list || [])];
+                                      list[idx].so_luong += 1;
+                                      const totalDv = list.reduce(
+                                        (s: number, d: any) => s + Number(d.so_luong) * Number(d.don_gia),
+                                        0
+                                      );
+                                      setBookingModal({
+                                        ...bookingModal,
+                                        data: {
+                                          ...bookingModal.data,
+                                          dich_vu_list: list,
+                                          tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv,
+                                        },
+                                      });
+                                    }}
+                                    className="px-2 py-0.5 hover:bg-slate-200 dark:hover:bg-emerald-950 font-bold transition-colors cursor-pointer"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                                <div className="font-black text-emerald-600 dark:text-emerald-400 w-16 text-right font-mono text-[11px]">
+                                  {(Number(it.so_luong) * Number(it.don_gia)).toLocaleString('vi-VN')} đ
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const list = bookingModal.data.dich_vu_list.filter((_: any, i: number) => i !== idx);
+                                    const totalDv = list.reduce(
+                                      (s: number, d: any) => s + Number(d.so_luong) * Number(d.don_gia),
+                                      0
+                                    );
+                                    setBookingModal({
+                                      ...bookingModal,
+                                      data: {
+                                        ...bookingModal.data,
+                                        dich_vu_list: list,
+                                        tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv,
+                                      },
+                                    });
+                                  }}
+                                  className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer transition-colors"
+                                  title="Xóa dịch vụ"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 italic py-1 text-center">
+                          Chưa thêm dịch vụ nào vào đơn đặt sân này.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* KHỐI 5: PHƯƠNG THỨC & TRẠNG THÁI THANH TOÁN */}
+                    <div
+                      className={`p-4 rounded-2xl border space-y-3 ${
+                        isDarkMode ? 'bg-[#070d1e]/60 border-emerald-950/80' : 'bg-slate-50/70 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-800">
+                        <CreditCard className="w-4 h-4 text-emerald-500" />
+                        <h4 className="font-black text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                          4. Thiết Lập Thanh Toán
+                        </h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-black uppercase mb-1">Phương Thức</label>
+                          <select
+                            value={bookingModal.data.phuong_thuc || 'CHUYEN_KHOAN'}
+                            onChange={(e) =>
+                              setBookingModal({
+                                ...bookingModal,
+                                data: { ...bookingModal.data, phuong_thuc: e.target.value },
+                              })
+                            }
+                            className={`w-full p-2.5 rounded-xl border font-bold text-xs cursor-pointer ${
+                              isDarkMode
+                                ? 'bg-[#0b132b] border-emerald-800/40 text-white'
+                                : 'bg-white border-slate-300 text-[#0f172a]'
+                            }`}
+                          >
+                            <option value="CHUYEN_KHOAN">💳 Chuyển Khoản</option>
+                            <option value="TIEN_MAT">💵 Tiền Mặt</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block font-black uppercase mb-1">Trạng Thái Đơn</label>
+                          <select
+                            value={bookingModal.data.trang_thai || 'CHO_THANH_TOAN'}
+                            onChange={(e) => {
+                              const nextStatus = e.target.value;
+                              const curTotal = Number(
+                                bookingModal.data.tong_tien || bookingModal.data.tien_san || 0
+                              );
+                              let nextLoaiTT = '';
+                              let nextSoTien = 0;
+                              let nextTrangThaiGd = 'DANG_CHO';
+                              if (nextStatus === 'DA_THANH_TOAN') {
+                                nextLoaiTT = 'TRA_HET';
+                                nextSoTien = curTotal;
+                                nextTrangThaiGd = 'THANH_CONG';
+                              } else if (nextStatus === 'DA_COC') {
+                                nextLoaiTT = 'DAT_COC';
+                                nextSoTien = Math.round(curTotal * 0.3);
+                                nextTrangThaiGd = 'THANH_CONG';
+                              } else {
+                                nextLoaiTT = '';
+                                nextSoTien = 0;
+                                nextTrangThaiGd = 'DANG_CHO';
+                              }
+                              setBookingModal({
+                                ...bookingModal,
+                                data: {
+                                  ...bookingModal.data,
+                                  trang_thai: nextStatus,
+                                  loai_thanh_toan: nextLoaiTT,
+                                  so_tien: nextSoTien,
+                                  trang_thai_gd: nextTrangThaiGd,
+                                },
+                              });
+                            }}
+                            className={`w-full p-2.5 rounded-xl border font-bold text-xs cursor-pointer ${
+                              isDarkMode
+                                ? 'bg-[#0b132b] border-emerald-800/40 text-white'
+                                : 'bg-white border-slate-300 text-[#0f172a]'
+                            }`}
+                          >
+                            <option value="CHO_THANH_TOAN">Chưa Thanh Toán</option>
+                            <option value="DA_COC">Đã Cọc (30%)</option>
+                            <option value="DA_THANH_TOAN">Đã Thanh Toán (100%)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Hint trạng thái thanh toán */}
+                      {bookingModal.data.trang_thai === 'DA_COC' && (
+                        <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/25 text-sky-600 dark:text-sky-400 font-medium text-[11px] flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 shrink-0 text-sky-500" />
+                          <span>
+                            Số tiền cọc cần thu:{' '}
+                            <strong className="font-mono text-xs">
+                              {(
+                                Number(
+                                  bookingModal.data.so_tien ||
+                                    Math.round(
+                                      Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0) * 0.3
+                                    )
+                                )
+                              ).toLocaleString('vi-VN')}{' '}
+                              đ
+                            </strong>{' '}
+                            (30% tổng hóa đơn)
+                          </span>
+                        </div>
+                      )}
+                      {bookingModal.data.trang_thai === 'DA_THANH_TOAN' && (
+                        <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-medium text-[11px] flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
+                          <span>
+                            Đã thu toàn bộ:{' '}
+                            <strong className="font-mono text-xs">
+                              {Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0).toLocaleString(
+                                'vi-VN'
+                              )}{' '}
+                              đ
+                            </strong>{' '}
+                            (100% hoàn tất)
+                          </span>
+                        </div>
+                      )}
+                      {(bookingModal.data.trang_thai === 'CHO_THANH_TOAN' || !bookingModal.data.trang_thai) && (
+                        <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 font-medium text-[11px] flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                          <span>Đơn chờ thanh toán (Số tiền đã thu hiện tại: 0 đ)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* KHỐI 6: TỔNG KẾT HÓA ĐƠN (INVOICE SUMMARY CARD) */}
+                    <div
+                      className={`p-4 rounded-2xl border space-y-2.5 ${
+                        isDarkMode
+                          ? 'bg-gradient-to-br from-emerald-950/40 to-slate-900 border-emerald-800/40'
+                          : 'bg-gradient-to-br from-emerald-50/70 to-slate-50 border-emerald-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500 dark:text-slate-400">Tiền thuê sân:</span>
+                        <span className="font-mono font-bold">
+                          {Number(bookingModal.data.tien_san || 0).toLocaleString('vi-VN')} đ
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500 dark:text-slate-400">Dịch vụ đi kèm:</span>
+                        <span className="font-mono font-bold">
+                          {(
+                            (bookingModal.data.dich_vu_list || []).reduce(
+                              (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
+                              0
+                            )
+                          ).toLocaleString('vi-VN')}{' '}
+                          đ
+                        </span>
+                      </div>
+                      <div className="border-t border-dashed border-slate-300 dark:border-emerald-800/50 pt-2 flex items-center justify-between">
+                        <span className="font-black text-xs uppercase tracking-wider text-slate-800 dark:text-white">
+                          Tổng Thanh Toán:
+                        </span>
+                        <span className="font-black text-lg sm:text-xl font-mono text-emerald-600 dark:text-emerald-400">
+                          {Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0).toLocaleString(
+                            'vi-VN'
+                          )}{' '}
+                          đ
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block font-black uppercase mb-1">Trạng Thái Đơn</label>
-                <select
-                  value={bookingModal.data.trang_thai || 'CHO_THANH_TOAN'}
-                  onChange={(e) => {
-                    const nextStatus = e.target.value;
-                    const curTotal = Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0);
-                    let nextLoaiTT = '';
-                    let nextSoTien = 0;
-                    let nextTrangThaiGd = 'DANG_CHO';
-                    if (nextStatus === 'DA_THANH_TOAN') {
-                      nextLoaiTT = 'TRA_HET';
-                      nextSoTien = curTotal;
-                      nextTrangThaiGd = 'THANH_CONG';
-                    } else if (nextStatus === 'DA_COC') {
-                      nextLoaiTT = 'DAT_COC';
-                      nextSoTien = Math.round(curTotal * 0.3);
-                      nextTrangThaiGd = 'THANH_CONG';
-                    } else {
-                      nextLoaiTT = '';
-                      nextSoTien = 0;
-                      nextTrangThaiGd = 'DANG_CHO';
-                    }
-                    setBookingModal({
-                      ...bookingModal,
-                      data: {
-                        ...bookingModal.data,
-                        trang_thai: nextStatus,
-                        loai_thanh_toan: nextLoaiTT,
-                        so_tien: nextSoTien,
-                        trang_thai_gd: nextTrangThaiGd
-                      }
-                    });
-                  }}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                >
-                  <option value="CHO_THANH_TOAN">Chưa Thanh Toán</option>
-                  <option value="DA_COC">Đã Cọc (30%)</option>
-                  <option value="DA_THANH_TOAN">Đã Thanh Toán (100%)</option>
-                </select>
-                {bookingModal.data.trang_thai === 'DA_COC' && (
-                  <p className="mt-1 text-[11px] text-sky-500 font-medium">
-                    ⚡ Số tiền cọc cần trả: <strong>{(Number(bookingModal.data.so_tien || Math.round(Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0) * 0.3))).toLocaleString('vi-VN')} đ</strong> (30% tổng đơn)
-                  </p>
-                )}
-                {bookingModal.data.trang_thai === 'DA_THANH_TOAN' && (
-                  <p className="mt-1 text-[11px] text-emerald-500 font-medium">
-                    ⚡ Đã thanh toán toàn bộ: <strong>{Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0).toLocaleString('vi-VN')} đ</strong>
-                  </p>
-                )}
-                {(bookingModal.data.trang_thai === 'CHO_THANH_TOAN' || !bookingModal.data.trang_thai) && (
-                  <p className="mt-1 text-[11px] text-amber-500 font-medium">
-                    ⚡ Đơn chưa thanh toán (Số tiền thanh toán: 0 đ)
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block font-black uppercase mb-1">Ghi Chú</label>
-                <input
-                  type="text"
-                  placeholder="Ghi chú thêm cho đơn..."
-                  value={bookingModal.data.ghi_chu || ''}
-                  onChange={(e) => setBookingModal({ ...bookingModal, data: { ...bookingModal.data, ghi_chu: e.target.value } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
-              </div>
-
-              <div className="flex items-center justify-between pt-3 border-t">
-                <div className="text-xs">
-                  <span className={`font-bold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Tổng Thanh Toán: </span>
-                  <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm font-mono">
-                    {Number(bookingModal.data.tong_tien || bookingModal.data.tien_san || 0).toLocaleString('vi-VN')} đ
+              {/* FOOTER MODAL CỐ ĐỊNH */}
+              <div
+                className={`px-5 py-3.5 border-t flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 ${
+                  isDarkMode ? 'bg-[#070d1e] border-slate-800' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 truncate">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span className="truncate">
+                    {courtList.find((c) => c.id === Number(bookingModal.data.ma_san))?.ten_san || 'Sân bóng'} •{' '}
+                    {(bookingModal.data.gio_bat_dau || '17:00').substring(0, 5)} -{' '}
+                    {(bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5)} •{' '}
+                    {formatVNDate(
+                      bookingModal.data.ngay_da
+                        ? String(bookingModal.data.ngay_da).split('T')[0]
+                        : new Date().toISOString().split('T')[0]
+                    )}
                   </span>
                 </div>
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setBookingModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
-                  <button type="submit" className="px-5 py-2 rounded-xl font-black bg-emerald-600 text-white cursor-pointer hover:bg-emerald-500">Lưu Đơn Đặt Sân</button>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setBookingModal({ isOpen: false, mode: 'ADD', data: {} })}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      isDarkMode
+                        ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                        : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                    }`}
+                  >
+                    Hủy bỏ
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl text-xs font-black text-slate-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                    <span>{bookingModal.mode === 'ADD' ? 'Lưu Đơn Đặt Sân' : 'Cập Nhật Đơn Đặt'}</span>
+                  </button>
                 </div>
               </div>
             </form>

@@ -222,7 +222,7 @@ IF NOT EXISTS (SELECT 1 FROM Nguoi_Dung WHERE id = @id)
         SET ho_ten = @ho_ten,
             email = @email,
             so_dien_thoai = @so_dien_thoai,
-            dia_chi = CASE WHEN @dia_chi IS NOT NULL THEN @dia_chi ELSE dia_chi END,
+            dia_chi = @dia_chi,
             MaVaiTro = ISNULL(@v_MaVaiTro, MaVaiTro),
             mat_khau = CASE WHEN @mat_khau IS NOT NULL AND LEN(@mat_khau) > 0 THEN @mat_khau ELSE mat_khau END
         WHERE id = @id;
@@ -477,7 +477,7 @@ BEGIN
             UPDATE San_Bong
             SET ten_san = LTRIM(RTRIM(@ten_san)),
                 ma_loai_san = @ma_loai_san,
-                hinh_anh = ISNULL(@hinh_anh, hinh_anh),
+                hinh_anh = @hinh_anh,
                 don_gia_phut = ISNULL(@don_gia_phut, don_gia_phut),
                 trang_thai = ISNULL(@trang_thai, trang_thai)
             WHERE id = @id;
@@ -2457,7 +2457,7 @@ BEGIN
 
             UPDATE Loai_San
             SET ten_loai = LTRIM(RTRIM(@ten_loai)),
-                mo_ta = ISNULL(@mo_ta, mo_ta),
+                mo_ta = @mo_ta,
                 trang_thai = ISNULL(@trang_thai, trang_thai)
             WHERE id = @id;
 
@@ -5913,7 +5913,7 @@ BEGIN
             tien_coc = ISNULL(@tien_coc, tien_coc),
             tong_tien = @currentTongSoBuoi * @currentDonGia,
             trang_thai = ISNULL(@trang_thai, trang_thai),
-            ghi_chu = ISNULL(@ghi_chu, ghi_chu)
+            ghi_chu = @ghi_chu
         WHERE id = @id;
 
         -- Nếu chuyển trạng thái sang DA_HUY, tự động hủy các buổi chưa diễn ra
@@ -6051,6 +6051,366 @@ BEGIN
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 10.13. THỦ TỤC LẤY CHI TIẾT SÂN, ĐÁNH GIÁ & BÌNH LUẬN (KÈM TRẢ LỜI)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_LayDanhGiaTheoSan
+    @ma_san INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1. Thông tin sân bóng & thống kê số sao
+    SELECT 
+        sb.id AS ma_san,
+        sb.ten_san,
+        sb.hinh_anh,
+        sb.don_gia_phut,
+        sb.trang_thai,
+        ls.id AS ma_loai_san,
+        ls.ten_loai,
+        ISNULL(ROUND(AVG(CAST(dg.so_sao AS FLOAT)), 1), 5.0) AS diem_trung_binh,
+        COUNT(CASE WHEN dg.binh_luan_cha_id IS NULL AND dg.so_sao IS NOT NULL THEN 1 END) AS tong_danh_gia,
+        COUNT(CASE WHEN dg.so_sao = 5 THEN 1 END) AS sao_5,
+        COUNT(CASE WHEN dg.so_sao = 4 THEN 1 END) AS sao_4,
+        COUNT(CASE WHEN dg.so_sao = 3 THEN 1 END) AS sao_3,
+        COUNT(CASE WHEN dg.so_sao = 2 THEN 1 END) AS sao_2,
+        COUNT(CASE WHEN dg.so_sao = 1 THEN 1 END) AS sao_1
+    FROM San_Bong sb
+    JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+    LEFT JOIN Danh_Gia_San dg ON sb.id = dg.ma_san AND dg.trang_thai = 1
+    WHERE sb.id = @ma_san
+    GROUP BY sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, ls.id, ls.ten_loai;
+
+    -- 2. Danh sách toàn bộ đánh giá và câu trả lời (kèm tên người được trả lời cha)
+    SELECT 
+        dg.id,
+        dg.ma_san,
+        dg.ma_nguoi_dung,
+        dg.binh_luan_cha_id,
+        dg.so_sao,
+        dg.noi_dung,
+        dg.ngay_tao,
+        dg.trang_thai,
+        nd.ho_ten,
+        nd.email,
+        nd.anh_dai_dien,
+        ISNULL(vt.TenVaiTro, 'KHACH_HANG') AS vai_tro,
+        cha_nd.ho_ten AS tra_loi_cho_ho_ten
+    FROM Danh_Gia_San dg
+    JOIN Nguoi_Dung nd ON dg.ma_nguoi_dung = nd.id
+    LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+    LEFT JOIN Danh_Gia_San cha_dg ON dg.binh_luan_cha_id = cha_dg.id
+    LEFT JOIN Nguoi_Dung cha_nd ON cha_dg.ma_nguoi_dung = cha_nd.id
+    WHERE dg.ma_san = @ma_san AND dg.trang_thai = 1
+    ORDER BY dg.id ASC;
+END;
+GO
+
+-- =====================================================================
+-- 10.14. THỦ TỤC THÊM BÌNH LUẬN / ĐÁNH GIÁ HOẶC TRẢ LỜI BÌNH LUẬN
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_ThemDanhGiaSan
+    @ma_san INT,
+    @ma_nguoi_dung INT,
+    @noi_dung NVARCHAR(1000),
+    @so_sao INT = NULL,
+    @binh_luan_cha_id INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF @noi_dung IS NULL OR LTRIM(RTRIM(@noi_dung)) = ''
+        BEGIN
+            ;THROW 50050, N'Nội dung bình luận không được để trống.', 1;
+        END;
+
+        -- Nếu là bình luận gốc (không có cha), mặc định 5 sao nếu chưa chọn
+        IF @binh_luan_cha_id IS NULL
+        BEGIN
+            IF @so_sao IS NULL OR @so_sao < 1 OR @so_sao > 5
+            BEGIN
+                SET @so_sao = 5;
+            END;
+        END;
+
+        INSERT INTO Danh_Gia_San (ma_san, ma_nguoi_dung, binh_luan_cha_id, so_sao, noi_dung, ngay_tao, trang_thai)
+        VALUES (@ma_san, @ma_nguoi_dung, @binh_luan_cha_id, @so_sao, @noi_dung, GETDATE(), 1);
+
+        DECLARE @new_id INT = SCOPE_IDENTITY();
+
+        -- Trả về dữ liệu bản ghi vừa tạo
+        SELECT 
+            dg.id,
+            dg.ma_san,
+            dg.ma_nguoi_dung,
+            dg.binh_luan_cha_id,
+            dg.so_sao,
+            dg.noi_dung,
+            dg.ngay_tao,
+            dg.trang_thai,
+            nd.ho_ten,
+            nd.email,
+            nd.anh_dai_dien,
+            ISNULL(vt.TenVaiTro, 'KHACH_HANG') AS vai_tro,
+            cha_nd.ho_ten AS tra_loi_cho_ho_ten
+        FROM Danh_Gia_San dg
+        JOIN Nguoi_Dung nd ON dg.ma_nguoi_dung = nd.id
+        LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+        LEFT JOIN Danh_Gia_San cha_dg ON dg.binh_luan_cha_id = cha_dg.id
+        LEFT JOIN Nguoi_Dung cha_nd ON cha_dg.ma_nguoi_dung = cha_nd.id
+        WHERE dg.id = @new_id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 10.15. THỦ TỤC XÓA BÌNH LUẬN / ĐÁNH GIÁ (KÈM CÁC CÂU TRẢ LỜI CON)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_XoaDanhGiaSan
+    @id INT,
+    @ma_nguoi_dung INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        -- Kiểm tra quyền xóa: người tạo hoặc Admin (MaVaiTro = 1 hoặc email admin)
+        DECLARE @owner_id INT;
+        DECLARE @user_role INT;
+        DECLARE @user_email VARCHAR(255);
+
+        SELECT @owner_id = ma_nguoi_dung FROM Danh_Gia_San WHERE id = @id;
+        SELECT @user_role = MaVaiTro, @user_email = email FROM Nguoi_Dung WHERE id = @ma_nguoi_dung;
+
+        IF @owner_id IS NULL
+        BEGIN
+            ;THROW 50051, N'Bình luận không tồn tại.', 1;
+        END;
+
+        IF @owner_id <> @ma_nguoi_dung 
+           AND ISNULL(@user_role, 3) <> 1 
+           AND LOWER(ISNULL(@user_email, '')) NOT IN ('xoancao2.0@gmail.com', 'admin@soccer247.vn')
+        BEGIN
+            ;THROW 50052, N'Bạn không có quyền xóa bình luận này.', 1;
+        END;
+
+        -- Tìm và xóa toàn bộ bình luận con/cháu nhiều tầng theo thứ tự từ sâu nhất lên
+        IF OBJECT_ID('tempdb..#ToDel') IS NOT NULL DROP TABLE #ToDel;
+
+        ;WITH Descendants AS (
+            SELECT id, 1 AS lv FROM Danh_Gia_San WHERE binh_luan_cha_id = @id
+            UNION ALL
+            SELECT d.id, a.lv + 1
+            FROM Danh_Gia_San d
+            INNER JOIN Descendants a ON d.binh_luan_cha_id = a.id
+        )
+        SELECT id, lv INTO #ToDel FROM Descendants;
+
+        DECLARE @cur_lv INT;
+        SELECT @cur_lv = MAX(lv) FROM #ToDel;
+
+        WHILE @cur_lv >= 1
+        BEGIN
+            DELETE FROM Danh_Gia_San 
+            WHERE id IN (SELECT id FROM #ToDel WHERE lv = @cur_lv);
+            
+            SET @cur_lv = @cur_lv - 1;
+        END;
+
+        IF OBJECT_ID('tempdb..#ToDel') IS NOT NULL DROP TABLE #ToDel;
+
+        -- Xóa chính bản ghi mục tiêu
+        DELETE FROM Danh_Gia_San WHERE id = @id;
+
+        SELECT 1 AS success;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 10.16. THỦ TỤC CHỈNH SỬA BÌNH LUẬN / ĐÁNH GIÁ (CHÍNH CHỦ HOẶC ADMIN)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_SuaDanhGiaSan
+    @id INT,
+    @ma_nguoi_dung INT,
+    @noi_dung NVARCHAR(1000),
+    @so_sao INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF @noi_dung IS NULL OR LTRIM(RTRIM(@noi_dung)) = ''
+        BEGIN
+            ;THROW 50060, N'Nội dung bình luận không được để trống.', 1;
+        END;
+
+        DECLARE @owner_id INT;
+        DECLARE @user_role INT;
+        DECLARE @user_email VARCHAR(255);
+
+        SELECT @owner_id = ma_nguoi_dung FROM Danh_Gia_San WHERE id = @id;
+        SELECT @user_role = MaVaiTro, @user_email = email FROM Nguoi_Dung WHERE id = @ma_nguoi_dung;
+
+        IF @owner_id IS NULL
+        BEGIN
+            ;THROW 50061, N'Bình luận không tồn tại.', 1;
+        END;
+
+        -- Kiểm tra quyền sửa: người tạo hoặc Admin (MaVaiTro = 1 hoặc email admin)
+        IF @owner_id <> @ma_nguoi_dung 
+           AND ISNULL(@user_role, 3) <> 1 
+           AND LOWER(ISNULL(@user_email, '')) NOT IN ('xoancao2.0@gmail.com', 'admin@soccer247.vn')
+        BEGIN
+            ;THROW 50062, N'Bạn không có quyền chỉnh sửa bình luận này.', 1;
+        END;
+
+        -- Cập nhật nội dung và số sao (nếu có và từ 1-5)
+        UPDATE Danh_Gia_San
+        SET noi_dung = LTRIM(RTRIM(@noi_dung)),
+            so_sao = CASE WHEN @so_sao BETWEEN 1 AND 5 THEN @so_sao ELSE so_sao END
+        WHERE id = @id;
+
+        SELECT 
+            dg.id,
+            dg.ma_san,
+            dg.ma_nguoi_dung,
+            dg.binh_luan_cha_id,
+            dg.so_sao,
+            dg.noi_dung,
+            dg.ngay_tao,
+            dg.trang_thai,
+            nd.ho_ten,
+            nd.email,
+            nd.anh_dai_dien,
+            ISNULL(vt.TenVaiTro, 'KHACH_HANG') AS vai_tro
+        FROM Danh_Gia_San dg
+        JOIN Nguoi_Dung nd ON dg.ma_nguoi_dung = nd.id
+        LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+        WHERE dg.id = @id;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 29. TÌM KIẾM NGÀY & THỜI GIAN TRỐNG CỦA SÂN CHO KHÁCH HÀNG (7 - 30 NGÀY TỚI)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_TimKiemCaTrong
+    @ma_san INT = NULL,
+    @ma_loai_san INT = NULL,
+    @tu_ngay DATE = NULL,
+    @so_ngay INT = 7,
+    @buoi VARCHAR(10) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF @tu_ngay IS NULL
+            SET @tu_ngay = CAST(GETDATE() AS DATE);
+        
+        IF @so_ngay IS NULL OR @so_ngay <= 0 OR @so_ngay > 30
+            SET @so_ngay = 7;
+
+        DECLARE @den_ngay DATE = DATEADD(DAY, @so_ngay - 1, @tu_ngay);
+        DECLARE @now_date DATE = CAST(GETDATE() AS DATE);
+        DECLARE @now_time VARCHAR(5) = CONVERT(VARCHAR(5), GETDATE(), 108);
+
+        WITH DatesCTE AS (
+            SELECT @tu_ngay AS ngay
+            UNION ALL
+            SELECT DATEADD(DAY, 1, ngay)
+            FROM DatesCTE
+            WHERE ngay < @den_ngay
+        )
+        SELECT 
+            CONVERT(VARCHAR(10), d.ngay, 120) AS ngay,
+            CASE DATEPART(dw, d.ngay)
+                WHEN 1 THEN N'Chủ Nhật'
+                WHEN 2 THEN N'Thứ Hai'
+                WHEN 3 THEN N'Thứ Ba'
+                WHEN 4 THEN N'Thứ Tư'
+                WHEN 5 THEN N'Thứ Năm'
+                WHEN 6 THEN N'Thứ Sáu'
+                WHEN 7 THEN N'Thứ Bảy'
+            END AS ten_thu,
+            sb.id AS ma_san,
+            sb.ten_san,
+            sb.don_gia_phut,
+            ROUND(sb.don_gia_phut * 60, 0) AS don_gia_gio,
+            ls.id AS ma_loai_san,
+            ls.ten_loai,
+            kg.id AS ma_khung_gio,
+            kg.gio_bat_dau,
+            kg.gio_ket_thuc,
+            kg.nhan_hien_thi,
+            kg.thu_tu
+        FROM DatesCTE d
+        CROSS JOIN San_Bong sb
+        INNER JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        CROSS JOIN Khung_Gio kg
+        WHERE sb.trang_thai = 'SAN_SANG'
+          AND kg.trang_thai = 1
+          AND (@ma_san IS NULL OR sb.id = @ma_san)
+          AND (@ma_loai_san IS NULL OR sb.ma_loai_san = @ma_loai_san)
+          AND (
+              @buoi IS NULL OR @buoi = 'ALL'
+              OR (@buoi = 'SANG' AND kg.gio_bat_dau >= '06:00' AND kg.gio_bat_dau < '12:00')
+              OR (@buoi = 'CHIEU' AND kg.gio_bat_dau >= '12:00' AND kg.gio_bat_dau < '17:00')
+              OR (@buoi = 'TOI' AND kg.gio_bat_dau >= '17:00' AND kg.gio_bat_dau <= '23:00')
+          )
+          AND NOT (d.ngay = @now_date AND kg.gio_bat_dau <= @now_time)
+          AND NOT EXISTS (
+              SELECT 1 
+              FROM Don_Dat_San dds
+              WHERE dds.ma_san = sb.id
+                AND dds.ngay_da = d.ngay
+                AND dds.trang_thai NOT IN ('DA_HUY', 'HOAN_THANH', 'KET_THUC', N'Đã hủy', N'Hoàn thành', N'Kết thúc')
+                AND NOT (dds.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND dds.ghi_chu LIKE '%PayOS%')
+                AND NOT EXISTS (SELECT 1 FROM Chi_Tiet_Don_Dat ct_check WHERE ct_check.ma_don_dat = dds.id)
+                AND (kg.gio_bat_dau < CONVERT(VARCHAR(5), dds.gio_ket_thuc, 108) 
+                     AND kg.gio_ket_thuc > CONVERT(VARCHAR(5), dds.gio_bat_dau, 108))
+          )
+          AND NOT EXISTS (
+              SELECT 1 
+              FROM Chi_Tiet_Don_Dat ct
+              INNER JOIN Don_Dat_San dds ON ct.ma_don_dat = dds.id
+              WHERE ct.ma_san = sb.id
+                AND ct.ngay_da = d.ngay
+                AND dds.trang_thai NOT IN ('DA_HUY', 'HOAN_THANH', 'KET_THUC', N'Đã hủy', N'Hoàn thành', N'Kết thúc')
+                AND NOT (dds.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND dds.ghi_chu LIKE '%PayOS%')
+                AND (kg.gio_bat_dau < CONVERT(VARCHAR(5), ct.gio_ket_thuc, 108) 
+                     AND kg.gio_ket_thuc > CONVERT(VARCHAR(5), ct.gio_bat_dau, 108))
+          )
+          AND NOT EXISTS (
+              SELECT 1
+              FROM Lich_Co_Dinh lcd
+              WHERE lcd.ma_san = sb.id
+                AND lcd.trang_thai = 'DANG_HOAT_DONG'
+                AND d.ngay >= lcd.tu_ngay AND d.ngay <= lcd.den_ngay
+                AND (
+                    CHARINDEX(CAST(((DATEPART(dw, d.ngay) + @@DATEFIRST - 2) % 7) + 2 AS VARCHAR(5)), lcd.cac_thu_trong_tuan) > 0
+                    OR (DATEPART(dw, d.ngay) = 1 AND (lcd.cac_thu_trong_tuan LIKE '%CN%' OR lcd.cac_thu_trong_tuan LIKE '%8%' OR lcd.cac_thu_trong_tuan LIKE '%1%'))
+                )
+                AND (kg.gio_bat_dau < CONVERT(VARCHAR(5), lcd.gio_ket_thuc, 108) 
+                     AND kg.gio_ket_thuc > CONVERT(VARCHAR(5), lcd.gio_bat_dau, 108))
+          )
+        ORDER BY d.ngay ASC, kg.thu_tu ASC, sb.id ASC
+        OPTION (MAXRECURSION 31);
+    END TRY
+    BEGIN CATCH
         ;THROW;
     END CATCH;
 END;

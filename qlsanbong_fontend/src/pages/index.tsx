@@ -63,6 +63,7 @@ import {
 } from 'lucide-react';
 import Login, { AuthUser } from './Login/login';
 import Profile from './profile';
+import CourtDetailModal from '../components/CourtDetailModal';
 import SoccerLoader from '../components/SoccerLoader';
 import DateNavigationBar from '../components/DateNavigationBar';
 import Footer from '../components/Footer';
@@ -384,6 +385,10 @@ export default function HomePage() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [loginInitialRegister, setLoginInitialRegister] = useState<boolean>(false);
 
+  // State Modal Chi tiết Sân & Đánh giá/Bình luận
+  const [selectedCourtDetailId, setSelectedCourtDetailId] = useState<number | null>(null);
+  const [isCourtDetailModalOpen, setIsCourtDetailModalOpen] = useState<boolean>(false);
+
   // State tìm kiếm nhanh tên sân tại Navbar
   const [searchCourtName, setSearchCourtName] = useState<string>('');
 
@@ -438,6 +443,10 @@ export default function HomePage() {
 
   // Bật/tắt hiển thị khung giờ đêm (00:00 - 06:00)
   const [showNightSlots, setShowNightSlots] = useState<boolean>(false);
+
+  // Bộ lọc chỉ hiện ca trống & tìm ca trống sớm nhất (Lựa chọn 3 / B)
+  const [onlyShowEmptySlots, setOnlyShowEmptySlots] = useState<boolean>(false);
+  const [isSearchingNextSlot, setIsSearchingNextSlot] = useState<boolean>(false);
 
   // Ref container cuộn của Google Calendar
   const calendarScrollRef = useRef<HTMLDivElement>(null);
@@ -1346,12 +1355,58 @@ export default function HomePage() {
     return filterNgayDa === todayStr;
   }, [filterNgayDa]);
 
-  // Danh sách khung giờ cho Google Calendar (mốc thời gian chọn bắt đầu 6h, 7h, 8h .. 19h)
+  // Danh sách khung giờ cho Google Calendar (áp dụng bộ lọc Buổi Sáng/Chiều/Tối & Chỉ hiện ca trống)
   const calendarDisplaySlots = useMemo(() => {
-    const rawSlots = timeSlotsList.length > 0 ? timeSlotsList : DEFAULT_TIME_SLOTS;
-    if (filterKhungGio === 'ALL') return rawSlots;
-    return rawSlots.filter((s) => s.start === filterKhungGio);
-  }, [timeSlotsList, filterKhungGio]);
+    let rawSlots = timeSlotsList.length > 0 ? timeSlotsList : DEFAULT_TIME_SLOTS;
+    if (filterKhungGio !== 'ALL') {
+      rawSlots = rawSlots.filter((s) => s.start === filterKhungGio);
+    }
+
+    // Lọc theo buổi trong ngày (Sáng: 06h-12h, Chiều: 12h-17h, Tối: 17h-24h)
+    if (filterBuoi === 'MORNING') {
+      rawSlots = rawSlots.filter((slot) => {
+        const hour = parseInt(slot.start.split(':')[0], 10);
+        return hour >= 6 && hour < 12;
+      });
+    } else if (filterBuoi === 'AFTERNOON') {
+      rawSlots = rawSlots.filter((slot) => {
+        const hour = parseInt(slot.start.split(':')[0], 10);
+        return hour >= 12 && hour < 17;
+      });
+    } else if (filterBuoi === 'EVENING') {
+      rawSlots = rawSlots.filter((slot) => {
+        const hour = parseInt(slot.start.split(':')[0], 10);
+        return hour >= 17;
+      });
+    }
+
+    // Lọc "Chỉ hiện ca trống": Chỉ giữ lại các khung giờ có ít nhất 1 sân chưa đặt & chưa qua giờ
+    if (onlyShowEmptySlots) {
+      rawSlots = rawSlots.filter((slot) => {
+        const isPast = isSlotInThePast(slot.start);
+        if (isPast) return false;
+
+        return filteredSanList.some((san) => {
+          const slotKey = `${san.id}_${slot.start}`;
+          const slotData = gridSlots[slotKey];
+          const matchedSyncOrder = syncOrders.find((order) => {
+            if ((order.ngay_da || '').substring(0, 10) !== filterNgayDa) return false;
+            if (order.trang_thai === 'Đã hủy') return false;
+            const matchSan = (order.ma_san && order.ma_san === san.id) ||
+              (order.ten_san && (order.ten_san.includes(san.ten_san) || san.ten_san.includes(order.ten_san)));
+            if (!matchSan) return false;
+            return isTimeOverlapping(slot.start, slot.end,
+              (order.gio_bat_dau || '').substring(0, 5),
+              (order.gio_ket_thuc || '').substring(0, 5));
+          });
+          const isBooked = (slotData && slotData.trang_thai !== 'TRONG') || !!matchedSyncOrder;
+          return !isBooked;
+        });
+      });
+    }
+
+    return rawSlots;
+  }, [timeSlotsList, filterKhungGio, filterBuoi, onlyShowEmptySlots, isSlotInThePast, filteredSanList, gridSlots, syncOrders, filterNgayDa]);
 
   // Kiểm tra khung giờ có phải là giờ hiện tại không
   const isCurrentTimeSlot = useCallback((slotStart: string, slotEnd: string) => {
@@ -1400,6 +1455,52 @@ export default function HomePage() {
       });
     }
   }, [calendarLineTopPx]);
+
+  // Tìm kiếm ca trống sớm nhất cho khách hàng (Lựa chọn 3 / Option B)
+  const handleFindNextAvailableSlot = async () => {
+    try {
+      setIsSearchingNextSlot(true);
+      const params = new URLSearchParams();
+      if (filterSanId && filterSanId !== 'ALL') {
+        params.append('ma_san', filterSanId);
+      }
+      if (selectedCategory?.id) {
+        params.append('ma_loai_san', String(selectedCategory.id));
+      }
+      params.append('so_ngay', '14');
+      if (filterBuoi === 'MORNING') params.append('buoi', 'SANG');
+      else if (filterBuoi === 'AFTERNOON') params.append('buoi', 'CHIEU');
+      else if (filterBuoi === 'EVENING') params.append('buoi', 'TOI');
+
+      const res = await fetch(`${API_BASE_URL}/dat-san/tim-ca-trong?${params.toString()}`);
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+        const nextSlot = json.data[0];
+        const targetDate = nextSlot.ngay;
+        setFilterNgayDa(targetDate);
+        if (filterSanId === 'ALL' && nextSlot.ma_san) {
+          setFilterSanId(String(nextSlot.ma_san));
+          setCalendarSelectedCourtId(nextSlot.ma_san);
+        }
+        triggerToast({
+          type: 'success',
+          message: `⚡ Đã tìm thấy ca trống sớm nhất: ${nextSlot.nhan_hien_thi || nextSlot.gio_bat_dau?.substring(0, 5)} ngày ${formatDateDMY(targetDate)} (${nextSlot.ten_san})!`,
+        });
+      } else {
+        triggerToast({
+          type: 'info',
+          message: 'Hiện tại không còn ca trống nào trong 14 ngày tới phù hợp bộ lọc.',
+        });
+      }
+    } catch (err: any) {
+      triggerToast({
+        type: 'error',
+        message: 'Lỗi khi tìm ca trống: ' + (err.message || 'Không thể kết nối máy chủ'),
+      });
+    } finally {
+      setIsSearchingNextSlot(false);
+    }
+  };
 
   // Tự động cuộn đến giờ hiện tại khi mở modal ở chế độ Google Calendar
   useEffect(() => {
@@ -1468,7 +1569,7 @@ export default function HomePage() {
     fetchLichSan(filterNgayDa, sanBongList);
     triggerToast({
       type: 'info',
-      message: `Đang cập nhật lịch sân thực tế từ CSDL cho ngày ${filterNgayDa}...`,
+      message: `Đang cập nhật lịch sân thực tế từ CSDL cho ngày ${formatDateDMY(filterNgayDa)}...`,
     });
 
     const matrixElement = document.getElementById('ma-tran-lich-san');
@@ -1710,7 +1811,7 @@ export default function HomePage() {
         if (i === 0) {
           triggerToast({
             type: 'info',
-            message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang được khách hàng khác giữ chỗ!`,
+            message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang có người khác chọn!`,
           });
           return;
         }
@@ -2856,34 +2957,72 @@ export default function HomePage() {
                   />
                 </div>
 
-                {/* LỌC SÂN CỤ THỂ */}
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
-                  isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-300 shadow-xs'
-                }`}>
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  <span className={`text-xs font-bold whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                    Sân:
-                  </span>
-                  <select
-                    value={filterSanId}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setFilterSanId(val);
-                      setCalendarSelectedCourtId(val === 'ALL' ? 'ALL' : Number(val));
-                    }}
-                    className={`bg-transparent text-xs font-black focus:outline-none cursor-pointer ${
-                      isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
-                    }`}
-                  >
-                    <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
-                      Tất Cả ({availableSanOptions.length} sân)
-                    </option>
-                    {availableSanOptions.map((san) => (
-                      <option key={san.id} value={san.id} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
-                        {san.ten_san}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* LỌC SÂN CỤ THỂ */}
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
+                    isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-300 shadow-xs'
+                  }`}>
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span className={`text-xs font-bold whitespace-nowrap ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                      Sân:
+                    </span>
+                    <select
+                      value={filterSanId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFilterSanId(val);
+                        setCalendarSelectedCourtId(val === 'ALL' ? 'ALL' : Number(val));
+                      }}
+                      className={`bg-transparent text-xs font-black focus:outline-none cursor-pointer ${
+                        isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
+                      }`}
+                    >
+                      <option value="ALL" className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
+                        Tất Cả ({availableSanOptions.length} sân)
                       </option>
-                    ))}
-                  </select>
+                      {availableSanOptions.map((san) => (
+                        <option key={san.id} value={san.id} className={isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}>
+                          {san.ten_san}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* TOGGLE CHỈ HIỆN CA TRỐNG */}
+                  <button
+                    type="button"
+                    onClick={() => setOnlyShowEmptySlots(!onlyShowEmptySlots)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                      onlyShowEmptySlots
+                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 ring-1 ring-emerald-500/30'
+                        : isDarkMode
+                        ? 'bg-slate-950/80 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+                        : 'bg-white border-slate-300 text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="Chỉ hiển thị các khung giờ còn ít nhất một sân trống"
+                  >
+                    <CheckCircle2 className={`w-3.5 h-3.5 ${onlyShowEmptySlots ? 'text-emerald-400' : 'text-slate-400'}`} />
+                    <span>Chỉ hiện ca trống</span>
+                  </button>
+
+                  {filterSanId !== 'ALL' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCourtDetailId(Number(filterSanId));
+                        setIsCourtDetailModalOpen(true);
+                      }}
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-xs ${
+                        isDarkMode
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                          : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+                      }`}
+                      title="Xem chi tiết, đánh giá & bình luận sân này"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                      <span>Chi tiết sân</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2903,24 +3042,13 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 border border-amber-400/60 shadow-xs" />
-                      <span className="text-[11px] font-semibold">Khách đang giữ (10p)</span>
+                      <span className="text-[11px] font-semibold">Người khác đang chọn</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 border border-emerald-400/60 shadow-xs" />
-                      <span className="text-[11px] font-semibold">Bạn đang giữ (Giỏ)</span>
+                      <span className="text-[11px] font-semibold">Bạn đang chọn</span>
                     </div>
                   </div>
-
-                  {calendarSubMode === 'TIMELINE' && isViewingToday && calendarLineTopPx !== null && (
-                    <button
-                      type="button"
-                      onClick={scrollToCurrentTime}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-all cursor-pointer"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                      <span>Cuộn đến giờ hiện tại</span>
-                    </button>
-                  )}
                 </div>
               )}
 
@@ -2966,7 +3094,7 @@ export default function HomePage() {
                           <span>GMT+7</span>
                         </div>
 
-                          {/* TIÊU ĐỀ TỪNG SÂN */}
+                          {/* TIÊU ĐỀ TỪNG SÂN (CLICK ĐỂ XEM CHI TIẾT SÂN & ĐÁNH GIÁ/BÌNH LUẬN) */}
                           {filteredSanList.map((san) => (
                             <div
                               key={`header_${san.id}`}
@@ -2974,16 +3102,21 @@ export default function HomePage() {
                                 isDarkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-900'
                               }`}
                             >
-                              <div className="flex items-center justify-center gap-1.5">
-                                <div className={`w-5 h-5 rounded-md flex items-center justify-center font-black text-[10px] border shadow-xs ${
-                                  isDarkMode ? 'bg-slate-800 border-slate-700 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedCourtDetailId(san.id);
+                                  setIsCourtDetailModalOpen(true);
+                                }}
+                                title={`Bấm vào tên sân để xem chi tiết & đánh giá: ${san.ten_san}`}
+                                className="w-full group flex items-center justify-center focus:outline-none cursor-pointer py-0.5 rounded-lg transition-all hover:scale-[1.02]"
+                              >
+                                <span className={`font-black text-xs sm:text-sm truncate transition-colors ${
+                                  isDarkMode ? 'group-hover:text-emerald-400' : 'group-hover:text-emerald-600'
                                 }`}>
-                                  {san.ten_san.substring(0, 2)}
-                                </div>
-                                <span className="font-black text-xs sm:text-sm truncate">
                                   {san.ten_san}
                                 </span>
-                              </div>
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -3077,15 +3210,15 @@ export default function HomePage() {
                                       </div>
                                     ) : isLockedByOther ? (
                                       <div
-                                        title={`Ca ${slot.label} (${slot.start} - ${slot.end}) đang có khách giữ chỗ`}
+                                        title={`Ca ${slot.label} (${slot.start} - ${slot.end}) đang có người khác chọn`}
                                         onClick={() => triggerToast({
                                           type: 'info',
-                                          message: `Khung giờ ${slot.label} của ${san.ten_san} đang có khách khác giữ chỗ!`,
+                                          message: `Khung giờ ${slot.label} của ${san.ten_san} đang có người khác chọn!`,
                                         })}
                                         className="w-full max-w-[130px] sm:max-w-[160px] h-7 sm:h-7.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer select-none"
                                       >
                                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping shrink-0" />
-                                        <span className="truncate">{slot.label} • Đang giữ</span>
+                                        <span className="truncate">{slot.label} • Đang chọn</span>
                                       </div>
                                     ) : isHeldByMe ? (
                                       <button
@@ -3272,11 +3405,11 @@ export default function HomePage() {
                                 ) : isLockedByOther ? (
                                   /* Ô do khách hàng khác đang chọn giữ chỗ Real-time (Màu Cam Đậm nổi bật) */
                                   <div
-                                    title={`Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang được khách hàng khác chọn giữ chỗ`}
+                                    title={`Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang có người khác chọn`}
                                     onClick={() => {
                                       triggerToast({
                                         type: 'info',
-                                        message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang có khách hàng khác chọn giữ chỗ. Vui lòng chọn khung giờ khác!`,
+                                        message: `Khung giờ ${slot.label} (${slot.start}) của ${san.ten_san} đang có người khác chọn. Vui lòng chọn khung giờ khác!`,
                                       });
                                     }}
                                     className="w-full h-9 sm:h-10 px-2 sm:px-3 rounded-full bg-gradient-to-r from-orange-500 via-amber-600 to-orange-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/30 border border-orange-400/50 cursor-not-allowed select-none transition-all"
@@ -3292,7 +3425,7 @@ export default function HomePage() {
                                       setMultiBookingStep('CART');
                                       setIsMultiBookingModalOpen(true);
                                     }}
-                                    title={`Bạn đang chọn giữ chỗ khung giờ ${slot.label} (${san.ten_san}). Bấm để mở giỏ sân.`}
+                                    title={`Bạn đang chọn khung giờ ${slot.label} (${san.ten_san}). Bấm để mở giỏ sân.`}
                                     className="w-full h-9 sm:h-10 px-2 sm:px-3 rounded-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/40 ring-2 ring-emerald-300 hover:scale-[1.04] active:scale-95 transition-all duration-200 cursor-pointer select-none"
                                   >
                                     <Lock className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -5277,6 +5410,40 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* MODAL CHI TIẾT SÂN & ĐÁNH GIÁ, BÌNH LUẬN CÓ PHẢN HỒI */}
+      <CourtDetailModal
+        isOpen={isCourtDetailModalOpen}
+        sanId={selectedCourtDetailId}
+        onClose={() => {
+          setIsCourtDetailModalOpen(false);
+          setSelectedCourtDetailId(null);
+        }}
+        isDarkMode={isDarkMode}
+        onBookNow={(court, targetDate, targetSlot) => {
+          setIsCourtDetailModalOpen(false);
+          const targetCourtId = court.ma_san || court.id;
+          setFilterSanId(String(targetCourtId));
+          setCalendarSelectedCourtId(targetCourtId);
+          if (targetDate) {
+            setFilterNgayDa(targetDate);
+          }
+          if (!selectedCategory) {
+            const foundLoai = loaiSanList.find(
+              (l) => l.id === (court.ma_loai_san || court.maLoaiSan)
+            );
+            if (foundLoai) {
+              handleSelectCategory(foundLoai);
+            }
+          }
+          if (targetSlot) {
+            triggerToast({
+              type: 'success',
+              message: `⚡ Đã chuyển sang ngày ${formatDateDMY(targetDate || '')} cho ${court.ten_san}. Ca ${targetSlot.gio_bat_dau?.substring(0, 5)} - ${targetSlot.gio_ket_thuc?.substring(0, 5)} đã sẵn sàng trên lịch!`,
+            });
+          }
+        }}
+      />
 
       {/* MODAL ĐĂNG NHẬP / ĐĂNG KÝ ROOT LEVEL */}
       <Login

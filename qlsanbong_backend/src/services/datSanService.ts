@@ -284,7 +284,7 @@ export const capNhatLichCoDinh = async (params: {
         .input('don_gia_moi_buoi', sql.Decimal(10, 2), params.don_gia_moi_buoi !== undefined ? params.don_gia_moi_buoi : null)
         .input('tien_coc', sql.Decimal(10, 2), params.tien_coc !== undefined ? params.tien_coc : null)
         .input('trang_thai', sql.VarChar(30), params.trang_thai || null)
-        .input('ghi_chu', sql.NVarChar(sql.MAX), params.ghi_chu || null)
+        .input('ghi_chu', sql.NVarChar(sql.MAX), params.ghi_chu !== undefined ? (params.ghi_chu ? params.ghi_chu.trim() : null) : null)
         .execute('sp_CapNhatLichCoDinh');
     return {
         hop_dong: result.recordsets[0]?.[0] || null,

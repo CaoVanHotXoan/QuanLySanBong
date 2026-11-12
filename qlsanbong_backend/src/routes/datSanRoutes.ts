@@ -48,6 +48,9 @@ router.post('/vao-san/:id', datSanController.vaoSan);
 // Lấy lịch đặt sân theo ngày
 router.get('/lich-san', datSanController.layLichSan);
 
+// Tìm kiếm ngày và ca trống cho khách hàng
+router.get('/tim-ca-trong', datSanController.timKiemCaTrong);
+
 // Lấy lịch sử đặt sân của khách hàng (CSDL SQL Server)
 router.get('/lich-su-khach-hang', datSanController.layLichSuKhachHang);
 
