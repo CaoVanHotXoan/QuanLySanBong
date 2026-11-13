@@ -29,14 +29,15 @@ const thanhToanRoutes_1 = __importDefault(require("./src/routes/thanhToanRoutes"
 const baoCaoRoutes_1 = __importDefault(require("./src/routes/baoCaoRoutes"));
 const uploadRoutes_1 = __importDefault(require("./src/routes/uploadRoutes"));
 const contentRoutes_1 = __importDefault(require("./src/routes/contentRoutes"));
+const reviewRoutes_1 = __importDefault(require("./src/routes/reviewRoutes"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // Cấu hình Middleware
 app.use((0, cors_1.default)());
 app.use((0, compression_1.default)()); // Nén toàn bộ dữ liệu phản hồi API (Gzip/Brotli) giúp giảm 60-80% băng thông
-app.use(express_1.default.json());
-app.use(express_1.default.urlencoded({ extended: true }));
-app.use(express_1.default.text({ type: ['text/plain', 'text/*'] }));
+app.use(express_1.default.json({ limit: '50mb' }));
+app.use(express_1.default.urlencoded({ limit: '50mb', extended: true }));
+app.use(express_1.default.text({ type: ['text/plain', 'text/*'], limit: '50mb' }));
 // Trang chào mừng & Kiểm tra trạng thái máy chủ
 app.get('/', (req, res) => {
     res.status(200).json({
@@ -52,6 +53,7 @@ app.get('/', (req, res) => {
             thanh_toan: '/api/thanh-toan',
             bao_cao: '/api/bao-cao',
             upload: '/api/upload',
+            reviews: '/api/reviews',
             content: '/api (tin-tuc, about-us, lien-he, banner)'
         }
     });
@@ -63,6 +65,7 @@ app.use('/api/dich-vu', dichVuRoutes_1.default);
 app.use('/api/thanh-toan', thanhToanRoutes_1.default);
 app.use('/api/bao-cao', baoCaoRoutes_1.default);
 app.use('/api/upload', uploadRoutes_1.default);
+app.use('/api/reviews', reviewRoutes_1.default);
 app.use('/api', contentRoutes_1.default);
 // Cung cấp giao diện Swagger UI trực quan tương tác (/api-docs)
 try {

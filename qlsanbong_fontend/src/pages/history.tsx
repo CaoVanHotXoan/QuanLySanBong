@@ -32,7 +32,9 @@ import {
   FileText,
   Sun,
   Moon,
-  Lock
+  Lock,
+  XCircle,
+  Landmark
 } from 'lucide-react';
 
 // 1. Định nghĩa Interface đơn đặt sân lấy từ CSDL SQL Server
@@ -56,6 +58,13 @@ export interface IDonDatSan {
   tien_coc?: number;
   tien_da_nhan?: number;
   tien_thieu?: number;
+  trang_thai_hoan?: string;
+  so_tien_hoan?: number;
+  ty_le_hoan?: number;
+  ten_ngan_hang?: string;
+  so_tai_khoan?: string;
+  ten_chu_tai_khoan?: string;
+  ngay_chuyen_khoan?: string;
   chi_tiet_dich_vu?: Array<{
     ma_dich_vu: number;
     ten_dich_vu: string;
@@ -121,6 +130,119 @@ export default function History() {
   const [isPaymentSuccess, setIsPaymentSuccess] = useState<boolean>(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [payOSAlertMessage, setPayOSAlertMessage] = useState<string>('');
+
+  // State Modal Hủy Sân & Hoàn Tiền
+  const [cancelModalOrder, setCancelModalOrder] = useState<IDonDatSan | null>(null);
+  const [cancelBankName, setCancelBankName] = useState<string>('MB Bank');
+  const [cancelBankAccount, setCancelBankAccount] = useState<string>('');
+  const [cancelAccountHolder, setCancelAccountHolder] = useState<string>('');
+  const [cancelReason, setCancelReason] = useState<string>('Bận việc đột xuất');
+  const [isSubmittingCancel, setIsSubmittingCancel] = useState<boolean>(false);
+
+  // Helper tính toán tỷ lệ và số tiền hoàn khi hủy đơn
+  const calculateCancelRefund = useCallback((order: IDonDatSan | null) => {
+    if (!order || !order.ngay_da) return { hoursLeft: 0, refundRate: 0, refundAmount: 0, totalPaid: 0 };
+    
+    let matchDateTime: Date;
+    const timeParts = (order.gio_bat_dau || '00:00').split(':');
+    const h = parseInt(timeParts[0] || '0', 10);
+    const m = parseInt(timeParts[1] || '0', 10);
+
+    if (order.ngay_da.includes('-')) {
+      const parts = order.ngay_da.split('-');
+      if (parts[0].length === 4) {
+        matchDateTime = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), h, m);
+      } else {
+        matchDateTime = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10), h, m);
+      }
+    } else {
+      matchDateTime = new Date(order.ngay_da);
+      matchDateTime.setHours(h, m, 0, 0);
+    }
+
+    const now = new Date();
+    const hoursLeft = Math.max(0, (matchDateTime.getTime() - now.getTime()) / (1000 * 60 * 60));
+
+    let refundRate = 0;
+    if (hoursLeft >= 24) {
+      refundRate = 100;
+    } else if (hoursLeft >= 12) {
+      refundRate = 50;
+    } else {
+      refundRate = 0;
+    }
+
+    const totalPaid = Number(order.tien_da_nhan || 0);
+    const refundAmount = Math.round((totalPaid * refundRate) / 100);
+
+    return { hoursLeft, refundRate, refundAmount, totalPaid };
+  }, []);
+
+  const handleOpenCancelModal = (order: IDonDatSan) => {
+    setCancelModalOrder(order);
+    setCancelBankName('MB Bank');
+    setCancelBankAccount('');
+    setCancelAccountHolder(order.ten_khach_hang || currentUser?.ho_ten || '');
+    setCancelReason('Bận việc đột xuất');
+  };
+
+  const handleConfirmCancelOrder = async () => {
+    if (!cancelModalOrder) return;
+    const { refundRate } = calculateCancelRefund(cancelModalOrder);
+
+    if (refundRate > 0 && cancelBankName !== 'Nhận tiền mặt tại quầy') {
+      if (!cancelBankAccount.trim()) {
+        setToastMessage({ type: 'error', text: 'Vui lòng nhập số tài khoản ngân hàng để nhận tiền hoàn!' });
+        return;
+      }
+      if (!cancelAccountHolder.trim()) {
+        setToastMessage({ type: 'error', text: 'Vui lòng nhập tên chủ tài khoản ngân hàng!' });
+        return;
+      }
+    }
+
+    try {
+      setIsSubmittingCancel(true);
+      const token = typeof window !== 'undefined' ? (localStorage.getItem('auth_token') || localStorage.getItem('token')) : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_BASE_URL}/dat-san/huy-don`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          ma_don_dat: cancelModalOrder.id,
+          ma_nguoi_dung: currentUser?.id || currentUser?.ma_nguoi_dung || (cancelModalOrder as any).ma_nguoi_dung,
+          ly_do_huy: cancelReason,
+          ten_ngan_hang: cancelBankName,
+          so_tai_khoan: cancelBankName === 'Nhận tiền mặt tại quầy' ? 'TIEN_MAT' : cancelBankAccount.trim(),
+          ten_chu_tai_khoan: cancelAccountHolder.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setToastMessage({
+          type: 'success',
+          text: `✅ Đã hủy sân #${cancelModalOrder.id} thành công! Đang chờ Ban Quản Lý hoàn tiền.`
+        });
+        setCancelModalOrder(null);
+        fetchBookingHistory(currentUser);
+      } else {
+        setToastMessage({
+          type: 'error',
+          text: data.message || 'Không thể hủy đơn đặt sân, vui lòng thử lại!'
+        });
+      }
+    } catch (err: any) {
+      setToastMessage({
+        type: 'error',
+        text: err.message || 'Lỗi kết nối khi hủy đơn đặt sân!'
+      });
+    } finally {
+      setIsSubmittingCancel(false);
+    }
+  };
 
   // Helper kiểm tra đơn đặt đã qua ngày/giờ thi đấu hay chưa
   const isOrderPastTime = useCallback((item: IDonDatSan) => {
@@ -465,9 +587,33 @@ export default function History() {
     .reduce((sum, don) => sum + (Number(don.tong_tien) || 0), 0);
 
   // Helper hiển thị badge trạng thái chuẩn hóa đồng bộ toàn hệ thống
-  const renderStatusBadge = (status: string, tienThieu: number = 0, tienDaNhan: number = 0, tongTien: number = 0) => {
+  const renderStatusBadge = (status: string, tienThieu: number = 0, tienDaNhan: number = 0, tongTien: number = 0, item?: IDonDatSan) => {
     const s = (status || '').toUpperCase();
     if (s.includes('HUY')) {
+      if (item?.trang_thai_hoan === 'CHO_HOAN') {
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-sm animate-pulse" title="Đơn đã hủy - Đang chờ BQL chuyển khoản hoàn tiền">
+            <Clock className="w-3 h-3 text-amber-400" />
+            Chờ hoàn tiền {item.so_tien_hoan ? `(${formatCurrency(item.so_tien_hoan)})` : ''}
+          </span>
+        );
+      }
+      if (item?.trang_thai_hoan === 'DA_HOAN') {
+        if (item.so_tien_hoan && item.so_tien_hoan > 0) {
+          return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm" title="Đã hoàn tiền thành công">
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              Đã hoàn tiền ({formatCurrency(item.so_tien_hoan)})
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-500/20 text-slate-400 border border-slate-500/30" title="Đã hủy đơn (Hủy sát giờ hoặc không hoàn)">
+            <AlertCircle className="w-3 h-3 text-slate-400" />
+            Đã hủy (0đ hoàn)
+          </span>
+        );
+      }
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">
           <AlertCircle className="w-3 h-3 text-rose-400" />
@@ -910,10 +1056,10 @@ export default function History() {
 
                         {/* Trạng thái thanh toán */}
                         <td className="py-4 px-4 text-center whitespace-nowrap">
-                          {renderStatusBadge(item.trang_thai, tienThieu, tienDaNhan, item.tong_tien)}
+                          {renderStatusBadge(item.trang_thai, tienThieu, tienDaNhan, item.tong_tien, item)}
                         </td>
 
-                        {/* Hành động: Chỉ hiển thị duy nhất nút Xem chi tiết */}
+                        {/* Hành động: Nút Xem chi tiết & Hủy đơn */}
                         <td className="py-4 px-4 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
@@ -926,8 +1072,23 @@ export default function History() {
                               title="Xem chi tiết đơn đặt sân & hóa đơn"
                             >
                               <Eye className="w-3.5 h-3.5 text-cyan-500" />
-                              <span>Xem chi tiết</span>
+                              <span>Chi tiết</span>
                             </button>
+
+                            {!isCancelled && !isPast && item.trang_thai !== 'HOAN_THANH' && (
+                              <button
+                                onClick={() => handleOpenCancelModal(item)}
+                                className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 ${
+                                  isDarkMode
+                                    ? 'bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 border-rose-800/60 hover:border-rose-600'
+                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-800 border-rose-200'
+                                }`}
+                                title="Yêu cầu hủy đơn đặt sân & hoàn tiền"
+                              >
+                                <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                                <span>Hủy sân</span>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1346,9 +1507,39 @@ export default function History() {
                   </div>
                   <div>
                     <span className={`block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>Trạng thái:</span>
-                    <span className="mt-0.5 block">{renderStatusBadge(selectedOrderForDetail.trang_thai, selectedOrderForDetail.tien_thieu || 0, selectedOrderForDetail.tien_da_nhan || 0, selectedOrderForDetail.tong_tien)}</span>
+                    <span className="mt-0.5 block">{renderStatusBadge(selectedOrderForDetail.trang_thai, selectedOrderForDetail.tien_thieu || 0, selectedOrderForDetail.tien_da_nhan || 0, selectedOrderForDetail.tong_tien, selectedOrderForDetail)}</span>
                   </div>
                 </div>
+
+                {/* Khối thông báo hủy đơn & hoàn tiền (nếu đã hủy) */}
+                {selectedOrderForDetail.trang_thai?.includes('HUY') && (
+                  <div className={`p-4 rounded-2xl border text-xs space-y-1.5 ${
+                    selectedOrderForDetail.trang_thai_hoan === 'DA_HOAN'
+                      ? isDarkMode ? 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300' : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                      : isDarkMode ? 'bg-amber-950/40 border-amber-800/50 text-amber-300' : 'bg-amber-50 border-amber-300 text-amber-900'
+                  }`}>
+                    <div className="flex items-center gap-2 font-bold text-sm">
+                      {selectedOrderForDetail.trang_thai_hoan === 'DA_HOAN' ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          <span>Đã chuyển khoản hoàn tiền thành công</span>
+                        </>
+                      ) : (
+                        <>
+                          <Clock className="w-4 h-4 text-amber-500 animate-pulse" />
+                          <span>Đơn đã hủy • Đang chờ Ban Quản Lý chuyển khoản hoàn tiền</span>
+                        </>
+                      )}
+                    </div>
+                    <div><strong>Số tiền hoàn:</strong> {formatCurrency(selectedOrderForDetail.so_tien_hoan || 0)} ({selectedOrderForDetail.ty_le_hoan || 0}%)</div>
+                    {selectedOrderForDetail.so_tai_khoan && (
+                      <div><strong>Tài khoản nhận:</strong> {selectedOrderForDetail.so_tai_khoan} - {selectedOrderForDetail.ten_ngan_hang} (Chủ TK: {selectedOrderForDetail.ten_chu_tai_khoan || selectedOrderForDetail.ten_khach_hang})</div>
+                    )}
+                    {selectedOrderForDetail.ngay_chuyen_khoan && (
+                      <div><strong>Thời gian chuyển:</strong> {new Date(selectedOrderForDetail.ngay_chuyen_khoan).toLocaleString('vi-VN')}</div>
+                    )}
+                  </div>
+                )}
 
                 {selectedOrderForDetail.ghi_chu && (
                   <div className={`pt-2 border-t text-[11px] ${
@@ -1478,6 +1669,20 @@ export default function History() {
                 }
                 return null;
               })()}
+              {!isOrderPastTime(selectedOrderForDetail) && !selectedOrderForDetail.trang_thai?.includes('HUY') && selectedOrderForDetail.trang_thai !== 'HOAN_THANH' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const orderToCancel = selectedOrderForDetail;
+                    setSelectedOrderForDetail(null);
+                    handleOpenCancelModal(orderToCancel);
+                  }}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all flex items-center gap-1.5 cursor-pointer hover:scale-105"
+                >
+                  <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                  <span>Hủy sân này</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedOrderForDetail(null)}
@@ -1492,6 +1697,230 @@ export default function History() {
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: HỦY ĐƠN ĐẶT SÂN & HOÀN TIỀN */}
+      {/* ========================================================================= */}
+      {cancelModalOrder && (() => {
+        const { hoursLeft, refundRate, refundAmount, totalPaid } = calculateCancelRefund(cancelModalOrder);
+
+        const banks = [
+          'MB Bank',
+          'Vietcombank',
+          'Techcombank',
+          'VietinBank',
+          'BIDV',
+          'Agribank',
+          'ACB',
+          'VPBank',
+          'TPBank',
+          'MoMo',
+          'Nhận tiền mặt tại quầy'
+        ];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+            <div className={`border rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] transition-colors ${
+              isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+            }`}>
+              {/* Header */}
+              <div className={`px-6 py-4 border-b flex items-center justify-between transition-colors ${
+                isDarkMode ? 'border-slate-800 bg-slate-950/60' : 'border-slate-200 bg-slate-50'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-rose-500/15 text-rose-500 border border-rose-500/30">
+                    <XCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-rose-500">Xác Nhận Hủy Đặt Sân</h3>
+                    <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                      Mã đơn #{cancelModalOrder.id} • {cancelModalOrder.ten_san}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setCancelModalOrder(null)}
+                  disabled={isSubmittingCancel}
+                  className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                    isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 overflow-y-auto space-y-4 text-xs">
+                {/* Thông tin đơn */}
+                <div className={`p-4 rounded-2xl border space-y-2 ${
+                  isDarkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+                }`}>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Sân bóng:</span>
+                    <span className="font-bold">{cancelModalOrder.ten_san}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Thời gian đá:</span>
+                    <span className="font-mono font-bold">{formatDateDMY(cancelModalOrder.ngay_da)} ({cancelModalOrder.gio_bat_dau} - {cancelModalOrder.gio_ket_thuc})</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Số tiền bạn đã trả:</span>
+                    <span className="font-bold text-sm text-cyan-400">{formatCurrency(totalPaid)}</span>
+                  </div>
+                </div>
+
+                {/* Chính sách hoàn tiền */}
+                <div className={`p-4 rounded-2xl border space-y-2 ${
+                  refundRate === 100
+                    ? isDarkMode ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300' : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                    : refundRate === 50
+                    ? isDarkMode ? 'bg-amber-950/40 border-amber-800/60 text-amber-300' : 'bg-amber-50 border-amber-300 text-amber-900'
+                    : isDarkMode ? 'bg-rose-950/40 border-rose-800/60 text-rose-300' : 'bg-rose-50 border-rose-300 text-rose-900'
+                }`}>
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="text-sm">Chính Sách Hoàn Tiền:</span>
+                    <span className="text-sm px-2.5 py-0.5 rounded-full font-black bg-black/20 border border-current">
+                      Tỷ lệ hoàn: {refundRate}%
+                    </span>
+                  </div>
+                  <div className="text-[11px] leading-relaxed">
+                    {hoursLeft >= 24 ? (
+                      <span>✅ Bạn đang hủy trước giờ đá <strong>{hoursLeft.toFixed(1)} giờ</strong> (&ge; 24h), được hoàn đủ <strong>100%</strong> số tiền đã trả.</span>
+                    ) : hoursLeft >= 12 ? (
+                      <span>⚠️ Bạn đang hủy trước giờ đá <strong>{hoursLeft.toFixed(1)} giờ</strong> (từ 12h - 24h), được hoàn <strong>50%</strong> số tiền đã trả (phí giữ sân 50%).</span>
+                    ) : (
+                      <span>❌ Bạn đang hủy sát giờ đá <strong>{hoursLeft.toFixed(1)} giờ</strong> (&lt; 12h). Theo quy định sân bóng không được hoàn tiền.</span>
+                    )}
+                  </div>
+                  <div className="pt-2 border-t border-current/20 flex items-center justify-between">
+                    <span className="font-bold uppercase tracking-wider text-[11px]">Số tiền hoàn thực tế:</span>
+                    <span className="font-black text-base">{formatCurrency(refundAmount)}</span>
+                  </div>
+                </div>
+
+                {/* Form thông tin ngân hàng nhận hoàn tiền */}
+                {refundRate > 0 && (
+                  <div className={`p-4 rounded-2xl border space-y-3 ${
+                    isDarkMode ? 'bg-slate-950/50 border-slate-800' : 'bg-slate-50/80 border-slate-200'
+                  }`}>
+                    <div className="font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5 text-cyan-400">
+                      <Landmark className="w-3.5 h-3.5" />
+                      <span>Thông Tin Nhận Tiền Hoàn</span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="block text-[11px] font-semibold text-slate-400">Hình thức nhận:</label>
+                      <select
+                        value={cancelBankName}
+                        onChange={(e) => setCancelBankName(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-xl border text-xs font-medium outline-none transition-all ${
+                          isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                        }`}
+                      >
+                        {banks.map((b) => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {cancelBankName !== 'Nhận tiền mặt tại quầy' && (
+                      <>
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-semibold text-slate-400">Số tài khoản thụ hưởng: *</label>
+                          <input
+                            type="text"
+                            placeholder="Nhập số tài khoản ngân hàng..."
+                            value={cancelBankAccount}
+                            onChange={(e) => setCancelBankAccount(e.target.value)}
+                            className={`w-full px-3 py-2 rounded-xl border text-xs font-mono font-bold outline-none transition-all ${
+                              isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-cyan-500' : 'bg-white border-slate-300 text-slate-900 focus:border-cyan-600'
+                            }`}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-semibold text-slate-400">Tên chủ tài khoản: *</label>
+                          <input
+                            type="text"
+                            placeholder="NGUYEN VAN A..."
+                            value={cancelAccountHolder}
+                            onChange={(e) => setCancelAccountHolder(e.target.value.toUpperCase())}
+                            className={`w-full px-3 py-2 rounded-xl border text-xs font-bold uppercase outline-none transition-all ${
+                              isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-cyan-500' : 'bg-white border-slate-300 text-slate-900 focus:border-cyan-600'
+                            }`}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {cancelBankName === 'Nhận tiền mặt tại quầy' && (
+                      <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[11px]">
+                        ℹ️ Quý khách vui lòng đến quầy lễ tân sân bóng đọc mã đơn <strong>#{cancelModalOrder.id}</strong> để nhân viên gửi lại tiền mặt trực tiếp.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Lý do hủy */}
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-slate-400">Lý do hủy đơn:</label>
+                  <select
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    className={`w-full px-3 py-2 rounded-xl border text-xs font-medium outline-none transition-all ${
+                      isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                  >
+                    <option value="Bận việc đột xuất">Bận việc đột xuất</option>
+                    <option value="Thời tiết xấu / Mưa to">Thời tiết xấu / Mưa to</option>
+                    <option value="Đội bóng thiếu người">Đội bóng thiếu người</option>
+                    <option value="Thay đổi kế hoạch thi đấu">Thay đổi kế hoạch thi đấu</option>
+                    <option value="Khác">Lý do khác</option>
+                  </select>
+                </div>
+
+                <div className="text-[11px] text-amber-500/90 italic">
+                  * Sau khi bạn bấm xác nhận, khung giờ đặt sân sẽ được giải phóng ngay lập tức. Phiếu hoàn tiền sẽ được chuyển tới Ban Quản Lý để hoàn tất chuyển tiền.
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className={`p-4 border-t flex items-center justify-end gap-2 ${
+                isDarkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'
+              }`}>
+                <button
+                  type="button"
+                  onClick={() => setCancelModalOrder(null)}
+                  disabled={isSubmittingCancel}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                  }`}
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCancelOrder}
+                  disabled={isSubmittingCancel}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-rose-500/20 disabled:opacity-50"
+                >
+                  {isSubmittingCancel ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Đang xử lý hủy...</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Xác Nhận Hủy Sân</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
     </>

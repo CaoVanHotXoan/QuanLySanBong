@@ -72,7 +72,9 @@ import {
   Send,
   Save,
   Menu,
-  Code2
+  Code2,
+  RotateCcw,
+  Landmark
 } from 'lucide-react';
 import { AuthUser } from './Login/login';
 import { contentService, BannerItem, LienHePayload, LoaiTinTuc, TinTucItem, AboutUsData } from '../services/contentService';
@@ -274,6 +276,12 @@ export interface LichSuHoanTien {
   ty_le_hoan: number;
   ly_do_huy: string;
   ngay_hoan: string;
+  ten_ngan_hang?: string;
+  so_tai_khoan?: string;
+  ten_chu_tai_khoan?: string;
+  trang_thai_hoan?: string;
+  ngay_chuyen_khoan?: string;
+  ghi_chu_admin?: string;
 }
 
 // 10. Nguoi_Dung
@@ -664,6 +672,29 @@ export default function AdminDashboard() {
   const [inventoryList, setInventoryList] = useState<PhieuNhapKho[]>([]);
   const [paymentList, setPaymentList] = useState<ThanhToan[]>([]);
   const [refundList, setRefundList] = useState<LichSuHoanTien[]>([]);
+  const [adminRefundQRModal, setAdminRefundQRModal] = useState<LichSuHoanTien | null>(null);
+  const [confirmRefundModal, setConfirmRefundModal] = useState<{
+    isOpen: boolean;
+    data: LichSuHoanTien | null;
+    ghiChuAdmin: string;
+    isSubmitting: boolean;
+  }>({
+    isOpen: false,
+    data: null,
+    ghiChuAdmin: '',
+    isSubmitting: false
+  });
+  const [revertRefundModal, setRevertRefundModal] = useState<{
+    isOpen: boolean;
+    data: LichSuHoanTien | null;
+    lyDoHoanTac: string;
+    isSubmitting: boolean;
+  }>({
+    isOpen: false,
+    data: null,
+    lyDoHoanTac: '',
+    isSubmitting: false
+  });
   const [khungGioList, setKhungGioList] = useState<KhungGio[]>([]);
   const [userList, setUserList] = useState<NguoiDung[]>([]);
   const [roleList, setRoleList] = useState<VaiTro[]>([]);
@@ -3134,6 +3165,87 @@ export default function AdminDashboard() {
       setToastMessage({ type: 'success', message: '✅ Đã cập nhật phiếu hoàn tiền!' });
     }
     setRefundModal({ isOpen: false, mode: 'ADD', data: {} });
+  };
+
+  const handleConfirmRefundPaid = (refundItem: LichSuHoanTien) => {
+    handleOpenConfirmPaidModal(refundItem);
+  };
+
+  const handleOpenConfirmPaidModal = (refundItem: LichSuHoanTien) => {
+    setConfirmRefundModal({
+      isOpen: true,
+      data: refundItem,
+      ghiChuAdmin: 'Chuyển khoản VietQR thành công qua Ngân hàng',
+      isSubmitting: false
+    });
+  };
+
+  const handleExecuteConfirmPaid = async () => {
+    if (!confirmRefundModal.data) return;
+    try {
+      setConfirmRefundModal(prev => ({ ...prev, isSubmitting: true }));
+      const res = await fetch(`${API_BASE}/thanh-toan/hoan-tien/${confirmRefundModal.data.id}/xac-nhan`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ghi_chu_admin: confirmRefundModal.ghiChuAdmin.trim() || 'Quản trị viên đã chuyển khoản hoàn tất'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToastMessage({
+          type: 'success',
+          message: `✅ Đã xác nhận hoàn tiền #${confirmRefundModal.data.id} thành công! Hệ thống đã gửi email biên lai cho khách.`
+        });
+        setConfirmRefundModal({ isOpen: false, data: null, ghiChuAdmin: '', isSubmitting: false });
+        setAdminRefundQRModal(null);
+        loadAllDataFromBackend();
+      } else {
+        setToastMessage({ type: 'error', message: data.message || 'Lỗi khi xác nhận hoàn tiền' });
+      }
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối khi xác nhận hoàn tiền' });
+    } finally {
+      setConfirmRefundModal(prev => ({ ...prev, isSubmitting: false }));
+    }
+  };
+
+  const handleOpenRevertModal = (refundItem: LichSuHoanTien) => {
+    setRevertRefundModal({
+      isOpen: true,
+      data: refundItem,
+      lyDoHoanTac: 'Quản trị viên chưa thực chuyển hoặc hoàn tác để kiểm tra lại',
+      isSubmitting: false
+    });
+  };
+
+  const handleExecuteRevertRefund = async () => {
+    if (!revertRefundModal.data) return;
+    try {
+      setRevertRefundModal(prev => ({ ...prev, isSubmitting: true }));
+      const res = await fetch(`${API_BASE}/thanh-toan/hoan-tien/${revertRefundModal.data.id}/hoan-tac`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ly_do_hoan_tac: revertRefundModal.lyDoHoanTac.trim() || 'Quản trị viên hoàn tác về Chờ hoàn tiền'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToastMessage({
+          type: 'success',
+          message: `🔄 Đã hoàn tác phiếu #${revertRefundModal.data.id} về trạng thái "Chờ chuyển tiền"! Bạn có thể mở VietQR để chuyển lại.`
+        });
+        setRevertRefundModal({ isOpen: false, data: null, lyDoHoanTac: '', isSubmitting: false });
+        loadAllDataFromBackend();
+      } else {
+        setToastMessage({ type: 'error', message: data.message || 'Lỗi khi hoàn tác phiếu hoàn tiền' });
+      }
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối khi hoàn tác phiếu' });
+    } finally {
+      setRevertRefundModal(prev => ({ ...prev, isSubmitting: false }));
+    }
   };
 
   const handleDeleteRefund = (id: number, info?: string) => {
@@ -5776,27 +5888,88 @@ export default function AdminDashboard() {
                   <table className="w-full text-left text-xs min-w-[750px]">
                     <thead>
                       <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4">KHÁCH HÀNG</th>
+                        <th className="p-4">ĐƠN / KHÁCH HÀNG</th>
                         <th className="p-4">TIỀN HOÀN</th>
                         <th className="p-4">TỶ LỆ</th>
-                        <th className="p-4">LÝ DO HỦY SÂN</th>
-                        <th className="p-4">NGÀY HOÀN</th>
+                        <th className="p-4">THÔNG TIN NHẬN TIỀN</th>
+                        <th className="p-4">TRẠNG THÁI</th>
+                        <th className="p-4">LÝ DO HỦY</th>
+                        <th className="p-4">NGÀY TẠO</th>
                         <th className="p-4 text-right">THAO TÁC</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
                       {pagedData.items.map((h) => (
                         <tr key={h.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
-                          <td className="p-4 font-black">{h.ten_khach_hang || 'Khách Đặt'}</td>
+                          <td className="p-4 font-black">
+                            <div>{h.ten_khach_hang || 'Khách Đặt'}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">
+                              Đơn #{h.ma_don_dat} {h.ten_san ? `• ${h.ten_san}` : ''}
+                            </div>
+                            {h.so_dien_thoai && (
+                              <div className="text-[10px] text-slate-400 font-mono">{h.so_dien_thoai}</div>
+                            )}
+                          </td>
                           <td className="p-4 font-black text-rose-600 dark:text-rose-400 text-sm">
                             {Number(h.so_tien_hoan).toLocaleString('vi-VN')} đ
                           </td>
                           <td className="p-4 font-black">
                             <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-500">{h.ty_le_hoan}%</span>
                           </td>
+                          <td className="p-4">
+                            {h.so_tai_khoan ? (
+                              <div className="space-y-0.5">
+                                <div className="font-mono font-bold text-cyan-500">{h.so_tai_khoan}</div>
+                                <div className="text-[11px] text-slate-600 dark:text-slate-300 font-medium">{h.ten_ngan_hang}</div>
+                                {h.ten_chu_tai_khoan && (
+                                  <div className="text-[10px] text-slate-400 uppercase font-bold">{h.ten_chu_tai_khoan}</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic">Chưa có STK</span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            {h.trang_thai_hoan === 'DA_HOAN' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                <Check className="w-3 h-3" /> Đã hoàn tiền
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30 animate-pulse">
+                                <Clock className="w-3 h-3" /> Chờ chuyển tiền
+                              </span>
+                            )}
+                          </td>
                           <td className="p-4 text-slate-600 dark:text-slate-300">{h.ly_do_huy}</td>
                           <td className="p-4 font-mono text-slate-600 dark:text-slate-300 font-bold">{formatVNDate(h.ngay_hoan)}</td>
                           <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                            {h.trang_thai_hoan !== 'DA_HOAN' && Number(h.so_tien_hoan) > 0 && h.so_tai_khoan && h.so_tai_khoan !== 'TIEN_MAT' && (
+                              <button
+                                onClick={() => setAdminRefundQRModal(h)}
+                                className="p-2 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 border border-cyan-500/30 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
+                                title="Mở mã VietQR chuyển khoản nhanh cho khách"
+                              >
+                                <QrCode className="w-3.5 h-3.5" /> VietQR
+                              </button>
+                            )}
+                            {h.trang_thai_hoan !== 'DA_HOAN' && (
+                              <button
+                                onClick={() => handleConfirmRefundPaid(h)}
+                                className="p-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
+                                title="Xác nhận đã chuyển khoản hoàn tất"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Đã chuyển
+                              </button>
+                            )}
+                            {h.trang_thai_hoan === 'DA_HOAN' && (
+                              <button
+                                onClick={() => handleOpenRevertModal(h)}
+                                className="p-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
+                                title="Hoàn tác về trạng thái Chờ chuyển tiền nếu Quản lý bấm nhầm hoặc chưa thực chuyển"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" /> Hoàn tác
+                              </button>
+                            )}
                             <button
                               onClick={() => setRefundModal({ isOpen: true, mode: 'EDIT', data: h })}
                               className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
@@ -8396,6 +8569,260 @@ export default function AdminDashboard() {
                 <button type="submit" className="px-5 py-2 rounded-xl font-black bg-rose-600 text-white cursor-pointer">Lưu Phiếu Hoàn</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal VietQR Hoàn Tiền Nhanh Cho Admin */}
+      {adminRefundQRModal && (() => {
+        const getBankBin = (name?: string): string => {
+          if (!name) return 'MB';
+          const n = name.toUpperCase();
+          if (n.includes('MB')) return 'MB';
+          if (n.includes('VIETCOMBANK') || n.includes('VCB')) return 'VCB';
+          if (n.includes('TECHCOMBANK') || n.includes('TCB')) return 'TCB';
+          if (n.includes('VIETINBANK') || n.includes('CTG')) return 'CTG';
+          if (n.includes('BIDV')) return 'BIDV';
+          if (n.includes('ACB')) return 'ACB';
+          if (n.includes('AGRIBANK') || n.includes('VBA')) return 'VBA';
+          if (n.includes('VPBANK') || n.includes('VPB')) return 'VPB';
+          if (n.includes('TPBANK') || n.includes('TPB')) return 'TPB';
+          return 'MB';
+        };
+
+        const bankBin = getBankBin(adminRefundQRModal.ten_ngan_hang);
+        const qrUrl = `https://img.vietqr.io/image/${bankBin}-${adminRefundQRModal.so_tai_khoan}-compact2.png?amount=${adminRefundQRModal.so_tien_hoan}&addInfo=HOAN%20TIEN%20DON%20${adminRefundQRModal.ma_don_dat}&accountName=${encodeURIComponent(adminRefundQRModal.ten_chu_tai_khoan || '')}`;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className={`border rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl p-6 text-center ${
+              isDarkMode ? 'bg-[#0f172a] border-emerald-900/60 text-white' : 'bg-white border-slate-200 text-slate-900'
+            }`}>
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="font-black text-sm flex items-center gap-1.5 text-cyan-400">
+                  <QrCode className="w-4 h-4" /> VietQR Hoàn Tiền 1 Chạm
+                </h4>
+                <button
+                  onClick={() => setAdminRefundQRModal(null)}
+                  className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-400 mb-3">
+                Mở ứng dụng ngân hàng quét mã để chuyển khoản chính xác tới khách hàng:
+              </p>
+
+              <div className="p-3 bg-white rounded-xl inline-block shadow-lg mx-auto">
+                <img
+                  src={qrUrl}
+                  alt="VietQR Refund"
+                  className="w-56 h-auto mx-auto rounded"
+                />
+              </div>
+
+              <div className="mt-3 text-xs space-y-1 text-left bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                <div><strong>Khách hàng:</strong> {adminRefundQRModal.ten_khach_hang || adminRefundQRModal.ten_chu_tai_khoan}</div>
+                <div><strong>Số tiền:</strong> <span className="text-rose-400 font-bold">{Number(adminRefundQRModal.so_tien_hoan).toLocaleString('vi-VN')} đ</span></div>
+                <div><strong>STK:</strong> <span className="font-mono text-cyan-400 font-bold">{adminRefundQRModal.so_tai_khoan}</span> ({adminRefundQRModal.ten_ngan_hang})</div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => setAdminRefundQRModal(null)}
+                  className="flex-1 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300"
+                >
+                  Đóng
+                </button>
+                <button
+                  onClick={() => handleConfirmRefundPaid(adminRefundQRModal)}
+                  className="flex-1 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-1"
+                >
+                  <Check className="w-3.5 h-3.5" /> Đã chuyển xong
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal Xác Nhận Đã Chuyển Tiền Hoàn Cho Khách (Thay thế window.confirm) */}
+      {confirmRefundModal.isOpen && confirmRefundModal.data && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${
+            isDarkMode ? 'bg-[#0f172a] border-emerald-500/40 text-white' : 'bg-white border-slate-300 text-slate-900'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-700/50 mb-4">
+              <h3 className="font-black text-base flex items-center gap-2 text-emerald-400">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                Xác Nhận Đã Hoàn Tiền
+              </h3>
+              <button
+                onClick={() => setConfirmRefundModal({ isOpen: false, data: null, ghiChuAdmin: '', isSubmitting: false })}
+                className="cursor-pointer text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="text-center py-2 mb-4">
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/15 text-emerald-400 mb-2 border border-emerald-500/30">
+                <Landmark className="w-7 h-7" />
+              </div>
+              <p className="text-xs text-slate-400">Số tiền xác nhận hoàn lại</p>
+              <div className="text-2xl font-black text-emerald-400 tracking-tight mt-1">
+                {Number(confirmRefundModal.data.so_tien_hoan).toLocaleString('vi-VN')} đ
+              </div>
+            </div>
+
+            <div className={`p-3.5 rounded-2xl mb-4 text-xs space-y-2 border ${
+              isDarkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Khách hàng nhận:</span>
+                <span className="font-bold text-right">{confirmRefundModal.data.ten_khach_hang || confirmRefundModal.data.ten_chu_tai_khoan}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Ngân hàng:</span>
+                <span className="font-bold text-cyan-400">{confirmRefundModal.data.ten_ngan_hang || 'Chuyển khoản'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400">Số tài khoản:</span>
+                <span className="font-mono font-bold text-amber-400">{confirmRefundModal.data.so_tai_khoan || 'TIEN_MAT'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Mã đơn đặt sân:</span>
+                <span className="font-mono font-bold">#{confirmRefundModal.data.ma_don_dat}</span>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-400 mb-1.5">
+                Mã giao dịch / Ghi chú đối soát (tùy chọn):
+              </label>
+              <input
+                type="text"
+                value={confirmRefundModal.ghiChuAdmin}
+                onChange={(e) => setConfirmRefundModal(prev => ({ ...prev, ghiChuAdmin: e.target.value }))}
+                placeholder="VD: FT2411..., Chuyển qua MB Bank..."
+                className={`w-full px-3 py-2 text-xs rounded-xl border outline-none focus:ring-2 focus:ring-emerald-500 ${
+                  isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                }`}
+              />
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] mb-4 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+              <span>
+                <strong>Lưu ý:</strong> Sau khi bấm xác nhận, hệ thống sẽ đổi trạng thái thành <strong>Đã hoàn tiền</strong> và tự động gửi email thông báo kèm biên lai tới khách hàng.
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmRefundModal({ isOpen: false, data: null, ghiChuAdmin: '', isSubmitting: false })}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={confirmRefundModal.isSubmitting}
+                onClick={handleExecuteConfirmPaid}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/30 transition disabled:opacity-50"
+              >
+                {confirmRefundModal.isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Đang lưu...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Xác Nhận Đã Chuyển
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Hoàn Tác Trạng Thái Hoàn Tiền (Khi Quản lý lỡ bấm nhầm chưa chuyển) */}
+      {revertRefundModal.isOpen && revertRefundModal.data && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${
+            isDarkMode ? 'bg-[#0f172a] border-amber-500/40 text-white' : 'bg-white border-slate-300 text-slate-900'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-700/50 mb-4">
+              <h3 className="font-black text-base flex items-center gap-2 text-amber-400">
+                <RotateCcw className="w-5 h-5 text-amber-400" />
+                Hoàn Tác Về "Chờ Chuyển Tiền"
+              </h3>
+              <button
+                onClick={() => setRevertRefundModal({ isOpen: false, data: null, lyDoHoanTac: '', isSubmitting: false })}
+                className="cursor-pointer text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl mb-4 text-xs space-y-2 border bg-amber-500/10 border-amber-500/20 text-amber-200">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                <span>
+                  Bạn đang chuẩn bị hoàn tác phiếu hoàn tiền <strong>#{revertRefundModal.data.id}</strong> (Đơn <strong>#{revertRefundModal.data.ma_don_dat}</strong> - Số tiền: <strong>{Number(revertRefundModal.data.so_tien_hoan).toLocaleString('vi-VN')} đ</strong>).
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Thao tác này dùng khi Quản trị viên lỡ bấm nhầm <em>"Đã chuyển"</em> mà thực tế chưa chuyển tiền, hoặc giao dịch ngân hàng bị lỗi. Trạng thái sẽ trở về <strong>"Chờ chuyển tiền"</strong> và nút quét VietQR sẽ xuất hiện lại để bạn thực hiện lại.
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-400 mb-1.5">
+                Lý do hoàn tác:
+              </label>
+              <input
+                type="text"
+                value={revertRefundModal.lyDoHoanTac}
+                onChange={(e) => setRevertRefundModal(prev => ({ ...prev, lyDoHoanTac: e.target.value }))}
+                placeholder="VD: Quản lý lỡ bấm nhầm / Chưa thực chuyển..."
+                className={`w-full px-3 py-2 text-xs rounded-xl border outline-none focus:ring-2 focus:ring-amber-500 ${
+                  isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                }`}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setRevertRefundModal({ isOpen: false, data: null, lyDoHoanTac: '', isSubmitting: false })}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                disabled={revertRefundModal.isSubmitting}
+                onClick={handleExecuteRevertRefund}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white flex items-center justify-center gap-1.5 shadow-lg shadow-amber-600/30 transition disabled:opacity-50"
+              >
+                {revertRefundModal.isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Đang xử lý...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4" />
+                    Xác Nhận Hoàn Tác
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

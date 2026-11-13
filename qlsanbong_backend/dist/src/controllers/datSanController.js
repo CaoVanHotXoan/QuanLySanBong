@@ -55,10 +55,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.xoaLichCoDinh = exports.capNhatLichCoDinh = exports.huyLichCoDinh = exports.doiTrangThaiLichCoDinh = exports.themLichCoDinh = exports.kiemTraTrungLichCoDinh = exports.layChiTietLichCoDinh = exports.layDanhSachLichCoDinh = exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.datNhieuSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanDateForSql = exports.cleanTimeForSql = void 0;
+exports.timKiemCaTrong = exports.xoaLichCoDinh = exports.capNhatLichCoDinh = exports.huyLichCoDinh = exports.doiTrangThaiLichCoDinh = exports.themLichCoDinh = exports.kiemTraTrungLichCoDinh = exports.layChiTietLichCoDinh = exports.layDanhSachLichCoDinh = exports.banLeDichVu = exports.chuyenSanDaTiep = exports.xacNhanGiaHan = exports.kiemTraGiaHan = exports.vaoSan = exports.xoaDonDatVaThanhToan = exports.suaDonDatVaThanhToan = exports.themDonDatVaThanhToan = exports.resetKhungGio = exports.xoaKhungGio = exports.suaKhungGio = exports.themKhungGio = exports.layTatCaKhungGioAdmin = exports.layDanhSachKhungGio = exports.ketThucTranDau = exports.ketThucDaLinhHoat = exports.batDauDaLinhHoat = exports.datSanLinhHoat = exports.tinhGiaLinhHoat = exports.huyDonVaHoanCoc = exports.layLichSuKhachHang = exports.datSan = exports.datNhieuSan = exports.layLichSan = exports.layTatCaDonDat = exports.xoaKhungGioGia = exports.suaKhungGioGia = exports.themKhungGioGia = exports.layKhungGioGia = exports.xoaSanBong = exports.suaSanBong = exports.themSanBong = exports.xoaLoaiSan = exports.suaLoaiSan = exports.themLoaiSan = exports.layDanhSachLoaiSan = exports.layDanhSachSan = exports.cleanDateForSql = exports.cleanTimeForSql = void 0;
 const db_1 = require("../config/db");
 const cacheService_1 = __importDefault(require("../services/cacheService"));
 const datSanService = __importStar(require("../services/datSanService"));
+const emailService = __importStar(require("../services/emailService"));
 const cleanTimeForSql = (val, fallback = '00:00:00') => {
     if (!val)
         return fallback;
@@ -233,7 +234,7 @@ const suaLoaiSan = async (req, res) => {
         const result = await pool.request()
             .input('id', db_1.sql.Int, parseInt(id, 10))
             .input('ten_loai', db_1.sql.NVarChar(50), ten_loai.trim())
-            .input('mo_ta', db_1.sql.NVarChar(db_1.sql.MAX), mo_ta || null)
+            .input('mo_ta', db_1.sql.NVarChar(db_1.sql.MAX), mo_ta !== undefined ? (mo_ta ? mo_ta.trim() : null) : null)
             .input('trang_thai', db_1.sql.Bit, trang_thai !== false ? 1 : 0)
             .execute('sp_SuaLoaiSan');
         cacheService_1.default.del('danh_sach_loai_san');
@@ -339,7 +340,7 @@ const suaSanBong = async (req, res) => {
             .input('id', db_1.sql.Int, parseInt(id, 10))
             .input('ten_san', db_1.sql.NVarChar(50), ten_san.trim())
             .input('ma_loai_san', db_1.sql.Int, ma_loai_san ? parseInt(String(ma_loai_san), 10) : null)
-            .input('hinh_anh', db_1.sql.VarChar(255), hinh_anh || null)
+            .input('hinh_anh', db_1.sql.VarChar(255), hinh_anh !== undefined ? (hinh_anh ? hinh_anh.trim() : null) : null)
             .input('don_gia_phut', db_1.sql.Decimal(10, 2), don_gia_phut ? parseFloat(String(don_gia_phut)) : null)
             .input('trang_thai', db_1.sql.VarChar(20), trang_thai || 'SAN_SANG')
             .execute('sp_SuaSanBong');
@@ -1001,8 +1002,8 @@ exports.layLichSuKhachHang = layLichSuKhachHang;
  */
 const huyDonVaHoanCoc = async (req, res) => {
     try {
-        const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung || 1);
-        const { ma_don_dat, ly_do_huy } = req.body;
+        const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung ? parseInt(req.body.ma_nguoi_dung, 10) : null);
+        const { ma_don_dat, ly_do_huy, ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan } = req.body;
         if (!ma_don_dat) {
             return res.status(400).json({
                 success: false,
@@ -1010,16 +1011,59 @@ const huyDonVaHoanCoc = async (req, res) => {
             });
         }
         const pool = await db_1.poolPromise;
+        // Truy vấn thông tin đơn trước khi cập nhật để có thông tin gửi mail
+        let cInfo = null;
+        try {
+            const customerQuery = await pool.request()
+                .input('ma_don_dat_info', db_1.sql.Int, parseInt(ma_don_dat, 10))
+                .query(`
+                    SELECT nd.ho_ten, nd.email, sb.ten_san, 
+                           CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da,
+                           CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+                           CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc
+                    FROM Don_Dat_San d
+                    LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+                    LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+                    WHERE d.id = @ma_don_dat_info
+                `);
+            cInfo = customerQuery.recordset && customerQuery.recordset[0];
+        }
+        catch (eInfo) {
+            console.warn('Lỗi lấy thông tin đơn hủy:', eInfo.message);
+        }
         const result = await pool.request()
             .input('ma_don_dat', db_1.sql.Int, parseInt(ma_don_dat, 10))
-            .input('ma_nguoi_dung', db_1.sql.Int, parseInt(ma_nguoi_dung, 10))
-            .input('ly_do_huy', db_1.sql.NVarChar(255), ly_do_huy || 'Khách hàng hủy đơn')
+            .input('ma_nguoi_dung', db_1.sql.Int, ma_nguoi_dung)
+            .input('ly_do_huy', db_1.sql.NVarChar(255), ly_do_huy || 'Khách hàng yêu cầu hủy đơn')
+            .input('ten_ngan_hang', db_1.sql.NVarChar(100), ten_ngan_hang || null)
+            .input('so_tai_khoan', db_1.sql.VarChar(50), so_tai_khoan || null)
+            .input('ten_chu_tai_khoan', db_1.sql.NVarChar(100), ten_chu_tai_khoan || null)
             .execute('sp_HuyDonVaHoanCoc');
         const cancelResult = result.recordset[0];
         const io = req.app.get('io');
         if (io) {
             io.emit('booking_updated');
             io.emit('payment_success');
+            io.emit('refund_updated');
+        }
+        // Tự động gửi email thông báo hủy đơn tới khách hàng nếu có email
+        if (cInfo && cInfo.email) {
+            emailService.sendCancelBookingEmail({
+                toEmail: cInfo.email,
+                customerName: cInfo.ho_ten || cancelResult.ten_chu_tai_khoan || 'Quý khách',
+                bookingId: parseInt(ma_don_dat, 10),
+                pitchName: cInfo.ten_san,
+                playDate: cInfo.ngay_da,
+                startTime: cInfo.gio_bat_dau,
+                endTime: cInfo.gio_ket_thuc,
+                totalPaid: cancelResult.tong_tien_da_coc,
+                refundRate: cancelResult.ty_le_hoan,
+                refundAmount: cancelResult.so_tien_hoan,
+                bankName: cancelResult.ten_ngan_hang,
+                bankAccount: cancelResult.so_tai_khoan,
+                accountHolder: cancelResult.ten_chu_tai_khoan,
+                cancelReason: cancelResult.ly_do_huy
+            }).catch((err) => console.warn('Lỗi gửi email hủy đơn:', err.message));
         }
         return res.status(200).json({
             success: true,
@@ -2279,3 +2323,35 @@ const xoaLichCoDinh = async (req, res) => {
     }
 };
 exports.xoaLichCoDinh = xoaLichCoDinh;
+/**
+ * Tìm kiếm ngày và ca trống cho khách hàng (7 - 30 ngày)
+ * Method: GET /api/dat-san/tim-ca-trong
+ * Procedure: sp_TimKiemCaTrong
+ */
+const timKiemCaTrong = async (req, res) => {
+    try {
+        const { ma_san, ma_loai_san, tu_ngay, so_ngay, buoi } = req.query;
+        const pool = await db_1.poolPromise;
+        const result = await pool.request()
+            .input('ma_san', db_1.sql.Int, ma_san && ma_san !== 'ALL' ? parseInt(String(ma_san), 10) : null)
+            .input('ma_loai_san', db_1.sql.Int, ma_loai_san && ma_loai_san !== 'ALL' ? parseInt(String(ma_loai_san), 10) : null)
+            .input('tu_ngay', db_1.sql.Date, tu_ngay ? String(tu_ngay) : null)
+            .input('so_ngay', db_1.sql.Int, so_ngay ? parseInt(String(so_ngay), 10) : 7)
+            .input('buoi', db_1.sql.VarChar(10), buoi && buoi !== 'ALL' ? String(buoi) : null)
+            .execute('sp_TimKiemCaTrong');
+        return res.status(200).json({
+            success: true,
+            message: 'Lấy danh sách ca trống thành công!',
+            total: result.recordset.length,
+            data: result.recordset
+        });
+    }
+    catch (error) {
+        console.error('Lỗi sp_TimKiemCaTrong:', error.message);
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Lỗi khi tìm kiếm ca trống'
+        });
+    }
+};
+exports.timKiemCaTrong = timKiemCaTrong;

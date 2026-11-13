@@ -15,6 +15,7 @@ import { sql, poolPromise } from '../config/db';
 import payOS from '../config/payos';
 import { AuthRequest } from '../types';
 import { cleanTimeForSql } from './datSanController';
+import * as emailService from '../services/emailService';
 
 /**
  * Hàm làm sạch nội dung sao kê ngân hàng:
@@ -774,14 +775,24 @@ export const layDanhSachHoanTien = async (req: AuthRequest, res: Response) => {
  */
 export const themHoanTien = async (req: AuthRequest, res: Response) => {
     try {
-        const { ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy } = req.body;
+        const { ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy, ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan, trang_thai_hoan } = req.body;
         const pool = await poolPromise;
         const result = await pool.request()
             .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
             .input('so_tien_hoan', sql.Decimal(10, 2), parseFloat(so_tien_hoan) || 0)
             .input('ty_le_hoan', sql.Int, parseInt(ty_le_hoan, 10) || 100)
             .input('ly_do_huy', sql.NVarChar(255), ly_do_huy || 'Hủy sân hoàn cọc')
+            .input('ten_ngan_hang', sql.NVarChar(100), ten_ngan_hang || null)
+            .input('so_tai_khoan', sql.VarChar(50), so_tai_khoan || null)
+            .input('ten_chu_tai_khoan', sql.NVarChar(100), ten_chu_tai_khoan || null)
+            .input('trang_thai_hoan', sql.VarChar(30), trang_thai_hoan || 'CHO_HOAN')
             .execute('sp_ThemHoanTien');
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('refund_updated');
+            io.emit('booking_updated');
+        }
 
         return res.status(201).json({
             success: true,
@@ -800,7 +811,7 @@ export const themHoanTien = async (req: AuthRequest, res: Response) => {
 export const suaHoanTien = async (req: AuthRequest, res: Response) => {
     try {
         const id = String(req.params.id);
-        const { so_tien_hoan, ty_le_hoan, ly_do_huy } = req.body;
+        const { so_tien_hoan, ty_le_hoan, ly_do_huy, ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan, trang_thai_hoan, ghi_chu_admin } = req.body;
 
         const pool = await poolPromise;
         const result = await pool.request()
@@ -808,7 +819,18 @@ export const suaHoanTien = async (req: AuthRequest, res: Response) => {
             .input('so_tien_hoan', sql.Decimal(10, 2), parseFloat(so_tien_hoan) || 0)
             .input('ty_le_hoan', sql.Int, parseInt(ty_le_hoan, 10) || 100)
             .input('ly_do_huy', sql.NVarChar(255), ly_do_huy || '')
+            .input('ten_ngan_hang', sql.NVarChar(100), ten_ngan_hang || null)
+            .input('so_tai_khoan', sql.VarChar(50), so_tai_khoan || null)
+            .input('ten_chu_tai_khoan', sql.NVarChar(100), ten_chu_tai_khoan || null)
+            .input('trang_thai_hoan', sql.VarChar(30), trang_thai_hoan || null)
+            .input('ghi_chu_admin', sql.NVarChar(255), ghi_chu_admin || null)
             .execute('sp_SuaHoanTien');
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('refund_updated');
+            io.emit('booking_updated');
+        }
 
         return res.status(200).json({
             success: true,
@@ -820,6 +842,92 @@ export const suaHoanTien = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({
             success: false,
             message: error.message || 'Lỗi khi sửa bản ghi hoàn tiền'
+        });
+    }
+};
+
+/**
+ * 9. Xác nhận đã hoàn tiền (Thực thi Stored Procedure: sp_XacNhanDaHoanTien)
+ * Method: POST /api/thanh-toan/hoan-tien/:id/xac-nhan
+ */
+export const xacNhanHoanTien = async (req: AuthRequest, res: Response) => {
+    try {
+        const id = String(req.params.id);
+        const { ghi_chu_admin } = req.body;
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .input('ghi_chu_admin', sql.NVarChar(255), ghi_chu_admin || 'Quản trị viên đã chuyển khoản hoàn tất')
+            .execute('sp_XacNhanDaHoanTien');
+
+        const updated = result.recordset && result.recordset[0];
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('refund_updated');
+            io.emit('booking_updated');
+        }
+
+        // Tự động gửi email thông báo hoàn tiền thành công tới khách hàng nếu có email
+        if (updated && updated.email) {
+            emailService.sendRefundSuccessEmail({
+                toEmail: updated.email,
+                customerName: updated.ten_khach_hang || updated.ten_chu_tai_khoan || 'Quý khách',
+                bookingId: updated.ma_don_dat,
+                pitchName: updated.ten_san,
+                playDate: updated.ngay_da,
+                refundAmount: updated.so_tien_hoan,
+                bankName: updated.ten_ngan_hang,
+                bankAccount: updated.so_tai_khoan,
+                accountHolder: updated.ten_chu_tai_khoan,
+                adminNote: updated.ghi_chu_admin
+            }).catch((err: any) => console.warn('Lỗi gửi email hoàn tiền:', err.message));
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Xác nhận đã chuyển tiền hoàn thành công!',
+            data: updated
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_XacNhanDaHoanTien:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xác nhận hoàn tiền'
+        });
+    }
+};
+
+export const hoanTacHoanTien = async (req: AuthRequest, res: Response) => {
+    try {
+        const id = String(req.params.id);
+        const { ly_do_hoan_tac } = req.body;
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, parseInt(id, 10))
+            .input('ly_do_hoan_tac', sql.NVarChar(255), ly_do_hoan_tac || 'Quản trị viên hoàn tác về Chờ hoàn tiền')
+            .execute('sp_HoanTacTrangThaiHoanTien');
+
+        const updated = result.recordset && result.recordset[0];
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('refund_updated');
+            io.emit('booking_updated');
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đã hoàn tác trạng thái về Chờ hoàn tiền thành công!',
+            data: updated
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_HoanTacTrangThaiHoanTien:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi hoàn tác trạng thái hoàn tiền'
         });
     }
 };

@@ -23,6 +23,7 @@ import { sql, poolPromise } from '../config/db';
 import { AuthRequest } from '../types';
 import memoryCache from '../services/cacheService';
 import * as datSanService from '../services/datSanService';
+import * as emailService from '../services/emailService';
 
 export const cleanTimeForSql = (val: any, fallback: string = '00:00:00'): string => {
     if (!val) return fallback;
@@ -1000,8 +1001,8 @@ export const layLichSuKhachHang = async (req: AuthRequest, res: Response) => {
  */
 export const huyDonVaHoanCoc = async (req: AuthRequest, res: Response) => {
     try {
-        const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung || 1);
-        const { ma_don_dat, ly_do_huy } = req.body;
+        const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung ? parseInt(req.body.ma_nguoi_dung, 10) : null);
+        const { ma_don_dat, ly_do_huy, ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan } = req.body;
 
         if (!ma_don_dat) {
             return res.status(400).json({
@@ -1011,10 +1012,34 @@ export const huyDonVaHoanCoc = async (req: AuthRequest, res: Response) => {
         }
 
         const pool = await poolPromise;
+
+        // Truy vấn thông tin đơn trước khi cập nhật để có thông tin gửi mail
+        let cInfo: any = null;
+        try {
+            const customerQuery = await pool.request()
+                .input('ma_don_dat_info', sql.Int, parseInt(ma_don_dat, 10))
+                .query(`
+                    SELECT nd.ho_ten, nd.email, sb.ten_san, 
+                           CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da,
+                           CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+                           CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc
+                    FROM Don_Dat_San d
+                    LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+                    LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+                    WHERE d.id = @ma_don_dat_info
+                `);
+            cInfo = customerQuery.recordset && customerQuery.recordset[0];
+        } catch (eInfo: any) {
+            console.warn('Lỗi lấy thông tin đơn hủy:', eInfo.message);
+        }
+
         const result = await pool.request()
             .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
-            .input('ma_nguoi_dung', sql.Int, parseInt(ma_nguoi_dung, 10))
-            .input('ly_do_huy', sql.NVarChar(255), ly_do_huy || 'Khách hàng hủy đơn')
+            .input('ma_nguoi_dung', sql.Int, ma_nguoi_dung)
+            .input('ly_do_huy', sql.NVarChar(255), ly_do_huy || 'Khách hàng yêu cầu hủy đơn')
+            .input('ten_ngan_hang', sql.NVarChar(100), ten_ngan_hang || null)
+            .input('so_tai_khoan', sql.VarChar(50), so_tai_khoan || null)
+            .input('ten_chu_tai_khoan', sql.NVarChar(100), ten_chu_tai_khoan || null)
             .execute('sp_HuyDonVaHoanCoc');
 
         const cancelResult = result.recordset[0];
@@ -1023,6 +1048,27 @@ export const huyDonVaHoanCoc = async (req: AuthRequest, res: Response) => {
         if (io) {
             io.emit('booking_updated');
             io.emit('payment_success');
+            io.emit('refund_updated');
+        }
+
+        // Tự động gửi email thông báo hủy đơn tới khách hàng nếu có email
+        if (cInfo && cInfo.email) {
+            emailService.sendCancelBookingEmail({
+                toEmail: cInfo.email,
+                customerName: cInfo.ho_ten || cancelResult.ten_chu_tai_khoan || 'Quý khách',
+                bookingId: parseInt(ma_don_dat, 10),
+                pitchName: cInfo.ten_san,
+                playDate: cInfo.ngay_da,
+                startTime: cInfo.gio_bat_dau,
+                endTime: cInfo.gio_ket_thuc,
+                totalPaid: cancelResult.tong_tien_da_coc,
+                refundRate: cancelResult.ty_le_hoan,
+                refundAmount: cancelResult.so_tien_hoan,
+                bankName: cancelResult.ten_ngan_hang,
+                bankAccount: cancelResult.so_tai_khoan,
+                accountHolder: cancelResult.ten_chu_tai_khoan,
+                cancelReason: cancelResult.ly_do_huy
+            }).catch((err: any) => console.warn('Lỗi gửi email hủy đơn:', err.message));
         }
 
         return res.status(200).json({

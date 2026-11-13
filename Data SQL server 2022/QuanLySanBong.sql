@@ -175,6 +175,12 @@ CREATE TABLE Lich_Su_Hoan_Tien (
     ty_le_hoan INT CHECK (ty_le_hoan BETWEEN 0 AND 100),
     ly_do_huy NVARCHAR(255),
     ngay_hoan DATETIME DEFAULT GETDATE(),
+    ten_ngan_hang NVARCHAR(100) NULL,
+    so_tai_khoan VARCHAR(50) NULL,
+    ten_chu_tai_khoan NVARCHAR(100) NULL,
+    trang_thai_hoan VARCHAR(30) DEFAULT 'CHO_HOAN' CHECK (trang_thai_hoan IN ('CHO_HOAN', 'DA_HOAN', 'TU_CHOI')),
+    ngay_chuyen_khoan DATETIME NULL,
+    ghi_chu_admin NVARCHAR(255) NULL,
     FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id) ON DELETE CASCADE
 );
 GO

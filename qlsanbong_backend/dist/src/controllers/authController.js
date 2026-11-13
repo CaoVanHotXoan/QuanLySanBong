@@ -277,6 +277,7 @@ const dangNhapGoogle = async (req, res) => {
         let googleEmail = '';
         let googleName = '';
         let googleAvatar = null;
+        let googlePhone = null;
         // Trường hợp 1: Sử dụng access_token từ custom button qua useGoogleLogin()
         if (access_token) {
             try {
@@ -290,6 +291,9 @@ const dangNhapGoogle = async (req, res) => {
                 googleEmail = tokenInfo.email.toLowerCase().trim();
                 googleName = userInfo?.name || userInfo?.given_name || (tokenInfo.email.split('@')[0]) || 'Khách hàng Google';
                 googleAvatar = userInfo?.picture || null;
+                if (userInfo?.phone_number || userInfo?.phoneNumber) {
+                    googlePhone = String(userInfo.phone_number || userInfo.phoneNumber).trim();
+                }
             }
             catch (tokenErr) {
                 console.error('Lỗi getTokenInfo Google:', tokenErr.message);
@@ -325,6 +329,9 @@ const dangNhapGoogle = async (req, res) => {
             googleEmail = payload.email.toLowerCase().trim();
             googleName = payload.name || payload.given_name || 'Khách hàng Google';
             googleAvatar = payload.picture || null;
+            if (payload.phone_number || payload.phoneNumber) {
+                googlePhone = String(payload.phone_number || payload.phoneNumber).trim();
+            }
         }
         // 2. Gọi Stored Procedure sp_DangNhapGoogle trong SQL Server
         const pool = await db_1.poolPromise;
@@ -332,6 +339,7 @@ const dangNhapGoogle = async (req, res) => {
             .input('email', db_1.sql.VarChar(255), googleEmail)
             .input('ho_ten', db_1.sql.NVarChar(100), googleName)
             .input('anh_dai_dien', db_1.sql.VarChar(db_1.sql.MAX), googleAvatar)
+            .input('so_dien_thoai', db_1.sql.VarChar(20), googlePhone || null)
             .execute('sp_DangNhapGoogle');
         const user = result.recordset && result.recordset[0];
         if (!user) {
@@ -395,7 +403,7 @@ const layThongTinCaNhan = async (req, res) => {
             const queryRes = await pool.request()
                 .input('id', db_1.sql.Int, ma_nguoi_dung)
                 .query(`
-                    SELECT nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.anh_dai_dien,
+                    SELECT nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.dia_chi, nd.anh_dai_dien,
                            nd.MaVaiTro, vt.TenVaiTro AS vai_tro, vt.TenVaiTro, vt.MoTa AS vai_tro_mota
                     FROM Nguoi_Dung nd
                     LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
@@ -492,7 +500,9 @@ exports.layDanhSachNguoiDung = layDanhSachNguoiDung;
 const suaNguoiDung = async (req, res) => {
     try {
         const id = String(req.params.id);
-        const { ho_ten, email, so_dien_thoai, vai_tro, mat_khau, anh_dai_dien } = req.body;
+        const { ho_ten, email, so_dien_thoai, vai_tro, mat_khau, anh_dai_dien, diaChi, dia_chi } = req.body;
+        const rawDiaChi = dia_chi !== undefined ? dia_chi : diaChi;
+        const userDiaChi = rawDiaChi !== undefined ? (rawDiaChi ? String(rawDiaChi).trim() : null) : null;
         let hashedPassword = null;
         if (mat_khau && mat_khau.trim() !== '') {
             const salt = await bcryptjs_1.default.genSalt(10);
@@ -507,6 +517,7 @@ const suaNguoiDung = async (req, res) => {
                 .input('so_dien_thoai', db_1.sql.VarChar(15), so_dien_thoai || null)
                 .input('vai_tro', db_1.sql.VarChar(20), vai_tro || 'KHACH_HANG')
                 .input('mat_khau', db_1.sql.VarChar(255), hashedPassword)
+                .input('dia_chi', db_1.sql.NVarChar(255), userDiaChi)
                 .execute('sp_SuaNguoiDung');
             if (anh_dai_dien !== undefined) {
                 await pool.request()
@@ -532,6 +543,8 @@ const suaNguoiDung = async (req, res) => {
                 q += `, mat_khau = @mat_khau`;
             if (anh_dai_dien !== undefined)
                 q += `, anh_dai_dien = @anh_dai_dien`;
+            if (userDiaChi !== null)
+                q += `, dia_chi = @dia_chi`;
             q += ` WHERE id = @id`;
             const reqDb = pool.request()
                 .input('id', db_1.sql.Int, parseInt(id, 10))
@@ -543,9 +556,11 @@ const suaNguoiDung = async (req, res) => {
                 reqDb.input('mat_khau', db_1.sql.VarChar(255), hashedPassword);
             if (anh_dai_dien !== undefined)
                 reqDb.input('anh_dai_dien', db_1.sql.VarChar(255), anh_dai_dien);
+            if (userDiaChi !== null)
+                reqDb.input('dia_chi', db_1.sql.NVarChar(255), userDiaChi);
             await reqDb.query(q);
             const updatedRes = await pool.request().input('id', db_1.sql.Int, parseInt(id, 10)).query(`
-                SELECT nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.MaVaiTro, vt.TenVaiTro AS vai_tro, nd.anh_dai_dien
+                SELECT nd.id, nd.ho_ten, nd.email, nd.so_dien_thoai, nd.dia_chi, nd.MaVaiTro, vt.TenVaiTro AS vai_tro, nd.anh_dai_dien
                 FROM Nguoi_Dung nd LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro WHERE nd.id = @id
             `);
             return res.status(200).json({

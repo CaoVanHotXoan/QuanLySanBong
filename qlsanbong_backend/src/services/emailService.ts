@@ -547,3 +547,237 @@ export const sendOtpEmail = async (payload: OtpEmailPayload): Promise<boolean> =
   }
 };
 
+export interface CancelBookingEmailPayload {
+  toEmail?: string | null;
+  customerName: string;
+  bookingId: number;
+  pitchName?: string;
+  playDate?: string;
+  startTime?: string;
+  endTime?: string;
+  totalPaid?: number;
+  refundRate?: number;
+  refundAmount?: number;
+  bankName?: string | null;
+  bankAccount?: string | null;
+  accountHolder?: string | null;
+  cancelReason?: string | null;
+}
+
+/**
+ * Gửi email xác nhận hủy đơn đặt sân tới khách hàng
+ */
+export const sendCancelBookingEmail = async (payload: CancelBookingEmailPayload): Promise<boolean> => {
+  try {
+    if (!payload.toEmail || !payload.toEmail.includes('@')) {
+      return false;
+    }
+
+    const mailEnabled = await isMailServiceEnabled();
+    if (!mailEnabled) {
+      console.log(`ℹ️ [MAIL SERVICE TẮT] Bỏ qua gửi email xác nhận hủy đơn tới ${payload.toEmail}.`);
+      return true;
+    }
+
+    const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Sport247 <no-reply@sport247.vn>';
+    const transporter = createTransporter();
+
+    const formatVND = (n?: number) => (n ? n.toLocaleString('vi-VN') + ' đ' : '0 đ');
+
+    const subject = `⚽ [Sport247] Xác nhận yêu cầu hủy đơn đặt sân #${payload.bookingId}`;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #1e293b; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+          .header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 28px 24px; text-align: center; border-bottom: 4px solid #f59e0b; }
+          .logo { font-size: 26px; font-weight: 900; color: #ffffff; letter-spacing: 1px; }
+          .logo span { color: #10b981; }
+          .subtitle { color: #94a3b8; font-size: 13px; margin-top: 6px; text-transform: uppercase; letter-spacing: 1.5px; }
+          .body { padding: 28px 24px; }
+          .badge { display: inline-block; background-color: #fef3c7; color: #92400e; font-size: 13px; font-weight: bold; padding: 6px 14px; border-radius: 20px; margin-bottom: 16px; }
+          .info-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+          .info-table td { padding: 10px 12px; font-size: 14px; border-bottom: 1px solid #f1f5f9; }
+          .info-table td.label { color: #64748b; font-weight: 600; width: 40%; }
+          .info-table td.value { color: #0f172a; font-weight: 700; }
+          .refund-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px; margin: 16px 0; }
+          .refund-amount { font-size: 22px; font-weight: 900; color: #d97706; }
+          .footer { background: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="logo">SPORT<span>247</span></div>
+            <div class="subtitle">Thông Báo Hủy Đặt Sân & Hoàn Tiền</div>
+          </div>
+          <div class="body">
+            <div class="badge">⏳ YÊU CẦU HỦY ĐƠN ĐÃ ĐƯỢC TIẾP NHẬN</div>
+            <p>Xin chào <strong>${payload.customerName}</strong>,</p>
+            <p>Hệ thống Sport247 đã tiếp nhận yêu cầu hủy đơn đặt sân <strong>#${payload.bookingId}</strong> của bạn.</p>
+
+            <table class="info-table">
+              <tr>
+                <td class="label">Mã đơn đặt:</td>
+                <td class="value">#${payload.bookingId}</td>
+              </tr>
+              ${payload.pitchName ? `<tr><td class="label">Sân bóng:</td><td class="value">${payload.pitchName}</td></tr>` : ''}
+              ${payload.playDate ? `<tr><td class="label">Ngày đá:</td><td class="value">${payload.playDate}</td></tr>` : ''}
+              ${payload.startTime ? `<tr><td class="label">Giờ đá:</td><td class="value">${payload.startTime} - ${payload.endTime || ''}</td></tr>` : ''}
+              <tr>
+                <td class="label">Số tiền đã trả:</td>
+                <td class="value">${formatVND(payload.totalPaid)}</td>
+              </tr>
+              <tr>
+                <td class="label">Tỷ lệ hoàn tiền:</td>
+                <td class="value" style="color: #059669;">${payload.refundRate || 0}%</td>
+              </tr>
+              ${payload.cancelReason ? `<tr><td class="label">Lý do hủy:</td><td class="value">${payload.cancelReason}</td></tr>` : ''}
+            </table>
+
+            <div class="refund-box">
+              <div style="font-size: 13px; color: #92400e; font-weight: 600;">SỐ TIỀN HOÀN DỰ KIẾN:</div>
+              <div class="refund-amount">${formatVND(payload.refundAmount)}</div>
+              ${payload.bankAccount ? `
+                <div style="margin-top: 10px; font-size: 13px; color: #78350f;">
+                  <strong>Ngân hàng thụ hưởng:</strong> ${payload.bankName || 'Ngân hàng'}<br/>
+                  <strong>Số tài khoản:</strong> ${payload.bankAccount}<br/>
+                  <strong>Chủ tài khoản:</strong> ${payload.accountHolder || payload.customerName}
+                </div>
+              ` : ''}
+              <div style="margin-top: 8px; font-size: 12px; color: #b45309;">
+                Quản trị viên đang xử lý chuyển khoản hoàn tiền. Tiền sẽ về tài khoản của bạn trong vòng 15-30 phút (hoặc tối đa 24h).
+              </div>
+            </div>
+          </div>
+          <div class="footer">
+            Cảm ơn bạn đã tin tưởng Sport247. Mọi thắc mắc vui lòng liên hệ hotline: <strong>0816.344.504</strong>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await transporter.sendMail({
+      from: mailFrom,
+      to: payload.toEmail,
+      subject,
+      html: htmlContent
+    });
+
+    console.log(`✅ [Hủy Đơn Email] Đã gửi xác nhận hủy đơn #${payload.bookingId} tới: ${payload.toEmail}`);
+    return true;
+  } catch (error: any) {
+    console.error(`❌ [Hủy Đơn Email] Lỗi gửi email hủy đơn tới ${payload.toEmail}:`, error.message);
+    return false;
+  }
+};
+
+export interface RefundSuccessEmailPayload {
+  toEmail?: string | null;
+  customerName: string;
+  bookingId: number;
+  pitchName?: string;
+  playDate?: string;
+  refundAmount?: number;
+  bankName?: string | null;
+  bankAccount?: string | null;
+  accountHolder?: string | null;
+  adminNote?: string | null;
+}
+
+/**
+ * Gửi email thông báo hoàn tiền thành công tới khách hàng
+ */
+export const sendRefundSuccessEmail = async (payload: RefundSuccessEmailPayload): Promise<boolean> => {
+  try {
+    if (!payload.toEmail || !payload.toEmail.includes('@')) {
+      return false;
+    }
+
+    const mailEnabled = await isMailServiceEnabled();
+    if (!mailEnabled) {
+      console.log(`ℹ️ [MAIL SERVICE TẮT] Bỏ qua gửi email hoàn tiền thành công tới ${payload.toEmail}.`);
+      return true;
+    }
+
+    const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Sport247 <no-reply@sport247.vn>';
+    const transporter = createTransporter();
+
+    const formatVND = (n?: number) => (n ? n.toLocaleString('vi-VN') + ' đ' : '0 đ');
+
+    const subject = `⚽ [Sport247] Hoàn tiền thành công cho đơn đặt sân #${payload.bookingId}`;
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #1e293b; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+          .header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 28px 24px; text-align: center; border-bottom: 4px solid #10b981; }
+          .logo { font-size: 26px; font-weight: 900; color: #ffffff; letter-spacing: 1px; }
+          .logo span { color: #10b981; }
+          .subtitle { color: #94a3b8; font-size: 13px; margin-top: 6px; text-transform: uppercase; letter-spacing: 1.5px; }
+          .body { padding: 28px 24px; }
+          .badge { display: inline-block; background-color: #d1fae5; color: #065f46; font-size: 13px; font-weight: bold; padding: 6px 14px; border-radius: 20px; margin-bottom: 16px; }
+          .success-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 18px; margin: 16px 0; text-align: center; }
+          .amount { font-size: 26px; font-weight: 900; color: #15803d; }
+          .footer { background: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="logo">SPORT<span>247</span></div>
+            <div class="subtitle">Hoàn Tiền Thành Công</div>
+          </div>
+          <div class="body">
+            <div class="badge">✅ ĐÃ HOÀN TIỀN THÀNH CÔNG</div>
+            <p>Xin chào <strong>${payload.customerName}</strong>,</p>
+            <p>Ban quản lý Sport247 đã hoàn tất chuyển khoản tiền hoàn cho đơn đặt sân <strong>#${payload.bookingId}</strong>.</p>
+
+            <div class="success-box">
+              <div style="font-size: 13px; color: #166534; font-weight: 600; text-transform: uppercase;">Số tiền đã chuyển khoản:</div>
+              <div class="amount">${formatVND(payload.refundAmount)}</div>
+              ${payload.bankAccount ? `
+                <div style="margin-top: 12px; font-size: 13px; color: #14532d;">
+                  Tới tài khoản: <strong>${payload.bankAccount}</strong> (${payload.bankName || 'Ngân hàng'})<br/>
+                  Chủ thẻ: <strong>${payload.accountHolder || payload.customerName}</strong>
+                </div>
+              ` : ''}
+              ${payload.adminNote ? `<div style="margin-top: 8px; font-size: 12px; color: #166534; font-style: italic;">Ghi chú: ${payload.adminNote}</div>` : ''}
+            </div>
+
+            <p style="font-size: 14px; color: #475569;">
+              Quý khách vui lòng kiểm tra biến động số dư tài khoản ngân hàng. Rất mong được phục vụ quý khách trong các trận đấu tiếp theo!
+            </p>
+          </div>
+          <div class="footer">
+            Sport247 cảm ơn sự đồng hành của quý khách • Hotline: <strong>0816.344.504</strong>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await transporter.sendMail({
+      from: mailFrom,
+      to: payload.toEmail,
+      subject,
+      html: htmlContent
+    });
+
+    console.log(`✅ [Hoàn Tiền Email] Đã gửi thông báo hoàn tiền #${payload.bookingId} tới: ${payload.toEmail}`);
+    return true;
+  } catch (error: any) {
+    console.error(`❌ [Hoàn Tiền Email] Lỗi gửi thông báo hoàn tiền tới ${payload.toEmail}:`, error.message);
+    return false;
+  }
+};
+

@@ -10,14 +10,48 @@
  * 5. sp_LayDanhSachHoanTien
  * =====================================================================
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.huyDonTamPayOS = exports.xoaHoanTien = exports.suaHoanTien = exports.themHoanTien = exports.layDanhSachHoanTien = exports.layDanhSachThanhToan = exports.xacNhanWebhookUrl = exports.xuLyWebhookPayOS = exports.kiemTraTrangThaiPayOS = exports.taoThanhToanPayOS = exports.thanhToanDon = exports.lamSachNoiDungChuyenKhoan = void 0;
+exports.huyDonTamPayOS = exports.xoaHoanTien = exports.hoanTacHoanTien = exports.xacNhanHoanTien = exports.suaHoanTien = exports.themHoanTien = exports.layDanhSachHoanTien = exports.layDanhSachThanhToan = exports.xacNhanWebhookUrl = exports.xuLyWebhookPayOS = exports.kiemTraTrangThaiPayOS = exports.taoThanhToanPayOS = exports.thanhToanDon = exports.lamSachNoiDungChuyenKhoan = void 0;
 const db_1 = require("../config/db");
 const payos_1 = __importDefault(require("../config/payos"));
 const datSanController_1 = require("./datSanController");
+const emailService = __importStar(require("../services/emailService"));
 /**
  * Hàm làm sạch nội dung sao kê ngân hàng:
  * Lọc bỏ triệt để các mã kỹ thuật hệ thống (Mã tài khoản ảo Qamtnt..., CASSO..., Trace SNL..., FT Code, i1WZU...)
@@ -704,14 +738,23 @@ exports.layDanhSachHoanTien = layDanhSachHoanTien;
  */
 const themHoanTien = async (req, res) => {
     try {
-        const { ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy } = req.body;
+        const { ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy, ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan, trang_thai_hoan } = req.body;
         const pool = await db_1.poolPromise;
         const result = await pool.request()
             .input('ma_don_dat', db_1.sql.Int, parseInt(ma_don_dat, 10))
             .input('so_tien_hoan', db_1.sql.Decimal(10, 2), parseFloat(so_tien_hoan) || 0)
             .input('ty_le_hoan', db_1.sql.Int, parseInt(ty_le_hoan, 10) || 100)
             .input('ly_do_huy', db_1.sql.NVarChar(255), ly_do_huy || 'Hủy sân hoàn cọc')
+            .input('ten_ngan_hang', db_1.sql.NVarChar(100), ten_ngan_hang || null)
+            .input('so_tai_khoan', db_1.sql.VarChar(50), so_tai_khoan || null)
+            .input('ten_chu_tai_khoan', db_1.sql.NVarChar(100), ten_chu_tai_khoan || null)
+            .input('trang_thai_hoan', db_1.sql.VarChar(30), trang_thai_hoan || 'CHO_HOAN')
             .execute('sp_ThemHoanTien');
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('refund_updated');
+            io.emit('booking_updated');
+        }
         return res.status(201).json({
             success: true,
             message: 'Thêm bản ghi hoàn tiền thành công!',
@@ -730,14 +773,24 @@ exports.themHoanTien = themHoanTien;
 const suaHoanTien = async (req, res) => {
     try {
         const id = String(req.params.id);
-        const { so_tien_hoan, ty_le_hoan, ly_do_huy } = req.body;
+        const { so_tien_hoan, ty_le_hoan, ly_do_huy, ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan, trang_thai_hoan, ghi_chu_admin } = req.body;
         const pool = await db_1.poolPromise;
         const result = await pool.request()
             .input('id', db_1.sql.Int, parseInt(id, 10))
             .input('so_tien_hoan', db_1.sql.Decimal(10, 2), parseFloat(so_tien_hoan) || 0)
             .input('ty_le_hoan', db_1.sql.Int, parseInt(ty_le_hoan, 10) || 100)
             .input('ly_do_huy', db_1.sql.NVarChar(255), ly_do_huy || '')
+            .input('ten_ngan_hang', db_1.sql.NVarChar(100), ten_ngan_hang || null)
+            .input('so_tai_khoan', db_1.sql.VarChar(50), so_tai_khoan || null)
+            .input('ten_chu_tai_khoan', db_1.sql.NVarChar(100), ten_chu_tai_khoan || null)
+            .input('trang_thai_hoan', db_1.sql.VarChar(30), trang_thai_hoan || null)
+            .input('ghi_chu_admin', db_1.sql.NVarChar(255), ghi_chu_admin || null)
             .execute('sp_SuaHoanTien');
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('refund_updated');
+            io.emit('booking_updated');
+        }
         return res.status(200).json({
             success: true,
             message: 'Cập nhật bản ghi hoàn tiền thành công!',
@@ -753,6 +806,85 @@ const suaHoanTien = async (req, res) => {
     }
 };
 exports.suaHoanTien = suaHoanTien;
+/**
+ * 9. Xác nhận đã hoàn tiền (Thực thi Stored Procedure: sp_XacNhanDaHoanTien)
+ * Method: POST /api/thanh-toan/hoan-tien/:id/xac-nhan
+ */
+const xacNhanHoanTien = async (req, res) => {
+    try {
+        const id = String(req.params.id);
+        const { ghi_chu_admin } = req.body;
+        const pool = await db_1.poolPromise;
+        const result = await pool.request()
+            .input('id', db_1.sql.Int, parseInt(id, 10))
+            .input('ghi_chu_admin', db_1.sql.NVarChar(255), ghi_chu_admin || 'Quản trị viên đã chuyển khoản hoàn tất')
+            .execute('sp_XacNhanDaHoanTien');
+        const updated = result.recordset && result.recordset[0];
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('refund_updated');
+            io.emit('booking_updated');
+        }
+        // Tự động gửi email thông báo hoàn tiền thành công tới khách hàng nếu có email
+        if (updated && updated.email) {
+            emailService.sendRefundSuccessEmail({
+                toEmail: updated.email,
+                customerName: updated.ten_khach_hang || updated.ten_chu_tai_khoan || 'Quý khách',
+                bookingId: updated.ma_don_dat,
+                pitchName: updated.ten_san,
+                playDate: updated.ngay_da,
+                refundAmount: updated.so_tien_hoan,
+                bankName: updated.ten_ngan_hang,
+                bankAccount: updated.so_tai_khoan,
+                accountHolder: updated.ten_chu_tai_khoan,
+                adminNote: updated.ghi_chu_admin
+            }).catch((err) => console.warn('Lỗi gửi email hoàn tiền:', err.message));
+        }
+        return res.status(200).json({
+            success: true,
+            message: 'Xác nhận đã chuyển tiền hoàn thành công!',
+            data: updated
+        });
+    }
+    catch (error) {
+        console.error('Lỗi sp_XacNhanDaHoanTien:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xác nhận hoàn tiền'
+        });
+    }
+};
+exports.xacNhanHoanTien = xacNhanHoanTien;
+const hoanTacHoanTien = async (req, res) => {
+    try {
+        const id = String(req.params.id);
+        const { ly_do_hoan_tac } = req.body;
+        const pool = await db_1.poolPromise;
+        const result = await pool.request()
+            .input('id', db_1.sql.Int, parseInt(id, 10))
+            .input('ly_do_hoan_tac', db_1.sql.NVarChar(255), ly_do_hoan_tac || 'Quản trị viên hoàn tác về Chờ hoàn tiền')
+            .execute('sp_HoanTacTrangThaiHoanTien');
+        const updated = result.recordset && result.recordset[0];
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('refund_updated');
+            io.emit('booking_updated');
+        }
+        return res.status(200).json({
+            success: true,
+            message: 'Đã hoàn tác trạng thái về Chờ hoàn tiền thành công!',
+            data: updated
+        });
+    }
+    catch (error) {
+        console.error('Lỗi sp_HoanTacTrangThaiHoanTien:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi hoàn tác trạng thái hoàn tiền'
+        });
+    }
+};
+exports.hoanTacHoanTien = hoanTacHoanTien;
 const xoaHoanTien = async (req, res) => {
     try {
         const id = String(req.params.id);

@@ -65,6 +65,8 @@ router.get('/danh-sach', thanhToanController.layDanhSachThanhToan);
 // Lấy & Quản lý danh sách hoàn tiền / hủy đơn (Lich_Su_Hoan_Tien)
 router.get('/hoan-tien', thanhToanController.layDanhSachHoanTien);
 router.post('/hoan-tien', thanhToanController.themHoanTien);
+router.post('/hoan-tien/:id/xac-nhan', thanhToanController.xacNhanHoanTien);
+router.post('/hoan-tien/:id/hoan-tac', thanhToanController.hoanTacHoanTien);
 router.put('/hoan-tien/:id', thanhToanController.suaHoanTien);
 router.delete('/hoan-tien/:id', thanhToanController.xoaHoanTien);
 // Thanh toán đơn đặt sân truyền thống

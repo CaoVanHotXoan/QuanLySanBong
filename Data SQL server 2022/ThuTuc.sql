@@ -1256,7 +1256,14 @@ BEGIN
                 0 AS da_qua_gio,
                 0 AS tien_coc,
                 0 AS tien_da_nhan,
-                0 AS tien_thieu
+                0 AS tien_thieu,
+                CAST(NULL AS VARCHAR(30)) AS trang_thai_hoan,
+                CAST(0 AS DECIMAL(10,2)) AS so_tien_hoan,
+                CAST(0 AS INT) AS ty_le_hoan,
+                CAST(NULL AS NVARCHAR(100)) AS ten_ngan_hang,
+                CAST(NULL AS VARCHAR(50)) AS so_tai_khoan,
+                CAST(NULL AS NVARCHAR(100)) AS ten_chu_tai_khoan,
+                CAST(NULL AS DATETIME) AS ngay_chuyen_khoan
             FROM Don_Dat_San d
             LEFT JOIN San_Bong sb ON d.ma_san = sb.id
             LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
@@ -1325,49 +1332,44 @@ BEGIN
                         ELSE 0 
                     END))
                 END
-            END AS tien_thieu
+            END AS tien_thieu,
+            ht.trang_thai_hoan,
+            ht.so_tien_hoan,
+            ht.ty_le_hoan,
+            ht.ten_ngan_hang,
+            ht.so_tai_khoan,
+            ht.ten_chu_tai_khoan,
+            ht.ngay_chuyen_khoan
         FROM Don_Dat_San d
         LEFT JOIN San_Bong sb ON d.ma_san = sb.id
         LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
         LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        OUTER APPLY (
+            SELECT TOP 1
+                ht_sub.trang_thai_hoan,
+                ht_sub.so_tien_hoan,
+                ht_sub.ty_le_hoan,
+                ht_sub.ten_ngan_hang,
+                ht_sub.so_tai_khoan,
+                ht_sub.ten_chu_tai_khoan,
+                ht_sub.ngay_chuyen_khoan
+            FROM Lich_Su_Hoan_Tien ht_sub
+            WHERE ht_sub.ma_don_dat = d.id
+            ORDER BY ht_sub.id DESC
+        ) ht
         WHERE (
-            -- 1. Khớp theo ID người dùng đặt sân
             (@ma_nguoi_dung IS NOT NULL AND d.ma_nguoi_dung = @ma_nguoi_dung)
-            -- 2. Hoặc khớp theo Số điện thoại (ở bảng Nguoi_Dung hoặc ghi chú)
-            OR (@clean_phone IS NOT NULL AND (
-                REPLACE(REPLACE(ISNULL(nd.so_dien_thoai, ''), ' ', ''), '.', '') = @clean_phone
-                OR d.ghi_chu LIKE '%' + @clean_phone + '%'
-            ))
-            -- 3. Hoặc khớp theo Email
-            OR (@clean_email IS NOT NULL AND (
-                LOWER(ISNULL(nd.email, '')) = @clean_email
-                OR d.ghi_chu LIKE '%' + @clean_email + '%'
-            ))
-            -- 4. Hoặc nếu là Quản trị viên (ADMIN), cho phép xem các đơn của quản trị viên
-            OR (@ma_nguoi_dung IS NOT NULL AND EXISTS (
-                SELECT 1 FROM Nguoi_Dung adm 
-                WHERE adm.id = @ma_nguoi_dung AND (adm.MaVaiTro = 1 OR LOWER(adm.email) IN ('admin@gmail.com', 'xoancao2.0@gmail.com'))
-            ) AND (nd.ho_ten LIKE N'%Quản Trị%' OR d.ghi_chu LIKE N'%Quản Trị%' OR d.id = 157))
+            OR (@clean_phone IS NOT NULL AND REPLACE(REPLACE(nd.so_dien_thoai, ' ', ''), '.', '') = @clean_phone)
+            OR (@clean_email IS NOT NULL AND LOWER(nd.email) = @clean_email)
         )
-        -- Không ẩn các đơn đã có giao dịch thanh toán thành công
-        AND NOT (
-            d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') 
-            AND d.ghi_chu LIKE '%PayOS%' 
-            AND (d.ghi_chu IS NULL OR d.ghi_chu NOT LIKE N'%CẢNH BÁO%')
-            AND NOT EXISTS (
-                SELECT 1 FROM Thanh_Toan tt 
-                WHERE tt.ma_don_dat = d.id AND tt.trang_thai_gd IN ('THANH_CONG', 'CHO_XU_LY')
-            )
-        )
-        -- Loại bỏ đơn rác đã hủy
-        AND NOT (d.trang_thai = 'DA_HUY' AND (d.ghi_chu LIKE '%PayOS VietQR%' OR d.ghi_chu LIKE '%PayOS #%'))
-        ORDER BY d.id DESC;
+        ORDER BY d.ngay_da DESC, d.gio_bat_dau DESC;
     END TRY
     BEGIN CATCH
         ;THROW;
     END CATCH;
 END;
 GO
+
 
 CREATE OR ALTER PROCEDURE sp_LayChiTietDichVuDonDat
     @ma_don_dat INT = NULL
@@ -1925,8 +1927,11 @@ GO
 
 CREATE OR ALTER PROCEDURE sp_HuyDonVaHoanCoc
     @ma_don_dat INT,
-    @ma_nguoi_dung INT,
-    @ly_do_huy NVARCHAR(255) = N'Khách hàng yêu cầu hủy đơn'
+    @ma_nguoi_dung INT = NULL,
+    @ly_do_huy NVARCHAR(255) = N'Khách hàng yêu cầu hủy đơn',
+    @ten_ngan_hang NVARCHAR(100) = NULL,
+    @so_tai_khoan VARCHAR(50) = NULL,
+    @ten_chu_tai_khoan NVARCHAR(100) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1950,13 +1955,32 @@ BEGIN
             ;THROW 50020, N'Không tìm thấy thông tin đơn đặt sân.', 1;
         END;
 
+        IF @ma_nguoi_dung IS NULL
+            SET @ma_nguoi_dung = @nguoi_so_huu;
+
         DECLARE @vai_tro VARCHAR(50);
-        SELECT @vai_tro = vt.TenVaiTro 
+        DECLARE @sdt_nguoi_goi VARCHAR(20) = '', @email_nguoi_goi VARCHAR(255) = '';
+        SELECT @vai_tro = UPPER(ISNULL(vt.TenVaiTro, '')),
+               @sdt_nguoi_goi = REPLACE(REPLACE(ISNULL(nd.so_dien_thoai, ''), ' ', ''), '.', ''),
+               @email_nguoi_goi = LOWER(ISNULL(nd.email, ''))
         FROM Nguoi_Dung nd
         LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
         WHERE nd.id = @ma_nguoi_dung;
+
+        DECLARE @sdt_owner VARCHAR(20) = '', @email_owner VARCHAR(255) = '';
+        IF @nguoi_so_huu IS NOT NULL
+        BEGIN
+            SELECT @sdt_owner = REPLACE(REPLACE(ISNULL(nd.so_dien_thoai, ''), ' ', ''), '.', ''),
+                   @email_owner = LOWER(ISNULL(nd.email, ''))
+            FROM Nguoi_Dung nd
+            WHERE nd.id = @nguoi_so_huu;
+        END;
         
-        IF @nguoi_so_huu <> @ma_nguoi_dung AND @vai_tro NOT IN ('ADMIN', 'NHAN_VIEN')
+        IF @nguoi_so_huu IS NOT NULL 
+           AND @nguoi_so_huu <> @ma_nguoi_dung 
+           AND @vai_tro NOT IN ('ADMIN', 'NHAN_VIEN', 'QUAN_TRI', 'QUAN_LY')
+           AND (@sdt_nguoi_goi = '' OR @sdt_nguoi_goi <> @sdt_owner)
+           AND (@email_nguoi_goi = '' OR @email_nguoi_goi <> @email_owner)
         BEGIN
             ;THROW 50021, N'Bạn không có quyền hủy đơn đặt sân của người khác.', 1;
         END;
@@ -1971,8 +1995,8 @@ BEGIN
             ;THROW 50023, N'Đơn đặt sân đã hoàn thành, không thể hủy.', 1;
         END;
 
-        DECLARE @thoi_diem_da DATETIME;
-        SET @thoi_diem_da = CAST(CONCAT(@ngay_da, ' ', @gio_bat_dau) AS DATETIME);
+        DECLARE @thoi_diem_da DATETIME2;
+        SET @thoi_diem_da = DATEADD(second, DATEDIFF(second, '00:00:00', @gio_bat_dau), CAST(@ngay_da AS DATETIME2));
         
         DECLARE @so_gio_con_lai FLOAT;
         SET @so_gio_con_lai = DATEDIFF(MINUTE, GETDATE(), @thoi_diem_da) / 60.0;
@@ -1997,23 +2021,49 @@ BEGIN
 
         SELECT @tong_tien_da_coc = ISNULL(SUM(so_tien), 0)
         FROM Thanh_Toan
-        WHERE ma_don_dat = @ma_don_dat AND trang_thai_gd = 'THANH_CONG';
+        WHERE ma_don_dat = @ma_don_dat AND trang_thai_gd IN ('THANH_CONG', 'CHO_XU_LY');
+
+        -- Nếu chưa có bản ghi Thanh_Toan nhưng đơn đã trả tiền mặt/đã cọc
+        IF @tong_tien_da_coc = 0
+        BEGIN
+            SELECT @tong_tien_da_coc = CASE 
+                WHEN trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan') THEN ISNULL(tong_tien, tien_san)
+                WHEN trang_thai = 'DA_COC' THEN ROUND(ISNULL(tong_tien, tien_san) * 0.3, 0)
+                ELSE 0
+            END
+            FROM Don_Dat_San
+            WHERE id = @ma_don_dat;
+        END;
 
         DECLARE @so_tien_hoan DECIMAL(10, 2);
         SET @so_tien_hoan = (@tong_tien_da_coc * @ty_le_hoan) / 100.0;
 
+        -- Giải phóng sân bóng ngay lập tức
         UPDATE Don_Dat_San
-        SET trang_thai = 'DA_HUY'
+        SET trang_thai = 'DA_HUY',
+            da_vao_san = 0
         WHERE id = @ma_don_dat;
+
+        DECLARE @trang_thai_hoan VARCHAR(30);
+        IF @so_tien_hoan > 0
+            SET @trang_thai_hoan = 'CHO_HOAN';
+        ELSE
+            SET @trang_thai_hoan = 'DA_HOAN';
+
+        INSERT INTO Lich_Su_Hoan_Tien (
+            ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy, ngay_hoan,
+            ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan, trang_thai_hoan
+        )
+        VALUES (
+            @ma_don_dat, @so_tien_hoan, @ty_le_hoan, @ly_do_huy, GETDATE(),
+            @ten_ngan_hang, @so_tai_khoan, @ten_chu_tai_khoan, @trang_thai_hoan
+        );
 
         IF @tong_tien_da_coc > 0
         BEGIN
-            INSERT INTO Lich_Su_Hoan_Tien (ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy, ngay_hoan)
-            VALUES (@ma_don_dat, @so_tien_hoan, @ty_le_hoan, @ly_do_huy, GETDATE());
-
             UPDATE Thanh_Toan
             SET trang_thai_gd = 'HOAN_TIEN'
-            WHERE ma_don_dat = @ma_don_dat AND trang_thai_gd = 'THANH_CONG';
+            WHERE ma_don_dat = @ma_don_dat AND trang_thai_gd IN ('THANH_CONG', 'CHO_XU_LY');
         END;
 
         COMMIT TRANSACTION;
@@ -2025,7 +2075,11 @@ BEGIN
             @ty_le_hoan AS ty_le_hoan,
             @so_tien_hoan AS so_tien_hoan,
             @so_gio_con_lai AS so_gio_con_lai,
-            @ly_do_huy AS ly_do_huy;
+            @ly_do_huy AS ly_do_huy,
+            @ten_ngan_hang AS ten_ngan_hang,
+            @so_tai_khoan AS so_tai_khoan,
+            @ten_chu_tai_khoan AS ten_chu_tai_khoan,
+            @trang_thai_hoan AS trang_thai_hoan;
 
     END TRY
     BEGIN CATCH
@@ -2033,6 +2087,114 @@ BEGIN
         BEGIN
             ROLLBACK TRANSACTION;
         END;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE sp_XacNhanDaHoanTien
+    @id INT,
+    @ghi_chu_admin NVARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Lich_Su_Hoan_Tien WHERE id = @id)
+        BEGIN
+            ;THROW 50059, N'Không tìm thấy phiếu hoàn tiền tương ứng.', 1;
+        END;
+
+        UPDATE Lich_Su_Hoan_Tien
+        SET trang_thai_hoan = 'DA_HOAN',
+            ngay_chuyen_khoan = GETDATE(),
+            ghi_chu_admin = ISNULL(@ghi_chu_admin, N'Quản trị viên đã chuyển khoản hoàn tất')
+        WHERE id = @id;
+
+        COMMIT TRANSACTION;
+
+        SELECT 
+            ht.id,
+            ht.ma_don_dat,
+            nd.ho_ten AS ten_khach_hang,
+            nd.so_dien_thoai,
+            nd.email,
+            sb.ten_san,
+            d.ngay_da,
+            CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da_dmy,
+            ht.so_tien_hoan,
+            ht.ty_le_hoan,
+            ht.ly_do_huy,
+            ht.ngay_hoan,
+            ht.ten_ngan_hang,
+            ht.so_tai_khoan,
+            ht.ten_chu_tai_khoan,
+            ht.trang_thai_hoan,
+            ht.ngay_chuyen_khoan,
+            ht.ghi_chu_admin
+        FROM Lich_Su_Hoan_Tien ht
+        LEFT JOIN Don_Dat_San d ON ht.ma_don_dat = d.id
+        LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        WHERE ht.id = @id;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+
+CREATE OR ALTER PROCEDURE sp_HoanTacTrangThaiHoanTien
+    @id INT,
+    @ly_do_hoan_tac NVARCHAR(255) = N'Quản trị viên hoàn tác về Chờ hoàn tiền'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Lich_Su_Hoan_Tien WHERE id = @id)
+        BEGIN
+            ;THROW 50060, N'Không tìm thấy phiếu hoàn tiền tương ứng.', 1;
+        END;
+
+        UPDATE Lich_Su_Hoan_Tien
+        SET trang_thai_hoan = 'CHO_HOAN',
+            ngay_chuyen_khoan = NULL,
+            ghi_chu_admin = ISNULL(@ly_do_hoan_tac, N'Quản trị viên hoàn tác về Chờ hoàn tiền')
+        WHERE id = @id;
+
+        COMMIT TRANSACTION;
+
+        SELECT 
+            ht.id,
+            ht.ma_don_dat,
+            nd.ho_ten AS ten_khach_hang,
+            nd.so_dien_thoai,
+            nd.email,
+            sb.ten_san,
+            d.ngay_da,
+            ht.so_tien_hoan,
+            ht.ty_le_hoan,
+            ht.ly_do_huy,
+            ht.ngay_hoan,
+            ht.ten_ngan_hang,
+            ht.so_tai_khoan,
+            ht.ten_chu_tai_khoan,
+            ht.trang_thai_hoan,
+            ht.ngay_chuyen_khoan,
+            ht.ghi_chu_admin
+        FROM Lich_Su_Hoan_Tien ht
+        LEFT JOIN Don_Dat_San d ON ht.ma_don_dat = d.id
+        LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        WHERE ht.id = @id;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
         ;THROW;
     END CATCH;
 END;
@@ -2354,24 +2516,34 @@ BEGIN
             ht.ma_don_dat,
             nd.ho_ten AS ten_khach_hang,
             nd.so_dien_thoai,
+            nd.email,
             sb.ten_san,
             d.ngay_da,
             CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da_dmy,
             ht.so_tien_hoan,
             ht.ty_le_hoan,
             ht.ly_do_huy,
-            ht.ngay_hoan
+            ht.ngay_hoan,
+            ht.ten_ngan_hang,
+            ht.so_tai_khoan,
+            ht.ten_chu_tai_khoan,
+            ISNULL(ht.trang_thai_hoan, 'CHO_HOAN') AS trang_thai_hoan,
+            ht.ngay_chuyen_khoan,
+            ht.ghi_chu_admin
         FROM Lich_Su_Hoan_Tien ht
         LEFT JOIN Don_Dat_San d ON ht.ma_don_dat = d.id
         LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
         LEFT JOIN San_Bong sb ON d.ma_san = sb.id
-        ORDER BY ht.ngay_hoan DESC, ht.id DESC;
+        ORDER BY 
+            CASE WHEN ISNULL(ht.trang_thai_hoan, 'CHO_HOAN') = 'CHO_HOAN' THEN 0 ELSE 1 END,
+            ht.ngay_hoan DESC, ht.id DESC;
     END TRY
     BEGIN CATCH
         ;THROW;
     END CATCH;
 END;
 GO
+
 
 CREATE OR ALTER PROCEDURE sp_LayDanhSachChiTietDichVu
 AS
@@ -2978,14 +3150,24 @@ CREATE OR ALTER PROCEDURE sp_ThemHoanTien
     @ma_don_dat INT,
     @so_tien_hoan DECIMAL(10, 2),
     @ty_le_hoan INT = 100,
-    @ly_do_huy NVARCHAR(255) = NULL
+    @ly_do_huy NVARCHAR(255) = NULL,
+    @ten_ngan_hang NVARCHAR(100) = NULL,
+    @so_tai_khoan VARCHAR(50) = NULL,
+    @ten_chu_tai_khoan NVARCHAR(100) = NULL,
+    @trang_thai_hoan VARCHAR(30) = 'CHO_HOAN'
 AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRANSACTION;
     BEGIN TRY
-        INSERT INTO Lich_Su_Hoan_Tien (ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy, ngay_hoan)
-        VALUES (@ma_don_dat, @so_tien_hoan, @ty_le_hoan, @ly_do_huy, GETDATE());
+        INSERT INTO Lich_Su_Hoan_Tien (
+            ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy, ngay_hoan,
+            ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan, trang_thai_hoan
+        )
+        VALUES (
+            @ma_don_dat, @so_tien_hoan, @ty_le_hoan, @ly_do_huy, GETDATE(),
+            @ten_ngan_hang, @so_tai_khoan, @ten_chu_tai_khoan, @trang_thai_hoan
+        );
 
         DECLARE @newId INT = SCOPE_IDENTITY();
 
@@ -2995,8 +3177,10 @@ BEGIN
         COMMIT TRANSACTION;
 
         SELECT 
-            ht.id, ht.ma_don_dat, nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai,
-            sb.ten_san, d.ngay_da, ht.so_tien_hoan, ht.ty_le_hoan, ht.ly_do_huy, ht.ngay_hoan
+            ht.id, ht.ma_don_dat, nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai, nd.email,
+            sb.ten_san, d.ngay_da, ht.so_tien_hoan, ht.ty_le_hoan, ht.ly_do_huy, ht.ngay_hoan,
+            ht.ten_ngan_hang, ht.so_tai_khoan, ht.ten_chu_tai_khoan, ht.trang_thai_hoan,
+            ht.ngay_chuyen_khoan, ht.ghi_chu_admin
         FROM Lich_Su_Hoan_Tien ht
         LEFT JOIN Don_Dat_San d ON ht.ma_don_dat = d.id
         LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
@@ -3010,17 +3194,24 @@ BEGIN
 END;
 GO
 
+
 CREATE OR ALTER PROCEDURE sp_SuaHoanTien
     @id INT,
     @so_tien_hoan DECIMAL(10, 2),
     @ty_le_hoan INT = 100,
-    @ly_do_huy NVARCHAR(255) = NULL
+    @ly_do_huy NVARCHAR(255) = NULL,
+    @ten_ngan_hang NVARCHAR(100) = NULL,
+    @so_tai_khoan VARCHAR(50) = NULL,
+    @ten_chu_tai_khoan NVARCHAR(100) = NULL,
+    @trang_thai_hoan VARCHAR(30) = NULL,
+    @ghi_chu_admin NVARCHAR(255) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRY
         BEGIN TRANSACTION;
-IF NOT EXISTS (SELECT 1 FROM Lich_Su_Hoan_Tien WHERE id = @id)
+
+        IF NOT EXISTS (SELECT 1 FROM Lich_Su_Hoan_Tien WHERE id = @id)
         BEGIN
             ;THROW 50057, N'Bản ghi hoàn tiền không tồn tại.', 1;
         END;
@@ -3028,18 +3219,26 @@ IF NOT EXISTS (SELECT 1 FROM Lich_Su_Hoan_Tien WHERE id = @id)
         UPDATE Lich_Su_Hoan_Tien
         SET so_tien_hoan = @so_tien_hoan,
             ty_le_hoan = @ty_le_hoan,
-            ly_do_huy = @ly_do_huy
+            ly_do_huy = @ly_do_huy,
+            ten_ngan_hang = ISNULL(@ten_ngan_hang, ten_ngan_hang),
+            so_tai_khoan = ISNULL(@so_tai_khoan, so_tai_khoan),
+            ten_chu_tai_khoan = ISNULL(@ten_chu_tai_khoan, ten_chu_tai_khoan),
+            trang_thai_hoan = ISNULL(@trang_thai_hoan, trang_thai_hoan),
+            ghi_chu_admin = ISNULL(@ghi_chu_admin, ghi_chu_admin)
         WHERE id = @id;
 
+        COMMIT TRANSACTION;
+
         SELECT 
-            ht.id, ht.ma_don_dat, nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai,
-            sb.ten_san, d.ngay_da, ht.so_tien_hoan, ht.ty_le_hoan, ht.ly_do_huy, ht.ngay_hoan
+            ht.id, ht.ma_don_dat, nd.ho_ten AS ten_khach_hang, nd.so_dien_thoai, nd.email,
+            sb.ten_san, d.ngay_da, ht.so_tien_hoan, ht.ty_le_hoan, ht.ly_do_huy, ht.ngay_hoan,
+            ht.ten_ngan_hang, ht.so_tai_khoan, ht.ten_chu_tai_khoan, ht.trang_thai_hoan,
+            ht.ngay_chuyen_khoan, ht.ghi_chu_admin
         FROM Lich_Su_Hoan_Tien ht
         LEFT JOIN Don_Dat_San d ON ht.ma_don_dat = d.id
         LEFT JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
         LEFT JOIN San_Bong sb ON d.ma_san = sb.id
         WHERE ht.id = @id;
-        COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0
@@ -3048,6 +3247,7 @@ IF NOT EXISTS (SELECT 1 FROM Lich_Su_Hoan_Tien WHERE id = @id)
     END CATCH;
 END;
 GO
+
 
 CREATE OR ALTER PROCEDURE sp_XoaHoanTien
     @id INT
