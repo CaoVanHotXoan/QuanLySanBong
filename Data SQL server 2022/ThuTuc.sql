@@ -1935,6 +1935,7 @@ CREATE OR ALTER PROCEDURE sp_HuyDonVaHoanCoc
 AS
 BEGIN
     SET NOCOUNT ON;
+    SET @ten_chu_tai_khoan = UPPER(LTRIM(RTRIM(@ten_chu_tai_khoan)));
     BEGIN TRANSACTION;
     BEGIN TRY
         DECLARE @trang_thai_hien_tai VARCHAR(20);
@@ -2003,11 +2004,15 @@ BEGIN
 
         DECLARE @ty_le_hoan INT;
         SET @ty_le_hoan = 0;
-        IF @so_gio_con_lai >= 24
+        -- Thể lệ hủy sân & hoàn tiền chuẩn:
+        -- 1. Từ 5 tiếng trở lên (>= 5.0h / 300p): hoàn 100% (tiền cọc và tiền thanh toán nếu có)
+        -- 2. Từ 1 đến dưới 5 tiếng (>= 1.0h và < 5.0h, tức từ 60p trở lên): hoàn 50% số tiền (tiền cọc và tiền thanh toán nếu có)
+        -- 3. Dưới 1 tiếng (< 1.0h / dưới 60 phút): hủy sân không hoàn tiền (0%)
+        IF @so_gio_con_lai >= 5.0
         BEGIN
             SET @ty_le_hoan = 100;
         END
-        ELSE IF @so_gio_con_lai >= 12
+        ELSE IF @so_gio_con_lai >= 1.0
         BEGIN
             SET @ty_le_hoan = 50;
         END
@@ -6609,6 +6614,714 @@ BEGIN
           )
         ORDER BY d.ngay ASC, kg.thu_tu ASC, sb.id ASC
         OPTION (MAXRECURSION 31);
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 128. THỦ TỤC KIỂM TRA ĐỔI SÂN & TÍNH TOÁN CHÊNH LỆCH TIỀN
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_KiemTraDoiSan
+    @ma_don_dat INT,
+    @ma_san_moi INT,
+    @ngay_da_moi DATE,
+    @gio_bat_dau_moi TIME,
+    @gio_ket_thuc_moi TIME,
+    @ma_nguoi_dung INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        -- 1. Kiểm tra đơn đặt sân cũ
+        IF NOT EXISTS (SELECT 1 FROM Don_Dat_San WHERE id = @ma_don_dat)
+        BEGIN
+            ;THROW 50050, N'Đơn đặt sân không tồn tại trong hệ thống.', 1;
+        END;
+
+        DECLARE @trang_thai_cu VARCHAR(30), @ngay_da_cu DATE, @gio_bat_dau_cu TIME, @gio_ket_thuc_cu TIME, @ma_san_cu INT, @tien_san_cu DECIMAL(10,2), @tong_tien_cu DECIMAL(10,2), @nguoi_so_huu INT;
+        SELECT 
+            @trang_thai_cu = trang_thai,
+            @ngay_da_cu = ngay_da,
+            @gio_bat_dau_cu = gio_bat_dau,
+            @gio_ket_thuc_cu = gio_ket_thuc,
+            @ma_san_cu = ma_san,
+            @tien_san_cu = ISNULL(tien_san, 0),
+            @tong_tien_cu = ISNULL(tong_tien, tien_san),
+            @nguoi_so_huu = ma_nguoi_dung
+        FROM Don_Dat_San
+        WHERE id = @ma_don_dat;
+
+        IF @trang_thai_cu IN ('DA_HUY')
+        BEGIN
+            ;THROW 50051, N'Đơn đặt sân này đã bị hủy, không thể đổi sân.', 1;
+        END;
+
+        IF @trang_thai_cu IN ('HOAN_THANH', 'DANG_DA')
+        BEGIN
+            ;THROW 50052, N'Đơn đặt sân đang diễn ra hoặc đã hoàn thành, không thể đổi sân.', 1;
+        END;
+
+        -- 2. Kiểm tra điều kiện thời gian tối thiểu 30 phút trước giờ đá cũ
+        DECLARE @thoi_diem_da_cu DATETIME2;
+        SET @thoi_diem_da_cu = DATEADD(second, DATEDIFF(second, '00:00:00', @gio_bat_dau_cu), CAST(@ngay_da_cu AS DATETIME2));
+
+        DECLARE @so_phut_con_lai INT;
+        SET @so_phut_con_lai = DATEDIFF(MINUTE, GETDATE(), @thoi_diem_da_cu);
+
+        IF @so_phut_con_lai < 30
+        BEGIN
+            ;THROW 50053, N'Theo quy định, chỉ được phép đổi sân trước giờ đá tối thiểu 30 phút!', 1;
+        END;
+
+        -- 3. Kiểm tra giờ bắt đầu và kết thúc mới
+        IF @gio_bat_dau_moi >= @gio_ket_thuc_moi
+        BEGIN
+            ;THROW 50054, N'Giờ bắt đầu phải nhỏ hơn giờ kết thúc.', 1;
+        END;
+
+        DECLARE @thoi_diem_da_moi DATETIME2;
+        SET @thoi_diem_da_moi = DATEADD(second, DATEDIFF(second, '00:00:00', @gio_bat_dau_moi), CAST(@ngay_da_moi AS DATETIME2));
+        IF @thoi_diem_da_moi <= GETDATE()
+        BEGIN
+            ;THROW 50055, N'Thời gian đá mới phải ở tương lai, không thể chọn thời gian trong quá khứ.', 1;
+        END;
+
+        -- 4. Kiểm tra sân mới tồn tại và sẵn sàng
+        IF NOT EXISTS (SELECT 1 FROM San_Bong WHERE id = @ma_san_moi AND trang_thai = 'SAN_SANG')
+        BEGIN
+            ;THROW 50056, N'Sân mới không tồn tại hoặc đang bảo trì!', 1;
+        END;
+
+        -- 5. Kiểm tra trùng lịch sân mới (trừ chính đơn này nếu chỉ đổi giờ trên cùng sân)
+        IF EXISTS (
+            SELECT 1 FROM Don_Dat_San
+            WHERE ma_san = @ma_san_moi
+              AND ngay_da = @ngay_da_moi
+              AND trang_thai NOT IN ('DA_HUY')
+              AND id <> @ma_don_dat
+              AND (gio_bat_dau < @gio_ket_thuc_moi AND gio_ket_thuc > @gio_bat_dau_moi)
+        )
+        BEGIN
+            ;THROW 50057, N'Sân mới trong khung giờ này đã có người đặt trước, vui lòng chọn sân hoặc khung giờ khác!', 1;
+        END;
+
+        IF EXISTS (
+            SELECT 1 FROM Chi_Tiet_Don_Dat ct
+            JOIN Don_Dat_San d ON ct.ma_don_dat = d.id
+            WHERE ct.ma_san = @ma_san_moi
+              AND ct.ngay_da = @ngay_da_moi
+              AND d.trang_thai NOT IN ('DA_HUY')
+              AND ct.ma_don_dat <> @ma_don_dat
+              AND (ct.gio_bat_dau < @gio_ket_thuc_moi AND ct.gio_ket_thuc > @gio_bat_dau_moi)
+        )
+        BEGIN
+            ;THROW 50058, N'Sân mới trong khung giờ này đã bị trùng lịch, vui lòng chọn ca khác!', 1;
+        END;
+
+        -- 6. Tính toán tiền sân mới
+        DECLARE @so_phut_da_moi INT = DATEDIFF(MINUTE, CAST(@gio_bat_dau_moi AS TIME), CAST(@gio_ket_thuc_moi AS TIME));
+        DECLARE @don_gia_phut_moi DECIMAL(10,2) = 5000.00;
+        DECLARE @ten_san_moi NVARCHAR(100), @ten_loai_moi NVARCHAR(100);
+
+        SELECT 
+            @don_gia_phut_moi = ISNULL(sb.don_gia_phut, 5000.00),
+            @ten_san_moi = sb.ten_san,
+            @ten_loai_moi = ls.ten_loai
+        FROM San_Bong sb
+        JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        WHERE sb.id = @ma_san_moi;
+
+        DECLARE @tien_san_moi DECIMAL(10,2) = @so_phut_da_moi * @don_gia_phut_moi;
+        DECLARE @tien_coc_san_moi DECIMAL(10,2) = ROUND(@tien_san_moi * 0.3, 0);
+
+        -- 7. Lấy số tiền khách đã thanh toán ở đơn cũ
+        DECLARE @da_thanh_toan_cu DECIMAL(10,2) = 0;
+        SELECT @da_thanh_toan_cu = ISNULL(SUM(so_tien), 0)
+        FROM Thanh_Toan
+        WHERE ma_don_dat = @ma_don_dat AND trang_thai_gd IN ('THANH_CONG', 'CHO_XU_LY');
+
+        IF @da_thanh_toan_cu = 0
+        BEGIN
+            SELECT @da_thanh_toan_cu = CASE 
+                WHEN trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan') THEN ISNULL(tong_tien, tien_san)
+                WHEN trang_thai = 'DA_COC' THEN ROUND(ISNULL(tong_tien, tien_san) * 0.3, 0)
+                ELSE 0
+            END
+            FROM Don_Dat_San
+            WHERE id = @ma_don_dat;
+        END;
+
+        -- 8. Phân tích chênh lệch và điều kiện đổi
+        DECLARE @chenh_lech_tien DECIMAL(10,2) = @tien_san_moi - @tien_san_cu;
+        DECLARE @duoc_doi_ngay BIT = 0;
+        DECLARE @loai_chenh_lech VARCHAR(20);
+        DECLARE @tien_thua DECIMAL(10,2) = 0;
+        DECLARE @can_bu_coc DECIMAL(10,2) = 0;
+        DECLARE @tien_con_thieu DECIMAL(10,2) = 0;
+
+        IF @da_thanh_toan_cu >= @tien_san_moi
+        BEGIN
+            -- Khách đã trả nhiều hơn hoặc bằng tổng tiền sân mới
+            SET @loai_chenh_lech = CASE WHEN @da_thanh_toan_cu > @tien_san_moi THEN 'RE_HON' ELSE 'BANG_GIA' END;
+            SET @duoc_doi_ngay = 1;
+            SET @tien_thua = @da_thanh_toan_cu - @tien_san_moi;
+            SET @can_bu_coc = 0;
+            SET @tien_con_thieu = 0;
+        END
+        ELSE
+        BEGIN
+            -- Sân mới giá cao hơn số tiền khách đã trả
+            SET @loai_chenh_lech = 'DAT_HON';
+            SET @tien_con_thieu = @tien_san_moi - @da_thanh_toan_cu;
+
+            IF @da_thanh_toan_cu >= @tien_coc_san_moi
+            BEGIN
+                -- Tiền đã thanh toán cũ >= tiền cọc (30%) sân mới: ĐƯỢC ĐỔI NGAY!
+                SET @duoc_doi_ngay = 1;
+                SET @can_bu_coc = 0;
+            END
+            ELSE
+            BEGIN
+                -- Tiền đã thanh toán cũ < tiền cọc (30%) sân mới: Cần bù đủ cọc mới được đổi!
+                SET @duoc_doi_ngay = 0;
+                SET @can_bu_coc = @tien_coc_san_moi - @da_thanh_toan_cu;
+            END;
+        END;
+
+        DECLARE @ten_san_cu NVARCHAR(100), @ten_loai_cu NVARCHAR(100);
+        SELECT @ten_san_cu = sb.ten_san, @ten_loai_cu = ls.ten_loai
+        FROM San_Bong sb
+        JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        WHERE sb.id = @ma_san_cu;
+
+        SELECT 
+            @ma_don_dat AS ma_don_dat,
+            @ma_san_cu AS ma_san_cu,
+            @ten_san_cu AS ten_san_cu,
+            @ten_loai_cu AS ten_loai_cu,
+            @ngay_da_cu AS ngay_da_cu,
+            CONVERT(VARCHAR(5), @gio_bat_dau_cu, 108) AS gio_bat_dau_cu,
+            CONVERT(VARCHAR(5), @gio_ket_thuc_cu, 108) AS gio_ket_thuc_cu,
+            @tien_san_cu AS tien_san_cu,
+            @da_thanh_toan_cu AS da_thanh_toan_cu,
+
+            @ma_san_moi AS ma_san_moi,
+            @ten_san_moi AS ten_san_moi,
+            @ten_loai_moi AS ten_loai_moi,
+            @ngay_da_moi AS ngay_da_moi,
+            CONVERT(VARCHAR(5), @gio_bat_dau_moi, 108) AS gio_bat_dau_moi,
+            CONVERT(VARCHAR(5), @gio_ket_thuc_moi, 108) AS gio_ket_thuc_moi,
+            @so_phut_da_moi AS so_phut_da_moi,
+            @don_gia_phut_moi AS don_gia_phut_moi,
+            @tien_san_moi AS tien_san_moi,
+            @tien_coc_san_moi AS tien_coc_san_moi,
+
+            @chenh_lech_tien AS chenh_lech_tien,
+            @loai_chenh_lech AS loai_chenh_lech,
+            @duoc_doi_ngay AS duoc_doi_ngay,
+            @can_bu_coc AS can_bu_coc,
+            @tien_con_thieu AS tien_con_thieu,
+            @tien_thua AS tien_thua;
+
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 129. THỦ TỤC XÁC NHẬN ĐỔI SÂN & CẬP NHẬT CSDL NGUYÊN TỬ
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_KhachHangDoiSan
+    @ma_don_dat INT,
+    @ma_san_moi INT,
+    @ngay_da_moi DATE,
+    @gio_bat_dau_moi TIME,
+    @gio_ket_thuc_moi TIME,
+    @ma_nguoi_dung INT = NULL,
+    @ly_do_doi NVARCHAR(255) = N'Khách hàng yêu cầu đổi sân',
+    @hinh_thuc_nhan_tien_thua NVARCHAR(100) = NULL,
+    @ten_ngan_hang NVARCHAR(100) = NULL,
+    @so_tai_khoan VARCHAR(50) = NULL,
+    @ten_chu_tai_khoan NVARCHAR(100) = NULL,
+    @tien_bu_da_tra DECIMAL(10,2) = 0,
+    @ma_giao_dich_bu VARCHAR(100) = NULL,
+    @phuong_thuc_bu VARCHAR(20) = 'CHUYEN_KHOAN'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET @ten_chu_tai_khoan = UPPER(LTRIM(RTRIM(@ten_chu_tai_khoan)));
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        -- 1. Kiểm tra đơn đặt sân cũ
+        IF NOT EXISTS (SELECT 1 FROM Don_Dat_San WHERE id = @ma_don_dat)
+        BEGIN
+            ;THROW 50050, N'Đơn đặt sân không tồn tại trong hệ thống.', 1;
+        END;
+
+        DECLARE @trang_thai_cu VARCHAR(30), @ngay_da_cu DATE, @gio_bat_dau_cu TIME, @gio_ket_thuc_cu TIME, @ma_san_cu INT, @tien_san_cu DECIMAL(10,2), @tong_tien_cu DECIMAL(10,2), @nguoi_so_huu INT;
+        SELECT 
+            @trang_thai_cu = trang_thai,
+            @ngay_da_cu = ngay_da,
+            @gio_bat_dau_cu = gio_bat_dau,
+            @gio_ket_thuc_cu = gio_ket_thuc,
+            @ma_san_cu = ma_san,
+            @tien_san_cu = ISNULL(tien_san, 0),
+            @tong_tien_cu = ISNULL(tong_tien, tien_san),
+            @nguoi_so_huu = ma_nguoi_dung
+        FROM Don_Dat_San
+        WHERE id = @ma_don_dat;
+
+        IF @trang_thai_cu IN ('DA_HUY')
+        BEGIN
+            ;THROW 50051, N'Đơn đặt sân này đã bị hủy, không thể đổi sân.', 1;
+        END;
+
+        IF @trang_thai_cu IN ('HOAN_THANH', 'DANG_DA')
+        BEGIN
+            ;THROW 50052, N'Đơn đặt sân đang diễn ra hoặc đã hoàn thành, không thể đổi sân.', 1;
+        END;
+
+        -- Kiểm tra quyền sở hữu đơn
+        IF @ma_nguoi_dung IS NOT NULL AND @nguoi_so_huu IS NOT NULL AND @nguoi_so_huu <> @ma_nguoi_dung
+        BEGIN
+            DECLARE @vai_tro VARCHAR(50);
+            SELECT @vai_tro = UPPER(ISNULL(vt.TenVaiTro, ''))
+            FROM Nguoi_Dung nd
+            LEFT JOIN Vai_Tro vt ON nd.MaVaiTro = vt.MaVaiTro
+            WHERE nd.id = @ma_nguoi_dung;
+
+            IF @vai_tro NOT IN ('ADMIN', 'NHAN_VIEN', 'QUAN_TRI', 'QUAN_LY')
+            BEGIN
+                ;THROW 50059, N'Bạn không có quyền thay đổi đơn đặt sân của khách hàng khác.', 1;
+            END;
+        END;
+
+        -- 2. Kiểm tra điều kiện thời gian tối thiểu 30 phút trước giờ đá cũ
+        DECLARE @thoi_diem_da_cu DATETIME2;
+        SET @thoi_diem_da_cu = DATEADD(second, DATEDIFF(second, '00:00:00', @gio_bat_dau_cu), CAST(@ngay_da_cu AS DATETIME2));
+
+        DECLARE @so_phut_con_lai INT;
+        SET @so_phut_con_lai = DATEDIFF(MINUTE, GETDATE(), @thoi_diem_da_cu);
+
+        IF @so_phut_con_lai < 30
+        BEGIN
+            ;THROW 50053, N'Theo quy định, chỉ được phép đổi sân trước giờ đá tối thiểu 30 phút!', 1;
+        END;
+
+        -- 3. Kiểm tra giờ bắt đầu và kết thúc mới
+        IF @gio_bat_dau_moi >= @gio_ket_thuc_moi
+        BEGIN
+            ;THROW 50054, N'Giờ bắt đầu phải nhỏ hơn giờ kết thúc.', 1;
+        END;
+
+        DECLARE @thoi_diem_da_moi DATETIME2;
+        SET @thoi_diem_da_moi = DATEADD(second, DATEDIFF(second, '00:00:00', @gio_bat_dau_moi), CAST(@ngay_da_moi AS DATETIME2));
+        IF @thoi_diem_da_moi <= GETDATE()
+        BEGIN
+            ;THROW 50055, N'Thời gian đá mới phải ở tương lai, không thể chọn thời gian trong quá khứ.', 1;
+        END;
+
+        -- 4. Kiểm tra sân mới tồn tại và sẵn sàng
+        IF NOT EXISTS (SELECT 1 FROM San_Bong WHERE id = @ma_san_moi AND trang_thai = 'SAN_SANG')
+        BEGIN
+            ;THROW 50056, N'Sân mới không tồn tại hoặc đang bảo trì!', 1;
+        END;
+
+        -- 5. Kiểm tra trùng lịch sân mới (trừ chính đơn này nếu chỉ đổi giờ trên cùng sân)
+        IF EXISTS (
+            SELECT 1 FROM Don_Dat_San
+            WHERE ma_san = @ma_san_moi
+              AND ngay_da = @ngay_da_moi
+              AND trang_thai NOT IN ('DA_HUY')
+              AND id <> @ma_don_dat
+              AND (gio_bat_dau < @gio_ket_thuc_moi AND gio_ket_thuc > @gio_bat_dau_moi)
+        )
+        BEGIN
+            ;THROW 50057, N'Sân mới trong khung giờ này đã có người đặt trước, vui lòng chọn sân hoặc khung giờ khác!', 1;
+        END;
+
+        IF EXISTS (
+            SELECT 1 FROM Chi_Tiet_Don_Dat ct
+            JOIN Don_Dat_San d ON ct.ma_don_dat = d.id
+            WHERE ct.ma_san = @ma_san_moi
+              AND ct.ngay_da = @ngay_da_moi
+              AND d.trang_thai NOT IN ('DA_HUY')
+              AND ct.ma_don_dat <> @ma_don_dat
+              AND (ct.gio_bat_dau < @gio_ket_thuc_moi AND ct.gio_ket_thuc > @gio_bat_dau_moi)
+        )
+        BEGIN
+            ;THROW 50058, N'Sân mới trong khung giờ này đã bị trùng lịch, vui lòng chọn ca khác!', 1;
+        END;
+
+        -- 6. Tính toán tiền sân mới
+        DECLARE @so_phut_da_moi INT = DATEDIFF(MINUTE, CAST(@gio_bat_dau_moi AS TIME), CAST(@gio_ket_thuc_moi AS TIME));
+        DECLARE @don_gia_phut_moi DECIMAL(10,2) = 5000.00;
+        SELECT @don_gia_phut_moi = ISNULL(don_gia_phut, 5000.00) FROM San_Bong WHERE id = @ma_san_moi;
+
+        DECLARE @tien_san_moi DECIMAL(10,2) = @so_phut_da_moi * @don_gia_phut_moi;
+        DECLARE @tien_coc_san_moi DECIMAL(10,2) = ROUND(@tien_san_moi * 0.3, 0);
+
+        -- 7. Lấy số tiền khách đã thanh toán ở đơn cũ
+        DECLARE @da_thanh_toan_cu DECIMAL(10,2) = 0;
+        SELECT @da_thanh_toan_cu = ISNULL(SUM(so_tien), 0)
+        FROM Thanh_Toan
+        WHERE ma_don_dat = @ma_don_dat AND trang_thai_gd IN ('THANH_CONG', 'CHO_XU_LY');
+
+        IF @da_thanh_toan_cu = 0
+        BEGIN
+            SELECT @da_thanh_toan_cu = CASE 
+                WHEN trang_thai IN ('DA_THANH_TOAN', 'Da Thanh Toan') THEN ISNULL(tong_tien, tien_san)
+                WHEN trang_thai = 'DA_COC' THEN ROUND(ISNULL(tong_tien, tien_san) * 0.3, 0)
+                ELSE 0
+            END
+            FROM Don_Dat_San
+            WHERE id = @ma_don_dat;
+        END;
+
+        DECLARE @tong_tien_hien_co DECIMAL(10,2) = @da_thanh_toan_cu + ISNULL(@tien_bu_da_tra, 0);
+
+        -- 8. Kiểm tra điều kiện cọc theo quy định
+        IF @tong_tien_hien_co < @tien_coc_san_moi
+        BEGIN
+            DECLARE @so_tien_thieu_coc DECIMAL(10,2) = @tien_coc_san_moi - @tong_tien_hien_co;
+            DECLARE @msg_error NVARCHAR(500) = CONCAT(N'Tiền cọc chưa đủ 30% giá sân mới! Vui lòng thanh toán bù thêm ', FORMAT(@so_tien_thieu_coc, '#,##0'), N' đ tiền cọc để hoàn tất đổi sân.');
+            ;THROW 50060, @msg_error, 1;
+        END;
+
+        -- 9. Ghi nhận giao dịch bù tiền (nếu có)
+        IF ISNULL(@tien_bu_da_tra, 0) > 0
+        BEGIN
+            INSERT INTO Thanh_Toan (
+                ma_don_dat, phuong_thuc, loai_thanh_toan, so_tien, ma_giao_dich, noi_dung_chuyen_khoan, trang_thai_gd, ngay_thanh_toan
+            )
+            VALUES (
+                @ma_don_dat,
+                @phuong_thuc_bu,
+                CASE WHEN @tong_tien_hien_co >= @tien_san_moi THEN 'TRA_HET' ELSE 'DAT_COC' END,
+                @tien_bu_da_tra,
+                ISNULL(@ma_giao_dich_bu, CONCAT('BU_DOI_SAN_', @ma_don_dat, '_', DATEDIFF(SECOND, '2026-01-01', GETDATE()))),
+                CONCAT(N'Thanh toán bù khi đổi sang sân mới #', @ma_don_dat),
+                'THANH_CONG',
+                GETDATE()
+            );
+        END;
+
+        -- 10. Xử lý trường hợp có tiền thừa hoàn lại
+        DECLARE @tien_thua DECIMAL(10,2) = 0;
+        IF @da_thanh_toan_cu > @tien_san_moi
+        BEGIN
+            SET @tien_thua = @da_thanh_toan_cu - @tien_san_moi;
+            
+            INSERT INTO Lich_Su_Hoan_Tien (
+                ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy, ngay_hoan,
+                ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan, trang_thai_hoan, ghi_chu_admin
+            )
+            VALUES (
+                @ma_don_dat,
+                @tien_thua,
+                100,
+                CONCAT(N'Hoàn tiền thừa khi đổi sang sân giá thấp hơn (Đơn #', @ma_don_dat, N')'),
+                GETDATE(),
+                @ten_ngan_hang,
+                @so_tai_khoan,
+                @ten_chu_tai_khoan,
+                'CHO_HOAN',
+                CONCAT(N'Hình thức nhận: ', ISNULL(@hinh_thuc_nhan_tien_thua, N'Chưa rõ'))
+            );
+        END;
+
+        -- 11. Xác định trạng thái mới của đơn đặt sân
+        DECLARE @trang_thai_moi VARCHAR(30);
+        IF @tong_tien_hien_co >= @tien_san_moi
+            SET @trang_thai_moi = 'DA_THANH_TOAN';
+        ELSE
+            SET @trang_thai_moi = 'DA_COC';
+
+        -- 12. Cập nhật bảng Don_Dat_San
+        UPDATE Don_Dat_San
+        SET ma_san = @ma_san_moi,
+            ngay_da = @ngay_da_moi,
+            gio_bat_dau = @gio_bat_dau_moi,
+            gio_ket_thuc = @gio_ket_thuc_moi,
+            tien_san = @tien_san_moi,
+            tong_tien = @tien_san_moi,
+            trang_thai = @trang_thai_moi,
+            ghi_chu = CONCAT(ISNULL(ghi_chu, ''), N' | Đã đổi sân lúc ', FORMAT(GETDATE(), 'dd/MM/yyyy HH:mm'))
+        WHERE id = @ma_don_dat;
+
+        -- 13. Cập nhật bảng Chi_Tiet_Don_Dat (nếu có bản ghi)
+        IF EXISTS (SELECT 1 FROM Chi_Tiet_Don_Dat WHERE ma_don_dat = @ma_don_dat)
+        BEGIN
+            UPDATE Chi_Tiet_Don_Dat
+            SET ma_san = @ma_san_moi,
+                ngay_da = @ngay_da_moi,
+                gio_bat_dau = @gio_bat_dau_moi,
+                gio_ket_thuc = @gio_ket_thuc_moi,
+                tien_san = @tien_san_moi
+            WHERE ma_don_dat = @ma_don_dat;
+        END;
+
+        -- 14. Ghi nhận nhật ký vào bảng Lich_Su_Doi_San
+        INSERT INTO Lich_Su_Doi_San (
+            ma_don_dat, ma_nguoi_dung, ma_san_cu, ma_san_moi,
+            ngay_da_cu, ngay_da_moi, gio_bat_dau_cu, gio_ket_thuc_cu,
+            gio_bat_dau_moi, gio_ket_thuc_moi, tien_san_cu, tien_san_moi,
+            da_thanh_toan_cu, chenh_lech_tien, tien_bu_da_tra, tien_thua_hoan,
+            hinh_thuc_nhan_tien_thua, ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan,
+            ly_do_doi, ngay_doi
+        )
+        VALUES (
+            @ma_don_dat, @nguoi_so_huu, @ma_san_cu, @ma_san_moi,
+            @ngay_da_cu, @ngay_da_moi, @gio_bat_dau_cu, @gio_ket_thuc_cu,
+            @gio_bat_dau_moi, @gio_ket_thuc_moi, @tien_san_cu, @tien_san_moi,
+            @da_thanh_toan_cu, (@tien_san_moi - @tien_san_cu), ISNULL(@tien_bu_da_tra, 0), @tien_thua,
+            @hinh_thuc_nhan_tien_thua, @ten_ngan_hang, @so_tai_khoan, @ten_chu_tai_khoan,
+            @ly_do_doi, GETDATE()
+        );
+
+        COMMIT TRANSACTION;
+
+        -- 15. Trả về kết quả sau khi đổi sân
+        SELECT 
+            d.id, d.ma_san, sb.ten_san, ls.ten_loai, d.ma_nguoi_dung,
+            d.ngay_da,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+            d.tien_san, d.tong_tien, d.trang_thai,
+            @da_thanh_toan_cu AS da_thanh_toan_cu,
+            ISNULL(@tien_bu_da_tra, 0) AS tien_bu_da_tra,
+            @tien_thua AS tien_thua_hoan,
+            @tien_coc_san_moi AS tien_coc_san_moi,
+            CASE WHEN @tong_tien_hien_co < @tien_san_moi THEN (@tien_san_moi - @tong_tien_hien_co) ELSE 0 END AS tien_con_thieu
+        FROM Don_Dat_San d
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        WHERE d.id = @ma_don_dat;
+
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 130. THỦ TỤC LẤY DANH SÁCH LỊCH SỬ ĐỔI SÂN CHO ADMIN (sp_LayDanhSachDoiSan)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_LayDanhSachDoiSan
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT 
+            ls.id,
+            ls.ma_don_dat,
+            ls.ma_nguoi_dung,
+            nd.ho_ten AS ten_khach_hang,
+            nd.so_dien_thoai,
+            nd.email,
+            ls.ma_san_cu,
+            sc.ten_san AS ten_san_cu,
+            ls.ma_san_moi,
+            sm.ten_san AS ten_san_moi,
+            ls.ngay_da_cu,
+            CONVERT(VARCHAR(10), ls.ngay_da_cu, 103) AS ngay_da_cu_dmy,
+            ls.ngay_da_moi,
+            CONVERT(VARCHAR(10), ls.ngay_da_moi, 103) AS ngay_da_moi_dmy,
+            ls.gio_bat_dau_cu,
+            ls.gio_ket_thuc_cu,
+            ls.gio_bat_dau_moi,
+            ls.gio_ket_thuc_moi,
+            ls.tien_san_cu,
+            ls.tien_san_moi,
+            ls.da_thanh_toan_cu,
+            ls.chenh_lech_tien,
+            ls.tien_bu_da_tra,
+            ls.tien_thua_hoan,
+            ls.hinh_thuc_nhan_tien_thua,
+            ls.ten_ngan_hang,
+            ls.so_tai_khoan,
+            ls.ten_chu_tai_khoan,
+            ls.ly_do_doi,
+            ls.ngay_doi
+        FROM Lich_Su_Doi_San ls
+        LEFT JOIN Don_Dat_San d ON ls.ma_don_dat = d.id
+        LEFT JOIN Nguoi_Dung nd ON ls.ma_nguoi_dung = nd.id
+        LEFT JOIN San_Bong sc ON ls.ma_san_cu = sc.id
+        LEFT JOIN San_Bong sm ON ls.ma_san_moi = sm.id
+        ORDER BY ls.ngay_doi DESC, ls.id DESC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 131. THỦ TỤC TẠO GIAO DỊCH ĐỔI SÂN TỪ PHÍA ADMIN (sp_ThemDoiSanAdmin)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_ThemDoiSanAdmin
+    @ma_don_dat INT,
+    @ma_san_moi INT,
+    @ngay_da_moi DATE,
+    @gio_bat_dau_moi VARCHAR(8),
+    @gio_ket_thuc_moi VARCHAR(8),
+    @ly_do_doi NVARCHAR(255) = N'Quản trị viên hỗ trợ đổi sân',
+    @tien_bu_da_tra DECIMAL(10,2) = 0,
+    @tien_thua_hoan DECIMAL(10,2) = 0,
+    @hinh_thuc_nhan_tien_thua NVARCHAR(100) = NULL,
+    @ten_ngan_hang NVARCHAR(100) = NULL,
+    @so_tai_khoan VARCHAR(50) = NULL,
+    @ten_chu_tai_khoan NVARCHAR(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Kiểm tra đơn đặt cũ
+        DECLARE @ma_san_cu INT, @ngay_da_cu DATE, @gio_bat_dau_cu VARCHAR(8), @gio_ket_thuc_cu VARCHAR(8);
+        DECLARE @tien_san_cu DECIMAL(10,2), @ma_nguoi_dung INT;
+        SELECT 
+            @ma_san_cu = ma_san,
+            @ngay_da_cu = ngay_da,
+            @gio_bat_dau_cu = CONVERT(VARCHAR(5), gio_bat_dau, 108),
+            @gio_ket_thuc_cu = CONVERT(VARCHAR(5), gio_ket_thuc, 108),
+            @tien_san_cu = ISNULL(tien_san, 0),
+            @ma_nguoi_dung = ma_nguoi_dung
+        FROM Don_Dat_San
+        WHERE id = @ma_don_dat;
+
+        IF @ma_san_cu IS NULL
+        BEGIN
+            RAISERROR(N'Không tìm thấy đơn đặt sân!', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+
+        -- Lấy đơn giá sân mới
+        DECLARE @don_gia_phut DECIMAL(10,2) = 0;
+        SELECT @don_gia_phut = ISNULL(don_gia_phut, 300) FROM San_Bong WHERE id = @ma_san_moi;
+
+        DECLARE @thoi_luong_moi_phut INT = DATEDIFF(MINUTE, CAST(@gio_bat_dau_moi AS TIME), CAST(@gio_ket_thuc_moi AS TIME));
+        IF @thoi_luong_moi_phut <= 0 SET @thoi_luong_moi_phut = 60;
+        DECLARE @tien_san_moi DECIMAL(10,2) = @thoi_luong_moi_phut * @don_gia_phut;
+
+        -- Cập nhật đơn đặt sân
+        UPDATE Don_Dat_San
+        SET ma_san = @ma_san_moi,
+            ngay_da = @ngay_da_moi,
+            gio_bat_dau = @gio_bat_dau_moi,
+            gio_ket_thuc = @gio_ket_thuc_moi,
+            tien_san = @tien_san_moi,
+            tong_tien = @tien_san_moi,
+            ghi_chu = CONCAT(ISNULL(ghi_chu, ''), N' [Admin đổi sân: ', @ly_do_doi, N']')
+        WHERE id = @ma_don_dat;
+
+        -- Ghi log lịch sử đổi sân
+        INSERT INTO Lich_Su_Doi_San (
+            ma_don_dat, ma_nguoi_dung, ma_san_cu, ma_san_moi,
+            ngay_da_cu, ngay_da_moi, gio_bat_dau_cu, gio_ket_thuc_cu,
+            gio_bat_dau_moi, gio_ket_thuc_moi, tien_san_cu, tien_san_moi,
+            da_thanh_toan_cu, chenh_lech_tien, tien_bu_da_tra, tien_thua_hoan,
+            hinh_thuc_nhan_tien_thua, ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan,
+            ly_do_doi, ngay_doi
+        )
+        VALUES (
+            @ma_don_dat, @ma_nguoi_dung, @ma_san_cu, @ma_san_moi,
+            @ngay_da_cu, @ngay_da_moi, @gio_bat_dau_cu, @gio_ket_thuc_cu,
+            @gio_bat_dau_moi, @gio_ket_thuc_moi, @tien_san_cu, @tien_san_moi,
+            @tien_san_cu, (@tien_san_moi - @tien_san_cu), @tien_bu_da_tra, @tien_thua_hoan,
+            @hinh_thuc_nhan_tien_thua, @ten_ngan_hang, @so_tai_khoan, @ten_chu_tai_khoan,
+            @ly_do_doi, GETDATE()
+        );
+
+        -- Nếu có tiền thừa, tạo phiếu hoàn tiền tương ứng
+        IF @tien_thua_hoan > 0
+        BEGIN
+            INSERT INTO Lich_Su_Hoan_Tien (
+                ma_don_dat, so_tien_hoan, ty_le_hoan, ly_do_huy, ngay_hoan,
+                ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan, trang_thai_hoan, ghi_chu_admin
+            )
+            VALUES (
+                @ma_don_dat, @tien_thua_hoan, 100,
+                CONCAT(N'Hoàn tiền thừa khi đổi sang sân giá thấp hơn (Đơn #', @ma_don_dat, N')'),
+                GETDATE(), @ten_ngan_hang, @so_tai_khoan, @ten_chu_tai_khoan, 'CHO_HOAN',
+                CONCAT(N'Admin tạo phiếu hoàn - Hình thức: ', ISNULL(@hinh_thuc_nhan_tien_thua, N'Chưa rõ'))
+            );
+        END;
+
+        COMMIT TRANSACTION;
+
+        SELECT SCOPE_IDENTITY() AS id, N'Tạo giao dịch đổi sân thành công!' AS thong_bao;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 132. THỦ TỤC CẬP NHẬT GHI CHÚ / THÔNG TIN ĐỔI SÂN (sp_SuaDoiSanAdmin)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_SuaDoiSanAdmin
+    @id INT,
+    @ly_do_doi NVARCHAR(255),
+    @hinh_thuc_nhan_tien_thua NVARCHAR(100) = NULL,
+    @ten_ngan_hang NVARCHAR(100) = NULL,
+    @so_tai_khoan VARCHAR(50) = NULL,
+    @ten_chu_tai_khoan NVARCHAR(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Lich_Su_Doi_San WHERE id = @id)
+        BEGIN
+            RAISERROR(N'Bản ghi đổi sân không tồn tại!', 16, 1);
+            RETURN;
+        END;
+
+        UPDATE Lich_Su_Doi_San
+        SET ly_do_doi = @ly_do_doi,
+            hinh_thuc_nhan_tien_thua = ISNULL(@hinh_thuc_nhan_tien_thua, hinh_thuc_nhan_tien_thua),
+            ten_ngan_hang = ISNULL(@ten_ngan_hang, ten_ngan_hang),
+            so_tai_khoan = ISNULL(@so_tai_khoan, so_tai_khoan),
+            ten_chu_tai_khoan = ISNULL(@ten_chu_tai_khoan, ten_chu_tai_khoan)
+        WHERE id = @id;
+
+        SELECT @id AS id, N'Cập nhật thông tin đổi sân thành công!' AS thong_bao;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 133. THỦ TỤC XÓA BẢN GHI LỊCH SỬ ĐỔI SÂN (sp_XoaDoiSanAdmin)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_XoaDoiSanAdmin
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Lich_Su_Doi_San WHERE id = @id)
+        BEGIN
+            RAISERROR(N'Bản ghi đổi sân không tồn tại!', 16, 1);
+            RETURN;
+        END;
+
+        DELETE FROM Lich_Su_Doi_San WHERE id = @id;
+
+        SELECT @id AS id, N'Đã xóa bản ghi đổi sân thành công!' AS thong_bao;
     END TRY
     BEGIN CATCH
         ;THROW;

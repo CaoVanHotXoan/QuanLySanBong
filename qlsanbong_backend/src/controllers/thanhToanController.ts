@@ -1006,3 +1006,63 @@ export const huyDonTamPayOS = async (req: AuthRequest, res: Response) => {
         });
     }
 };
+
+/**
+ * Danh sách ngân hàng chuẩn Napas dự phòng
+ */
+const DEFAULT_BANKS = [
+    { id: 21, code: 'MB', shortName: 'MBBank', name: 'Ngân hàng TMCP Quân đội', bin: '970422' },
+    { id: 43, code: 'VCB', shortName: 'Vietcombank', name: 'Ngân hàng TMCP Ngoại Thương Việt Nam', bin: '970436' },
+    { id: 17, code: 'ICB', shortName: 'VietinBank', name: 'Ngân hàng TMCP Công thương Việt Nam', bin: '970415' },
+    { id: 2, code: 'BIDV', shortName: 'BIDV', name: 'Ngân hàng TMCP Đầu tư và Phát triển Việt Nam', bin: '970418' },
+    { id: 38, code: 'TCB', shortName: 'Techcombank', name: 'Ngân hàng TMCP Kỹ thương Việt Nam', bin: '970407' },
+    { id: 47, code: 'VPB', shortName: 'VPBank', name: 'Ngân hàng TMCP Việt Nam Thịnh Vượng', bin: '970432' },
+    { id: 1, code: 'ACB', shortName: 'ACB', name: 'Ngân hàng TMCP Á Châu', bin: '970416' },
+    { id: 42, code: 'VBA', shortName: 'Agribank', name: 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam', bin: '970405' },
+    { id: 40, code: 'TPB', shortName: 'TPBank', name: 'Ngân hàng TMCP Tiên Phong', bin: '970423' },
+    { id: 35, code: 'STB', shortName: 'Sacombank', name: 'Ngân hàng TMCP Sài Gòn Thương Tín', bin: '970403' },
+    { id: 13, code: 'HDB', shortName: 'HDBank', name: 'Ngân hàng TMCP Phát triển TP.HCM', bin: '970437' },
+    { id: 44, code: 'VIB', shortName: 'VIB', name: 'Ngân hàng TMCP Quốc tế Việt Nam', bin: '970441' },
+    { id: 33, code: 'SHB', shortName: 'SHB', name: 'Ngân hàng TMCP Sài Gòn - Hà Nội', bin: '970443' },
+    { id: 22, code: 'MSB', shortName: 'MSB', name: 'Ngân hàng TMCP Hàng Hải', bin: '970426' },
+    { id: 32, code: 'SSB', shortName: 'SeABank', name: 'Ngân hàng TMCP Đông Nam Á', bin: '970440' },
+    { id: 27, code: 'OCB', shortName: 'OCB', name: 'Ngân hàng TMCP Phương Đông', bin: '970448' },
+    { id: 9, code: 'EIB', shortName: 'Eximbank', name: 'Ngân hàng TMCP Xuất Nhập khẩu Việt Nam', bin: '970431' },
+    { id: 20, code: 'LPB', shortName: 'LPBank', name: 'Ngân hàng TMCP Lộc Phát Việt Nam', bin: '970449' }
+];
+
+let cachedBanks: any[] | null = null;
+let lastBanksFetchTime = 0;
+
+/**
+ * Lấy danh sách ngân hàng thương mại Việt Nam (Dữ liệu thật 100% từ VietQR / Napas Open API)
+ * GET /api/thanh-toan/danh-sach-ngan-hang
+ */
+export const layDanhSachNganHang = async (req: AuthRequest, res: Response) => {
+    try {
+        const now = Date.now();
+        if (cachedBanks && cachedBanks.length > 0 && now - lastBanksFetchTime < 1000 * 60 * 60 * 24) {
+            return res.status(200).json({ success: true, data: cachedBanks });
+        }
+
+        const response = await fetch('https://api.vietqr.io/v2/banks', { signal: AbortSignal.timeout(4000) });
+        const data = await response.json();
+
+        if (data && data.code === '00' && Array.isArray(data.data)) {
+            cachedBanks = data.data.map((b: any) => ({
+                id: b.id,
+                name: b.name,
+                code: b.code,
+                bin: b.bin,
+                shortName: b.shortName || b.short_name,
+                logo: b.logo
+            }));
+            lastBanksFetchTime = now;
+            return res.status(200).json({ success: true, data: cachedBanks });
+        }
+
+        return res.status(200).json({ success: true, data: DEFAULT_BANKS });
+    } catch (error: any) {
+        return res.status(200).json({ success: true, data: cachedBanks || DEFAULT_BANKS });
+    }
+};

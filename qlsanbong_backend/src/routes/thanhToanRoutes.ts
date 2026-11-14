@@ -27,6 +27,9 @@ router.post('/payos/confirm-webhook', thanhToanController.xacNhanWebhookUrl);
 // 5. Hủy đơn đặt sân tạm thời khi đóng modal
 router.post('/payos/huy-don-tam', thanhToanController.huyDonTamPayOS);
 
+// 6. Lấy danh sách ngân hàng thật (VietQR Open Banking API)
+router.get('/danh-sach-ngan-hang', thanhToanController.layDanhSachNganHang);
+
 // =====================================================================
 // LỊCH SỬ GIAO DỊCH & QUẢN LÝ HOÀN TIỀN
 // =====================================================================

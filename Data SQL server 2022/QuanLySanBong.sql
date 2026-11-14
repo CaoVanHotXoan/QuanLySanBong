@@ -341,6 +341,37 @@ CREATE TABLE Danh_Gia_San (
 );
 GO
 
+-- 3.20. Bảng Lich_Su_Doi_San (Ghi nhận lịch sử đổi sân & xử lý chênh lệch thanh toán)
+CREATE TABLE Lich_Su_Doi_San (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ma_don_dat INT NOT NULL,
+    ma_nguoi_dung INT NULL,
+    ma_san_cu INT NOT NULL,
+    ma_san_moi INT NOT NULL,
+    ngay_da_cu DATE NOT NULL,
+    ngay_da_moi DATE NOT NULL,
+    gio_bat_dau_cu TIME NOT NULL,
+    gio_ket_thuc_cu TIME NOT NULL,
+    gio_bat_dau_moi TIME NOT NULL,
+    gio_ket_thuc_moi TIME NOT NULL,
+    tien_san_cu DECIMAL(10, 2) NOT NULL,
+    tien_san_moi DECIMAL(10, 2) NOT NULL,
+    da_thanh_toan_cu DECIMAL(10, 2) NOT NULL,
+    chenh_lech_tien DECIMAL(10, 2) NOT NULL,
+    tien_bu_da_tra DECIMAL(10, 2) DEFAULT 0,
+    tien_thua_hoan DECIMAL(10, 2) DEFAULT 0,
+    hinh_thuc_nhan_tien_thua NVARCHAR(100) NULL,
+    ten_ngan_hang NVARCHAR(100) NULL,
+    so_tai_khoan VARCHAR(50) NULL,
+    ten_chu_tai_khoan NVARCHAR(100) NULL,
+    ly_do_doi NVARCHAR(255) NULL,
+    ngay_doi DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id) ON DELETE CASCADE,
+    FOREIGN KEY (ma_san_cu) REFERENCES San_Bong(id) ON DELETE NO ACTION,
+    FOREIGN KEY (ma_san_moi) REFERENCES San_Bong(id) ON DELETE NO ACTION
+);
+GO
+
 -- =====================================================================
 -- 4. CHỈ MỤC TỐI ƯU HIỆU NĂNG TRUY VẤN (PERFORMANCE INDEXES)
 -- =====================================================================
@@ -358,6 +389,7 @@ CREATE NONCLUSTERED INDEX IX_LienHe_TrangThai ON Lien_He(trang_thai_xu_ly);
 CREATE NONCLUSTERED INDEX IX_XacThucOTP_Email_Loai ON Xac_Thuc_OTP(email, loai_otp, da_xac_thuc, het_han_luc);
 CREATE NONCLUSTERED INDEX IX_XacThucOTP_IP_NgayTao ON Xac_Thuc_OTP(ip_gui, ngay_tao);
 CREATE NONCLUSTERED INDEX IX_DanhGiaSan_MaSan_TrangThai ON Danh_Gia_San(ma_san, trang_thai) INCLUDE (so_sao, ngay_tao);
+CREATE NONCLUSTERED INDEX IX_LichSuDoiSan_MaDonDat ON Lich_Su_Doi_San(ma_don_dat);
 CREATE NONCLUSTERED INDEX IX_DanhGiaSan_BinhLuanCha ON Danh_Gia_San(binh_luan_cha_id);
 GO
 

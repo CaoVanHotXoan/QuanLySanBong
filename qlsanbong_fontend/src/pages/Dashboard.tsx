@@ -44,6 +44,7 @@ import {
   Download,
   Check,
   RefreshCw,
+  ArrowLeftRight,
   Trophy,
   Sparkles,
   MapPin,
@@ -284,6 +285,46 @@ export interface LichSuHoanTien {
   ghi_chu_admin?: string;
 }
 
+// 9.1. Lich_Su_Doi_San
+export interface LichSuDoiSan {
+  id: number;
+  ma_don_dat: number;
+  ma_nguoi_dung?: number;
+  ten_khach_hang?: string;
+  so_dien_thoai?: string;
+  email?: string;
+  ma_san_cu?: number;
+  ten_san_cu?: string;
+  ma_san_moi?: number;
+  ten_san_moi?: string;
+  ngay_da_cu?: string;
+  ngay_da_cu_dmy?: string;
+  ngay_da_moi?: string;
+  ngay_da_moi_dmy?: string;
+  gio_bat_dau_cu?: string;
+  gio_ket_thuc_cu?: string;
+  gio_bat_dau_moi?: string;
+  gio_ket_thuc_moi?: string;
+  tien_san_cu?: number;
+  tien_san_moi?: number;
+  da_thanh_toan_cu?: number;
+  chenh_lech_tien?: number;
+  tien_chenh_lech?: number;
+  tien_bu_da_tra?: number;
+  tien_thua_hoan?: number;
+  hinh_thuc_nhan_tien_thua?: string;
+  hinh_thuc_xu_ly?: string;
+  ten_ngan_hang?: string;
+  ngan_hang_nhan?: string;
+  so_tai_khoan?: string;
+  so_tai_khoan_nhan?: string;
+  ten_chu_tai_khoan?: string;
+  ly_do_doi?: string;
+  ghi_chu?: string;
+  ngay_doi?: string;
+  nguoi_thuc_hien?: string;
+}
+
 // 10. Nguoi_Dung
 export interface NguoiDung {
   id: number;
@@ -397,7 +438,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     items: [
       { id: 'DON_DAT_THANH_TOAN', label: 'Đơn Đặt Sân & Thanh Toán', icon: Receipt, tableHint: 'Don_Dat_San, Thanh_Toan' },
       { id: 'LICH_CO_DINH', label: 'Hợp Đồng Lịch Cố Định', icon: CalendarClock, tableHint: 'Lich_Co_Dinh' },
-      { id: 'HOAN_TIEN', label: 'Lịch Sử Hoàn Tiền', icon: RefreshCw, tableHint: 'Lich_Su_Hoan_Tien' }
+      { id: 'HOAN_TIEN', label: 'Hủy Sân và Đổi Sân', icon: ArrowLeftRight, tableHint: 'Lich_Su_Hoan_Tien, Lich_Su_Doi_San' }
     ]
   },
   {
@@ -672,6 +713,18 @@ export default function AdminDashboard() {
   const [inventoryList, setInventoryList] = useState<PhieuNhapKho[]>([]);
   const [paymentList, setPaymentList] = useState<ThanhToan[]>([]);
   const [refundList, setRefundList] = useState<LichSuHoanTien[]>([]);
+  const [exchangeList, setExchangeList] = useState<LichSuDoiSan[]>([]);
+  const [cancelExchangeSubTab, setCancelExchangeSubTab] = useState<'HUY_SAN' | 'DOI_SAN'>('HUY_SAN');
+  const [exchangeSearch, setExchangeSearch] = useState<string>('');
+  const [exchangeModal, setExchangeModal] = useState<{
+    isOpen: boolean;
+    mode: 'ADD' | 'EDIT';
+    data: any;
+  }>({
+    isOpen: false,
+    mode: 'ADD',
+    data: {}
+  });
   const [adminRefundQRModal, setAdminRefundQRModal] = useState<LichSuHoanTien | null>(null);
   const [confirmRefundModal, setConfirmRefundModal] = useState<{
     isOpen: boolean;
@@ -1098,6 +1151,8 @@ export default function AdminDashboard() {
         contentService.getAboutUs().catch(() => null),
         // 17: Hợp đồng Lịch cố định
         fetch(`${API_BASE}/dat-san/lich-co-dinh`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        // 18: Danh sách Lịch sử Đổi Sân & Dời Giờ
+        fetch(`${API_BASE}/dat-san/doi-san/danh-sach`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       ]);
 
       // 0. Sân bóng
@@ -1174,6 +1229,11 @@ export default function AdminDashboard() {
       const res17: any = results[17];
       if (res17 && res17.status === 'fulfilled' && res17.value?.success && Array.isArray(res17.value.data)) {
         setFixedScheduleList(res17.value.data);
+      }
+      // 18. Lịch Sử Đổi Sân & Dời Giờ
+      const res18: any = results[18];
+      if (res18 && res18.status === 'fulfilled' && res18.value?.success && Array.isArray(res18.value.data)) {
+        setExchangeList(res18.value.data);
       }
     } catch (err) {
       console.warn('Lỗi tải dữ liệu từ CSDL:', err);
@@ -3273,6 +3333,101 @@ export default function AdminDashboard() {
     );
   };
 
+  // 10.1. Thêm/Sửa Lịch Sử Đổi Sân & Dời Giờ (Lich_Su_Doi_San)
+  const handleSaveExchangeOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const d = exchangeModal.data;
+    try {
+      if (exchangeModal.mode === 'ADD') {
+        const payload = {
+          ma_don_dat: Number(d.ma_don_dat),
+          ma_san_cu: Number(d.ma_san_cu),
+          ma_san_moi: Number(d.ma_san_moi),
+          ngay_da_cu: d.ngay_da_cu,
+          gio_bat_dau_cu: d.gio_bat_dau_cu,
+          gio_ket_thuc_cu: d.gio_ket_thuc_cu,
+          ngay_da_moi: d.ngay_da_moi,
+          gio_bat_dau_moi: d.gio_bat_dau_moi,
+          gio_ket_thuc_moi: d.gio_ket_thuc_moi,
+          tien_san_cu: Number(d.tien_san_cu || 0),
+          tien_san_moi: Number(d.tien_san_moi || 0),
+          tien_chenh_lech: Number(d.tien_chenh_lech || 0),
+          hinh_thuc_xu_ly: d.hinh_thuc_xu_ly || 'NHAN_TAI_QUAY',
+          so_tai_khoan_nhan: d.so_tai_khoan_nhan || null,
+          ten_chu_tai_khoan: d.ten_chu_tai_khoan || null,
+          ngan_hang_nhan: d.ngan_hang_nhan || null,
+          ly_do_doi: d.ly_do_doi || 'Khách yêu cầu đổi sân',
+          nguoi_thuc_hien: currentAdminUser?.ho_ten || 'Quản Trị Viên'
+        };
+        const res = await fetch(`${API_BASE}/dat-san/doi-san/admin`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload)
+        });
+        const resJson = await res.json();
+        if (resJson.success) {
+          setToastMessage({ type: 'success', message: '✅ Đã thêm đơn đổi sân & cập nhật lịch thành công!' });
+          loadAllDataFromBackend();
+          setExchangeModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        } else {
+          setToastMessage({ type: 'error', message: resJson.message || 'Lỗi khi tạo đơn đổi sân' });
+        }
+      } else {
+        const payload = {
+          hinh_thuc_xu_ly: d.hinh_thuc_xu_ly,
+          so_tai_khoan_nhan: d.so_tai_khoan_nhan,
+          ten_chu_tai_khoan: d.ten_chu_tai_khoan,
+          ngan_hang_nhan: d.ngan_hang_nhan,
+          ly_do_doi: d.ly_do_doi,
+          ghi_chu: d.ghi_chu
+        };
+        const res = await fetch(`${API_BASE}/dat-san/doi-san/admin/${d.id}`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload)
+        });
+        const resJson = await res.json();
+        if (resJson.success) {
+          setToastMessage({ type: 'success', message: '✅ Đã cập nhật đơn đổi sân thành công!' });
+          loadAllDataFromBackend();
+          setExchangeModal({ isOpen: false, mode: 'ADD', data: {} });
+          return;
+        } else {
+          setToastMessage({ type: 'error', message: resJson.message || 'Lỗi khi cập nhật đơn đổi sân' });
+        }
+      }
+    } catch (err: any) {
+      setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối khi lưu đơn đổi sân' });
+    }
+  };
+
+  const handleDeleteExchangeOrder = (id: number, info?: string) => {
+    openDeleteConfirm(
+      'Xóa Đơn Đổi Sân',
+      'Bạn có chắc chắn muốn xóa bản ghi lịch sử đổi sân này?',
+      `🔄 Đổi sân: #${id} ${info ? `(${info})` : ''}`,
+      async () => {
+        try {
+          const res = await fetch(`${API_BASE}/dat-san/doi-san/admin/${id}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+          });
+          const data = await res.json();
+          if (data.success) {
+            setToastMessage({ type: 'success', message: '🗑️ Đã xóa bản ghi đổi sân!' });
+            loadAllDataFromBackend();
+            return;
+          } else {
+            setToastMessage({ type: 'error', message: data.message || 'Lỗi khi xóa' });
+          }
+        } catch (err: any) {
+          setToastMessage({ type: 'error', message: 'Lỗi kết nối khi xóa' });
+        }
+      }
+    );
+  };
+
   // 11. Thêm/Sửa Khung Giờ (Khung_Gio)
   const handleSaveKhungGio = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -4059,7 +4214,7 @@ export default function AdminDashboard() {
                 {activeTab === 'PHIEU_NHAP_KHO' && 'Quản Lý Nhập Kho'}
                 {activeTab === 'DON_DAT_THANH_TOAN' && 'Đơn Đặt Sân & Chi Tiết Thanh Toán'}
                 {activeTab === 'LICH_CO_DINH' && 'Quản Lý Hợp Đồng Lịch Cố Định'}
-                {activeTab === 'HOAN_TIEN' && 'Lịch Sử Hoàn Tiền'}
+                {activeTab === 'HOAN_TIEN' && 'Hủy Sân và Đổi Sân'}
                 {activeTab === 'KHUNG_GIO' && 'Bảng Khung Giờ Hoạt Động'}
                 {activeTab === 'NGUOI_DUNG' && 'Danh Sách Người Dùng'}
                 {activeTab === 'VAI_TRO' && 'Phân Quyền & Vai Trò'}
@@ -5858,144 +6013,394 @@ export default function AdminDashboard() {
             })()}
 
             {/* =================================================================
-                TAB: HOAN_TIEN - LỊCH SỬ HOÀN TIỀN (CÓ ĐỦ THÊM SỬA XÓA)
+                TAB: HOAN_TIEN - HỦY SÂN VÀ ĐỔI SÂN (CÓ ĐỦ THÊM SỬA XÓA)
                 ================================================================= */}
             {activeTab === 'HOAN_TIEN' && (() => {
               const pagedData = getPaginatedData(refundList, 'HOAN_TIEN', 10);
+              const filteredExchanges = exchangeList.filter((e) => {
+                if (!exchangeSearch.trim()) return true;
+                const q = exchangeSearch.toLowerCase();
+                return (
+                  (e.ten_khach_hang && e.ten_khach_hang.toLowerCase().includes(q)) ||
+                  (e.so_dien_thoai && e.so_dien_thoai.includes(q)) ||
+                  (e.ma_don_dat && String(e.ma_don_dat).includes(q)) ||
+                  (e.ten_san_cu && e.ten_san_cu.toLowerCase().includes(q)) ||
+                  (e.ten_san_moi && e.ten_san_moi.toLowerCase().includes(q)) ||
+                  (e.ly_do_doi && e.ly_do_doi.toLowerCase().includes(q))
+                );
+              });
+              const pagedExchange = getPaginatedData(filteredExchanges, 'DOI_SAN', 10);
+
               return (
-              <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
-                  <div>
-                    <h3 className="text-base font-black flex items-center gap-2">
-                      <RefreshCw className="w-5 h-5 text-rose-500" /> Bảng Lịch Sử Hoàn Tiền
-                    </h3>
-                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
-                      Ghi nhận và quản lý các giao dịch hoàn cọc do khách hủy lịch hoặc thay đổi sân.
-                    </p>
+                <div className="space-y-4">
+                  {/* Thanh Chuyển Đổi Tab Con: Đơn Hủy Sân vs Lịch Sử Đổi Sân */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setCancelExchangeSubTab('HUY_SAN')}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                        cancelExchangeSubTab === 'HUY_SAN'
+                          ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30 ring-2 ring-rose-500/50'
+                          : isDarkMode
+                          ? 'bg-[#101c3d] text-slate-400 hover:text-white border border-emerald-900/40'
+                          : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-300'
+                      }`}
+                    >
+                      <RefreshCw className="w-4 h-4 text-rose-300" />
+                      <span>Đơn Hủy Sân & Hoàn Tiền</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/20 font-mono font-bold">
+                        {refundList.length}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => setCancelExchangeSubTab('DOI_SAN')}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+                        cancelExchangeSubTab === 'DOI_SAN'
+                          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500/50'
+                          : isDarkMode
+                          ? 'bg-[#101c3d] text-slate-400 hover:text-white border border-emerald-900/40'
+                          : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-300'
+                      }`}
+                    >
+                      <ArrowLeftRight className="w-4 h-4 text-emerald-300" />
+                      <span>Lịch Sử Đổi Sân & Dời Giờ</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/20 font-mono font-bold">
+                        {exchangeList.length}
+                      </span>
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setRefundModal({
-                      isOpen: true,
-                      mode: 'ADD',
-                      data: { ma_don_dat: bookingList[0]?.id || 101, so_tien_hoan: 150000, ty_le_hoan: 100, ly_do_huy: 'Báo hủy trước 24h theo quy định' }
-                    })}
-                    className="px-4 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-4 h-4 stroke-[3]" /> Thêm Phiếu Hoàn
-                  </button>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[750px]">
-                    <thead>
-                      <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
-                        <th className="p-4">ĐƠN / KHÁCH HÀNG</th>
-                        <th className="p-4">TIỀN HOÀN</th>
-                        <th className="p-4">TỶ LỆ</th>
-                        <th className="p-4">THÔNG TIN NHẬN TIỀN</th>
-                        <th className="p-4">TRẠNG THÁI</th>
-                        <th className="p-4">LÝ DO HỦY</th>
-                        <th className="p-4">NGÀY TẠO</th>
-                        <th className="p-4 text-right">THAO TÁC</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
-                      {pagedData.items.map((h) => (
-                        <tr key={h.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
-                          <td className="p-4 font-black">
-                            <div>{h.ten_khach_hang || 'Khách Đặt'}</div>
-                            <div className="text-[10px] text-slate-500 font-mono">
-                              Đơn #{h.ma_don_dat} {h.ten_san ? `• ${h.ten_san}` : ''}
-                            </div>
-                            {h.so_dien_thoai && (
-                              <div className="text-[10px] text-slate-400 font-mono">{h.so_dien_thoai}</div>
-                            )}
-                          </td>
-                          <td className="p-4 font-black text-rose-600 dark:text-rose-400 text-sm">
-                            {Number(h.so_tien_hoan).toLocaleString('vi-VN')} đ
-                          </td>
-                          <td className="p-4 font-black">
-                            <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-500">{h.ty_le_hoan}%</span>
-                          </td>
-                          <td className="p-4">
-                            {h.so_tai_khoan ? (
-                              <div className="space-y-0.5">
-                                <div className="font-mono font-bold text-cyan-500">{h.so_tai_khoan}</div>
-                                <div className="text-[11px] text-slate-600 dark:text-slate-300 font-medium">{h.ten_ngan_hang}</div>
-                                {h.ten_chu_tai_khoan && (
-                                  <div className="text-[10px] text-slate-400 uppercase font-bold">{h.ten_chu_tai_khoan}</div>
-                                )}
-                              </div>
+
+                  {/* SUBTAB 1: ĐƠN HỦY SÂN & HOÀN TIỀN */}
+                  {cancelExchangeSubTab === 'HUY_SAN' && (
+                    <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                      <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
+                        <div>
+                          <h3 className="text-base font-black flex items-center gap-2">
+                            <RefreshCw className="w-5 h-5 text-rose-500" /> Bảng Lịch Sử Hoàn Tiền Khi Hủy Sân
+                          </h3>
+                          <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
+                            Ghi nhận và quản lý các giao dịch hoàn cọc do khách hủy lịch hoặc trả sân.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setRefundModal({
+                            isOpen: true,
+                            mode: 'ADD',
+                            data: { ma_don_dat: bookingList[0]?.id || 101, so_tien_hoan: 150000, ty_le_hoan: 100, ly_do_huy: 'Báo hủy trước 24h theo quy định' }
+                          })}
+                          className="px-4 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
+                        >
+                          <Plus className="w-4 h-4 stroke-[3]" /> Thêm Phiếu Hoàn
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs min-w-[750px]">
+                          <thead>
+                            <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                              <th className="p-4">ĐƠN / KHÁCH HÀNG</th>
+                              <th className="p-4">TIỀN HOÀN</th>
+                              <th className="p-4">TỶ LỆ</th>
+                              <th className="p-4">THÔNG TIN NHẬN TIỀN</th>
+                              <th className="p-4">TRẠNG THÁI</th>
+                              <th className="p-4">LÝ DO HỦY</th>
+                              <th className="p-4">NGÀY TẠO</th>
+                              <th className="p-4 text-right">THAO TÁC</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
+                            {pagedData.items.map((h) => (
+                              <tr key={h.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
+                                <td className="p-4 font-black">
+                                  <div>{h.ten_khach_hang || 'Khách Đặt'}</div>
+                                  <div className="text-[10px] text-slate-500 font-mono">
+                                    Đơn #{h.ma_don_dat} {h.ten_san ? `• ${h.ten_san}` : ''}
+                                  </div>
+                                  {h.so_dien_thoai && (
+                                    <div className="text-[10px] text-slate-400 font-mono">{h.so_dien_thoai}</div>
+                                  )}
+                                </td>
+                                <td className="p-4 font-black text-rose-600 dark:text-rose-400 text-sm">
+                                  {Number(h.so_tien_hoan).toLocaleString('vi-VN')} đ
+                                </td>
+                                <td className="p-4 font-black">
+                                  <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-500">{h.ty_le_hoan}%</span>
+                                </td>
+                                <td className="p-4">
+                                  {h.so_tai_khoan ? (
+                                    <div className="space-y-0.5">
+                                      <div className="font-mono font-bold text-cyan-500">{h.so_tai_khoan}</div>
+                                      <div className="text-[11px] text-slate-600 dark:text-slate-300 font-medium">{h.ten_ngan_hang}</div>
+                                      {h.ten_chu_tai_khoan && (
+                                        <div className="text-[10px] text-slate-400 uppercase font-bold">{h.ten_chu_tai_khoan}</div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400 italic">Chưa có STK</span>
+                                  )}
+                                </td>
+                                <td className="p-4">
+                                  {h.trang_thai_hoan === 'DA_HOAN' ? (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                      <Check className="w-3 h-3" /> Đã hoàn tiền
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30 animate-pulse">
+                                      <Clock className="w-3 h-3" /> Chờ chuyển tiền
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-4 text-slate-600 dark:text-slate-300">{h.ly_do_huy}</td>
+                                <td className="p-4 font-mono text-slate-600 dark:text-slate-300 font-bold">{formatVNDate(h.ngay_hoan)}</td>
+                                <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                                  {h.trang_thai_hoan !== 'DA_HOAN' && Number(h.so_tien_hoan) > 0 && h.so_tai_khoan && h.so_tai_khoan !== 'TIEN_MAT' && (
+                                    <button
+                                      onClick={() => setAdminRefundQRModal(h)}
+                                      className="p-2 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 border border-cyan-500/30 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
+                                      title="Mở mã VietQR chuyển khoản nhanh cho khách"
+                                    >
+                                      <QrCode className="w-3.5 h-3.5" /> VietQR
+                                    </button>
+                                  )}
+                                  {h.trang_thai_hoan !== 'DA_HOAN' && (
+                                    <button
+                                      onClick={() => handleConfirmRefundPaid(h)}
+                                      className="p-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
+                                      title="Xác nhận đã chuyển khoản hoàn tất"
+                                    >
+                                      <Check className="w-3.5 h-3.5" /> Đã chuyển
+                                    </button>
+                                  )}
+                                  {h.trang_thai_hoan === 'DA_HOAN' && (
+                                    <button
+                                      onClick={() => handleOpenRevertModal(h)}
+                                      className="p-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
+                                      title="Hoàn tác về trạng thái Chờ chuyển tiền nếu Quản lý bấm nhầm hoặc chưa thực chuyển"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5" /> Hoàn tác
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => setRefundModal({ isOpen: true, mode: 'EDIT', data: h })}
+                                    className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" /> Sửa
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteRefund(h.id)}
+                                    className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> Xóa
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <TablePagination
+                        currentPage={pagedData.currentPage}
+                        totalItems={pagedData.totalItems}
+                        pageSize={10}
+                        onPageChange={(p) => setTabPage('HOAN_TIEN', p)}
+                        isDarkMode={isDarkMode}
+                      />
+                    </div>
+                  )}
+
+                  {/* SUBTAB 2: LỊCH SỬ ĐỔI SÂN & DỜI GIỜ (CÓ ĐỦ THÊM SỬA XÓA) */}
+                  {cancelExchangeSubTab === 'DOI_SAN' && (
+                    <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
+                      <div className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
+                        <div>
+                          <h3 className="text-base font-black flex items-center gap-2">
+                            <ArrowLeftRight className="w-5 h-5 text-emerald-500" /> Bảng Lịch Sử Đổi Sân & Dời Giờ Thi Đấu
+                          </h3>
+                          <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
+                            Quản lý, theo dõi các yêu cầu đổi sân, chuyển ca giờ và xử lý chênh lệch thanh toán.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="relative">
+                            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type="text"
+                              value={exchangeSearch}
+                              onChange={(e) => setExchangeSearch(e.target.value)}
+                              placeholder="Tìm khách, sân, đơn..."
+                              className={`pl-8 pr-3 py-2 rounded-xl text-xs font-medium border ${
+                                isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'
+                              }`}
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              const firstBooking = bookingList[0];
+                              setExchangeModal({
+                                isOpen: true,
+                                mode: 'ADD',
+                                data: {
+                                  ma_don_dat: firstBooking?.id || 101,
+                                  ma_san_cu: firstBooking?.ma_san || 1,
+                                  ma_san_moi: courtList[0]?.id || 1,
+                                  ngay_da_cu: firstBooking?.ngay_da ? String(firstBooking.ngay_da).split('T')[0] : '',
+                                  gio_bat_dau_cu: firstBooking?.gio_bat_dau ? String(firstBooking.gio_bat_dau).substring(0, 5) : '17:00',
+                                  gio_ket_thuc_cu: firstBooking?.gio_ket_thuc ? String(firstBooking.gio_ket_thuc).substring(0, 5) : '18:30',
+                                  ngay_da_moi: new Date().toISOString().split('T')[0],
+                                  gio_bat_dau_moi: '17:00',
+                                  gio_ket_thuc_moi: '18:30',
+                                  tien_san_cu: Number(firstBooking?.tien_san || firstBooking?.tong_tien || 0),
+                                  tien_san_moi: Number(courtList[0]?.don_gia_phut ? courtList[0].don_gia_phut * 60 : 0),
+                                  tien_chenh_lech: 0,
+                                  hinh_thuc_xu_ly: 'NHAN_TAI_QUAY',
+                                  ly_do_doi: 'Khách yêu cầu đổi sân / dời giờ'
+                                }
+                              });
+                            }}
+                            className="px-4 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
+                          >
+                            <Plus className="w-4 h-4 stroke-[3]" /> Thêm Đơn Đổi Sân
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs min-w-[900px]">
+                          <thead>
+                            <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
+                              <th className="p-4">ĐƠN / KHÁCH HÀNG</th>
+                              <th className="p-4">SÂN CŨ ➔ SÂN MỚI</th>
+                              <th className="p-4">NGÀY & CA GIỜ</th>
+                              <th className="p-4">TIỀN SÂN & CHÊNH LỆCH</th>
+                              <th className="p-4">XỬ LÝ CHÊNH LỆCH</th>
+                              <th className="p-4">LÝ DO ĐỔI</th>
+                              <th className="p-4">NGÀY ĐỔI / NGƯỜI LÀM</th>
+                              <th className="p-4 text-right">THAO TÁC</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200 dark:divide-emerald-900/30">
+                            {pagedExchange.items.length === 0 ? (
+                              <tr>
+                                <td colSpan={8} className="p-8 text-center text-slate-400 italic">
+                                  Chưa có bản ghi đổi sân nào. Bấm nút "+ Thêm Đơn Đổi Sân" để tạo mới.
+                                </td>
+                              </tr>
                             ) : (
-                              <span className="text-slate-400 italic">Chưa có STK</span>
+                              pagedExchange.items.map((ex) => (
+                                <tr key={ex.id} className={isDarkMode ? 'hover:bg-emerald-950/20' : 'hover:bg-slate-50'}>
+                                  <td className="p-4 font-black">
+                                    <div className="text-sm">{ex.ten_khach_hang || 'Khách đặt'}</div>
+                                    <div className="text-[11px] text-slate-500 font-mono">
+                                      Đơn #{ex.ma_don_dat} • Ghi nhận #{ex.id}
+                                    </div>
+                                    {ex.so_dien_thoai && (
+                                      <div className="text-[10px] text-slate-400 font-mono">{ex.so_dien_thoai}</div>
+                                    )}
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex items-center gap-1.5 font-bold">
+                                      <span className="text-slate-400 line-through">{ex.ten_san_cu || `Sân ${ex.ma_san_cu}`}</span>
+                                      <span className="text-emerald-500">➔</span>
+                                      <span className="text-emerald-400">{ex.ten_san_moi || `Sân ${ex.ma_san_moi}`}</span>
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="text-[11px] text-slate-400 line-through">
+                                      {formatVNDate(ex.ngay_da_cu)} ({ex.gio_bat_dau_cu} - {ex.gio_ket_thuc_cu})
+                                    </div>
+                                    <div className="text-xs font-bold text-emerald-400 mt-0.5">
+                                      {formatVNDate(ex.ngay_da_moi)} ({ex.gio_bat_dau_moi} - {ex.gio_ket_thuc_moi})
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="text-[11px] text-slate-400">
+                                      Cũ: {Number(ex.tien_san_cu || 0).toLocaleString('vi-VN')} đ ➔ Mới: {Number(ex.tien_san_moi || 0).toLocaleString('vi-VN')} đ
+                                    </div>
+                                    <div className="mt-1">
+                                      {Number(ex.tien_chenh_lech) > 0 ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                                          +{Number(ex.tien_chenh_lech).toLocaleString('vi-VN')} đ (Bù thêm)
+                                        </span>
+                                      ) : Number(ex.tien_chenh_lech) < 0 ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                                          -{Number(Math.abs(ex.tien_chenh_lech || 0)).toLocaleString('vi-VN')} đ (Hoàn thừa)
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-slate-500/15 text-slate-400 border border-slate-500/30">
+                                          0 đ (Cùng giá)
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="p-4">
+                                    <div>
+                                      {ex.hinh_thuc_xu_ly === 'HOAN_TIEN_NGAN_HANG' ? (
+                                        <span className="px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-400 font-bold text-[11px]">
+                                          🏦 Chuyển khoản ngân hàng
+                                        </span>
+                                      ) : ex.hinh_thuc_xu_ly === 'THANH_TOAN_BU' ? (
+                                        <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 font-bold text-[11px]">
+                                          💳 Thanh toán bù trên web
+                                        </span>
+                                      ) : ex.hinh_thuc_xu_ly === 'KHONG_DOI_TIEN' ? (
+                                        <span className="px-2 py-0.5 rounded bg-slate-500/15 text-slate-400 font-bold text-[11px]">
+                                          ⚖️ Bằng giá không đổi tiền
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-bold text-[11px]">
+                                          💵 Tại quầy lễ tân
+                                        </span>
+                                      )}
+                                    </div>
+                                    {ex.so_tai_khoan_nhan && (
+                                      <div className="mt-1 space-y-0.5 text-[11px]">
+                                        <div className="font-mono font-bold text-cyan-400">{ex.so_tai_khoan_nhan}</div>
+                                        <div className="text-slate-400">{ex.ngan_hang_nhan} {ex.ten_chu_tai_khoan ? `• ${ex.ten_chu_tai_khoan}` : ''}</div>
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="p-4 text-slate-600 dark:text-slate-300 max-w-[200px]">
+                                    <div className="line-clamp-2" title={ex.ly_do_doi}>{ex.ly_do_doi || '---'}</div>
+                                    {ex.ghi_chu && <div className="text-[10px] text-slate-500 italic mt-0.5">{ex.ghi_chu}</div>}
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="font-mono font-bold text-slate-600 dark:text-slate-300">
+                                      {formatVNDate(ex.ngay_doi)}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                      Bởi: {ex.nguoi_thuc_hien || 'Hệ thống'}
+                                    </div>
+                                  </td>
+                                  <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                                    <button
+                                      onClick={() => setExchangeModal({ isOpen: true, mode: 'EDIT', data: ex })}
+                                      className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" /> Sửa
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteExchangeOrder(ex.id, `Đơn #${ex.ma_don_dat}`)}
+                                      className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" /> Xóa
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
                             )}
-                          </td>
-                          <td className="p-4">
-                            {h.trang_thai_hoan === 'DA_HOAN' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                <Check className="w-3 h-3" /> Đã hoàn tiền
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30 animate-pulse">
-                                <Clock className="w-3 h-3" /> Chờ chuyển tiền
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-4 text-slate-600 dark:text-slate-300">{h.ly_do_huy}</td>
-                          <td className="p-4 font-mono text-slate-600 dark:text-slate-300 font-bold">{formatVNDate(h.ngay_hoan)}</td>
-                          <td className="p-4 text-right space-x-2 whitespace-nowrap">
-                            {h.trang_thai_hoan !== 'DA_HOAN' && Number(h.so_tien_hoan) > 0 && h.so_tai_khoan && h.so_tai_khoan !== 'TIEN_MAT' && (
-                              <button
-                                onClick={() => setAdminRefundQRModal(h)}
-                                className="p-2 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 border border-cyan-500/30 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
-                                title="Mở mã VietQR chuyển khoản nhanh cho khách"
-                              >
-                                <QrCode className="w-3.5 h-3.5" /> VietQR
-                              </button>
-                            )}
-                            {h.trang_thai_hoan !== 'DA_HOAN' && (
-                              <button
-                                onClick={() => handleConfirmRefundPaid(h)}
-                                className="p-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
-                                title="Xác nhận đã chuyển khoản hoàn tất"
-                              >
-                                <Check className="w-3.5 h-3.5" /> Đã chuyển
-                              </button>
-                            )}
-                            {h.trang_thai_hoan === 'DA_HOAN' && (
-                              <button
-                                onClick={() => handleOpenRevertModal(h)}
-                                className="p-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 cursor-pointer font-bold inline-flex items-center gap-1 shadow-sm"
-                                title="Hoàn tác về trạng thái Chờ chuyển tiền nếu Quản lý bấm nhầm hoặc chưa thực chuyển"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" /> Hoàn tác
-                              </button>
-                            )}
-                            <button
-                              onClick={() => setRefundModal({ isOpen: true, mode: 'EDIT', data: h })}
-                              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 cursor-pointer font-bold inline-flex items-center gap-1"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" /> Sửa
-                            </button>
-                            <button
-                              onClick={() => handleDeleteRefund(h.id)}
-                              className="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 cursor-pointer font-bold inline-flex items-center gap-1"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" /> Xóa
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <TablePagination
+                        currentPage={pagedExchange.currentPage}
+                        totalItems={pagedExchange.totalItems}
+                        pageSize={10}
+                        onPageChange={(p) => setTabPage('DOI_SAN', p)}
+                        isDarkMode={isDarkMode}
+                      />
+                    </div>
+                  )}
                 </div>
-                <TablePagination
-                  currentPage={pagedData.currentPage}
-                  totalItems={pagedData.totalItems}
-                  pageSize={10}
-                  onPageChange={(p) => setTabPage('HOAN_TIEN', p)}
-                  isDarkMode={isDarkMode}
-                />
-              </div>
               );
             })()}
 
@@ -8573,6 +8978,293 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* Modal Quản Lý Đổi Sân (Thêm / Sửa) */}
+      {exchangeModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-lg p-6 rounded-3xl border shadow-2xl my-8 ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            <div className="flex items-center justify-between pb-3 border-b mb-4">
+              <h3 className="font-black text-base flex items-center gap-2 text-emerald-500">
+                <ArrowLeftRight className="w-5 h-5" />
+                {exchangeModal.mode === 'ADD' ? 'Tạo Đơn Đổi Sân & Dời Giờ' : 'Cập Nhật Đơn Đổi Sân'}
+              </h3>
+              <button onClick={() => setExchangeModal({ isOpen: false, mode: 'ADD', data: {} })}>
+                <X className="w-5 h-5 hover:text-rose-500 transition-colors" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveExchangeOrder} className="space-y-4 text-xs">
+              {exchangeModal.mode === 'ADD' ? (
+                <>
+                  {/* Chọn Đơn Đặt Sân */}
+                  <div>
+                    <label className="block font-black uppercase mb-1">Chọn Đơn Đặt Sân Muốn Đổi *</label>
+                    <select
+                      value={exchangeModal.data.ma_don_dat || ''}
+                      onChange={(e) => {
+                        const donId = Number(e.target.value);
+                        const selBooking = bookingList.find((b) => b.id === donId);
+                        if (selBooking) {
+                          const oldPrice = Number(selBooking.tien_san || selBooking.tong_tien || 0);
+                          const newSanId = exchangeModal.data.ma_san_moi || selBooking.ma_san;
+                          const newCourt = courtList.find((c) => c.id === Number(newSanId));
+                          const newPrice = Number(newCourt?.don_gia_phut ? newCourt.don_gia_phut * 60 : oldPrice);
+                          const diff = newPrice - oldPrice;
+
+                          setExchangeModal({
+                            ...exchangeModal,
+                            data: {
+                              ...exchangeModal.data,
+                              ma_don_dat: donId,
+                              ma_san_cu: selBooking.ma_san,
+                              ngay_da_cu: selBooking.ngay_da ? String(selBooking.ngay_da).split('T')[0] : '',
+                              gio_bat_dau_cu: selBooking.gio_bat_dau ? String(selBooking.gio_bat_dau).substring(0, 5) : '17:00',
+                              gio_ket_thuc_cu: selBooking.gio_ket_thuc ? String(selBooking.gio_ket_thuc).substring(0, 5) : '18:30',
+                              tien_san_cu: oldPrice,
+                              ma_san_moi: newSanId,
+                              ngay_da_moi: exchangeModal.data.ngay_da_moi || (selBooking.ngay_da ? String(selBooking.ngay_da).split('T')[0] : ''),
+                              gio_bat_dau_moi: exchangeModal.data.gio_bat_dau_moi || (selBooking.gio_bat_dau ? String(selBooking.gio_bat_dau).substring(0, 5) : '17:00'),
+                              gio_ket_thuc_moi: exchangeModal.data.gio_ket_thuc_moi || (selBooking.gio_ket_thuc ? String(selBooking.gio_ket_thuc).substring(0, 5) : '18:30'),
+                              tien_san_moi: newPrice,
+                              tien_chenh_lech: diff
+                            }
+                          });
+                        }
+                      }}
+                      className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                      required
+                    >
+                      <option value="">-- Chọn đơn đặt sân --</option>
+                      {bookingList.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          #{b.id} - {b.ten_khach_hang || 'Khách'} ({b.ten_san || `Sân ${b.ma_san}`} | {b.ngay_da ? String(b.ngay_da).split('T')[0] : ''} {b.gio_bat_dau})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Thông tin Sân Cũ (Readonly) */}
+                  <div className={`p-3 rounded-xl border text-[11px] grid grid-cols-2 gap-2 ${isDarkMode ? 'bg-slate-900/50 border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
+                    <div>
+                      <span className="text-slate-400">Sân cũ: </span>
+                      <span className="font-bold">{courtList.find((c) => c.id === Number(exchangeModal.data.ma_san_cu))?.ten_san || exchangeModal.data.ma_san_cu || 'Chưa chọn'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Tiền sân cũ: </span>
+                      <span className="font-bold text-rose-500">{Number(exchangeModal.data.tien_san_cu || 0).toLocaleString('vi-VN')} đ</span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-slate-400">Lịch cũ: </span>
+                      <span className="font-bold">{exchangeModal.data.ngay_da_cu || '---'} ({exchangeModal.data.gio_bat_dau_cu || '--:--'} - {exchangeModal.data.gio_ket_thuc_cu || '--:--'})</span>
+                    </div>
+                  </div>
+
+                  {/* Chọn Sân Mới & Thời Gian Mới */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-black uppercase mb-1">Sân Mới Muốn Đổi *</label>
+                      <select
+                        value={exchangeModal.data.ma_san_moi || ''}
+                        onChange={(e) => {
+                          const newSanId = Number(e.target.value);
+                          const court = courtList.find((c) => c.id === newSanId);
+                          const newPrice = Number(court?.don_gia_phut ? court.don_gia_phut * 60 : exchangeModal.data.tien_san_moi || 0);
+                          const diff = newPrice - Number(exchangeModal.data.tien_san_cu || 0);
+                          setExchangeModal({
+                            ...exchangeModal,
+                            data: {
+                              ...exchangeModal.data,
+                              ma_san_moi: newSanId,
+                              tien_san_moi: newPrice,
+                              tien_chenh_lech: diff
+                            }
+                          });
+                        }}
+                        className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        required
+                      >
+                        <option value="">-- Chọn sân mới --</option>
+                        {courtList.map((c) => (
+                          <option key={c.id} value={c.id}>{c.ten_san} ({c.ten_loai || 'Sân bóng'} - {Number(c.don_gia_phut * 60).toLocaleString('vi-VN')} đ/h)</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block font-black uppercase mb-1">Ngày Đá Mới *</label>
+                      <input
+                        type="date"
+                        value={exchangeModal.data.ngay_da_moi || ''}
+                        onChange={(e) => setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, ngay_da_moi: e.target.value } })}
+                        className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-black uppercase mb-1">Giờ Bắt Đầu Mới *</label>
+                      <input
+                        type="time"
+                        value={exchangeModal.data.gio_bat_dau_moi || '17:00'}
+                        onChange={(e) => setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, gio_bat_dau_moi: e.target.value } })}
+                        className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-black uppercase mb-1">Giờ Kết Thúc Mới *</label>
+                      <input
+                        type="time"
+                        value={exchangeModal.data.gio_ket_thuc_moi || '18:30'}
+                        onChange={(e) => setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, gio_ket_thuc_moi: e.target.value } })}
+                        className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tiền sân mới & Chênh lệch */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-black uppercase mb-1">Tiền Sân Mới (VNĐ)</label>
+                      <input
+                        type="number"
+                        value={exchangeModal.data.tien_san_moi || 0}
+                        onChange={(e) => {
+                          const p = Number(e.target.value);
+                          const diff = p - Number(exchangeModal.data.tien_san_cu || 0);
+                          setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, tien_san_moi: p, tien_chenh_lech: diff } });
+                        }}
+                        className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-black uppercase mb-1">Chênh Lệch (VNĐ)</label>
+                      <div className={`p-2.5 rounded-xl border font-black text-sm flex items-center justify-between ${
+                        Number(exchangeModal.data.tien_chenh_lech || 0) > 0
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-500'
+                          : Number(exchangeModal.data.tien_chenh_lech || 0) < 0
+                          ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
+                          : isDarkMode ? 'bg-[#070d1e] border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-700'
+                      }`}>
+                        <span>{Number(exchangeModal.data.tien_chenh_lech || 0).toLocaleString('vi-VN')} đ</span>
+                        <span className="text-[10px]">
+                          {Number(exchangeModal.data.tien_chenh_lech || 0) > 0 ? '(Bù thêm)' : Number(exchangeModal.data.tien_chenh_lech || 0) < 0 ? '(Hoàn thừa)' : '(Cùng giá)'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* Chế độ Sửa (EDIT) */
+                <div className={`p-3 rounded-xl border text-[11px] space-y-1 mb-2 ${isDarkMode ? 'bg-slate-900/50 border-slate-700/50' : 'bg-slate-50 border-slate-200'}`}>
+                  <div className="font-bold text-emerald-400">Đơn #{exchangeModal.data.ma_don_dat} • {exchangeModal.data.ten_khach_hang || 'Khách đặt'}</div>
+                  <div className="text-slate-400">
+                    Đổi từ <span className="font-semibold text-white">{exchangeModal.data.ten_san_cu}</span> sang <span className="font-semibold text-emerald-400">{exchangeModal.data.ten_san_moi}</span>
+                  </div>
+                  <div>Chênh lệch: <span className="font-bold">{Number(exchangeModal.data.tien_chenh_lech || 0).toLocaleString('vi-VN')} đ</span></div>
+                </div>
+              )}
+
+              {/* Hình Thức Xử Lý */}
+              <div>
+                <label className="block font-black uppercase mb-1">Hình Thức Xử Lý Tiền Chênh Lệch</label>
+                <select
+                  value={exchangeModal.data.hinh_thuc_xu_ly || 'NHAN_TAI_QUAY'}
+                  onChange={(e) => setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, hinh_thuc_xu_ly: e.target.value } })}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                >
+                  <option value="NHAN_TAI_QUAY">💵 Nhận / Thanh toán tại quầy lễ tân</option>
+                  <option value="HOAN_TIEN_NGAN_HANG">🏦 Chuyển khoản ngân hàng (Hoàn tiền thừa)</option>
+                  <option value="THANH_TOAN_BU">💳 Thanh toán bù trực tuyến trên Web</option>
+                  <option value="KHONG_DOI_TIEN">⚖️ Không đổi tiền (Đồng giá hoặc giữ nguyên)</option>
+                </select>
+              </div>
+
+              {/* Nếu là hoàn tiền qua ngân hàng thì hiển thị thông tin ngân hàng */}
+              {exchangeModal.data.hinh_thuc_xu_ly === 'HOAN_TIEN_NGAN_HANG' && (
+                <div className="space-y-3 p-3 rounded-xl border border-cyan-500/30 bg-cyan-500/5">
+                  <div className="font-bold text-[11px] text-cyan-400">Thông tin Ngân hàng nhận hoàn thừa:</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-bold text-[10px] uppercase mb-1">Tên Ngân Hàng</label>
+                      <input
+                        type="text"
+                        placeholder="MBBank, Vietcombank..."
+                        value={exchangeModal.data.ngan_hang_nhan || ''}
+                        onChange={(e) => setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, ngan_hang_nhan: e.target.value } })}
+                        className={`w-full p-2 rounded-lg border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-[10px] uppercase mb-1">Số Tài Khoản</label>
+                      <input
+                        type="text"
+                        placeholder="0123456789..."
+                        value={exchangeModal.data.so_tai_khoan_nhan || ''}
+                        onChange={(e) => setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, so_tai_khoan_nhan: e.target.value } })}
+                        className={`w-full p-2 rounded-lg border font-bold font-mono ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                      />
+                    </div>
+                    <div className="col-span-full">
+                      <label className="block font-bold text-[10px] uppercase mb-1">Tên Chủ Tài Khoản</label>
+                      <input
+                        type="text"
+                        placeholder="NGUYEN VAN A..."
+                        value={exchangeModal.data.ten_chu_tai_khoan || ''}
+                        onChange={(e) => setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, ten_chu_tai_khoan: e.target.value.toUpperCase() } })}
+                        className={`w-full p-2 rounded-lg border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Lý Do Đổi Sân */}
+              <div>
+                <label className="block font-black uppercase mb-1">Lý Do Đổi Sân</label>
+                <input
+                  type="text"
+                  value={exchangeModal.data.ly_do_doi || ''}
+                  onChange={(e) => setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, ly_do_doi: e.target.value } })}
+                  placeholder="Khách bận việc xin dời giờ / Đổi sang sân lớn hơn..."
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                />
+              </div>
+
+              {exchangeModal.mode === 'EDIT' && (
+                <div>
+                  <label className="block font-black uppercase mb-1">Ghi Chú Admin</label>
+                  <input
+                    type="text"
+                    value={exchangeModal.data.ghi_chu || ''}
+                    onChange={(e) => setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, ghi_chu: e.target.value } })}
+                    placeholder="Ghi chú thêm..."
+                    className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setExchangeModal({ isOpen: false, mode: 'ADD', data: {} })}
+                  className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 hover:bg-slate-300 cursor-pointer transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl font-black bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer transition-colors shadow-md"
+                >
+                  {exchangeModal.mode === 'ADD' ? 'Tạo Đơn Đổi Sân' : 'Lưu Thay Đổi'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal VietQR Hoàn Tiền Nhanh Cho Admin */}
       {adminRefundQRModal && (() => {
         const getBankBin = (name?: string): string => {
@@ -8581,12 +9273,23 @@ export default function AdminDashboard() {
           if (n.includes('MB')) return 'MB';
           if (n.includes('VIETCOMBANK') || n.includes('VCB')) return 'VCB';
           if (n.includes('TECHCOMBANK') || n.includes('TCB')) return 'TCB';
-          if (n.includes('VIETINBANK') || n.includes('CTG')) return 'CTG';
+          if (n.includes('VIETINBANK') || n.includes('CTG') || n.includes('ICB')) return 'ICB';
           if (n.includes('BIDV')) return 'BIDV';
           if (n.includes('ACB')) return 'ACB';
           if (n.includes('AGRIBANK') || n.includes('VBA')) return 'VBA';
           if (n.includes('VPBANK') || n.includes('VPB')) return 'VPB';
           if (n.includes('TPBANK') || n.includes('TPB')) return 'TPB';
+          if (n.includes('SACOMBANK') || n.includes('STB')) return 'STB';
+          if (n.includes('HDBANK') || n.includes('HDB')) return 'HDB';
+          if (n.includes('VIB')) return 'VIB';
+          if (n.includes('SHB')) return 'SHB';
+          if (n.includes('MSB')) return 'MSB';
+          if (n.includes('SEABANK') || n.includes('SSB')) return 'SSB';
+          if (n.includes('OCB')) return 'OCB';
+          if (n.includes('EXIMBANK') || n.includes('EIB')) return 'EIB';
+          if (n.includes('LPBANK') || n.includes('LPB')) return 'LPB';
+          if (n.includes('NAM A') || n.includes('NAB')) return 'NAB';
+          if (n.includes('BAC A') || n.includes('BAB')) return 'BAB';
           return 'MB';
         };
 

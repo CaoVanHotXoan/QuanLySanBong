@@ -3779,51 +3779,69 @@ export default function HomePage() {
                       {cartCourts.map((item, idx) => (
                         <div
                           key={item.id}
-                          className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col gap-3 ${
                             isDarkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-white border-slate-200 shadow-xs'
                           }`}
                         >
-                          <div className="flex items-center gap-3">
-                            <span className={`w-7 h-7 rounded-xl border font-black text-xs flex items-center justify-center ${
-                              isDarkMode ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-amber-100 text-amber-800 border-amber-300'
-                            }`}>
-                              {idx + 1}
-                            </span>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4 className={`text-sm font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                                  {item.san.ten_san}
-                                </h4>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                  isDarkMode ? 'bg-sky-500/15 text-sky-400 border-sky-500/30' : 'bg-sky-100 text-sky-800 border-sky-300'
-                                }`}>
-                                  {item.san.ten_loai}
-                                </span>
+                          {/* Dòng 1: Thông tin sân, Ngày thi đấu (DD/MM/YYYY) & Nút xóa */}
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
+                              <span className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg sm:rounded-xl border font-black text-xs flex items-center justify-center shrink-0 ${
+                                isDarkMode ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-amber-100 text-amber-800 border-amber-300'
+                              }`}>
+                                {idx + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className={`text-sm font-black truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                                    {item.san.ten_san}
+                                  </h4>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                                    isDarkMode ? 'bg-sky-500/15 text-sky-400 border-sky-500/30' : 'bg-sky-100 text-sky-800 border-sky-300'
+                                  }`}>
+                                    {item.san.ten_loai}
+                                  </span>
+                                </div>
+                                <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
+                                  📅 <span className={`font-semibold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{formatDateDMY(item.ngay_da)}</span> • Giờ đá: <strong className={`font-mono font-bold ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>{item.slot.start} - {item.gioKetThuc}</strong>
+                                </p>
                               </div>
-                              <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
-                                📅 <span className={`font-semibold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{item.ngay_da}</span> • Giờ đá: <strong className={`font-mono font-bold ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`}>{item.slot.start} - {item.gioKetThuc}</strong>
-                              </p>
                             </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCartCourt(item.id)}
+                              className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                                isDarkMode
+                                  ? 'border-slate-700 hover:border-rose-500/50 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400'
+                                  : 'border-slate-300 hover:border-rose-300 hover:bg-rose-50 text-slate-500 hover:text-rose-600 shadow-xs'
+                              }`}
+                              title="Xóa sân này khỏi giỏ"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
 
-                          <div className={`flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 ${
-                            isDarkMode ? 'border-slate-800' : 'border-slate-200'
+                          {/* Dòng 2: Nút chọn thời lượng thi đấu và Giá tiền sân */}
+                          <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2.5 border-t ${
+                            isDarkMode ? 'border-slate-800/80' : 'border-slate-200'
                           }`}>
-                            {/* Chọn thời lượng cho từng sân trong giỏ */}
-                            <div className={`inline-flex rounded-xl p-0.5 border ${
+                            {/* 3 Nút chọn thời lượng: 1 tiếng, 1 tiếng 30p, 2 tiếng */}
+                            <div className={`grid grid-cols-3 sm:inline-flex rounded-xl p-0.5 border w-full sm:w-auto text-center ${
                               isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-300'
                             }`}>
-                              {[60, 120].map((dur) => {
+                              {[60, 90, 120].map((dur) => {
                                 const maxAvailableMin = (item.holdSlotKeys?.length || 1) * 60;
                                 const isAvailable = dur <= maxAvailableMin;
+                                const label = dur === 60 ? '1 tiếng (60p)' : dur === 90 ? '1 tiếng 30p (90p)' : '2 tiếng (120p)';
                                 return (
                                   <button
                                     key={dur}
                                     type="button"
                                     disabled={!isAvailable}
                                     onClick={() => isAvailable && handleChangeCartCourtDuration(item.id, dur)}
-                                    title={!isAvailable ? `Không thể chọn ${dur}p vì các khung giờ tiếp theo đã có người đặt hoặc đang giữ chỗ` : undefined}
-                                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                                    title={!isAvailable ? `Không thể chọn ${dur === 90 ? '1 tiếng 30p' : dur + 'p'} vì các khung giờ tiếp theo đã có người đặt hoặc đang giữ chỗ` : undefined}
+                                    className={`px-1.5 sm:px-3 py-1.5 sm:py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-all text-center whitespace-nowrap ${
                                       !isAvailable
                                         ? isDarkMode ? 'text-slate-600 opacity-30 cursor-not-allowed' : 'text-slate-400 opacity-40 cursor-not-allowed'
                                         : item.durationMin === dur
@@ -3835,30 +3853,19 @@ export default function HomePage() {
                                           : 'text-slate-600 hover:text-slate-900 cursor-pointer'
                                     }`}
                                   >
-                                    {dur === 60 ? '1 tiếng (60p)' : '2 tiếng (120p)'}
+                                    {label}
                                   </button>
                                 );
                               })}
                             </div>
 
-                            <div className="text-right min-w-[90px]">
-                              <p className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
+                            {/* Giá tiền */}
+                            <div className="flex items-center justify-between sm:justify-end gap-2 text-right">
+                              <span className={`text-xs font-medium sm:hidden ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Tiền sân:</span>
+                              <p className="text-base sm:text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
                                 {item.giaTien.toLocaleString('vi-VN')} đ
                               </p>
                             </div>
-
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveCartCourt(item.id)}
-                              className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
-                                isDarkMode
-                                  ? 'border-slate-700 hover:border-rose-500/50 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400'
-                                  : 'border-slate-300 hover:border-rose-300 hover:bg-rose-50 text-slate-500 hover:text-rose-600 shadow-xs'
-                              }`}
-                              title="Xóa sân này khỏi giỏ"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
                           </div>
                         </div>
                       ))}
@@ -3870,7 +3877,7 @@ export default function HomePage() {
                     <h3 className={`text-xs font-black uppercase tracking-wider mb-3 ${
                       isDarkMode ? 'text-slate-400' : 'text-slate-700 font-extrabold'
                     }`}>
-                      2. Lựa chọn hình thức thanh toán (PayOS VietQR)
+                      2. Lựa chọn hình thức thanh toán
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div

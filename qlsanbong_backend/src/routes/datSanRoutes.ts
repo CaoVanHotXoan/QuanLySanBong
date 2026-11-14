@@ -69,6 +69,16 @@ router.post('/checkout-linh-hoat', datSanController.ketThucDaLinhHoat);
 // Hủy đơn đặt sân và hoàn cọc (sp_HuyDonVaHoanCoc)
 router.post('/huy-don', datSanController.huyDonVaHoanCoc);
 
+// Đổi sân cho khách hàng (sp_KiemTraDoiSan & sp_KhachHangDoiSan)
+router.post('/kiem-tra-doi-san', datSanController.kiemTraDoiSan);
+router.post('/xac-nhan-doi-san', datSanController.xacNhanDoiSan);
+
+// Quản lý Đổi Sân cho Admin (sp_LayDanhSachDoiSan, sp_ThemDoiSanAdmin, sp_SuaDoiSanAdmin, sp_XoaDoiSanAdmin)
+router.get('/doi-san/danh-sach', datSanController.layDanhSachDoiSan);
+router.post('/doi-san/admin', datSanController.themDoiSanAdmin);
+router.put('/doi-san/admin/:id', datSanController.suaDoiSanAdmin);
+router.delete('/doi-san/admin/:id', datSanController.xoaDoiSanAdmin);
+
 // Gia hạn thời gian sân đang đá & Chuyển sân đá tiếp & Bán lẻ dịch vụ
 router.post('/kiem-tra-gia-han', datSanController.kiemTraGiaHan);
 router.post('/xac-nhan-gia-han', datSanController.xacNhanGiaHan);

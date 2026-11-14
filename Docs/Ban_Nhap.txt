@@ -34,6 +34,11 @@ tối đa 2mb
 anh đuôi jpg/png
 Màu trang web:
 
+Huy Sân:
+1. từ 5 tiếng trở lên là hoàn 100% (tiền cọc và tiền thanh toán nếu có)
+2. từ 2 đến 4 tiếng trước giờ là hoàn 50% số tiên(tiền cọc và tiền thanh toán(nếu có))
+2. trước 1 tiếng là hủy sân không hoàn tiền
+
 ======================================
 fix lỗi không ảnh hưởng đến tất cả các chức năng của toàn bộ trang web
 Có thể tùy chỉnh CSDL nhưng phải dùng procedure và cập nhật vào 

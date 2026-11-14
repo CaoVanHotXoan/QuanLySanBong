@@ -1033,13 +1033,23 @@ export const huyDonVaHoanCoc = async (req: AuthRequest, res: Response) => {
             console.warn('Lỗi lấy thông tin đơn hủy:', eInfo.message);
         }
 
+        const cleanAccountHolder = ten_chu_tai_khoan
+            ? String(ten_chu_tai_khoan)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/đ/g, 'd')
+                .replace(/Đ/g, 'D')
+                .toUpperCase()
+                .trim()
+            : null;
+
         const result = await pool.request()
             .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
             .input('ma_nguoi_dung', sql.Int, ma_nguoi_dung)
             .input('ly_do_huy', sql.NVarChar(255), ly_do_huy || 'Khách hàng yêu cầu hủy đơn')
             .input('ten_ngan_hang', sql.NVarChar(100), ten_ngan_hang || null)
             .input('so_tai_khoan', sql.VarChar(50), so_tai_khoan || null)
-            .input('ten_chu_tai_khoan', sql.NVarChar(100), ten_chu_tai_khoan || null)
+            .input('ten_chu_tai_khoan', sql.NVarChar(100), cleanAccountHolder)
             .execute('sp_HuyDonVaHoanCoc');
 
         const cancelResult = result.recordset[0];
@@ -1081,6 +1091,129 @@ export const huyDonVaHoanCoc = async (req: AuthRequest, res: Response) => {
         return res.status(400).json({
             success: false,
             message: error.message || 'Lỗi khi hủy đơn đặt sân'
+        });
+    }
+};
+
+/**
+ * 13.1 Kiểm tra đổi sân và tính toán chênh lệch tiền
+ * Method: POST /api/dat-san/kiem-tra-doi-san
+ * Procedure: sp_KiemTraDoiSan
+ */
+export const kiemTraDoiSan = async (req: AuthRequest, res: Response) => {
+    try {
+        const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung ? parseInt(req.body.ma_nguoi_dung, 10) : null);
+        const { ma_don_dat, ma_san_moi, ngay_da_moi, gio_bat_dau_moi, gio_ket_thuc_moi } = req.body;
+
+        if (!ma_don_dat || !ma_san_moi || !ngay_da_moi || !gio_bat_dau_moi || !gio_ket_thuc_moi) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ: ma_don_dat, ma_san_moi, ngay_da_moi, gio_bat_dau_moi, gio_ket_thuc_moi!'
+            });
+        }
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+            .input('ma_san_moi', sql.Int, parseInt(ma_san_moi, 10))
+            .input('ngay_da_moi', sql.Date, cleanDateForSql(ngay_da_moi))
+            .input('gio_bat_dau_moi', sql.VarChar(8), cleanTimeForSql(gio_bat_dau_moi))
+            .input('gio_ket_thuc_moi', sql.VarChar(8), cleanTimeForSql(gio_ket_thuc_moi))
+            .input('ma_nguoi_dung', sql.Int, ma_nguoi_dung)
+            .execute('sp_KiemTraDoiSan');
+
+        const data = result.recordset && result.recordset[0];
+        return res.status(200).json({
+            success: true,
+            data
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_KiemTraDoiSan:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi kiểm tra đổi sân'
+        });
+    }
+};
+
+/**
+ * 13.2 Xác nhận đổi sân và cập nhật CSDL nguyên tử
+ * Method: POST /api/dat-san/xac-nhan-doi-san
+ * Procedure: sp_KhachHangDoiSan
+ */
+export const xacNhanDoiSan = async (req: AuthRequest, res: Response) => {
+    try {
+        const ma_nguoi_dung = req.user ? req.user.id : (req.body.ma_nguoi_dung ? parseInt(req.body.ma_nguoi_dung, 10) : null);
+        const {
+            ma_don_dat,
+            ma_san_moi,
+            ngay_da_moi,
+            gio_bat_dau_moi,
+            gio_ket_thuc_moi,
+            ly_do_doi,
+            hinh_thuc_nhan_tien_thua,
+            ten_ngan_hang,
+            so_tai_khoan,
+            ten_chu_tai_khoan,
+            tien_bu_da_tra,
+            ma_giao_dich_bu,
+            phuong_thuc_bu
+        } = req.body;
+
+        if (!ma_don_dat || !ma_san_moi || !ngay_da_moi || !gio_bat_dau_moi || !gio_ket_thuc_moi) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ thông tin đổi sân!'
+            });
+        }
+
+        const cleanAccountHolder = ten_chu_tai_khoan
+            ? String(ten_chu_tai_khoan)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/đ/g, 'd')
+                .replace(/Đ/g, 'D')
+                .toUpperCase()
+                .trim()
+            : null;
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+            .input('ma_san_moi', sql.Int, parseInt(ma_san_moi, 10))
+            .input('ngay_da_moi', sql.Date, cleanDateForSql(ngay_da_moi))
+            .input('gio_bat_dau_moi', sql.VarChar(8), cleanTimeForSql(gio_bat_dau_moi))
+            .input('gio_ket_thuc_moi', sql.VarChar(8), cleanTimeForSql(gio_ket_thuc_moi))
+            .input('ma_nguoi_dung', sql.Int, ma_nguoi_dung)
+            .input('ly_do_doi', sql.NVarChar(255), ly_do_doi || 'Khách hàng yêu cầu đổi sân')
+            .input('hinh_thuc_nhan_tien_thua', sql.NVarChar(100), hinh_thuc_nhan_tien_thua || null)
+            .input('ten_ngan_hang', sql.NVarChar(100), ten_ngan_hang || null)
+            .input('so_tai_khoan', sql.VarChar(50), so_tai_khoan || null)
+            .input('ten_chu_tai_khoan', sql.NVarChar(100), cleanAccountHolder)
+            .input('tien_bu_da_tra', sql.Decimal(10, 2), Number(tien_bu_da_tra) || 0)
+            .input('ma_giao_dich_bu', sql.VarChar(100), ma_giao_dich_bu || null)
+            .input('phuong_thuc_bu', sql.VarChar(20), phuong_thuc_bu || 'CHUYEN_KHOAN')
+            .execute('sp_KhachHangDoiSan');
+
+        const doiSanResult = result.recordset && result.recordset[0];
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('payment_success');
+            io.emit('refund_updated');
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đổi sân thành công!',
+            data: doiSanResult
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_KhachHangDoiSan:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi thực hiện đổi sân'
         });
     }
 };
@@ -2418,6 +2551,180 @@ export const timKiemCaTrong = async (req: Request, res: Response) => {
         return res.status(500).json({
             success: false,
             message: error.message || 'Lỗi khi tìm kiếm ca trống'
+        });
+    }
+};
+
+/**
+ * 15. Lấy danh sách lịch sử đổi sân cho Admin
+ * Method: GET /api/dat-san/doi-san/danh-sach
+ * Procedure: sp_LayDanhSachDoiSan
+ */
+export const layDanhSachDoiSan = async (req: AuthRequest, res: Response) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().execute('sp_LayDanhSachDoiSan');
+        return res.status(200).json({
+            success: true,
+            total: result.recordset.length,
+            data: result.recordset
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_LayDanhSachDoiSan:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi lấy danh sách đổi sân'
+        });
+    }
+};
+
+/**
+ * 16. Admin tạo giao dịch đổi sân
+ * Method: POST /api/dat-san/doi-san/admin
+ * Procedure: sp_ThemDoiSanAdmin
+ */
+export const themDoiSanAdmin = async (req: AuthRequest, res: Response) => {
+    try {
+        const {
+            ma_don_dat, ma_san_moi, ngay_da_moi, gio_bat_dau_moi, gio_ket_thuc_moi,
+            ly_do_doi, tien_bu_da_tra, tien_thua_hoan, hinh_thuc_nhan_tien_thua,
+            ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan
+        } = req.body;
+
+        if (!ma_don_dat || !ma_san_moi || !ngay_da_moi || !gio_bat_dau_moi || !gio_ket_thuc_moi) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ thông tin đổi sân!'
+            });
+        }
+
+        const cleanAccountHolder = ten_chu_tai_khoan
+            ? String(ten_chu_tai_khoan)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/đ/g, 'd')
+                .replace(/Đ/g, 'D')
+                .toUpperCase()
+                .trim()
+            : null;
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+            .input('ma_san_moi', sql.Int, parseInt(ma_san_moi, 10))
+            .input('ngay_da_moi', sql.Date, cleanDateForSql(ngay_da_moi))
+            .input('gio_bat_dau_moi', sql.VarChar(8), cleanTimeForSql(gio_bat_dau_moi))
+            .input('gio_ket_thuc_moi', sql.VarChar(8), cleanTimeForSql(gio_ket_thuc_moi))
+            .input('ly_do_doi', sql.NVarChar(255), ly_do_doi || 'Quản trị viên hỗ trợ đổi sân')
+            .input('tien_bu_da_tra', sql.Decimal(10, 2), Number(tien_bu_da_tra) || 0)
+            .input('tien_thua_hoan', sql.Decimal(10, 2), Number(tien_thua_hoan) || 0)
+            .input('hinh_thuc_nhan_tien_thua', sql.NVarChar(100), hinh_thuc_nhan_tien_thua || null)
+            .input('ten_ngan_hang', sql.NVarChar(100), ten_ngan_hang || null)
+            .input('so_tai_khoan', sql.VarChar(50), so_tai_khoan || null)
+            .input('ten_chu_tai_khoan', sql.NVarChar(100), cleanAccountHolder)
+            .execute('sp_ThemDoiSanAdmin');
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('refund_updated');
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: 'Tạo giao dịch đổi sân thành công!',
+            data: result.recordset && result.recordset[0]
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_ThemDoiSanAdmin:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi tạo giao dịch đổi sân'
+        });
+    }
+};
+
+/**
+ * 17. Admin cập nhật ghi chú / thông tin giao dịch đổi sân
+ * Method: PUT /api/dat-san/doi-san/admin/:id
+ * Procedure: sp_SuaDoiSanAdmin
+ */
+export const suaDoiSanAdmin = async (req: AuthRequest, res: Response) => {
+    try {
+        const id = parseInt(String(req.params.id), 10);
+        const {
+            ly_do_doi, hinh_thuc_nhan_tien_thua,
+            ten_ngan_hang, so_tai_khoan, ten_chu_tai_khoan
+        } = req.body;
+
+        const cleanAccountHolder = ten_chu_tai_khoan
+            ? String(ten_chu_tai_khoan)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/đ/g, 'd')
+                .replace(/Đ/g, 'D')
+                .toUpperCase()
+                .trim()
+            : null;
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('ly_do_doi', sql.NVarChar(255), ly_do_doi || 'Cập nhật thông tin đổi sân')
+            .input('hinh_thuc_nhan_tien_thua', sql.NVarChar(100), hinh_thuc_nhan_tien_thua || null)
+            .input('ten_ngan_hang', sql.NVarChar(100), ten_ngan_hang || null)
+            .input('so_tai_khoan', sql.VarChar(50), so_tai_khoan || null)
+            .input('ten_chu_tai_khoan', sql.NVarChar(100), cleanAccountHolder)
+            .execute('sp_SuaDoiSanAdmin');
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('refund_updated');
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật thông tin đổi sân thành công!',
+            data: result.recordset && result.recordset[0]
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_SuaDoiSanAdmin:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi cập nhật giao dịch đổi sân'
+        });
+    }
+};
+
+/**
+ * 18. Admin xóa bản ghi lịch sử đổi sân
+ * Method: DELETE /api/dat-san/doi-san/admin/:id
+ * Procedure: sp_XoaDoiSanAdmin
+ */
+export const xoaDoiSanAdmin = async (req: AuthRequest, res: Response) => {
+    try {
+        const id = parseInt(String(req.params.id), 10);
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .execute('sp_XoaDoiSanAdmin');
+
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('booking_updated');
+            io.emit('refund_updated');
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đã xóa bản ghi đổi sân thành công!'
+        });
+    } catch (error: any) {
+        console.error('Lỗi sp_XoaDoiSanAdmin:', error.message);
+        return res.status(400).json({
+            success: false,
+            message: error.message || 'Lỗi khi xóa bản ghi đổi sân'
         });
     }
 };

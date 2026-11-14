@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -34,7 +34,13 @@ import {
   Moon,
   Lock,
   XCircle,
-  Landmark
+  Landmark,
+  CalendarClock,
+  RotateCcw,
+  Filter,
+  ArrowLeftRight,
+  Search,
+  ChevronDown
 } from 'lucide-react';
 
 // 1. Định nghĩa Interface đơn đặt sân lấy từ CSDL SQL Server
@@ -102,6 +108,292 @@ interface PayOSData {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
+// Hàm chuẩn hóa chuỗi sang IN HOA KHÔNG DẤU theo chuẩn thông tin chuyển khoản ngân hàng
+export const toUpperCaseNoAccents = (str: string): string => {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toUpperCase();
+};
+
+// =========================================================================
+// COMPONENT DROPDOWN CHỌN NGÂN HÀNG THƯƠNG MẠI (SẮP XẾP CHỮ CÁI A - Z & TÌM KIẾM)
+// =========================================================================
+interface BankItem {
+  id?: number;
+  code: string;
+  shortName: string;
+  name: string;
+  logo?: string;
+}
+
+interface BankSelectDropdownProps {
+  value: string;
+  onChange: (value: string) => void;
+  banks: BankItem[];
+  isDarkMode: boolean;
+  cashLabel?: string;
+  placeholder?: string;
+}
+
+const BankSelectDropdown: React.FC<BankSelectDropdownProps> = ({
+  value,
+  onChange,
+  banks,
+  isDarkMode,
+  cashLabel = 'Nhận tiền mặt tại quầy',
+  placeholder = 'Chọn phương thức nhận tiền...'
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Sắp xếp danh sách ngân hàng theo thứ tự bảng chữ cái A - Z theo tên viết tắt (shortName)
+  const sortedBanks = useMemo(() => {
+    return [...banks].sort((a, b) => {
+      const nameA = (a.shortName || a.name || '').trim();
+      const nameB = (b.shortName || b.name || '').trim();
+      return nameA.localeCompare(nameB, 'vi', { sensitivity: 'base' });
+    });
+  }, [banks]);
+
+  // Lọc theo từ khóa tìm kiếm nhanh
+  const filteredBanks = useMemo(() => {
+    if (!searchTerm.trim()) return sortedBanks;
+    const q = searchTerm.trim().toLowerCase();
+    return sortedBanks.filter((b) => {
+      const sName = (b.shortName || '').toLowerCase();
+      const fName = (b.name || '').toLowerCase();
+      const code = (b.code || '').toLowerCase();
+      return sName.includes(q) || fName.includes(q) || code.includes(q);
+    });
+  }, [sortedBanks, searchTerm]);
+
+  // Đóng dropdown khi click ra ngoài hoặc bấm Escape
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const isCashSelected = value === cashLabel || value.includes('quầy') || value.includes('tiền mặt');
+
+  const selectedBank = useMemo(() => {
+    if (isCashSelected) return null;
+    return banks.find((b) => b.shortName === value || b.name === value || b.code === value);
+  }, [banks, value, isCashSelected]);
+
+  return (
+    <div ref={dropdownRef} className="relative w-full">
+      {/* Nút trigger dropdown */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full px-3.5 py-2.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 transition-all cursor-pointer shadow-sm text-left ${
+          isOpen
+            ? isDarkMode
+              ? 'border-indigo-500 bg-slate-900 ring-2 ring-indigo-500/30 text-white'
+              : 'border-indigo-500 bg-white ring-2 ring-indigo-500/30 text-slate-950'
+            : isDarkMode
+            ? 'border-slate-700 bg-slate-900 hover:border-slate-600 text-white'
+            : 'border-slate-300 bg-white hover:border-slate-400 text-slate-950'
+        }`}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {isCashSelected ? (
+            <div className="flex items-center gap-2 truncate">
+              <span className="text-base shrink-0">💵</span>
+              <span className="font-extrabold text-emerald-600 dark:text-emerald-400 truncate">
+                Nhận tiền mặt trực tiếp tại quầy lễ tân
+              </span>
+            </div>
+          ) : selectedBank ? (
+            <div className="flex items-center gap-2 truncate">
+              {selectedBank.logo ? (
+                <img
+                  src={selectedBank.logo}
+                  alt={selectedBank.shortName}
+                  className="w-5 h-5 object-contain rounded bg-white p-0.5 border border-slate-200/60 shrink-0"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              ) : null}
+              <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-extrabold shrink-0 ${
+                isDarkMode ? 'bg-indigo-950/80 text-cyan-300 border border-indigo-700/50' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+              }`}>
+                {selectedBank.shortName}
+              </span>
+              <span className="truncate font-bold text-slate-900 dark:text-slate-100">
+                {selectedBank.name}
+              </span>
+            </div>
+          ) : (
+            <span className="truncate font-bold text-slate-900 dark:text-slate-100">
+              {value || placeholder}
+            </span>
+          )}
+        </div>
+
+        <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-indigo-500' : ''}`} />
+      </button>
+
+      {/* Menu dropdown popup */}
+      {isOpen && (
+        <div className={`absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl border shadow-2xl overflow-hidden flex flex-col animate-fade-in ${
+          isDarkMode
+            ? 'bg-slate-900 border-slate-700 shadow-black/80'
+            : 'bg-white border-slate-300 shadow-slate-300/60'
+        }`}>
+          {/* Ô tìm kiếm nhanh */}
+          <div className={`p-2.5 border-b flex items-center gap-2 shrink-0 ${
+            isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'
+          }`}>
+            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Tìm nhanh tên ngân hàng (VD: MB, VCB, ACB, Techcom...)..."
+              className={`w-full bg-transparent text-xs outline-none font-medium ${
+                isDarkMode ? 'text-white placeholder:text-slate-500' : 'text-slate-900 placeholder:text-slate-400'
+              }`}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="p-1 rounded-md text-slate-400 hover:text-white shrink-0"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Danh sách các lựa chọn cuộn mượt mà */}
+          <div className="max-h-60 sm:max-h-64 overflow-y-auto p-1.5 space-y-1 text-xs">
+            {/* Lựa chọn Tiền mặt (Luôn ở đầu nếu không tìm kiếm hoặc tìm kiếm khớp) */}
+            {(!searchTerm || 'nhận tiền mặt tại quầy lễ tân'.includes(searchTerm.toLowerCase())) && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(cashLabel);
+                  setIsOpen(false);
+                  setSearchTerm('');
+                }}
+                className={`w-full p-2.5 rounded-xl text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                  isCashSelected
+                    ? isDarkMode
+                      ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                    : isDarkMode
+                    ? 'hover:bg-slate-800 text-slate-200'
+                    : 'hover:bg-slate-100 text-slate-800'
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-base shrink-0">💵</span>
+                  <div className="min-w-0">
+                    <div className="font-extrabold text-xs">Nhận tiền mặt trực tiếp tại quầy</div>
+                    <div className="text-[10px] opacity-75">Thu ngân gửi lại tiền mặt khi bạn đến nhận sân</div>
+                  </div>
+                </div>
+                {isCashSelected && <Check className="w-4 h-4 text-emerald-500 shrink-0" />}
+              </button>
+            )}
+
+            {/* Tiêu đề nhóm Ngân hàng theo bảng chữ cái A - Z */}
+            <div className={`px-2.5 pt-2 pb-1 text-[10px] font-extrabold uppercase tracking-wider flex items-center justify-between ${
+              isDarkMode ? 'text-slate-400 border-t border-slate-800/80' : 'text-slate-500 border-t border-slate-200'
+            }`}>
+              <span>Danh sách 76 ngân hàng (Thứ tự A - Z)</span>
+              <span className="font-mono font-bold text-indigo-500">{filteredBanks.length} ngân hàng</span>
+            </div>
+
+            {/* Danh sách ngân hàng sắp xếp A - Z */}
+            {filteredBanks.map((b) => {
+              const isSelected = value === b.shortName;
+              return (
+                <button
+                  key={`${b.code}-${b.shortName}`}
+                  type="button"
+                  onClick={() => {
+                    onChange(b.shortName);
+                    setIsOpen(false);
+                    setSearchTerm('');
+                  }}
+                  className={`w-full p-2.5 rounded-xl text-left flex items-center justify-between gap-2.5 transition-all cursor-pointer ${
+                    isSelected
+                      ? isDarkMode
+                        ? 'bg-indigo-950/70 text-cyan-300 border border-indigo-500/50 shadow-inner'
+                        : 'bg-indigo-50 text-indigo-950 border border-indigo-300 font-bold shadow-inner'
+                      : isDarkMode
+                      ? 'hover:bg-slate-800/80 text-slate-200'
+                      : 'hover:bg-slate-100/90 text-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {b.logo ? (
+                      <img
+                        src={b.logo}
+                        alt={b.shortName}
+                        className="w-6 h-6 object-contain rounded-md bg-white p-0.5 border border-slate-200/80 shrink-0 shadow-xs"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    ) : null}
+                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-extrabold shrink-0 ${
+                      isSelected
+                        ? isDarkMode
+                          ? 'bg-cyan-500/25 text-cyan-300 border border-cyan-500/40'
+                          : 'bg-indigo-200 text-indigo-900 border border-indigo-300'
+                        : isDarkMode
+                        ? 'bg-slate-800 text-slate-300 border border-slate-700'
+                        : 'bg-slate-200 text-slate-700 border border-slate-300'
+                    }`}>
+                      {b.shortName}
+                    </span>
+                    <span className="truncate text-xs font-semibold">
+                      {b.name}
+                    </span>
+                  </div>
+                  {isSelected && <Check className="w-4 h-4 text-indigo-500 shrink-0" />}
+                </button>
+              );
+            })}
+
+            {filteredBanks.length === 0 && (
+              <div className="p-4 text-center text-slate-400 text-xs font-medium">
+                Không tìm thấy ngân hàng nào với từ khóa "{searchTerm}"
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function History() {
   const router = useRouter();
   const { isDarkMode, setIsDarkMode, toggleTheme } = useAppTheme(true);
@@ -133,11 +425,63 @@ export default function History() {
 
   // State Modal Hủy Sân & Hoàn Tiền
   const [cancelModalOrder, setCancelModalOrder] = useState<IDonDatSan | null>(null);
-  const [cancelBankName, setCancelBankName] = useState<string>('MB Bank');
+  const [cancelBankName, setCancelBankName] = useState<string>('Nhận tiền mặt tại quầy');
   const [cancelBankAccount, setCancelBankAccount] = useState<string>('');
   const [cancelAccountHolder, setCancelAccountHolder] = useState<string>('');
   const [cancelReason, setCancelReason] = useState<string>('Bận việc đột xuất');
   const [isSubmittingCancel, setIsSubmittingCancel] = useState<boolean>(false);
+  const [cancelModalError, setCancelModalError] = useState<string | null>(null);
+
+  // Danh sách ngân hàng thương mại thật (VietQR Open Banking API)
+  const [realBankList, setRealBankList] = useState<BankItem[]>([
+    { code: 'MB', shortName: 'MBBank', name: 'Ngân hàng TMCP Quân đội' },
+    { code: 'VCB', shortName: 'Vietcombank', name: 'Ngân hàng TMCP Ngoại Thương Việt Nam' },
+    { code: 'CTG', shortName: 'VietinBank', name: 'Ngân hàng TMCP Công thương Việt Nam' },
+    { code: 'BIDV', shortName: 'BIDV', name: 'Ngân hàng TMCP Đầu tư và Phát triển Việt Nam' },
+    { code: 'TCB', shortName: 'Techcombank', name: 'Ngân hàng TMCP Kỹ thương Việt Nam' },
+    { code: 'VPB', shortName: 'VPBank', name: 'Ngân hàng TMCP Việt Nam Thịnh Vượng' },
+    { code: 'ACB', shortName: 'ACB', name: 'Ngân hàng TMCP Á Châu' },
+    { code: 'VBA', shortName: 'Agribank', name: 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam' },
+    { code: 'TPB', shortName: 'TPBank', name: 'Ngân hàng TMCP Tiên Phong' },
+    { code: 'STB', shortName: 'Sacombank', name: 'Ngân hàng TMCP Sài Gòn Thương Tín' },
+    { code: 'HDB', shortName: 'HDBank', name: 'Ngân hàng TMCP Phát triển TP.HCM' },
+    { code: 'VIB', shortName: 'VIB', name: 'Ngân hàng TMCP Quốc tế Việt Nam' },
+    { code: 'SHB', shortName: 'SHB', name: 'Ngân hàng TMCP Sài Gòn - Hà Nội' },
+    { code: 'MSB', shortName: 'MSB', name: 'Ngân hàng TMCP Hàng Hải' },
+    { code: 'SSB', shortName: 'SeABank', name: 'Ngân hàng TMCP Đông Nam Á' },
+    { code: 'OCB', shortName: 'OCB', name: 'Ngân hàng TMCP Phương Đông' },
+    { code: 'EIB', shortName: 'Eximbank', name: 'Ngân hàng TMCP Xuất Nhập khẩu Việt Nam' },
+    { code: 'LPB', shortName: 'LPBank', name: 'Ngân hàng TMCP Lộc Phát Việt Nam' },
+    { code: 'NAB', shortName: 'Nam A Bank', name: 'Ngân hàng TMCP Nam Á' },
+    { code: 'BAB', shortName: 'Bac A Bank', name: 'Ngân hàng TMCP Bắc Á' }
+  ]);
+
+  // State Bộ lọc thời gian (Tất cả, Hôm nay, Ngày mai, Tuần này, Tháng này, Sắp tới, Đã qua, Tùy chọn)
+  const [filterType, setFilterType] = useState<'ALL' | 'TODAY' | 'TOMORROW' | 'THIS_WEEK' | 'THIS_MONTH' | 'UPCOMING' | 'PAST' | 'CUSTOM'>('ALL');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [isTimeFilterModalOpen, setIsTimeFilterModalOpen] = useState<boolean>(false);
+
+  // =========================================================================
+  // STATE MODAL ĐỔI SÂN CHO KHÁCH HÀNG (Tối thiểu trước giờ đá 30 phút)
+  // =========================================================================
+  const [exchangeModalOrder, setExchangeModalOrder] = useState<IDonDatSan | null>(null);
+  const [exchangePitchList, setExchangePitchList] = useState<any[]>([]);
+  const [exchangeSlotList, setExchangeSlotList] = useState<any[]>([]);
+  const [exchangeBookedList, setExchangeBookedList] = useState<any[]>([]);
+  const [exchangeSelectedDate, setExchangeSelectedDate] = useState<string>('');
+  const [exchangeSelectedPitchId, setExchangeSelectedPitchId] = useState<number | null>(null);
+  const [exchangeSelectedSlot, setExchangeSelectedSlot] = useState<{ gio_bat_dau: string; gio_ket_thuc: string; nhan_hien_thi?: string } | null>(null);
+  const [exchangeReason, setExchangeReason] = useState<string>('Thay đổi lịch thi đấu');
+  const [exchangePreviewData, setExchangePreviewData] = useState<any | null>(null);
+  const [exchangeLoadingPreview, setExchangeLoadingPreview] = useState<boolean>(false);
+  const [exchangeSubmitting, setExchangeSubmitting] = useState<boolean>(false);
+  const [exchangeModalError, setExchangeModalError] = useState<string | null>(null);
+
+  // Thông tin nhận lại tiền thừa (nếu sân mới rẻ hơn)
+  const [exchangeRefundBankName, setExchangeRefundBankName] = useState<string>('Nhận tiền mặt tại quầy');
+  const [exchangeRefundBankAccount, setExchangeRefundBankAccount] = useState<string>('');
+  const [exchangeRefundAccountHolder, setExchangeRefundAccountHolder] = useState<string>('');
 
   // Helper tính toán tỷ lệ và số tiền hoàn khi hủy đơn
   const calculateCancelRefund = useCallback((order: IDonDatSan | null) => {
@@ -163,16 +507,27 @@ export default function History() {
     const now = new Date();
     const hoursLeft = Math.max(0, (matchDateTime.getTime() - now.getTime()) / (1000 * 60 * 60));
 
+    // Thể lệ hủy sân & hoàn tiền chuẩn:
+    // 1. Từ 5 tiếng trở lên (>= 5h): hoàn 100% (tiền cọc và tiền thanh toán nếu có)
+    // 2. Từ 1 đến dưới 5 tiếng (từ 1h đến < 5h, tức từ 60 phút trở lên): hoàn 50% số tiền (tiền cọc và tiền thanh toán nếu có)
+    // 3. Dưới 1 tiếng (< 1h / < 60 phút): hủy sân không hoàn tiền (0%)
     let refundRate = 0;
-    if (hoursLeft >= 24) {
+    if (hoursLeft >= 5) {
       refundRate = 100;
-    } else if (hoursLeft >= 12) {
+    } else if (hoursLeft >= 1) {
       refundRate = 50;
     } else {
       refundRate = 0;
     }
 
-    const totalPaid = Number(order.tien_da_nhan || 0);
+    const isFullyPaid = (order.trang_thai === 'DA_THANH_TOAN' || order.trang_thai === 'HOAN_THANH' || order.trang_thai === 'KET_THUC');
+    const tienCoc = order.tien_coc !== undefined && order.tien_coc !== null ? Number(order.tien_coc) : Math.round((order.tong_tien || 0) * 0.3);
+    const totalPaid = isFullyPaid
+      ? Number(order.tong_tien || 0)
+      : (order.tien_da_nhan !== undefined && order.tien_da_nhan !== null && Number(order.tien_da_nhan) > 0
+        ? Number(order.tien_da_nhan)
+        : (order.trang_thai === 'DA_COC' ? tienCoc : Number(order.tien_da_nhan || 0)));
+
     const refundAmount = Math.round((totalPaid * refundRate) / 100);
 
     return { hoursLeft, refundRate, refundAmount, totalPaid };
@@ -180,23 +535,28 @@ export default function History() {
 
   const handleOpenCancelModal = (order: IDonDatSan) => {
     setCancelModalOrder(order);
-    setCancelBankName('MB Bank');
+    setCancelModalError(null);
+    setToastMessage(null);
+    setCancelBankName('Nhận tiền mặt tại quầy');
     setCancelBankAccount('');
-    setCancelAccountHolder(order.ten_khach_hang || currentUser?.ho_ten || '');
+    setCancelAccountHolder('');
     setCancelReason('Bận việc đột xuất');
   };
 
   const handleConfirmCancelOrder = async () => {
     if (!cancelModalOrder) return;
+    setCancelModalError(null);
     const { refundRate } = calculateCancelRefund(cancelModalOrder);
 
     if (refundRate > 0 && cancelBankName !== 'Nhận tiền mặt tại quầy') {
       if (!cancelBankAccount.trim()) {
-        setToastMessage({ type: 'error', text: 'Vui lòng nhập số tài khoản ngân hàng để nhận tiền hoàn!' });
+        const msg = 'Vui lòng nhập số tài khoản ngân hàng để nhận tiền hoàn!';
+        setCancelModalError(msg);
         return;
       }
       if (!cancelAccountHolder.trim()) {
-        setToastMessage({ type: 'error', text: 'Vui lòng nhập tên chủ tài khoản ngân hàng!' });
+        const msg = 'Vui lòng nhập tên chủ tài khoản ngân hàng (in hoa không dấu)!';
+        setCancelModalError(msg);
         return;
       }
     }
@@ -216,7 +576,7 @@ export default function History() {
           ly_do_huy: cancelReason,
           ten_ngan_hang: cancelBankName,
           so_tai_khoan: cancelBankName === 'Nhận tiền mặt tại quầy' ? 'TIEN_MAT' : cancelBankAccount.trim(),
-          ten_chu_tai_khoan: cancelAccountHolder.trim()
+          ten_chu_tai_khoan: toUpperCaseNoAccents(cancelAccountHolder).trim()
         })
       });
 
@@ -227,20 +587,266 @@ export default function History() {
           text: `✅ Đã hủy sân #${cancelModalOrder.id} thành công! Đang chờ Ban Quản Lý hoàn tiền.`
         });
         setCancelModalOrder(null);
+        setCancelModalError(null);
         fetchBookingHistory(currentUser);
       } else {
-        setToastMessage({
-          type: 'error',
-          text: data.message || 'Không thể hủy đơn đặt sân, vui lòng thử lại!'
-        });
+        const msg = data.message || 'Không thể hủy đơn đặt sân, vui lòng thử lại!';
+        setCancelModalError(msg);
       }
     } catch (err: any) {
-      setToastMessage({
-        type: 'error',
-        text: err.message || 'Lỗi kết nối khi hủy đơn đặt sân!'
-      });
+      const msg = err.message || 'Lỗi kết nối khi hủy đơn đặt sân!';
+      setCancelModalError(msg);
     } finally {
       setIsSubmittingCancel(false);
+    }
+  };
+
+  // =========================================================================
+  // XỬ LÝ NGHIỆP VỤ ĐỔI SÂN CHO KHÁCH HÀNG (TỐI THIỂU TRƯỚC 30 PHÚT)
+  // =========================================================================
+
+  // Helper kiểm tra điều kiện được phép đổi sân (tối thiểu trước 30 phút, chưa hủy, chưa hoàn thành)
+  const canExchangeOrder = useCallback((order: IDonDatSan | null) => {
+    if (!order || !order.ngay_da) return { allowed: false, minutesLeft: 0, reason: 'Không có thông tin lịch đá' };
+    if (order.trang_thai === 'DA_HUY' || (order as any).trang_thai_hoan) return { allowed: false, minutesLeft: 0, reason: 'Đơn đã hủy' };
+    if (order.trang_thai === 'HOAN_THANH') return { allowed: false, minutesLeft: 0, reason: 'Đơn đã hoàn thành' };
+    if (order.trang_thai === 'DANG_DA') return { allowed: false, minutesLeft: 0, reason: 'Trận đấu đang diễn ra' };
+
+    let matchDateTime: Date;
+    const timeParts = (order.gio_bat_dau || '00:00').split(':');
+    const h = parseInt(timeParts[0] || '0', 10);
+    const m = parseInt(timeParts[1] || '0', 10);
+
+    if (order.ngay_da.includes('-')) {
+      const parts = order.ngay_da.split('-');
+      if (parts[0].length === 4) {
+        matchDateTime = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), h, m);
+      } else {
+        matchDateTime = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10), h, m);
+      }
+    } else {
+      matchDateTime = new Date(order.ngay_da);
+      matchDateTime.setHours(h, m, 0, 0);
+    }
+
+    const now = new Date();
+    const minutesLeft = Math.floor((matchDateTime.getTime() - now.getTime()) / (1000 * 60));
+
+    // Thời gian tối thiểu cho phép đổi là 30 phút
+    if (minutesLeft < 30) {
+      return {
+        allowed: false,
+        minutesLeft,
+        reason: `Theo quy định, chỉ được đổi sân trước giờ đá tối thiểu 30 phút (hiện còn ${minutesLeft > 0 ? minutesLeft + ' phút' : 'đã qua giờ đá'})`
+      };
+    }
+    return { allowed: true, minutesLeft, reason: '' };
+  }, []);
+
+  // Mở modal đổi sân
+  const handleOpenExchangeModal = async (order: IDonDatSan) => {
+    setExchangeModalOrder(order);
+    setExchangeModalError(null);
+    setExchangePreviewData(null);
+    setExchangeSelectedSlot(null);
+    setExchangeRefundBankName('Nhận tiền mặt tại quầy');
+    setExchangeRefundBankAccount('');
+    setExchangeRefundAccountHolder('');
+    setExchangeReason('Thay đổi lịch thi đấu');
+
+    let defaultDate = '';
+    const todayStr = getLocalDateString(new Date());
+    if (order.ngay_da) {
+      const rawDate = order.ngay_da.split('T')[0];
+      defaultDate = rawDate >= todayStr ? rawDate : todayStr;
+    } else {
+      defaultDate = todayStr;
+    }
+    setExchangeSelectedDate(defaultDate);
+
+    try {
+      const [pitchRes, slotRes, bookedRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/dat-san/danh-sach-san`).then(r => r.json()).catch(() => ({ success: false })),
+        fetch(`${API_BASE_URL}/dat-san/khung-gio`).then(r => r.json()).catch(() => ({ success: false })),
+        fetch(`${API_BASE_URL}/dat-san/lich-san?ngay=${defaultDate}`).then(r => r.json()).catch(() => ({ success: false }))
+      ]);
+
+      if (pitchRes.success && Array.isArray(pitchRes.data)) {
+        const availablePitches = pitchRes.data.filter((p: any) => p.trang_thai === 'SAN_SANG');
+        setExchangePitchList(availablePitches);
+        const matchOld = availablePitches.find((p: any) => p.id === order.ma_san);
+        setExchangeSelectedPitchId(matchOld ? matchOld.id : (availablePitches[0]?.id || null));
+      }
+
+      if (slotRes.success && Array.isArray(slotRes.data)) {
+        setExchangeSlotList(slotRes.data.filter((s: any) => s.trang_thai !== false && s.trang_thai !== 0));
+      }
+
+      if (bookedRes.success && Array.isArray(bookedRes.data)) {
+        setExchangeBookedList(bookedRes.data);
+      }
+    } catch (err: any) {
+      console.warn('Lỗi khi mở modal đổi sân:', err.message);
+    }
+  };
+
+  // Đổi ngày trong modal đổi sân
+  const handleDateChangeExchange = async (newDate: string) => {
+    setExchangeSelectedDate(newDate);
+    setExchangeSelectedSlot(null);
+    setExchangePreviewData(null);
+    setExchangeModalError(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/dat-san/lich-san?ngay=${newDate}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setExchangeBookedList(data.data);
+      }
+    } catch (e: any) {
+      console.warn('Lỗi tải lịch sân:', e.message);
+    }
+  };
+
+  // Chọn ca giờ và tự động xem trước tính giá
+  const handleSelectSlotExchange = async (slot: any) => {
+    if (!exchangeModalOrder || !exchangeSelectedPitchId) return;
+    setExchangeSelectedSlot(slot);
+    setExchangeLoadingPreview(true);
+    setExchangeModalError(null);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/dat-san/kiem-tra-doi-san`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ma_don_dat: exchangeModalOrder.id,
+          ma_san_moi: exchangeSelectedPitchId,
+          ngay_da_moi: exchangeSelectedDate,
+          gio_bat_dau_moi: slot.gio_bat_dau,
+          gio_ket_thuc_moi: slot.gio_ket_thuc,
+          ma_nguoi_dung: currentUser?.id
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && data.data) {
+        setExchangePreviewData(data.data);
+      } else {
+        setExchangePreviewData(null);
+        setExchangeModalError(data.message || 'Ca này không khả dụng để đổi!');
+      }
+    } catch (err: any) {
+      setExchangeModalError(err.message || 'Lỗi kiểm tra tính toán đổi sân');
+      setExchangePreviewData(null);
+    } finally {
+      setExchangeLoadingPreview(false);
+    }
+  };
+
+  // Kiểm tra ca giờ có bị trùng lịch hoặc quá giờ hôm nay không
+  const isSlotBookedForExchange = (pitchId: number, slotStart: string, slotEnd: string) => {
+    const sStart = (slotStart || '').slice(0, 5);
+    const sEnd = (slotEnd || '').slice(0, 5);
+
+    // Kiểm tra giờ đã qua hôm nay hoặc ngày trong quá khứ
+    const todayStr = getLocalDateString(new Date());
+    if (exchangeSelectedDate && exchangeSelectedDate < todayStr) {
+      return true;
+    }
+    if (exchangeSelectedDate === todayStr) {
+      const now = new Date();
+      const [h, m] = sStart.split(':').map(Number);
+      if (h < now.getHours() || (h === now.getHours() && (m || 0) <= now.getMinutes())) {
+        return true;
+      }
+    }
+
+    return exchangeBookedList.some((b: any) => {
+      if (exchangeModalOrder && b.id === exchangeModalOrder.id) return false;
+      if (b.trang_thai === 'DA_HUY') return false;
+      if (b.ma_san !== pitchId) return false;
+
+      const bStart = (b.gio_bat_dau || '').slice(0, 5);
+      const bEnd = (b.gio_ket_thuc || '').slice(0, 5);
+      return sStart < bEnd && sEnd > bStart;
+    });
+  };
+
+  // Xác nhận đổi sân trực tiếp
+  const handleConfirmExchangeOrder = async (isPayOSRedirect: boolean = false) => {
+    if (!exchangeModalOrder || !exchangeSelectedPitchId || !exchangeSelectedSlot || !exchangePreviewData) {
+      setExchangeModalError('Vui lòng chọn ngày, sân và ca giờ mới hợp lệ!');
+      return;
+    }
+
+    setExchangeModalError(null);
+
+    // Kiểm tra thông tin hoàn tiền thừa nếu sân mới rẻ hơn
+    if (exchangePreviewData.tien_thua > 0 && exchangeRefundBankName !== 'Nhận tiền mặt tại quầy') {
+      if (!exchangeRefundBankAccount.trim()) {
+        setExchangeModalError('Vui lòng nhập số tài khoản ngân hàng để nhận lại tiền thừa!');
+        return;
+      }
+      if (!exchangeRefundAccountHolder.trim()) {
+        setExchangeModalError('Vui lòng nhập tên chủ tài khoản (in hoa không dấu) để nhận lại tiền thừa!');
+        return;
+      }
+    }
+
+    // Nếu cần bù tiền và khách chọn thanh toán qua VietQR PayOS
+    if (isPayOSRedirect) {
+      const amountToPay = exchangePreviewData.duoc_doi_ngay
+        ? exchangePreviewData.tien_con_thieu
+        : exchangePreviewData.can_bu_coc;
+      
+      const orderForPayment = exchangeModalOrder;
+      setExchangeModalOrder(null);
+      handleOpenVietQRPayment(orderForPayment, amountToPay);
+      return;
+    }
+
+    // Nếu không đủ cọc thì chặn không cho đổi trực tiếp
+    if (!exchangePreviewData.duoc_doi_ngay && exchangePreviewData.can_bu_coc > 0) {
+      setExchangeModalError(`Tiền cọc chưa đủ 30% sân mới! Bạn cần thanh toán bù thêm ${formatCurrency(exchangePreviewData.can_bu_coc)} tiền cọc để đổi sân.`);
+      return;
+    }
+
+    setExchangeSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/dat-san/xac-nhan-doi-san`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ma_don_dat: exchangeModalOrder.id,
+          ma_san_moi: exchangeSelectedPitchId,
+          ngay_da_moi: exchangeSelectedDate,
+          gio_bat_dau_moi: exchangeSelectedSlot.gio_bat_dau,
+          gio_ket_thuc_moi: exchangeSelectedSlot.gio_ket_thuc,
+          ly_do_doi: exchangeReason || 'Khách hàng đổi sân',
+          hinh_thuc_nhan_tien_thua: exchangePreviewData.tien_thua > 0 ? exchangeRefundBankName : null,
+          ten_ngan_hang: exchangeRefundBankName !== 'Nhận tiền mặt tại quầy' ? exchangeRefundBankName : null,
+          so_tai_khoan: exchangeRefundBankAccount || null,
+          ten_chu_tai_khoan: exchangeRefundAccountHolder ? toUpperCaseNoAccents(exchangeRefundAccountHolder) : null,
+          tien_bu_da_tra: 0
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setToastMessage({
+          type: 'success',
+          text: `✅ Đổi sang ${data.data?.ten_san || 'sân mới'} (${formatDateDMY(exchangeSelectedDate)} ${exchangeSelectedSlot.gio_bat_dau.slice(0, 5)} - ${exchangeSelectedSlot.gio_ket_thuc.slice(0, 5)}) thành công!`
+        });
+        setExchangeModalOrder(null);
+        setExchangePreviewData(null);
+        fetchBookingHistory(currentUser);
+      } else {
+        setExchangeModalError(data.message || 'Không thể đổi sân, vui lòng kiểm tra lại!');
+      }
+    } catch (err: any) {
+      setExchangeModalError(err.message || 'Lỗi kết nối khi đổi sân!');
+    } finally {
+      setExchangeSubmitting(false);
     }
   };
 
@@ -289,12 +895,135 @@ export default function History() {
   // Format ngày DD/MM/YYYY
   const formatDateDMY = (dateStr: string) => {
     if (!dateStr) return '';
-    const parts = dateStr.split('-');
+    const cleanStr = String(dateStr).split('T')[0].split(' ')[0];
+    const parts = cleanStr.split('-');
     if (parts.length === 3) {
       return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
     return dateStr;
   };
+
+  // Helper lấy chuỗi YYYY-MM-DD từ đối tượng Date theo giờ địa phương
+  const getLocalDateString = (d: Date = new Date()): string => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Helper chuẩn hóa ngày đá của đơn về định dạng YYYY-MM-DD để so sánh chính xác
+  const normalizeOrderDateStr = (dateStr?: string): string => {
+    if (!dateStr) return '';
+    if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts[0].length === 4) {
+        return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      } else if (parts[2]?.length === 4) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+    if (dateStr.includes('/')) {
+      const parts = dateStr.split('/');
+      if (parts[2]?.length === 4) {
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+    }
+    return dateStr;
+  };
+
+  // Hàm đặt lại bộ lọc về mặc định
+  const resetFilter = () => {
+    setFilterType('ALL');
+    setCustomStartDate('');
+    setCustomEndDate('');
+  };
+
+  // Label hiển thị trên nút Lọc thời gian
+  const getFilterLabel = () => {
+    switch (filterType) {
+      case 'TODAY':
+        return 'Hôm nay';
+      case 'TOMORROW':
+        return 'Ngày mai';
+      case 'THIS_WEEK':
+        return 'Tuần này';
+      case 'THIS_MONTH':
+        return 'Tháng này';
+      case 'UPCOMING':
+        return 'Sắp diễn ra';
+      case 'PAST':
+        return 'Đã qua giờ';
+      case 'CUSTOM':
+        if (customStartDate && customEndDate) {
+          return `${formatDateDMY(customStartDate)} - ${formatDateDMY(customEndDate)}`;
+        }
+        if (customStartDate) return `Từ ${formatDateDMY(customStartDate)}`;
+        if (customEndDate) return `Đến ${formatDateDMY(customEndDate)}`;
+        return 'Tùy chọn';
+      default:
+        return 'Lọc thời gian';
+    }
+  };
+
+  // Danh sách đơn đặt sân đã được lọc theo mốc thời gian
+  const danhSachDonFiltered = useMemo(() => {
+    if (filterType === 'ALL') return danhSachDon;
+
+    const todayStr = getLocalDateString(new Date());
+
+    if (filterType === 'TODAY') {
+      return danhSachDon.filter((item) => normalizeOrderDateStr(item.ngay_da) === todayStr);
+    }
+
+    if (filterType === 'TOMORROW') {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = getLocalDateString(tomorrow);
+      return danhSachDon.filter((item) => normalizeOrderDateStr(item.ngay_da) === tomorrowStr);
+    }
+
+    if (filterType === 'THIS_WEEK') {
+      const now = new Date();
+      const day = now.getDay();
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + diffToMonday);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      const mondayStr = getLocalDateString(monday);
+      const sundayStr = getLocalDateString(sunday);
+
+      return danhSachDon.filter((item) => {
+        const dStr = normalizeOrderDateStr(item.ngay_da);
+        return dStr >= mondayStr && dStr <= sundayStr;
+      });
+    }
+
+    if (filterType === 'THIS_MONTH') {
+      const now = new Date();
+      const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      return danhSachDon.filter((item) => normalizeOrderDateStr(item.ngay_da).startsWith(yearMonth));
+    }
+
+    if (filterType === 'UPCOMING') {
+      return danhSachDon.filter((item) => !isOrderPastTime(item) && item.trang_thai !== 'DA_HUY');
+    }
+
+    if (filterType === 'PAST') {
+      return danhSachDon.filter((item) => isOrderPastTime(item));
+    }
+
+    if (filterType === 'CUSTOM') {
+      return danhSachDon.filter((item) => {
+        const dStr = normalizeOrderDateStr(item.ngay_da);
+        if (customStartDate && dStr < customStartDate) return false;
+        if (customEndDate && dStr > customEndDate) return false;
+        return true;
+      });
+    }
+
+    return danhSachDon;
+  }, [danhSachDon, filterType, customStartDate, customEndDate, isOrderPastTime]);
 
   // Hàm copy văn bản
   const handleCopyText = (text: string, fieldName: string) => {
@@ -353,9 +1082,50 @@ export default function History() {
     }
   }, []);
 
+  // Tải danh mục ngân hàng thật từ API VietQR / Napas
+  const fetchRealBankList = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/thanh-toan/danh-sach-ngan-hang`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+        setRealBankList(data.data);
+        return;
+      }
+    } catch (e) {
+      console.warn('Lỗi gọi API ngân hàng nội bộ:', e);
+    }
+
+    try {
+      const resDirect = await fetch('https://api.vietqr.io/v2/banks');
+      const dataDirect = await resDirect.json();
+      if (dataDirect && dataDirect.code === '00' && Array.isArray(dataDirect.data)) {
+        setRealBankList(dataDirect.data.map((b: any) => ({
+          id: b.id,
+          code: b.code,
+          shortName: b.shortName || b.short_name,
+          name: b.name,
+          logo: b.logo
+        })));
+      }
+    } catch (err) {
+      console.error('Lỗi tải danh mục ngân hàng VietQR:', err);
+    }
+  };
+
+  // Tự động đóng Toast thông báo sau 3.5 giây
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
   // Đọc thông tin người dùng từ localStorage khi tải trang
   useEffect(() => {
     fetchAvailableServices();
+    fetchRealBankList();
     try {
       const savedAuth = localStorage.getItem('auth_user') || localStorage.getItem('soccer_current_user');
       if (savedAuth) {
@@ -661,180 +1431,131 @@ export default function History() {
         <title>Lịch Sử Đặt Sân | Sport247</title>
         <meta name="description" content="Xem chi tiết lịch sử đặt sân bóng và trạng thái thanh toán" />
       </Head>
-      <div className={`min-h-screen transition-colors duration-300 py-8 px-4 sm:px-6 lg:px-8 font-sans selection:bg-emerald-500 selection:text-white relative ${
+      <div className={`min-h-screen transition-colors duration-300 py-4 sm:py-8 px-3 sm:px-6 lg:px-8 font-sans selection:bg-emerald-500 selection:text-white relative ${
       isDarkMode ? 'bg-[#060e09] text-slate-100 dark' : 'bg-[#f4f7f5] text-slate-900'
     }`}>
       
       {/* Toast Notification Floating */}
       {toastMessage && (
-        <div className="fixed top-6 right-6 z-50 animate-bounce duration-300">
-          <div className={`px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md border flex items-center gap-3 text-xs font-semibold ${
+        <div className="fixed top-4 sm:top-6 right-3 sm:right-6 z-[9999] duration-300 max-w-[90vw] sm:max-w-md animate-fade-in">
+          <div className={`px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl shadow-2xl backdrop-blur-md border flex items-center justify-between gap-3 text-xs font-semibold ${
             toastMessage.type === 'success'
               ? isDarkMode ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/40' : 'bg-emerald-50 text-emerald-800 border-emerald-300'
               : toastMessage.type === 'error'
               ? isDarkMode ? 'bg-rose-950/90 text-rose-300 border-rose-500/40' : 'bg-rose-50 text-rose-800 border-rose-300'
               : isDarkMode ? 'bg-slate-900/90 text-slate-200 border-slate-700' : 'bg-white text-slate-800 border-slate-200'
           }`}>
-            {toastMessage.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-            {toastMessage.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-400" />}
-            {toastMessage.type === 'info' && <Sparkles className="w-4 h-4 text-teal-400" />}
-            <span>{toastMessage.text}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              {toastMessage.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+              {toastMessage.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
+              {toastMessage.type === 'info' && <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />}
+              <span className="truncate">{toastMessage.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="p-1 rounded-lg hover:bg-black/20 text-current opacity-70 hover:opacity-100 transition-opacity cursor-pointer shrink-0"
+              title="Đóng thông báo"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         
         {/* Header điều hướng & Tiêu đề */}
-        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-6 transition-colors ${
+        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 border-b pb-4 sm:pb-6 transition-colors ${
           isDarkMode ? 'border-slate-800' : 'border-slate-200'
         }`}>
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-2.5 sm:gap-3.5">
             <button
               onClick={() => router.push('/')}
-              className={`p-2.5 rounded-xl border transition-all cursor-pointer shadow-sm ${
+              className={`p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer shadow-sm shrink-0 ${
                 isDarkMode
                   ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800 hover:border-slate-700'
                   : 'bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 border-slate-200'
               }`}
               title="Quay về trang chủ"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
-            <div>
-              <h1 className={`text-2xl sm:text-3xl font-extrabold flex items-center gap-2.5 tracking-tight ${
+            <div className="min-w-0">
+              <h1 className={`text-lg sm:text-2xl md:text-3xl font-extrabold flex items-center gap-2 tracking-tight ${
                 isDarkMode ? 'text-white' : 'text-slate-900'
               }`}>
-                <Receipt className="w-7 h-7 text-emerald-500" />
-                Lịch Sử Đặt Sân & Hóa Đơn
+                <Receipt className="w-5 h-5 sm:w-7 sm:h-7 text-emerald-500 shrink-0" />
+                <span className="truncate">Lịch Sử Đặt Sân & Hóa Đơn</span>
               </h1>
-              <p className={`text-xs sm:text-sm mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
-                Theo dõi danh sách đơn đặt sân bóng, dịch vụ kèm theo và thanh toán
+              <p className={`text-[11px] sm:text-sm mt-0.5 sm:mt-1 truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
+                Theo dõi danh sách đơn đặt sân bóng, dịch vụ và thanh toán
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            {/* Nút Chuyển đổi Theme Sáng / Tối */}
+          <div className="grid grid-cols-2 gap-2.5 w-full sm:w-auto sm:flex sm:items-center">
+            {/* Nút lọc thời gian */}
             <button
               type="button"
-              onClick={() => toggleTheme()}
-              title={isDarkMode ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối'}
-              className={`p-2.5 rounded-xl border transition-all duration-300 flex items-center justify-center group shadow-sm hover:scale-105 active:scale-95 cursor-pointer ${
-                isDarkMode
-                  ? 'bg-slate-900 border-slate-700 text-amber-400 hover:bg-slate-800 hover:border-amber-400/50'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-emerald-600 shadow-sm'
+              onClick={() => setIsTimeFilterModalOpen(true)}
+              className={`px-3 sm:px-4 py-2.5 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm ${
+                filterType !== 'ALL'
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 border-emerald-400 shadow-emerald-500/20'
+                  : isDarkMode
+                  ? 'bg-slate-900 hover:bg-slate-800 text-cyan-300 hover:text-white border-slate-800 hover:border-slate-700'
+                  : 'bg-white hover:bg-slate-50 text-cyan-700 hover:text-cyan-900 border-slate-300'
               }`}
+              title="Lọc đơn đặt sân theo thời gian"
             >
-              {isDarkMode ? (
-                <Sun className="w-4 h-4 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
-              ) : (
-                <Moon className="w-4 h-4 text-emerald-600 group-hover:-rotate-12 transition-transform duration-300" />
+              <CalendarClock className="w-4 h-4 shrink-0 text-current" />
+              <span className="truncate">{getFilterLabel()}</span>
+              {filterType !== 'ALL' && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    resetFilter();
+                  }}
+                  className="p-0.5 hover:bg-black/20 rounded-full cursor-pointer ml-0.5"
+                  title="Xóa bộ lọc thời gian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </span>
               )}
             </button>
 
-            <button
-              onClick={() => fetchBookingHistory(currentUser)}
-              disabled={isLoading}
-              className={`px-3.5 py-2.5 text-xs font-semibold rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                isDarkMode
-                  ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-              }`}
-              title="Làm mới dữ liệu từ CSDL"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-emerald-400' : ''}`} />
-              <span>Làm mới</span>
-            </button>
-
+            {/* Nút Đặt sân mới */}
             <button
               onClick={() => router.push('/')}
-              className="px-4 py-2.5 text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 cursor-pointer"
+              className="px-3 sm:px-5 py-2.5 text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              <Calendar className="w-4 h-4" />
-              <span>Đặt sân mới</span>
+              <Calendar className="w-4 h-4 shrink-0" />
+              <span className="truncate">Đặt sân mới</span>
             </button>
           </div>
         </div>
 
-        {/* Khối tóm tắt thống kê từ CSDL */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: Tổng số đơn */}
-          <div className={`rounded-2xl p-4 flex items-center gap-4 shadow-lg transition-colors border ${
-            isDarkMode 
-              ? 'bg-slate-900/90 border-slate-800/90 shadow-black/40' 
-              : 'bg-white border-slate-200 shadow-slate-200/60'
+        {/* Tag thông báo đang lọc thời gian */}
+        {filterType !== 'ALL' && (
+          <div className={`p-2.5 sm:p-3 rounded-xl border flex items-center justify-between text-xs transition-colors ${
+            isDarkMode ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' : 'bg-emerald-50 border-emerald-200 text-emerald-900'
           }`}>
-            <div className={`p-3 rounded-xl border ${
-              isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-            }`}>
-              <Receipt className="w-6 h-6" />
+            <div className="flex items-center gap-2 min-w-0">
+              <CalendarClock className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span className="truncate">
+                Đang lọc: <strong>{getFilterLabel()}</strong> ({danhSachDonFiltered.length} đơn tìm thấy)
+              </span>
             </div>
-            <div>
-              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Tổng số đơn</p>
-              <p className={`text-xl font-extrabold mt-0.5 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                {isLoading ? '...' : `${totalBookings} đơn`}
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={resetFilter}
+              className="px-2 py-1 rounded-lg text-[11px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 flex items-center gap-1 transition-colors cursor-pointer shrink-0 ml-2"
+            >
+              <X className="w-3 h-3" />
+              <span>Xóa lọc</span>
+            </button>
           </div>
-
-          {/* Card 2: Đã cọc */}
-          <div className={`rounded-2xl p-4 flex items-center gap-4 shadow-lg transition-colors border ${
-            isDarkMode 
-              ? 'bg-slate-900/90 border-slate-800/90 shadow-black/40' 
-              : 'bg-white border-slate-200 shadow-slate-200/60'
-          }`}>
-            <div className={`p-3 rounded-xl border ${
-              isDarkMode ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-amber-50 text-amber-600 border-amber-200'
-            }`}>
-              <Clock3 className="w-6 h-6" />
-            </div>
-            <div>
-              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Đã cọc</p>
-              <p className={`text-xl font-extrabold mt-0.5 ${isDarkMode ? 'text-amber-400' : 'text-amber-600'}`}>
-                {isLoading ? '...' : `${daCocCount} đơn`}
-              </p>
-            </div>
-          </div>
-
-          {/* Card 3: Đã thanh toán */}
-          <div className={`rounded-2xl p-4 flex items-center gap-4 shadow-lg transition-colors border ${
-            isDarkMode 
-              ? 'bg-slate-900/90 border-slate-800/90 shadow-black/40' 
-              : 'bg-white border-slate-200 shadow-slate-200/60'
-          }`}>
-            <div className={`p-3 rounded-xl border ${
-              isDarkMode ? 'bg-teal-500/10 text-teal-400 border-teal-500/20' : 'bg-teal-50 text-teal-600 border-teal-200'
-            }`}>
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <div>
-              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Đã thanh toán</p>
-              <p className={`text-xl font-extrabold mt-0.5 ${isDarkMode ? 'text-teal-300' : 'text-teal-600'}`}>
-                {isLoading ? '...' : `${daThanhToanCount} đơn`}
-              </p>
-            </div>
-          </div>
-
-          {/* Card 4: Tổng giá trị đơn đặt */}
-          <div className={`rounded-2xl p-4 flex items-center gap-4 shadow-lg transition-colors border ${
-            isDarkMode 
-              ? 'bg-slate-900/90 border-slate-800/90 shadow-black/40' 
-              : 'bg-white border-slate-200 shadow-slate-200/60'
-          }`}>
-            <div className={`p-3 rounded-xl border ${
-              isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-            }`}>
-              <CreditCard className="w-6 h-6" />
-            </div>
-            <div>
-              <p className={`text-xs uppercase tracking-wider font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Tổng giá trị đơn đặt</p>
-              <p className={`text-xl font-extrabold mt-0.5 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                {isLoading ? '...' : formatCurrency(totalSpent)}
-              </p>
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Thông báo lỗi kết nối nếu có */}
         {errorMessage && (
@@ -848,21 +1569,6 @@ export default function History() {
         <div className={`rounded-2xl shadow-2xl overflow-hidden transition-colors border ${
           isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-slate-200/70'
         }`}>
-          <div className={`px-6 py-4 border-b flex items-center justify-between transition-colors ${
-            isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50/70'
-          }`}>
-            <h2 className={`text-base sm:text-lg font-bold flex items-center gap-2 ${
-              isDarkMode ? 'text-white' : 'text-slate-900'
-            }`}>
-              <HistoryIcon className="w-5 h-5 text-emerald-500" />
-              Chi Tiết Đơn Đặt Sân
-            </h2>
-            <span className={`text-xs px-3 py-1 rounded-full border font-bold ${
-              isDarkMode ? 'text-slate-400 bg-slate-950 border-slate-800' : 'text-slate-700 bg-slate-100 border-slate-300'
-            }`}>
-              Hiển thị {danhSachDon.length} đơn
-            </span>
-          </div>
 
           {isLoading ? (
             /* Hiệu ứng Skeleton Loading */
@@ -906,197 +1612,366 @@ export default function History() {
                 </>
               )}
             </div>
+          ) : danhSachDonFiltered.length === 0 ? (
+            /* Trạng thái khi có đơn nhưng bộ lọc thời gian không tìm thấy đơn nào */
+            <div className="py-14 px-4 text-center space-y-3">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto border shadow-inner ${
+                isDarkMode ? 'bg-slate-950 text-slate-500 border-slate-800' : 'bg-slate-100 text-slate-500 border-slate-300'
+              }`}>
+                <CalendarClock className="w-7 h-7 text-amber-500" />
+              </div>
+              <p className={`text-base font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+                Không tìm thấy đơn đặt sân nào!
+              </p>
+              <p className={`text-xs max-w-sm mx-auto ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
+                Không có trận đấu nào trong mốc thời gian: <strong className="text-emerald-500">{getFilterLabel()}</strong>. Bạn có thể chọn mốc khác hoặc xem toàn bộ.
+              </p>
+              <button
+                type="button"
+                onClick={resetFilter}
+                className="mt-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-md inline-flex items-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Xem tất cả thời gian</span>
+              </button>
+            </div>
           ) : (
-            /* Bảng hiển thị đơn đặt sân & tài chính */
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className={`border-b text-[11px] uppercase tracking-wider font-bold transition-colors ${
-                    isDarkMode ? 'bg-slate-950/80 border-slate-800 text-slate-400' : 'bg-slate-100/90 border-slate-300 text-slate-800 font-bold'
+            <>
+              {/* 1. GIAO DIỆN DESKTOP / TABLET (Bảng đầy đủ cho màn hình >= md) */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className={`border-b text-[11px] uppercase tracking-wider font-bold transition-colors ${
+                      isDarkMode ? 'bg-slate-950/80 border-slate-800 text-slate-400' : 'bg-slate-100/90 border-slate-300 text-slate-800 font-bold'
+                    }`}>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Tên Sân</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Ngày & Giờ Đá</th>
+                      <th className="py-3.5 px-4 whitespace-nowrap">Dịch Vụ Kèm Theo</th>
+                      <th className="py-3.5 px-4 text-right whitespace-nowrap">Tổng Tiền</th>
+                      <th className="py-3.5 px-4 text-right whitespace-nowrap">Tiền Cọc</th>
+                      <th className="py-3.5 px-4 text-right whitespace-nowrap">Đã Nhận</th>
+                      <th className="py-3.5 px-4 text-right whitespace-nowrap">Còn Thiếu</th>
+                      <th className="py-3.5 px-4 text-center whitespace-nowrap">Trạng Thái</th>
+                      <th className="py-3.5 px-4 text-center whitespace-nowrap">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y text-xs transition-colors ${
+                    isDarkMode ? 'divide-slate-800/70' : 'divide-slate-200'
                   }`}>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Tên Sân</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Ngày & Giờ Đá</th>
-                    <th className="py-3.5 px-4 whitespace-nowrap">Dịch Vụ Kèm Theo</th>
-                    <th className="py-3.5 px-4 text-right whitespace-nowrap">Tổng Tiền</th>
-                    <th className="py-3.5 px-4 text-right whitespace-nowrap">Tiền Cọc</th>
-                    <th className="py-3.5 px-4 text-right whitespace-nowrap">Đã Nhận</th>
-                    <th className="py-3.5 px-4 text-right whitespace-nowrap">Còn Thiếu</th>
-                    <th className="py-3.5 px-4 text-center whitespace-nowrap">Trạng Thái</th>
-                    <th className="py-3.5 px-4 text-center whitespace-nowrap">Thao Tác</th>
-                  </tr>
-                </thead>
-                <tbody className={`divide-y text-xs transition-colors ${
-                  isDarkMode ? 'divide-slate-800/70' : 'divide-slate-200'
-                }`}>
-                  {danhSachDon.map((item) => {
-                    const isPast = isOrderPastTime(item);
-                    const isFullyPaid = (item.trang_thai === 'DA_THANH_TOAN' || item.trang_thai === 'HOAN_THANH' || item.trang_thai === 'KET_THUC');
-                    const tienCoc = item.tien_coc !== undefined && item.tien_coc !== null ? Number(item.tien_coc) : Math.round((item.tong_tien || 0) * 0.3);
-                    const tienDaNhan = isFullyPaid
-                      ? Number(item.tong_tien || 0)
-                      : (item.tien_da_nhan !== undefined && item.tien_da_nhan !== null
-                        ? Number(item.tien_da_nhan)
-                        : (item.trang_thai === 'DA_COC' ? tienCoc : 0));
-                    const tienThieu = isFullyPaid
-                      ? 0
-                      : (item.tien_thieu !== undefined && item.tien_thieu !== null
-                        ? Number(item.tien_thieu)
-                        : Math.max(0, (item.tong_tien || 0) - tienDaNhan));
-                    const isCancelled = item.trang_thai === 'DA_HUY';
-                    const canAddService = !isCancelled && (item.trang_thai === 'DA_COC' || isFullyPaid || tienDaNhan > 0);
+                    {danhSachDonFiltered.map((item) => {
+                      const isPast = isOrderPastTime(item);
+                      const isFullyPaid = (item.trang_thai === 'DA_THANH_TOAN' || item.trang_thai === 'HOAN_THANH' || item.trang_thai === 'KET_THUC');
+                      const tienCoc = item.tien_coc !== undefined && item.tien_coc !== null ? Number(item.tien_coc) : Math.round((item.tong_tien || 0) * 0.3);
+                      const tienDaNhan = isFullyPaid
+                        ? Number(item.tong_tien || 0)
+                        : (item.tien_da_nhan !== undefined && item.tien_da_nhan !== null
+                          ? Number(item.tien_da_nhan)
+                          : (item.trang_thai === 'DA_COC' ? tienCoc : 0));
+                      const tienThieu = isFullyPaid
+                        ? 0
+                        : (item.tien_thieu !== undefined && item.tien_thieu !== null
+                          ? Number(item.tien_thieu)
+                          : Math.max(0, (item.tong_tien || 0) - tienDaNhan));
+                      const isCancelled = item.trang_thai === 'DA_HUY';
+                      const canAddService = !isCancelled && (item.trang_thai === 'DA_COC' || isFullyPaid || tienDaNhan > 0);
 
-                    return (
-                      <tr
-                        key={item.id || item.ma_don}
-                        className={`transition-all group ${
-                          isPast
-                            ? isDarkMode ? 'opacity-60 hover:opacity-100 bg-slate-950/40 hover:bg-slate-900/60' : 'opacity-60 hover:opacity-100 bg-slate-50 hover:bg-slate-100/80'
-                            : isDarkMode ? 'hover:bg-slate-800/60' : 'hover:bg-slate-50/90'
-                        }`}
-                      >
-                        {/* Tên sân */}
-                        <td className="py-4 px-4 whitespace-nowrap">
-                          <div className={`font-bold transition-colors ${
-                            isPast 
-                              ? isDarkMode ? 'text-slate-300 group-hover:text-white' : 'text-slate-700 group-hover:text-slate-900'
-                              : isDarkMode ? 'text-white group-hover:text-emerald-400' : 'text-slate-900 group-hover:text-emerald-600'
+                      return (
+                        <tr
+                          key={item.id || item.ma_don}
+                          className={`transition-all group ${
+                            isPast
+                              ? isDarkMode ? 'opacity-60 hover:opacity-100 bg-slate-950/40 hover:bg-slate-900/60' : 'opacity-60 hover:opacity-100 bg-slate-50 hover:bg-slate-100/80'
+                              : isDarkMode ? 'hover:bg-slate-800/60' : 'hover:bg-slate-50/90'
+                          }`}
+                        >
+                          {/* Tên sân */}
+                          <td className="py-4 px-4 whitespace-nowrap">
+                            <div className={`font-bold transition-colors ${
+                              isPast 
+                                ? isDarkMode ? 'text-slate-300 group-hover:text-white' : 'text-slate-700 group-hover:text-slate-900'
+                                : isDarkMode ? 'text-white group-hover:text-emerald-400' : 'text-slate-900 group-hover:text-emerald-600'
+                            }`}>
+                              {item.ten_san}
+                            </div>
+                            {item.ten_loai && (
+                              <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
+                                {item.ten_loai}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Ngày & Khung giờ */}
+                          <td className={`py-4 px-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                            <div className="flex items-center gap-1.5 font-medium whitespace-nowrap">
+                              <Calendar className="w-3.5 h-3.5 text-emerald-500" />
+                              {formatDateDMY(item.ngay_da)}
+                            </div>
+                            <div className={`flex items-center gap-1.5 font-mono text-[11px] mt-1 whitespace-nowrap ${
+                              isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'
+                            }`}>
+                              <Clock className={`w-3 h-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} />
+                              <span>{item.gio_bat_dau} - {item.gio_ket_thuc}</span>
+                            </div>
+                            {isPast && (
+                              <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] mt-1 font-medium ${
+                                isDarkMode ? 'bg-slate-800/80 border-slate-700/60 text-slate-400' : 'bg-slate-100 border-slate-300 text-slate-700 font-semibold'
+                              }`}>
+                                <Clock3 className="w-2.5 h-2.5" />
+                                <span>Đã qua giờ</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Dịch vụ kèm theo */}
+                          <td className="py-4 px-4 max-w-[200px]">
+                            {item.chi_tiet_dich_vu && item.chi_tiet_dich_vu.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {item.chi_tiet_dich_vu.map((dv, idx) => (
+                                  <span
+                                    key={idx}
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium whitespace-nowrap ${
+                                      isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700 font-medium'
+                                    }`}
+                                    title={`${dv.ten_dich_vu} x${dv.so_luong} = ${formatCurrency(dv.tongtien_dichvu)}`}
+                                  >
+                                    <Coffee className="w-3 h-3 text-emerald-500" />
+                                    <span>{dv.ten_dich_vu} x{dv.so_luong}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className={`text-[11px] italic ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>Chưa chọn dịch vụ</span>
+                            )}
+                          </td>
+
+                          {/* Tổng tiền */}
+                          <td className={`py-4 px-4 font-bold text-right whitespace-nowrap ${
+                            isDarkMode ? 'text-white' : 'text-slate-900'
+                          }`}>
+                            {formatCurrency(item.tong_tien)}
+                          </td>
+
+                          {/* Tiền cọc */}
+                          <td className={`py-4 px-4 font-medium text-right whitespace-nowrap ${
+                            isDarkMode ? 'text-teal-300' : 'text-teal-700'
+                          }`}>
+                            {formatCurrency(tienCoc)}
+                          </td>
+
+                          {/* Đã nhận */}
+                          <td className="py-4 px-4 font-bold text-emerald-500 text-right whitespace-nowrap">
+                            <span className={`inline-block px-2 py-0.5 rounded border ${
+                              isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            }`}>
+                              {formatCurrency(tienDaNhan)}
+                            </span>
+                          </td>
+
+                          {/* Còn thiếu */}
+                          <td className="py-4 px-4 font-bold text-right whitespace-nowrap">
+                            {tienThieu > 0 ? (
+                              <span className={`inline-block px-2 py-0.5 rounded border ${
+                                isDarkMode ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                                {formatCurrency(tienThieu)}
+                              </span>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] ${
+                                isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}>
+                                <Check className="w-3 h-3" /> Đã đủ
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Trạng thái thanh toán */}
+                          <td className="py-4 px-4 text-center whitespace-nowrap">
+                            {renderStatusBadge(item.trang_thai, tienThieu, tienDaNhan, item.tong_tien, item)}
+                          </td>
+
+                          {/* Hành động: Nút Xem chi tiết & Hủy đơn */}
+                          <td className="py-4 px-4 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => setSelectedOrderForDetail(item)}
+                                className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 ${
+                                  isDarkMode
+                                    ? 'bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white border-slate-700 hover:border-cyan-500/50'
+                                    : 'bg-cyan-50 hover:bg-cyan-100 text-cyan-700 hover:text-cyan-900 border-cyan-200'
+                                }`}
+                                title="Xem chi tiết đơn đặt sân & hóa đơn"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-cyan-500" />
+                                <span>Chi tiết</span>
+                              </button>
+
+                              {/* Nút Đổi sân (tối thiểu trước 30p) */}
+                              {!isCancelled && !isPast && item.trang_thai !== 'HOAN_THANH' && (() => {
+                                const exCheck = canExchangeOrder(item);
+                                if (!exCheck.allowed) return null;
+                                return (
+                                  <button
+                                    onClick={() => handleOpenExchangeModal(item)}
+                                    className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 ${
+                                      isDarkMode
+                                        ? 'bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-400 hover:text-indigo-200 border-indigo-800/60 hover:border-indigo-600'
+                                        : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-800 border-indigo-200'
+                                    }`}
+                                    title="Đổi sân bóng hoặc dời ngày/giờ thi đấu (tối thiểu trước 30p)"
+                                  >
+                                    <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-500" />
+                                    <span>Đổi sân</span>
+                                  </button>
+                                );
+                              })()}
+
+                              {!isCancelled && !isPast && item.trang_thai !== 'HOAN_THANH' && (
+                                <button
+                                  onClick={() => handleOpenCancelModal(item)}
+                                  className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 ${
+                                    isDarkMode
+                                      ? 'bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 border-rose-800/60 hover:border-rose-600'
+                                      : 'bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-800 border-rose-200'
+                                  }`}
+                                  title="Yêu cầu hủy đơn đặt sân & hoàn tiền"
+                                >
+                                  <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                                  <span>Hủy sân</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 2. GIAO DIỆN MOBILE CARD VIEW (Tối ưu hoàn hảo cho mọi dòng điện thoại) */}
+              <div className="block md:hidden p-2.5 sm:p-3 space-y-3">
+                {danhSachDonFiltered.map((item) => {
+                  const isPast = isOrderPastTime(item);
+                  const isFullyPaid = (item.trang_thai === 'DA_THANH_TOAN' || item.trang_thai === 'HOAN_THANH' || item.trang_thai === 'KET_THUC');
+                  const tienCoc = item.tien_coc !== undefined && item.tien_coc !== null ? Number(item.tien_coc) : Math.round((item.tong_tien || 0) * 0.3);
+                  const tienDaNhan = isFullyPaid
+                    ? Number(item.tong_tien || 0)
+                    : (item.tien_da_nhan !== undefined && item.tien_da_nhan !== null
+                      ? Number(item.tien_da_nhan)
+                      : (item.trang_thai === 'DA_COC' ? tienCoc : 0));
+                  const tienThieu = isFullyPaid
+                    ? 0
+                    : (item.tien_thieu !== undefined && item.tien_thieu !== null
+                      ? Number(item.tien_thieu)
+                      : Math.max(0, (item.tong_tien || 0) - tienDaNhan));
+                  const isCancelled = item.trang_thai === 'DA_HUY';
+
+                  return (
+                    <div
+                      key={`mob-${item.id || item.ma_don}`}
+                      className={`p-3.5 rounded-2xl border transition-all shadow-sm ${
+                        isPast
+                          ? isDarkMode ? 'bg-slate-950/50 border-slate-800/60 opacity-80' : 'bg-slate-50 border-slate-200 opacity-80'
+                          : isDarkMode ? 'bg-slate-900/90 border-slate-800 shadow-black/40' : 'bg-white border-slate-200 shadow-slate-200/50'
+                      }`}
+                    >
+                      {/* Dòng 1: Tên sân + Badge Trạng thái */}
+                      <div className="flex items-start justify-between gap-2 mb-2.5">
+                        <div className="min-w-0">
+                          <h3 className={`font-bold text-sm sm:text-base leading-tight truncate ${
+                            isDarkMode ? 'text-white' : 'text-slate-900'
                           }`}>
                             {item.ten_san}
-                          </div>
+                          </h3>
                           {item.ten_loai && (
-                            <div className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
+                            <span className={`text-[10px] mt-0.5 inline-block px-1.5 py-0.5 rounded ${
+                              isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600 font-medium'
+                            }`}>
                               {item.ten_loai}
-                            </div>
-                          )}
-                        </td>
-
-                        {/* Ngày & Khung giờ */}
-                        <td className={`py-4 px-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                          <div className="flex items-center gap-1.5 font-medium whitespace-nowrap">
-                            <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-                            {formatDateDMY(item.ngay_da)}
-                          </div>
-                          <div className={`flex items-center gap-1.5 font-mono text-[11px] mt-1 whitespace-nowrap ${
-                            isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'
-                          }`}>
-                            <Clock className={`w-3 h-3 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`} />
-                            <span>{item.gio_bat_dau} - {item.gio_ket_thuc}</span>
-                          </div>
-                          {isPast && (
-                            <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] mt-1 font-medium ${
-                              isDarkMode ? 'bg-slate-800/80 border-slate-700/60 text-slate-400' : 'bg-slate-100 border-slate-300 text-slate-700 font-semibold'
-                            }`}>
-                              <Clock3 className="w-2.5 h-2.5" />
-                              <span>Đã qua giờ</span>
-                            </div>
-                          )}
-                        </td>
-
-                        {/* Dịch vụ kèm theo */}
-                        <td className="py-4 px-4 max-w-[200px]">
-                          {item.chi_tiet_dich_vu && item.chi_tiet_dich_vu.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {item.chi_tiet_dich_vu.map((dv, idx) => (
-                                <span
-                                  key={idx}
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium whitespace-nowrap ${
-                                    isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700 font-medium'
-                                  }`}
-                                  title={`${dv.ten_dich_vu} x${dv.so_luong} = ${formatCurrency(dv.tongtien_dichvu)}`}
-                                >
-                                  <Coffee className="w-3 h-3 text-emerald-500" />
-                                  <span>{dv.ten_dich_vu} x{dv.so_luong}</span>
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className={`text-[11px] italic ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>Chưa chọn dịch vụ</span>
-                          )}
-                        </td>
-
-                        {/* Tổng tiền */}
-                        <td className={`py-4 px-4 font-bold text-right whitespace-nowrap ${
-                          isDarkMode ? 'text-white' : 'text-slate-900'
-                        }`}>
-                          {formatCurrency(item.tong_tien)}
-                        </td>
-
-                        {/* Tiền cọc */}
-                        <td className={`py-4 px-4 font-medium text-right whitespace-nowrap ${
-                          isDarkMode ? 'text-teal-300' : 'text-teal-700'
-                        }`}>
-                          {formatCurrency(tienCoc)}
-                        </td>
-
-                        {/* Đã nhận */}
-                        <td className="py-4 px-4 font-bold text-emerald-500 text-right whitespace-nowrap">
-                          <span className={`inline-block px-2 py-0.5 rounded border ${
-                            isDarkMode ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                          }`}>
-                            {formatCurrency(tienDaNhan)}
-                          </span>
-                        </td>
-
-                        {/* Còn thiếu */}
-                        <td className="py-4 px-4 font-bold text-right whitespace-nowrap">
-                          {tienThieu > 0 ? (
-                            <span className={`inline-block px-2 py-0.5 rounded border ${
-                              isDarkMode ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-amber-50 text-amber-700 border-amber-200'
-                            }`}>
-                              {formatCurrency(tienThieu)}
-                            </span>
-                          ) : (
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] ${
-                              isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            }`}>
-                              <Check className="w-3 h-3" /> Đã đủ
                             </span>
                           )}
-                        </td>
-
-                        {/* Trạng thái thanh toán */}
-                        <td className="py-4 px-4 text-center whitespace-nowrap">
+                        </div>
+                        <div className="shrink-0 text-right">
                           {renderStatusBadge(item.trang_thai, tienThieu, tienDaNhan, item.tong_tien, item)}
-                        </td>
+                        </div>
+                      </div>
 
-                        {/* Hành động: Nút Xem chi tiết & Hủy đơn */}
-                        <td className="py-4 px-4 text-center whitespace-nowrap">
-                          <div className="flex items-center justify-center gap-1.5">
+                      {/* Dòng 2: Thời gian đặt sân (Ngày & Giờ) */}
+                      <div className={`p-2.5 rounded-xl text-xs mb-2.5 flex items-center justify-between border ${
+                        isDarkMode ? 'bg-slate-950/70 border-slate-800/80' : 'bg-slate-50 border-slate-200/80'
+                      }`}>
+                        <div className="flex items-center gap-1.5 font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span>{formatDateDMY(item.ngay_da)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold">
+                          <Clock className="w-3 h-3 text-cyan-400 shrink-0" />
+                          <span>{item.gio_bat_dau} - {item.gio_ket_thuc}</span>
+                        </div>
+                        {isPast && (
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] border font-medium ${
+                            isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-200 text-slate-700 border-slate-300'
+                          }`}>
+                            Đã qua giờ
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Dòng 3: Nút Xem chi tiết (hiển thị đầy đủ thông tin) & Hủy */}
+                      <div className="flex items-center gap-2 pt-1 border-t border-slate-800/30">
+                        <button
+                          onClick={() => setSelectedOrderForDetail(item)}
+                          className={`flex-1 py-2 text-xs font-bold rounded-xl border flex items-center justify-center gap-1.5 transition active:scale-95 shadow-sm ${
+                            isDarkMode
+                              ? 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border-slate-700'
+                              : 'bg-cyan-50 hover:bg-cyan-100 text-cyan-700 border-cyan-200'
+                          }`}
+                        >
+                          <Eye className="w-3.5 h-3.5 text-cyan-500" />
+                          <span>Chi tiết</span>
+                        </button>
+
+                        {/* Nút Đổi sân */}
+                        {!isCancelled && !isPast && item.trang_thai !== 'HOAN_THANH' && (() => {
+                          const exCheck = canExchangeOrder(item);
+                          if (!exCheck.allowed) return null;
+                          return (
                             <button
-                              onClick={() => setSelectedOrderForDetail(item)}
-                              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 ${
+                              onClick={() => handleOpenExchangeModal(item)}
+                              className={`px-3 py-2 text-xs font-bold rounded-xl border flex items-center justify-center gap-1 transition active:scale-95 shrink-0 ${
                                 isDarkMode
-                                  ? 'bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white border-slate-700 hover:border-cyan-500/50'
-                                  : 'bg-cyan-50 hover:bg-cyan-100 text-cyan-700 hover:text-cyan-900 border-cyan-200'
+                                  ? 'bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-400 border-indigo-800/50'
+                                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-indigo-200'
                               }`}
-                              title="Xem chi tiết đơn đặt sân & hóa đơn"
+                              title="Đổi sang sân khác hoặc dời giờ đá"
                             >
-                              <Eye className="w-3.5 h-3.5 text-cyan-500" />
-                              <span>Chi tiết</span>
+                              <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-500" />
+                              <span>Đổi sân</span>
                             </button>
+                          );
+                        })()}
 
-                            {!isCancelled && !isPast && item.trang_thai !== 'HOAN_THANH' && (
-                              <button
-                                onClick={() => handleOpenCancelModal(item)}
-                                className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm hover:scale-105 ${
-                                  isDarkMode
-                                    ? 'bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-200 border-rose-800/60 hover:border-rose-600'
-                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-800 border-rose-200'
-                                }`}
-                                title="Yêu cầu hủy đơn đặt sân & hoàn tiền"
-                              >
-                                <XCircle className="w-3.5 h-3.5 text-rose-500" />
-                                <span>Hủy sân</span>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        {/* Nút Hủy sân */}
+                        {!isCancelled && !isPast && item.trang_thai !== 'HOAN_THANH' && (
+                          <button
+                            onClick={() => handleOpenCancelModal(item)}
+                            className={`px-3.5 py-2 text-xs font-bold rounded-xl border flex items-center justify-center gap-1 transition active:scale-95 shrink-0 ${
+                              isDarkMode
+                                ? 'bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 border-rose-800/50'
+                                : 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-200'
+                            }`}
+                            title="Yêu cầu hủy đơn đặt sân"
+                          >
+                            <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                            <span>Hủy</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
 
@@ -1106,31 +1981,31 @@ export default function History() {
       {/* MODAL 1: THÊM DỊCH VỤ VÀO HÓA ĐƠN */}
       {/* ========================================================================= */}
       {selectedOrderForService && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className={`border rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transition-colors ${
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className={`border rounded-2xl sm:rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] transition-colors ${
             isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
           }`}>
             
             {/* Modal Header */}
-            <div className={`px-6 py-4 border-b flex items-center justify-between transition-colors ${
+            <div className={`px-4 sm:px-6 py-3 sm:py-4 border-b flex items-center justify-between transition-colors ${
               isDarkMode ? 'border-slate-800 bg-slate-950/60' : 'border-slate-200 bg-slate-50'
             }`}>
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-xl border ${
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className={`p-1.5 sm:p-2 rounded-xl border shrink-0 ${
                   isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
                 }`}>
-                  <ShoppingBag className="w-5 h-5" />
+                  <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
-                <div>
-                  <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Thêm Dịch Vụ Vào Đơn Hàng</h3>
-                  <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
+                <div className="min-w-0">
+                  <h3 className={`text-sm sm:text-lg font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Thêm Dịch Vụ Vào Đơn Hàng</h3>
+                  <p className={`text-[11px] sm:text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                     Đơn: <span className="font-mono text-emerald-500 font-bold">{selectedOrderForService.ma_don || `DDS-${selectedOrderForService.id}`}</span> • {selectedOrderForService.ten_san}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedOrderForService(null)}
-                className={`p-2 rounded-xl transition-colors ${
+                className={`p-1.5 sm:p-2 rounded-xl transition-colors shrink-0 ${
                   isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
@@ -1139,7 +2014,7 @@ export default function History() {
             </div>
 
             {/* Modal Body - Danh sách dịch vụ */}
-            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+            <div className="p-3.5 sm:p-6 overflow-y-auto space-y-3 sm:space-y-4 flex-1">
               <div className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs ${
                 isDarkMode ? 'bg-slate-950/70 border-slate-800/80' : 'bg-slate-50 border-slate-200'
               }`}>
@@ -1669,6 +2544,24 @@ export default function History() {
                 }
                 return null;
               })()}
+              {!isOrderPastTime(selectedOrderForDetail) && !selectedOrderForDetail.trang_thai?.includes('HUY') && selectedOrderForDetail.trang_thai !== 'HOAN_THANH' && (() => {
+                const exCheck = canExchangeOrder(selectedOrderForDetail);
+                if (!exCheck.allowed) return null;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const orderToExchange = selectedOrderForDetail;
+                      setSelectedOrderForDetail(null);
+                      handleOpenExchangeModal(orderToExchange);
+                    }}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 transition-all flex items-center gap-1.5 cursor-pointer hover:scale-105"
+                  >
+                    <ArrowLeftRight className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Đổi sân này</span>
+                  </button>
+                );
+              })()}
               {!isOrderPastTime(selectedOrderForDetail) && !selectedOrderForDetail.trang_thai?.includes('HUY') && selectedOrderForDetail.trang_thai !== 'HOAN_THANH' && (
                 <button
                   type="button"
@@ -1704,44 +2597,34 @@ export default function History() {
       {cancelModalOrder && (() => {
         const { hoursLeft, refundRate, refundAmount, totalPaid } = calculateCancelRefund(cancelModalOrder);
 
-        const banks = [
-          'MB Bank',
-          'Vietcombank',
-          'Techcombank',
-          'VietinBank',
-          'BIDV',
-          'Agribank',
-          'ACB',
-          'VPBank',
-          'TPBank',
-          'MoMo',
-          'Nhận tiền mặt tại quầy'
-        ];
-
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-            <div className={`border rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] transition-colors ${
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+            <div className={`border rounded-2xl sm:rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] transition-colors ${
               isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
             }`}>
               {/* Header */}
-              <div className={`px-6 py-4 border-b flex items-center justify-between transition-colors ${
+              <div className={`px-4 sm:px-6 py-3.5 sm:py-4 border-b flex items-center justify-between transition-colors ${
                 isDarkMode ? 'border-slate-800 bg-slate-950/60' : 'border-slate-200 bg-slate-50'
               }`}>
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-rose-500/15 text-rose-500 border border-rose-500/30">
-                    <XCircle className="w-5 h-5" />
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 rounded-xl bg-rose-500/15 text-rose-500 border border-rose-500/30 shrink-0">
+                    <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-base text-rose-500">Xác Nhận Hủy Đặt Sân</h3>
-                    <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm sm:text-base text-rose-500 truncate">Xác Nhận Hủy Đặt Sân</h3>
+                    <p className={`text-[11px] sm:text-xs truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
                       Mã đơn #{cancelModalOrder.id} • {cancelModalOrder.ten_san}
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setCancelModalOrder(null)}
+                  onClick={() => {
+                    setCancelModalOrder(null);
+                    setCancelModalError(null);
+                    setToastMessage(null);
+                  }}
                   disabled={isSubmittingCancel}
-                  className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                  className={`p-1.5 sm:p-2 rounded-xl border transition-colors cursor-pointer shrink-0 ${
                     isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900'
                   }`}
                 >
@@ -1750,7 +2633,7 @@ export default function History() {
               </div>
 
               {/* Body */}
-              <div className="p-6 overflow-y-auto space-y-4 text-xs">
+              <div className="p-3.5 sm:p-6 overflow-y-auto space-y-3.5 sm:space-y-4 text-xs">
                 {/* Thông tin đơn */}
                 <div className={`p-4 rounded-2xl border space-y-2 ${
                   isDarkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
@@ -1784,14 +2667,34 @@ export default function History() {
                     </span>
                   </div>
                   <div className="text-[11px] leading-relaxed">
-                    {hoursLeft >= 24 ? (
-                      <span>✅ Bạn đang hủy trước giờ đá <strong>{hoursLeft.toFixed(1)} giờ</strong> (&ge; 24h), được hoàn đủ <strong>100%</strong> số tiền đã trả.</span>
-                    ) : hoursLeft >= 12 ? (
-                      <span>⚠️ Bạn đang hủy trước giờ đá <strong>{hoursLeft.toFixed(1)} giờ</strong> (từ 12h - 24h), được hoàn <strong>50%</strong> số tiền đã trả (phí giữ sân 50%).</span>
+                    {hoursLeft >= 5 ? (
+                      <span>✅ Bạn đang hủy trước giờ đá <strong>{hoursLeft.toFixed(1)} giờ</strong> (&ge; 5 tiếng), được hoàn đủ <strong>100%</strong> số tiền đã thanh toán/cọc.</span>
+                    ) : hoursLeft >= 1 ? (
+                      <span>⚠️ Bạn đang hủy trước giờ đá <strong>{hoursLeft.toFixed(1)} giờ</strong> (từ 1 đến dưới 5 tiếng trước giờ đá / &ge; 60 phút), được hoàn <strong>50%</strong> số tiền đã thanh toán/cọc.</span>
                     ) : (
-                      <span>❌ Bạn đang hủy sát giờ đá <strong>{hoursLeft.toFixed(1)} giờ</strong> (&lt; 12h). Theo quy định sân bóng không được hoàn tiền.</span>
+                      <span>❌ Bạn đang hủy trước giờ đá <strong>{hoursLeft.toFixed(1)} giờ</strong> (&lt; 1 tiếng / dưới 60 phút). Theo thể lệ quy định, đơn hủy không được hoàn tiền.</span>
                     )}
                   </div>
+
+                  {/* Bảng quy định thể lệ rõ ràng */}
+                  <div className={`p-2.5 rounded-xl border text-[10px] space-y-1 ${
+                    isDarkMode ? 'bg-black/30 border-white/10 text-slate-300' : 'bg-white/80 border-black/10 text-slate-700'
+                  }`}>
+                    <div className="font-bold uppercase tracking-wider text-[10px]">📋 Thể lệ hủy sân & hoàn tiền:</div>
+                    <div className="flex items-center justify-between">
+                      <span>• Hủy trước từ 5 tiếng trở lên:</span>
+                      <strong className="text-emerald-500 font-bold">Hoàn 100%</strong>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>• Hủy từ 1 đến 4 tiếng trước giờ (từ 60 phút):</span>
+                      <strong className="text-amber-500 font-bold">Hoàn 50%</strong>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>• Dưới 1 tiếng (dưới 60 phút):</span>
+                      <strong className="text-rose-500 font-bold">Không hoàn tiền (0%)</strong>
+                    </div>
+                  </div>
+
                   <div className="pt-2 border-t border-current/20 flex items-center justify-between">
                     <span className="font-bold uppercase tracking-wider text-[11px]">Số tiền hoàn thực tế:</span>
                     <span className="font-black text-base">{formatCurrency(refundAmount)}</span>
@@ -1809,46 +2712,74 @@ export default function History() {
                     </div>
 
                     <div className="space-y-1">
-                      <label className="block text-[11px] font-semibold text-slate-400">Hình thức nhận:</label>
-                      <select
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[11px] font-semibold text-slate-400">Hình thức nhận:</label>
+                        <span className="text-[10px] text-cyan-500 font-medium">Dữ liệu ngân hàng thật (VietQR / Napas)</span>
+                      </div>
+                      <BankSelectDropdown
                         value={cancelBankName}
-                        onChange={(e) => setCancelBankName(e.target.value)}
-                        className={`w-full px-3 py-2 rounded-xl border text-xs font-medium outline-none transition-all ${
-                          isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                        }`}
-                      >
-                        {banks.map((b) => (
-                          <option key={b} value={b}>{b}</option>
-                        ))}
-                      </select>
+                        onChange={(val) => {
+                          setCancelBankName(val);
+                          if (cancelModalError) setCancelModalError(null);
+                        }}
+                        banks={realBankList}
+                        isDarkMode={isDarkMode}
+                        cashLabel="Nhận tiền mặt tại quầy"
+                      />
                     </div>
 
                     {cancelBankName !== 'Nhận tiền mặt tại quầy' && (
                       <>
                         <div className="space-y-1">
-                          <label className="block text-[11px] font-semibold text-slate-400">Số tài khoản thụ hưởng: *</label>
+                          <label className="block text-[11px] font-semibold text-slate-400">
+                            Số tài khoản thụ hưởng: <span className="text-rose-500 font-bold">*</span>
+                          </label>
                           <input
                             type="text"
                             placeholder="Nhập số tài khoản ngân hàng..."
                             value={cancelBankAccount}
-                            onChange={(e) => setCancelBankAccount(e.target.value)}
+                            onChange={(e) => {
+                              setCancelBankAccount(e.target.value);
+                              if (cancelModalError) setCancelModalError(null);
+                            }}
                             className={`w-full px-3 py-2 rounded-xl border text-xs font-mono font-bold outline-none transition-all ${
-                              isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-cyan-500' : 'bg-white border-slate-300 text-slate-900 focus:border-cyan-600'
+                              cancelModalError && !cancelBankAccount.trim()
+                                ? 'border-rose-500 bg-rose-500/10 text-white focus:border-rose-400 ring-2 ring-rose-500/30'
+                                : isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-cyan-500' : 'bg-white border-slate-300 text-slate-900 focus:border-cyan-600'
                             }`}
                           />
+                          {cancelModalError && !cancelBankAccount.trim() && (
+                            <p className="text-[10px] text-rose-400 font-semibold flex items-center gap-1 mt-0.5 animate-pulse">
+                              <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                              <span>Vui lòng nhập số tài khoản ngân hàng</span>
+                            </p>
+                          )}
                         </div>
 
                         <div className="space-y-1">
-                          <label className="block text-[11px] font-semibold text-slate-400">Tên chủ tài khoản: *</label>
+                          <label className="block text-[11px] font-semibold text-slate-400">
+                            Tên chủ tài khoản: <span className="text-rose-500 font-bold">*</span>
+                          </label>
                           <input
                             type="text"
-                            placeholder="NGUYEN VAN A..."
+                            placeholder="NGUYEN VAN A (IN HOA KHÔNG DẤU)..."
                             value={cancelAccountHolder}
-                            onChange={(e) => setCancelAccountHolder(e.target.value.toUpperCase())}
+                            onChange={(e) => {
+                              setCancelAccountHolder(toUpperCaseNoAccents(e.target.value));
+                              if (cancelModalError) setCancelModalError(null);
+                            }}
                             className={`w-full px-3 py-2 rounded-xl border text-xs font-bold uppercase outline-none transition-all ${
-                              isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-cyan-500' : 'bg-white border-slate-300 text-slate-900 focus:border-cyan-600'
+                              cancelModalError && !cancelAccountHolder.trim()
+                                ? 'border-rose-500 bg-rose-500/10 text-white focus:border-rose-400 ring-2 ring-rose-500/30'
+                                : isDarkMode ? 'bg-slate-900 border-slate-700 text-white focus:border-cyan-500' : 'bg-white border-slate-300 text-slate-900 focus:border-cyan-600'
                             }`}
                           />
+                          {cancelModalError && !cancelAccountHolder.trim() && (
+                            <p className="text-[10px] text-rose-400 font-semibold flex items-center gap-1 mt-0.5 animate-pulse">
+                              <AlertCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                              <span>Vui lòng nhập tên chủ tài khoản (in hoa không dấu)</span>
+                            </p>
+                          )}
                         </div>
                       </>
                     )}
@@ -1858,6 +2789,14 @@ export default function History() {
                         ℹ️ Quý khách vui lòng đến quầy lễ tân sân bóng đọc mã đơn <strong>#{cancelModalOrder.id}</strong> để nhân viên gửi lại tiền mặt trực tiếp.
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Banner cảnh báo lỗi hiển thị trực tiếp trên modal */}
+                {cancelModalError && (
+                  <div className="p-3 sm:p-3.5 rounded-2xl border border-rose-500/60 bg-rose-500/15 text-rose-300 text-xs flex items-center gap-2.5 animate-bounce shadow-lg shadow-rose-950/40">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                    <span className="font-bold leading-relaxed">{cancelModalError}</span>
                   </div>
                 )}
 
@@ -1890,7 +2829,11 @@ export default function History() {
               }`}>
                 <button
                   type="button"
-                  onClick={() => setCancelModalOrder(null)}
+                  onClick={() => {
+                    setCancelModalOrder(null);
+                    setCancelModalError(null);
+                    setToastMessage(null);
+                  }}
                   disabled={isSubmittingCancel}
                   className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'
@@ -1921,6 +2864,716 @@ export default function History() {
           </div>
         );
       })()}
+
+      {/* ========================================================================= */}
+      {/* MODAL 5: LỌC THỜI GIAN ĐẶT SÂN */}
+      {/* ========================================================================= */}
+      {isTimeFilterModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className={`border rounded-2xl sm:rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transition-colors ${
+            isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+          }`}>
+            {/* Header */}
+            <div className={`px-4 sm:px-5 py-3.5 border-b flex items-center justify-between transition-colors ${
+              isDarkMode ? 'border-slate-800 bg-slate-950/60' : 'border-slate-200 bg-slate-50'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl border shrink-0 ${
+                  isDarkMode ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                }`}>
+                  <CalendarClock className="w-5 h-5 text-emerald-500" />
+                </div>
+                <div>
+                  <h3 className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Lọc Theo Thời Gian</h3>
+                  <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>Chọn mốc thời gian lọc lịch sử đơn đặt sân</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTimeFilterModalOpen(false)}
+                className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
+                  isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
+              {/* Quick Presets */}
+              <div>
+                <div className={`font-bold uppercase tracking-wider text-[11px] mb-2.5 ${
+                  isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                }`}>
+                  Mốc thời gian nhanh:
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: 'ALL', label: 'Tất cả thời gian', desc: 'Toàn bộ lịch sử' },
+                    { key: 'TODAY', label: 'Hôm nay', desc: 'Trận đá hôm nay' },
+                    { key: 'TOMORROW', label: 'Ngày mai', desc: 'Trận đá ngày mai' },
+                    { key: 'THIS_WEEK', label: 'Tuần này', desc: '7 ngày trong tuần' },
+                    { key: 'THIS_MONTH', label: 'Tháng này', desc: 'Trong tháng hiện tại' },
+                    { key: 'UPCOMING', label: 'Sắp diễn ra', desc: 'Chưa thi đấu' },
+                    { key: 'PAST', label: 'Đã qua giờ', desc: 'Các trận đã qua' },
+                  ].map((preset) => {
+                    const isSelected = filterType === preset.key;
+                    return (
+                      <button
+                        key={preset.key}
+                        type="button"
+                        onClick={() => {
+                          setFilterType(preset.key as any);
+                          setCustomStartDate('');
+                          setCustomEndDate('');
+                        }}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? isDarkMode
+                              ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300 font-bold shadow-sm'
+                              : 'bg-emerald-50 border-emerald-400 text-emerald-800 font-bold shadow-sm'
+                            : isDarkMode
+                            ? 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="font-semibold text-xs flex items-center justify-between">
+                          <span>{preset.label}</span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-emerald-500" />}
+                        </div>
+                        <div className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {preset.desc}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Tùy chọn khoảng ngày cụ thể */}
+              <div className={`p-3.5 rounded-2xl border space-y-2.5 ${
+                isDarkMode ? 'bg-slate-950/70 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+              }`}>
+                <div className={`font-bold uppercase tracking-wider text-[11px] ${
+                  isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                }`}>
+                  Hoặc chọn khoảng ngày cụ thể:
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className={`block text-[11px] mb-1 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Từ ngày:</label>
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => {
+                        setCustomStartDate(e.target.value);
+                        setFilterType('CUSTOM');
+                      }}
+                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none ${
+                        isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white'
+                          : 'bg-white border-slate-300 text-slate-900'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`block text-[11px] mb-1 font-medium ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Đến ngày:</label>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => {
+                        setCustomEndDate(e.target.value);
+                        setFilterType('CUSTOM');
+                      }}
+                      className={`w-full px-2.5 py-1.5 rounded-lg border text-xs outline-none ${
+                        isDarkMode
+                          ? 'bg-slate-900 border-slate-700 text-white'
+                          : 'bg-white border-slate-300 text-slate-900'
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Thống kê đơn phù hợp */}
+              <div className={`p-2.5 rounded-xl border text-center font-medium ${
+                danhSachDonFiltered.length > 0
+                  ? isDarkMode ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : isDarkMode ? 'bg-amber-950/20 border-amber-500/30 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-800'
+              }`}>
+                Tìm thấy <strong>{danhSachDonFiltered.length}</strong> đơn đặt sân phù hợp
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className={`p-4 border-t flex items-center justify-between gap-2 ${
+              isDarkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'
+            }`}>
+              <button
+                type="button"
+                onClick={resetFilter}
+                className={`px-3 py-2 rounded-xl border text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  isDarkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-300 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Đặt lại</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsTimeFilterModalOpen(false)}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-bold shadow-lg shadow-emerald-500/20 cursor-pointer transition-all"
+              >
+                Áp dụng bộ lọc
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 6: ĐỔI SÂN & DỜI GIỜ ĐÁ CHO KHÁCH HÀNG (TỐI THIỂU TRƯỚC 30 PHÚT) */}
+      {/* ========================================================================= */}
+      {exchangeModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className={`border rounded-2xl sm:rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] sm:max-h-[92vh] my-auto transition-colors ${
+            isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+          }`}>
+            {/* Header */}
+            <div className={`px-3.5 sm:px-6 py-2.5 sm:py-3.5 border-b flex items-center justify-between shrink-0 transition-colors ${
+              isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'
+            }`}>
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="p-1.5 sm:p-2 rounded-xl bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 shrink-0">
+                  <ArrowLeftRight className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-500" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className={`font-extrabold text-xs sm:text-base truncate ${isDarkMode ? 'text-indigo-400' : 'text-indigo-900'}`}>
+                    Đổi Sân & Dời Giờ Thi Đấu
+                  </h3>
+                  <p className={`text-[10px] sm:text-xs truncate font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                    Mã #{exchangeModalOrder.id} • {exchangeModalOrder.ten_san} ({formatDateDMY(exchangeModalOrder.ngay_da)} {exchangeModalOrder.gio_bat_dau} - {exchangeModalOrder.gio_ket_thuc})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setExchangeModalOrder(null);
+                  setExchangeModalError(null);
+                  setExchangePreviewData(null);
+                }}
+                disabled={exchangeSubmitting}
+                className={`p-1.5 rounded-xl border transition-colors cursor-pointer shrink-0 ${
+                  isDarkMode ? 'border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-3 sm:p-5 overflow-y-auto space-y-3 sm:space-y-3.5 text-xs">
+              {/* Alert thông báo lỗi trong modal (nếu có) */}
+              {exchangeModalError && (
+                <div className="p-2.5 sm:p-3 rounded-xl border border-rose-500/40 bg-rose-500/10 text-rose-400 text-xs flex items-center justify-between gap-2 animate-shake">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
+                    <span className="font-medium truncate">{exchangeModalError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExchangeModalError(null)}
+                    className="p-1 rounded hover:bg-rose-500/20 text-rose-300 shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Hướng dẫn & Thể lệ đổi sân (Gọn gàng, dễ nhìn trên mobile) */}
+              <div className={`p-2.5 sm:p-3 rounded-xl border text-[11px] space-y-1 ${
+                isDarkMode ? 'bg-indigo-950/20 border-indigo-500/30 text-indigo-200' : 'bg-indigo-50 border-indigo-200 text-indigo-900'
+              }`}>
+                <div className="font-bold flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 text-[11px] sm:text-xs">
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>Quy định đổi sân (Tối thiểu trước giờ đá 30 phút):</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-0.5 sm:gap-2 text-[10px] sm:text-[11px] opacity-90 pl-1">
+                  <div>• Sân mới giá thấp hơn: <strong>Hoàn lại tiền thừa</strong> (Tiền mặt / Chuyển khoản).</div>
+                  <div>• Sân mới giá cao hơn: <strong>Bù phần cọc thiếu</strong> (nếu đơn chưa đủ cọc 30%).</div>
+                </div>
+              </div>
+
+              {/* Phần 1: Chọn ngày đá mới & Sân mới */}
+              <div className={`p-3 sm:p-4 rounded-2xl border space-y-3 ${
+                isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-300 shadow-xs'
+              }`}>
+                <div className={`font-bold uppercase tracking-wider text-xs flex items-center gap-1.5 ${
+                  isDarkMode ? 'text-indigo-400' : 'text-indigo-900'
+                }`}>
+                  <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>1. Chọn Ngày Đá & Sân Mới</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                  {/* Chọn Ngày đá */}
+                  <div className="space-y-1">
+                    <label className={`block text-[11px] font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>Ngày đá mới:</label>
+                    <input
+                      type="date"
+                      min={getLocalDateString(new Date())}
+                      value={exchangeSelectedDate}
+                      onChange={(e) => handleDateChangeExchange(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs font-bold outline-none transition-all ${
+                        isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-950'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Chọn Sân bóng */}
+                  <div className="space-y-1">
+                    <label className={`block text-[11px] font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>Sân bóng mới:</label>
+                    <select
+                      value={exchangeSelectedPitchId || ''}
+                      onChange={(e) => {
+                        const pid = parseInt(e.target.value, 10);
+                        setExchangeSelectedPitchId(pid);
+                        setExchangeSelectedSlot(null);
+                        setExchangePreviewData(null);
+                        setExchangeModalError(null);
+                      }}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs font-bold outline-none transition-all ${
+                        isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-950'
+                      }`}
+                    >
+                      {exchangePitchList.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.ten_san} ({p.ten_loai || 'Sân bóng'}) • {formatCurrency(p.don_gia_phut * 60)}/h
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Chọn Khung Giờ (Chỉ hiển thị các ca còn trống, ẩn ca đã đặt hoặc đã qua giờ) */}
+                <div className="space-y-1.5 pt-1">
+                  <label className={`block text-[11px] font-bold flex flex-wrap items-center justify-between gap-1 ${
+                    isDarkMode ? 'text-slate-300' : 'text-slate-800'
+                  }`}>
+                    <span>Chọn khung giờ đá mới:</span>
+                    {exchangeSelectedSlot && (
+                      <span className="text-emerald-500 font-extrabold text-[11px]">
+                        ✓ Đang chọn: {exchangeSelectedSlot.gio_bat_dau.slice(0, 5)} - {exchangeSelectedSlot.gio_ket_thuc.slice(0, 5)}
+                      </span>
+                    )}
+                  </label>
+
+                  {(() => {
+                    // Lọc ẩn hoàn toàn các ca đã đặt hoặc đã qua giờ
+                    const availableSlots = exchangeSlotList.filter(
+                      (slot) => !isSlotBookedForExchange(exchangeSelectedPitchId || 0, slot.gio_bat_dau, slot.gio_ket_thuc)
+                    );
+
+                    if (availableSlots.length === 0) {
+                      return (
+                        <div className={`p-3.5 sm:p-4 rounded-xl border border-dashed text-center space-y-1 ${
+                          isDarkMode ? 'border-slate-800 bg-slate-950/40 text-slate-400' : 'border-slate-300 bg-slate-50 text-slate-600'
+                        }`}>
+                          <Clock className="w-4 h-4 mx-auto text-amber-500 opacity-80" />
+                          <div className="font-bold text-xs">Không còn khung giờ trống trong ngày này</div>
+                          <div className="text-[10px] sm:text-[11px] opacity-75">
+                            Các ca giờ đã kín lịch hoặc đã qua giờ thi đấu. Vui lòng chọn ngày khác hoặc sân khác để đổi!
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 gap-1.5 sm:gap-2">
+                        {availableSlots.map((slot, sIdx) => {
+                          const isSelected =
+                            exchangeSelectedSlot?.gio_bat_dau === slot.gio_bat_dau &&
+                            exchangeSelectedSlot?.gio_ket_thuc === slot.gio_ket_thuc;
+
+                          return (
+                            <button
+                              key={`${slot.gio_bat_dau}-${sIdx}`}
+                              type="button"
+                              disabled={exchangeLoadingPreview}
+                              onClick={() => handleSelectSlotExchange(slot)}
+                              className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 active:scale-95 ${
+                                isSelected
+                                  ? 'bg-gradient-to-r from-indigo-600 to-cyan-600 text-white border-transparent shadow-md shadow-indigo-500/25 ring-2 ring-indigo-400 scale-[1.02]'
+                                  : isDarkMode
+                                  ? 'bg-slate-900/90 hover:bg-slate-800 text-slate-100 border-slate-700 hover:border-indigo-500/50'
+                                  : 'bg-white hover:bg-slate-50 text-slate-950 font-bold border-slate-300 hover:border-indigo-600 shadow-xs'
+                              }`}
+                            >
+                              <span className="text-[11px] sm:text-xs font-extrabold font-mono tracking-tight">
+                                {slot.gio_bat_dau.slice(0, 5)} - {slot.gio_ket_thuc.slice(0, 5)}
+                              </span>
+                              <span className={`text-[9px] sm:text-[10px] font-semibold ${
+                                isSelected ? 'text-white/90' : isDarkMode ? 'text-cyan-400' : 'text-indigo-600'
+                              }`}>
+                                {slot.nhan_hien_thi || 'Còn trống'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Loading khi đang tính toán chênh lệch */}
+              {exchangeLoadingPreview && (
+                <div className="p-4 sm:p-6 rounded-2xl border flex items-center justify-center gap-2 text-indigo-500 font-bold text-xs sm:text-sm">
+                  <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+                  <span>Đang tính toán chênh lệch giá và kiểm tra khung giờ...</span>
+                </div>
+              )}
+
+              {/* Phần 2: Bảng So Sánh Giá Tiền & Xử Lý Chênh Lệch (Khi đã tính toán xong) */}
+              {exchangePreviewData && !exchangeLoadingPreview && (
+                <div className="space-y-3 animate-fade-in">
+                  <div className={`font-bold uppercase tracking-wider text-xs flex items-center gap-1.5 ${
+                    isDarkMode ? 'text-indigo-400' : 'text-indigo-900'
+                  }`}>
+                    <Receipt className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>2. So Sánh Đơn Đặt & Tính Toán Chênh Lệch</span>
+                  </div>
+
+                  {/* THIẾT KẾ 2 KHUNG 2 BÊN RÕ RÀNG TRÊN CẢ ĐIỆN THOẠI & MÁY TÍNH */}
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    {/* KHUNG TRÁI: Sân Hiện Tại */}
+                    <div className={`p-2.5 sm:p-3.5 rounded-2xl border flex flex-col justify-between ${
+                      isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-white border-slate-300 shadow-xs'
+                    }`}>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                            isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            Sân Hiện Tại
+                          </span>
+                        </div>
+                        <div className={`font-black text-xs sm:text-sm truncate ${
+                          isDarkMode ? 'text-cyan-400' : 'text-cyan-700'
+                        }`}>
+                          {exchangePreviewData.ten_san_cu}
+                        </div>
+                        <div className={`text-[10px] sm:text-[11px] font-semibold mt-0.5 ${
+                          isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                        }`}>
+                          <div>{formatDateDMY(exchangePreviewData.ngay_da_cu)}</div>
+                          <div className="font-mono font-bold text-indigo-500 dark:text-cyan-300">
+                            {exchangePreviewData.gio_bat_dau_cu} - {exchangePreviewData.gio_ket_thuc_cu}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 mt-2 border-t border-slate-200 dark:border-slate-800 space-y-1 text-[10px] sm:text-xs">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+                          <span className="text-slate-400 text-[10px]">Tiền sân cũ:</span>
+                          <span className="font-extrabold font-mono text-slate-950 dark:text-white text-[11px] sm:text-xs">
+                            {formatCurrency(exchangePreviewData.tien_san_cu)}
+                          </span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+                          <span className="text-slate-400 text-[10px]">Đã trả:</span>
+                          <span className={`font-extrabold font-mono text-[11px] sm:text-xs ${
+                            isDarkMode ? 'text-emerald-400' : 'text-emerald-700'
+                          }`}>
+                            {formatCurrency(exchangePreviewData.da_thanh_toan_cu)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* KHUNG PHẢI: Sân Mới Muốn Đổi */}
+                    <div className={`p-2.5 sm:p-3.5 rounded-2xl border flex flex-col justify-between ${
+                      isDarkMode ? 'bg-indigo-950/30 border-indigo-500/40' : 'bg-indigo-50/90 border-indigo-300 shadow-xs'
+                    }`}>
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                            isDarkMode ? 'bg-indigo-900/60 text-indigo-300' : 'bg-indigo-100 text-indigo-800'
+                          }`}>
+                            Sân Mới Đổi
+                          </span>
+                        </div>
+                        <div className={`font-black text-xs sm:text-sm truncate ${
+                          isDarkMode ? 'text-indigo-300' : 'text-indigo-900'
+                        }`}>
+                          {exchangePreviewData.ten_san_moi}
+                        </div>
+                        <div className={`text-[10px] sm:text-[11px] font-semibold mt-0.5 ${
+                          isDarkMode ? 'text-slate-300' : 'text-slate-800'
+                        }`}>
+                          <div>{formatDateDMY(exchangePreviewData.ngay_da_moi)}</div>
+                          <div className="font-mono font-bold text-indigo-500 dark:text-cyan-300">
+                            {exchangePreviewData.gio_bat_dau_moi} - {exchangePreviewData.gio_ket_thuc_moi}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 mt-2 border-t border-indigo-200 dark:border-indigo-500/20 space-y-1 text-[10px] sm:text-xs">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+                          <span className="text-slate-400 text-[10px]">Giá sân mới:</span>
+                          <span className={`font-extrabold font-mono text-[11px] sm:text-xs ${
+                            isDarkMode ? 'text-indigo-300' : 'text-indigo-900'
+                          }`}>
+                            {formatCurrency(exchangePreviewData.tien_san_moi)}
+                          </span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+                          <span className="text-slate-400 text-[10px]">Cọc tối thiểu:</span>
+                          <span className={`font-extrabold font-mono text-[11px] sm:text-xs ${
+                            isDarkMode ? 'text-amber-400' : 'text-amber-800'
+                          }`}>
+                            {formatCurrency(exchangePreviewData.tien_coc_san_moi)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* KẾT QUẢ CHÊNH LỆCH THEO THỂ LỆ QUY ĐỊNH */}
+                  {/* Trường hợp 1: Sân mới GIÁ THẤP HƠN -> Hoàn tiền thừa */}
+                  {exchangePreviewData.tien_thua > 0 && (
+                    <div className={`p-3 sm:p-4 rounded-2xl border space-y-2.5 ${
+                      isDarkMode ? 'bg-emerald-950/30 border-emerald-500/40' : 'bg-emerald-50/90 border-emerald-400 shadow-xs'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span className={`font-extrabold text-xs ${isDarkMode ? 'text-emerald-400' : 'text-emerald-950'}`}>
+                            Sân mới giá thấp hơn sân cũ
+                          </span>
+                        </div>
+                        <span className={`text-xs sm:text-sm font-extrabold font-mono ${isDarkMode ? 'text-emerald-400' : 'text-emerald-800'}`}>
+                          +{formatCurrency(exchangePreviewData.tien_thua)} (Thừa)
+                        </span>
+                      </div>
+                      <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-800 font-medium'}`}>
+                        Số tiền thừa của bạn là <strong className="text-emerald-700 dark:text-emerald-400 font-bold">{formatCurrency(exchangePreviewData.tien_thua)}</strong>. Vui lòng chọn cách bạn muốn nhận lại:
+                      </p>
+
+                      {/* Lựa chọn nhận tiền thừa */}
+                      <div className="space-y-2 pt-0.5">
+                        <label className={`block text-[11px] font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-900'}`}>
+                          Hình thức nhận lại tiền thừa:
+                        </label>
+                        <BankSelectDropdown
+                          value={exchangeRefundBankName}
+                          onChange={(val) => setExchangeRefundBankName(val)}
+                          banks={realBankList}
+                          isDarkMode={isDarkMode}
+                          cashLabel="Nhận tiền mặt tại quầy"
+                        />
+
+                        {exchangeRefundBankName !== 'Nhận tiền mặt tại quầy' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 animate-fade-in">
+                            <div className="space-y-1">
+                              <label className={`block text-[11px] font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-900'}`}>
+                                Số tài khoản thụ hưởng: <span className="text-rose-500 font-bold">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={exchangeRefundBankAccount}
+                                onChange={(e) => setExchangeRefundBankAccount(e.target.value)}
+                                placeholder="Nhập số tài khoản ngân hàng..."
+                                className={`w-full px-3 py-2 rounded-xl border text-xs font-mono font-bold outline-none transition-all ${
+                                  isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-950'
+                                }`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className={`block text-[11px] font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-900'}`}>
+                                Tên chủ tài khoản: <span className="text-rose-500 font-bold">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={exchangeRefundAccountHolder}
+                                onChange={(e) => setExchangeRefundAccountHolder(toUpperCaseNoAccents(e.target.value))}
+                                placeholder="NGUYEN VAN A (IN HOA KHONG DAU)..."
+                                className={`w-full px-3 py-2 rounded-xl border text-xs font-extrabold outline-none uppercase transition-all ${
+                                  isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-400 text-slate-950'
+                                }`}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Trường hợp 2: Sân mới GIÁ CAO HƠN nhưng ĐỦ CỌC 30% (Được đổi ngay) */}
+                  {exchangePreviewData.tien_thua === 0 && exchangePreviewData.duoc_doi_ngay && (
+                    <div className={`p-3 sm:p-4 rounded-2xl border space-y-2 ${
+                      isDarkMode ? 'bg-indigo-950/30 border-indigo-500/40 text-indigo-200' : 'bg-indigo-50/90 border-indigo-300 shadow-xs text-indigo-950'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span className={`font-extrabold text-xs ${isDarkMode ? 'text-emerald-400' : 'text-emerald-950'}`}>
+                            Đủ điều kiện đổi sân ngay!
+                          </span>
+                        </div>
+                        <span className={`text-xs sm:text-sm font-extrabold font-mono ${isDarkMode ? 'text-amber-400' : 'text-amber-800'}`}>
+                          Còn thiếu: {formatCurrency(exchangePreviewData.tien_con_thieu)}
+                        </span>
+                      </div>
+                      <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-900 font-medium'}`}>
+                        Tiền bạn đã thanh toán ở đơn cũ (<strong className="font-bold">{formatCurrency(exchangePreviewData.da_thanh_toan_cu)}</strong>) đã <strong className="font-bold text-emerald-600 dark:text-emerald-400">đạt mức cọc 30%</strong> của sân mới ({formatCurrency(exchangePreviewData.tien_coc_san_moi)}).
+                        <br />
+                        👉 <strong className="font-extrabold">Bạn được đổi sân ngay lập tức không cần chuyển thêm tiền!</strong>
+                        {exchangePreviewData.tien_con_thieu > 0 && (
+                          <span> Tiền còn thiếu (<strong className="font-bold">{formatCurrency(exchangePreviewData.tien_con_thieu)}</strong>) có thể thanh toán tại quầy khi đến sân hoặc thanh toán ngay qua VietQR.</span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Trường hợp 3: Sân mới GIÁ CAO HƠN và CHƯA ĐỦ CỌC 30% (Cần bù cọc mới được đổi) */}
+                  {exchangePreviewData.tien_thua === 0 && !exchangePreviewData.duoc_doi_ngay && (
+                    <div className={`p-3 sm:p-4 rounded-2xl border space-y-2 ${
+                      isDarkMode ? 'bg-amber-950/40 border-amber-500/50 text-amber-200' : 'bg-amber-50/90 border-amber-400 shadow-xs text-amber-950'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                          <span className={`font-extrabold text-xs ${isDarkMode ? 'text-amber-400' : 'text-amber-950'}`}>
+                            Cần thanh toán bù tiền cọc để đổi
+                          </span>
+                        </div>
+                        <span className={`text-xs sm:text-sm font-extrabold font-mono ${isDarkMode ? 'text-rose-400' : 'text-rose-700'}`}>
+                          Cần bù cọc: {formatCurrency(exchangePreviewData.can_bu_coc)}
+                        </span>
+                      </div>
+                      <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-200' : 'text-slate-900 font-medium'}`}>
+                        Mức cọc 30% sân mới là <strong className="font-bold">{formatCurrency(exchangePreviewData.tien_coc_san_moi)}</strong>, tiền cọc đơn cũ là <strong className="font-bold">{formatCurrency(exchangePreviewData.da_thanh_toan_cu)}</strong>.
+                        <br />
+                        Bạn cần thanh toán đủ phần tiền cọc còn thiếu (<strong className="text-rose-600 dark:text-rose-400 font-bold">{formatCurrency(exchangePreviewData.can_bu_coc)}</strong>) qua VietQR để hoàn tất đổi sân.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Lý do đổi */}
+                  <div className="space-y-1 pt-0.5">
+                    <label className={`block text-[11px] font-bold ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>
+                      Lý do đổi sân (tùy chọn):
+                    </label>
+                    <select
+                      value={exchangeReason}
+                      onChange={(e) => setExchangeReason(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-xl border text-xs font-bold outline-none transition-all ${
+                        isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-950'
+                      }`}
+                    >
+                      <option value="Thay đổi lịch thi đấu">Thay đổi lịch thi đấu</option>
+                      <option value="Muốn đổi sang sân lớn hơn / nhỏ hơn">Muốn đổi sang sân lớn hơn / nhỏ hơn</option>
+                      <option value="Trùng lịch với đội bóng khác">Trùng lịch với đội bóng khác</option>
+                      <option value="Đổi giờ do thời tiết">Đổi giờ do thời tiết</option>
+                      <option value="Lý do cá nhân khác">Lý do cá nhân khác</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer linh hoạt, tương thích mọi kích thước màn hình điện thoại */}
+            <div className={`p-3 sm:p-4 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-2 shrink-0 transition-colors ${
+              isDarkMode ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'
+            }`}>
+              <button
+                type="button"
+                onClick={() => {
+                  setExchangeModalOrder(null);
+                  setExchangeModalError(null);
+                  setExchangePreviewData(null);
+                }}
+                disabled={exchangeSubmitting}
+                className={`w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer text-center order-last sm:order-first ${
+                  isDarkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-300 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Đóng
+              </button>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                {/* Nút thanh toán bù cọc qua VietQR nếu chưa đủ cọc */}
+                {exchangePreviewData && !exchangePreviewData.duoc_doi_ngay && exchangePreviewData.can_bu_coc > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmExchangeOrder(true)}
+                    disabled={exchangeSubmitting}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-amber-500/20 active:scale-95"
+                  >
+                    <QrCode className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden sm:inline">Thanh toán bù cọc ({formatCurrency(exchangePreviewData.can_bu_coc)}) qua VietQR</span>
+                    <span className="sm:hidden">Bù cọc ({formatCurrency(exchangePreviewData.can_bu_coc)}) VietQR</span>
+                  </button>
+                )}
+
+                {/* Nút thanh toán nốt toàn bộ qua VietQR nếu khách muốn thanh toán hết ngay trên web */}
+                {exchangePreviewData && exchangePreviewData.duoc_doi_ngay && exchangePreviewData.tien_con_thieu > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmExchangeOrder(true)}
+                    disabled={exchangeSubmitting}
+                    className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  >
+                    <QrCode className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden sm:inline">Thanh toán nốt ({formatCurrency(exchangePreviewData.tien_con_thieu)}) VietQR</span>
+                    <span className="sm:hidden">Thanh toán hết ({formatCurrency(exchangePreviewData.tien_con_thieu)}) VietQR</span>
+                  </button>
+                )}
+
+                {/* Nút Xác nhận đổi sân ngay (cho trường hợp được đổi ngay) */}
+                {(!exchangePreviewData || exchangePreviewData.duoc_doi_ngay) && (
+                  <button
+                    type="button"
+                    disabled={!exchangePreviewData || exchangeSubmitting}
+                    onClick={() => handleConfirmExchangeOrder(false)}
+                    className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer active:scale-95 ${
+                      exchangePreviewData && exchangePreviewData.duoc_doi_ngay
+                        ? 'bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-400 hover:to-cyan-400 text-white shadow-indigo-500/25'
+                        : 'bg-slate-700 text-slate-400 cursor-not-allowed opacity-50'
+                    }`}
+                  >
+                    {exchangeSubmitting ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+                        <span>Đang xử lý đổi sân...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" />
+                        {exchangePreviewData && exchangePreviewData.tien_con_thieu > 0 ? (
+                          <>
+                            <span className="hidden sm:inline">
+                              Xác Nhận Đổi Sân (Thanh toán {formatCurrency(exchangePreviewData.tien_con_thieu)} tại quầy)
+                            </span>
+                            <span className="sm:hidden">
+                              Đổi Sân (Trả {formatCurrency(exchangePreviewData.tien_con_thieu)} tại quầy)
+                            </span>
+                          </>
+                        ) : (
+                          <span>Xác Nhận Đổi Sân</span>
+                        )}
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
     </>
