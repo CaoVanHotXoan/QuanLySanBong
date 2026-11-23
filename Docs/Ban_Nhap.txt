@@ -9,24 +9,44 @@ Làm thêm đặt trực tiếp
 - đặt bất cứ giờ nào
 - thêm 2 sân dự phòng
 
+Dau trang chữ i
+AI không được bịa số liệu, nội dung
+Cách viết không được giống AI
+nếu làm chung thầy chương 2 thì giữ nguyên 
+công cụ plantext 
+=======
+
+
+
+chụp hình và giải thích
+theo chuẩn ieee và thao chiếu đến các vùng dùng
+
+
 =================Làm thêm=====================
 Làm lại giao diện lịch đặt sân giống lịch google
 Thêm cơ thành viên(mã giảm giả, )
 Đặt nhiều sân 1 lúc trong cùng 1 khung giờ, thêm thời gian dùng
 Hủy đơn khi khách không vào sân
+mô hình erd
 
+
+
+đổi sân điều kiện thời gian để đổi
+quy tác quản lý(ràng buộc)
+nợ kỹ thuật
+
+trình bày công nghệ 
+
+
+Làm giao diẹn thêm điểm nhấn 
 =================================
 Danh sách test tay
 Làm thống kế xuất ra file excel, doanh thu hôm nay, tuần này, 
 ======================================================
 
-Chức năng nhân viên:
-1. Mục sân đang đá:
-    + Hiện thị danh sách các khách đã đặt vào ngày hôm nay
-    + khi nhấn vào thì điền thông tin vào thông tin order
-    (nếu thanh toán đầy đủ thì hiện nút vào sân, 
-    nếu chỉ thanh toán 30% thì sẽ hiện 2 nút lưu và thanh toán)
-    + nhấn nút lưu thì sẽ đưa hóa đơn này vào sân đang đá để khách hàng thanh toán sau
+Giao Diện nhân viên
++ nhập đầu ca 
+kết ca
 ============================================================================
 
 upload file 
@@ -48,6 +68,7 @@ File ThuTuc.sql thì chứa toàn bộ procedure
 Nếu có thay đổi csdl thì cũng nạp qua bên sql server luôn
 
 
+Khi đê
 Và deploy fontend trên vercel không bị lỗi
 
 

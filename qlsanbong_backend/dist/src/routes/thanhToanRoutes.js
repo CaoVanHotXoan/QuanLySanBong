@@ -57,6 +57,10 @@ router.post('/payos/webhook', thanhToanController.xuLyWebhookPayOS);
 router.post('/payos/confirm-webhook', thanhToanController.xacNhanWebhookUrl);
 // 5. Hủy đơn đặt sân tạm thời khi đóng modal
 router.post('/payos/huy-don-tam', thanhToanController.huyDonTamPayOS);
+// 6. Lấy danh sách ngân hàng thật (VietQR Open Banking API)
+router.get('/danh-sach-ngan-hang', thanhToanController.layDanhSachNganHang);
+// 7. Proxy tải ảnh mã QR VietQR MB Bank (chống lỗi CORS, tải trực tiếp file về máy)
+router.get('/tai-qr', thanhToanController.taiAnhQRCode);
 // =====================================================================
 // LỊCH SỬ GIAO DỊCH & QUẢN LÝ HOÀN TIỀN
 // =====================================================================

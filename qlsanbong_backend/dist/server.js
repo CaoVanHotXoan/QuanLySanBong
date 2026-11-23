@@ -30,6 +30,8 @@ const baoCaoRoutes_1 = __importDefault(require("./src/routes/baoCaoRoutes"));
 const uploadRoutes_1 = __importDefault(require("./src/routes/uploadRoutes"));
 const contentRoutes_1 = __importDefault(require("./src/routes/contentRoutes"));
 const reviewRoutes_1 = __importDefault(require("./src/routes/reviewRoutes"));
+const thongBaoRoutes_1 = __importDefault(require("./src/routes/thongBaoRoutes"));
+const reminderService_1 = require("./src/services/reminderService");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
 // Cấu hình Middleware
@@ -66,6 +68,7 @@ app.use('/api/thanh-toan', thanhToanRoutes_1.default);
 app.use('/api/bao-cao', baoCaoRoutes_1.default);
 app.use('/api/upload', uploadRoutes_1.default);
 app.use('/api/reviews', reviewRoutes_1.default);
+app.use('/api/thong-bao', thongBaoRoutes_1.default);
 app.use('/api', contentRoutes_1.default);
 // Cung cấp giao diện Swagger UI trực quan tương tác (/api-docs)
 try {
@@ -206,6 +209,31 @@ io.on('connection', (socket) => {
             io.emit('slots_updated', Array.from(lockedSlots.keys()));
         }
     });
+    // 3.5 SỰ KIỆN NHẢ NHIỀU Ô CỤ THỂ HOẶC TOÀN BỘ CỦA USER (unlock_slots)
+    socket.on('unlock_slots', (slotIds) => {
+        let hasChanges = false;
+        if (Array.isArray(slotIds) && slotIds.length > 0) {
+            slotIds.forEach((slotId) => {
+                const record = lockedSlots.get(slotId);
+                if (record && record.socketId === socket.id) {
+                    lockedSlots.delete(slotId);
+                    hasChanges = true;
+                }
+            });
+        }
+        else {
+            for (const [slotId, record] of lockedSlots.entries()) {
+                if (record.socketId === socket.id) {
+                    lockedSlots.delete(slotId);
+                    hasChanges = true;
+                }
+            }
+        }
+        if (hasChanges) {
+            console.log(`🔓 [Unlock Slots]: Socket ${socket.id} đã nhả các ô:`, slotIds);
+            io.emit('slots_updated', Array.from(lockedSlots.keys()));
+        }
+    });
     // 4. SỰ KIỆN NHẢ 1 Ô CỤ THỂ (unlock_slot & force_unlock_slot)
     socket.on('unlock_slot', (slotId) => {
         if (!slotId)
@@ -261,4 +289,6 @@ server.listen(PORT, () => {
     console.log(`🚀 Máy chủ Backend + Socket.io đang lắng nghe tại: http://localhost:${PORT}`);
     console.log(`📌 Môi trường: ${process.env.NODE_ENV || 'development'}`);
     console.log(`====================================================`);
+    // Khởi động Background Cron tự động gửi email và thông báo nhắc lịch đá bóng trước 1 tiếng
+    (0, reminderService_1.startBookingReminderCron)(io);
 });

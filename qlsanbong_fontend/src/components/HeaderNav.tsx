@@ -56,17 +56,54 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
   const userDropdownRef = useRef<HTMLDivElement>(null);
 
   // Khôi phục thông tin đăng nhập từ localStorage giống hệt index.tsx
-  const syncCurrentUser = () => {
+  const syncCurrentUser = async () => {
     try {
       const savedAuthUser = localStorage.getItem('auth_user');
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '')
+        : '';
+
       if (savedAuthUser) {
-        const parsed: AuthUser = JSON.parse(savedAuthUser);
-        setCurrentUser(parsed);
+        const parsed: any = JSON.parse(savedAuthUser);
+        const normalized: AuthUser = {
+          ...parsed,
+          ho_ten: parsed.ho_ten || parsed.hoTen || '',
+          email: parsed.email || '',
+          so_dien_thoai: parsed.so_dien_thoai || parsed.soDienThoai || '',
+          dia_chi: parsed.dia_chi || parsed.diaChi || '',
+          anh_dai_dien: parsed.anh_dai_dien || parsed.avatarUrl || ''
+        };
+        setCurrentUser(normalized);
+
+        // Tự động kiểm tra và đồng bộ avatar mới nhất từ server nếu chưa có avatar
+        if (token && !normalized.anh_dai_dien) {
+          try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/auth/me`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success && data.data && data.data.anh_dai_dien) {
+              const updated = {
+                ...normalized,
+                anh_dai_dien: data.data.anh_dai_dien,
+                ho_ten: data.data.ho_ten || normalized.ho_ten
+              };
+              localStorage.setItem('auth_user', JSON.stringify(updated));
+              setCurrentUser(updated);
+            }
+          } catch (e) {}
+        }
       } else {
         const savedSoccerUser = localStorage.getItem('soccer_current_user');
         if (savedSoccerUser) {
           const parsed = JSON.parse(savedSoccerUser);
-          setCurrentUser(parsed);
+          const normalized: AuthUser = {
+            ...parsed,
+            ho_ten: parsed.ho_ten || parsed.hoTen || '',
+            email: parsed.email || '',
+            anh_dai_dien: parsed.anh_dai_dien || parsed.avatarUrl || ''
+          };
+          setCurrentUser(normalized);
         } else {
           setCurrentUser(null);
         }
@@ -80,14 +117,14 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
   useEffect(() => {
     syncCurrentUser();
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'auth_user' || e.key === 'soccer_current_user' || e.key === 'auth_token') {
-        syncCurrentUser();
-      }
+    const handleStorageChange = (e?: any) => {
+      syncCurrentUser();
     };
 
+    window.addEventListener('app:user-updated', handleStorageChange);
     window.addEventListener('storage', handleStorageChange);
     return () => {
+      window.removeEventListener('app:user-updated', handleStorageChange);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
@@ -190,7 +227,23 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
                         : 'bg-slate-100 border-slate-300 hover:border-emerald-500'
                     }`}
                   >
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 flex items-center justify-center font-bold text-slate-950 text-xs shadow-inner">
+                    {currentUser.anh_dai_dien ? (
+                      <img
+                        src={currentUser.anh_dai_dien}
+                        alt={currentUser.ho_ten || 'Avatar'}
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-emerald-500/40 shadow-inner shrink-0"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.parentElement?.querySelector('.header-avatar-fallback');
+                          if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`header-avatar-fallback w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 items-center justify-center font-bold text-slate-950 text-xs shadow-inner ${
+                        currentUser.anh_dai_dien ? 'hidden' : 'flex'
+                      }`}
+                    >
                       {currentUser.ho_ten ? currentUser.ho_ten.charAt(0).toUpperCase() : 'U'}
                     </div>
                     <div className="text-left hidden xl:block">
@@ -206,11 +259,6 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
                     <div className={`absolute right-0 mt-3 w-60 rounded-2xl border shadow-2xl p-2 z-50 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 ${
                       isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
                     }`}>
-                      <div className={`px-3 py-2 border-b mb-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                        <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>Tài khoản:</p>
-                        <p className="text-xs font-bold text-emerald-500 truncate">{currentUser.email}</p>
-                      </div>
-
                       {/* Nút đi tới Management System cho Nhân viên & Admin */}
                       {isUserStaffOrAdmin && (
                         <a
@@ -515,7 +563,20 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-hidden">
           <div className="relative w-full max-w-2xl max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
             <Profile
-              onClose={() => setIsProfileModalOpen(false)}
+              onClose={() => {
+                setIsProfileModalOpen(false);
+                syncCurrentUser();
+              }}
+              onUpdateUser={(updated) => {
+                const normalized: AuthUser = {
+                  ...updated,
+                  ho_ten: updated.ho_ten || updated.hoTen || '',
+                  email: updated.email || '',
+                  so_dien_thoai: updated.so_dien_thoai || updated.soDienThoai || '',
+                  dia_chi: updated.dia_chi || updated.diaChi || ''
+                };
+                setCurrentUser(normalized);
+              }}
               onLogout={handleLogout}
               initialData={{
                 hoTen: currentUser?.ho_ten || '',

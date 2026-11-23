@@ -141,6 +141,18 @@ export const TIME_OPTIONS_24H: string[] = [
   '24:00'
 ];
 
+// Helper chuẩn hóa dữ liệu ô nhập số: Cho phép xóa rỗng '', tự động bỏ số 0 đứng đầu thừa (VD: '0500' -> 500, '0' -> 0)
+export const parseCleanNumberInput = (value: string | number, allowDecimal = false): any => {
+  if (value === '' || value === undefined || value === null) return '';
+  let cleaned = String(value).trim();
+  // Bỏ số 0 thừa đứng đầu (ví dụ: '0500' -> '500', '00' -> '0'), trừ số thập phân '0.xxx'
+  if (!allowDecimal || !cleaned.includes('.')) {
+    cleaned = cleaned.replace(/^0+(?=\d)/, '');
+  }
+  const parsed = allowDecimal ? parseFloat(cleaned) : parseInt(cleaned, 10);
+  return isNaN(parsed) ? '' : parsed;
+};
+
 // 1. San_Bong
 export interface SanBong {
   id: number;
@@ -380,6 +392,18 @@ const formatVNDate = (dateStr?: string) => {
   return raw;
 };
 
+const formatTimeSlot = (timeVal?: any) => {
+  if (!timeVal) return '';
+  const s = String(timeVal).trim();
+  if (s.includes('T')) {
+    return s.split('T')[1].slice(0, 5);
+  }
+  if (s.includes(' ')) {
+    return s.split(' ')[1].slice(0, 5);
+  }
+  return s.slice(0, 5);
+};
+
 
 interface SidebarItem {
   id: TabType;
@@ -447,7 +471,6 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     items: [
       { id: 'NGUOI_DUNG', label: 'Danh Sách Người Dùng', icon: User, tableHint: 'Nguoi_Dung' },
       { id: 'VAI_TRO', label: 'Phân Quyền & Vai Trò', icon: ShieldCheck, tableHint: 'Vai_Tro' },
-      { id: 'CHUC_NANG', label: 'Chức Năng', icon: SlidersHorizontal, tableHint: 'Cau_Hinh_He_Thong' },
       { id: 'OPENAPI', label: 'OpenAPI (Swagger)', icon: Code2, badge: 'API' }
     ]
   }
@@ -617,6 +640,7 @@ export default function AdminDashboard() {
   const [fixedScheduleModal, setFixedScheduleModal] = useState<{
     isOpen: boolean;
     data: {
+      ma_nguoi_dung?: number | '';
       ma_san: number | '';
       ten_doi_bong: string;
       so_dien_thoai: string;
@@ -644,6 +668,7 @@ export default function AdminDashboard() {
   }>({
     isOpen: false,
     data: {
+      ma_nguoi_dung: '',
       ma_san: '',
       ten_doi_bong: '',
       so_dien_thoai: '',
@@ -678,6 +703,7 @@ export default function AdminDashboard() {
     submitting: boolean;
     data: {
       id: number;
+      ma_nguoi_dung?: number | '';
       ten_doi_bong: string;
       so_dien_thoai: string;
       don_gia_moi_buoi: number;
@@ -697,6 +723,7 @@ export default function AdminDashboard() {
     submitting: false,
     data: {
       id: 0,
+      ma_nguoi_dung: '',
       ten_doi_bong: '',
       so_dien_thoai: '',
       don_gia_moi_buoi: 0,
@@ -1076,6 +1103,16 @@ export default function AdminDashboard() {
         router.replace('/?login=true&requireAdmin=true');
       }
     });
+
+    const handleUserUpdated = () => {
+      verifyAdminRole();
+    };
+    window.addEventListener('app:user-updated', handleUserUpdated);
+    window.addEventListener('storage', handleUserUpdated);
+    return () => {
+      window.removeEventListener('app:user-updated', handleUserUpdated);
+      window.removeEventListener('storage', handleUserUpdated);
+    };
   }, []);
 
   // Lắng nghe Socket Real-time đồng bộ các khung giờ đang chọn và dữ liệu mới
@@ -1193,7 +1230,25 @@ export default function AdminDashboard() {
       }
       // 9. Người dùng (Users)
       if (results[9].status === 'fulfilled' && results[9].value?.success && Array.isArray(results[9].value.data)) {
-        setUserList(results[9].value.data);
+        const uData: NguoiDung[] = results[9].value.data;
+        setUserList(uData);
+        // Tự động đồng bộ ảnh đại diện và họ tên mới nhất cho tài khoản Admin đang đăng nhập
+        setCurrentAdminUser((prevAdmin) => {
+          if (!prevAdmin) return prevAdmin;
+          const matched = uData.find((u) => u.id === prevAdmin.id || (u.email && prevAdmin.email && u.email.toLowerCase() === prevAdmin.email.toLowerCase()));
+          if (matched && (matched.anh_dai_dien !== prevAdmin.anh_dai_dien || matched.ho_ten !== prevAdmin.ho_ten)) {
+            const updated = {
+              ...prevAdmin,
+              ho_ten: matched.ho_ten || prevAdmin.ho_ten,
+              anh_dai_dien: matched.anh_dai_dien || prevAdmin.anh_dai_dien
+            };
+            try {
+              localStorage.setItem('auth_user', JSON.stringify(updated));
+            } catch (e) {}
+            return updated;
+          }
+          return prevAdmin;
+        });
       }
       // 10. Vai trò (Roles)
       if (results[10].status === 'fulfilled' && results[10].value?.success && Array.isArray(results[10].value.data)) {
@@ -1253,6 +1308,8 @@ export default function AdminDashboard() {
   const [courtModal, setCourtModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<SanBong> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [courtCategoryFilter, setCourtCategoryFilter] = useState<string>('ALL');
   const [courtStatusFilter, setCourtStatusFilter] = useState<string>('ALL');
+  const [isCourtCategoryDropdownOpen, setIsCourtCategoryDropdownOpen] = useState<boolean>(false);
+  const [isCourtStatusDropdownOpen, setIsCourtStatusDropdownOpen] = useState<boolean>(false);
   const [loaiSanModal, setLoaiSanModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<LoaiSan> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [serviceModal, setServiceModal] = useState<{
     isOpen: boolean;
@@ -1274,7 +1331,7 @@ export default function AdminDashboard() {
     mode: 'ADD',
     data: { ma_san: 1, ma_nguoi_dung: 1, ngay_da: new Date().toISOString().split('T')[0], gio_bat_dau: '17:00', gio_ket_thuc: '18:30', tien_san: 350000, tong_tien: 350000, trang_thai: 'DA_CHOT', phuong_thuc: 'TIEN_MAT', loai_thanh_toan: 'TRA_HET', so_tien: 350000, trang_thai_gd: 'THANH_CONG' }
   });
-  const [refundModal, setRefundModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<LichSuHoanTien> }>({ isOpen: false, mode: 'ADD', data: { ma_don_dat: 101, so_tien_hoan: 150000, ty_le_hoan: 100, ly_do_huy: 'Báo hủy trước 24h' } });
+  const [refundModal, setRefundModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<LichSuHoanTien> }>({ isOpen: false, mode: 'ADD', data: { ty_le_hoan: 100, ly_do_huy: 'Báo hủy trước 24h' } });
   const [khungGioModal, setKhungGioModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<KhungGio> }>({
     isOpen: false,
     mode: 'ADD',
@@ -1283,6 +1340,264 @@ export default function AdminDashboard() {
   const [userModal, setUserModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<NguoiDung> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [roleModal, setRoleModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<VaiTro> }>({ isOpen: false, mode: 'ADD', data: {} });
   const [bookingEditModal, setBookingEditModal] = useState<{ isOpen: boolean; mode: 'ADD' | 'EDIT'; data: Partial<DonDatSan> }>({ isOpen: false, mode: 'ADD', data: {} });
+
+  // State tìm kiếm & chọn khách hàng và hóa đơn trong Modal Hoàn Tiền (Thêm / Sửa)
+  const [refundCustomerSearch, setRefundCustomerSearch] = useState<string>('');
+  const [refundSelectedCustomerPhone, setRefundSelectedCustomerPhone] = useState<string>('');
+  const [refundIsChoosingCustomer, setRefundIsChoosingCustomer] = useState<boolean>(false);
+  const [refundIsChoosingOrder, setRefundIsChoosingOrder] = useState<boolean>(false);
+
+  // Danh sách khách hàng duy nhất tổng hợp từ bookingList và userList cho Modal Hoàn Tiền
+  const refundUniqueCustomers = useMemo(() => {
+    const map = new Map<string, {
+      key: string;
+      ten_khach_hang: string;
+      so_dien_thoai: string;
+      email?: string;
+      ma_nguoi_dung?: number;
+      totalBookings: number;
+    }>();
+
+    bookingList.forEach((b) => {
+      const phone = (b.so_dien_thoai || '').trim();
+      const name = (b.ten_khach_hang || '').trim();
+      const key = phone || name || `user_${b.ma_nguoi_dung}`;
+      if (!key) return;
+
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          ten_khach_hang: name || 'Khách vãng lai',
+          so_dien_thoai: phone || 'Chưa có SĐT',
+          ma_nguoi_dung: b.ma_nguoi_dung,
+          totalBookings: 1
+        });
+      } else {
+        const existing = map.get(key)!;
+        existing.totalBookings += 1;
+        if ((!existing.so_dien_thoai || existing.so_dien_thoai === 'Chưa có SĐT') && phone) existing.so_dien_thoai = phone;
+        if (existing.ten_khach_hang === 'Khách vãng lai' && name) existing.ten_khach_hang = name;
+      }
+    });
+
+    userList.forEach((u) => {
+      const phone = (u.so_dien_thoai || '').trim();
+      const name = (u.ho_ten || '').trim();
+      const key = phone || name || `user_${u.id}`;
+      if (!key) return;
+
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          ten_khach_hang: name || 'Khách hàng',
+          so_dien_thoai: phone || 'Chưa có SĐT',
+          email: u.email,
+          ma_nguoi_dung: u.id,
+          totalBookings: 0
+        });
+      } else {
+        const existing = map.get(key)!;
+        if (u.email && !existing.email) existing.email = u.email;
+        if (u.id && !existing.ma_nguoi_dung) existing.ma_nguoi_dung = u.id;
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.totalBookings - a.totalBookings);
+  }, [bookingList, userList]);
+
+  // Lọc danh sách khách hàng theo từ khóa tìm kiếm
+  const refundFilteredCustomers = useMemo(() => {
+    if (!refundCustomerSearch.trim()) return refundUniqueCustomers;
+    const kw = refundCustomerSearch.toLowerCase().trim();
+    return refundUniqueCustomers.filter(c =>
+      c.ten_khach_hang.toLowerCase().includes(kw) ||
+      c.so_dien_thoai.toLowerCase().includes(kw) ||
+      (c.email && c.email.toLowerCase().includes(kw))
+    );
+  }, [refundUniqueCustomers, refundCustomerSearch]);
+
+  // Khách hàng hiện được chọn trong Modal Hoàn Tiền
+  const refundSelectedCustomer = useMemo(() => {
+    if (refundSelectedCustomerPhone) {
+      const found = refundUniqueCustomers.find(c => c.key === refundSelectedCustomerPhone);
+      if (found) return found;
+    }
+    if (refundModal.data.ma_don_dat) {
+      const foundB = bookingList.find(b => b.id === Number(refundModal.data.ma_don_dat));
+      if (foundB) {
+        const phone = (foundB.so_dien_thoai || '').trim();
+        const name = (foundB.ten_khach_hang || '').trim();
+        const key = phone || name || `user_${foundB.ma_nguoi_dung}`;
+        return refundUniqueCustomers.find(c => c.key === key) || {
+          key,
+          ten_khach_hang: name || 'Khách đặt sân',
+          so_dien_thoai: phone || 'Chưa có SĐT',
+          ma_nguoi_dung: foundB.ma_nguoi_dung,
+          totalBookings: 1
+        };
+      }
+    }
+    return null;
+  }, [refundUniqueCustomers, refundSelectedCustomerPhone, refundModal.data.ma_don_dat, bookingList]);
+
+  // Danh sách các đơn đặt sân / hóa đơn của khách hàng đang chọn
+  const refundCustomerInvoices = useMemo(() => {
+    if (!refundSelectedCustomer) return [];
+    const customerKey = refundSelectedCustomer.key;
+    const userId = refundSelectedCustomer.ma_nguoi_dung;
+    return bookingList.filter(b => {
+      const phone = (b.so_dien_thoai || '').trim();
+      const name = (b.ten_khach_hang || '').trim();
+      const key = phone || name || `user_${b.ma_nguoi_dung}`;
+      if (key === customerKey) return true;
+      if (userId && b.ma_nguoi_dung && userId === b.ma_nguoi_dung) return true;
+      if (refundSelectedCustomer.so_dien_thoai && phone && refundSelectedCustomer.so_dien_thoai === phone && phone !== 'Chưa có SĐT') return true;
+      return false;
+    }).sort((a, b) => (b.id || 0) - (a.id || 0));
+  }, [bookingList, refundSelectedCustomer]);
+
+  // Đơn đặt sân / hóa đơn hiện đang được chọn
+  const refundSelectedBooking = useMemo(() => {
+    if (!refundModal.data.ma_don_dat) return null;
+    return bookingList.find(b => b.id === Number(refundModal.data.ma_don_dat)) || null;
+  }, [bookingList, refundModal.data.ma_don_dat]);
+
+  // Helper định dạng ngày tháng DD/MM/YYYY cho đặt sân & hoàn tiền
+  const formatBookingDateDMY = (dateVal?: string | Date) => {
+    if (!dateVal) return '';
+    const s = String(dateVal).split('T')[0];
+    const p = s.split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : s;
+  };
+  const formatBookingTimeRange = (start?: string, end?: string) => {
+    const s = start ? String(start).substring(0, 5) : '';
+    const e = end ? String(end).substring(0, 5) : '';
+    if (s && e) return `(${s} - ${e})`;
+    if (s) return `(${s})`;
+    return '';
+  };
+
+  // Helper lấy icon theo môn thể thao cho Loại sân
+  const getSportIcon = (name?: string) => {
+    const n = (name || '').toLowerCase();
+    if (n.includes('bóng đá') || n.includes('bong da') || n.includes('futsal')) return '⚽';
+    if (n.includes('cầu lông') || n.includes('cau long')) return '🏸';
+    if (n.includes('bóng bàn') || n.includes('bong ban') || n.includes('ping pong')) return '🏓';
+    if (n.includes('pickleball')) return '🎾';
+    if (n.includes('tennis') || n.includes('quần vợt')) return '🎾';
+    if (n.includes('bóng rổ') || n.includes('bong ro')) return '🏀';
+    if (n.includes('bóng chuyền') || n.includes('bong chuyen')) return '🏐';
+    return '🏟️';
+  };
+
+  // Kiểm tra đơn hoàn tiền hiện tại có liên quan đến Đổi Sân sang sân giá thấp hơn không
+  const refundRelatedExchange = useMemo(() => {
+    if (!refundModal.data.ma_don_dat) return null;
+    return exchangeList.find(ex => ex.ma_don_dat === Number(refundModal.data.ma_don_dat)) || null;
+  }, [exchangeList, refundModal.data.ma_don_dat]);
+
+  const refundIsExchangeRefund = useMemo(() => {
+    if (refundRelatedExchange && (Number(refundRelatedExchange.tien_thua_hoan || 0) > 0 || Number(refundRelatedExchange.tien_chenh_lech || 0) < 0)) {
+      return true;
+    }
+    const reason = (refundModal.data.ly_do_huy || '').toLowerCase();
+    return reason.includes('đổi sang sân giá thấp') || reason.includes('tiền thừa khi đổi') || reason.includes('tiền thừa');
+  }, [refundRelatedExchange, refundModal.data.ly_do_huy]);
+
+  const refundBaseAmount = useMemo(() => {
+    if (refundIsExchangeRefund) {
+      if (refundRelatedExchange?.tien_thua_hoan) return Number(refundRelatedExchange.tien_thua_hoan);
+      if (refundRelatedExchange?.tien_chenh_lech && Number(refundRelatedExchange.tien_chenh_lech) < 0) return Math.abs(Number(refundRelatedExchange.tien_chenh_lech));
+      if (refundModal.data.so_tien_hoan) return Number(refundModal.data.so_tien_hoan);
+    }
+    if (refundSelectedBooking) {
+      const tienCoc = refundSelectedBooking.tien_coc_da_tra !== undefined && refundSelectedBooking.tien_coc_da_tra !== null
+        ? Number(refundSelectedBooking.tien_coc_da_tra)
+        : (refundSelectedBooking.so_tien_da_tra !== undefined && refundSelectedBooking.so_tien_da_tra !== null
+          ? Number(refundSelectedBooking.so_tien_da_tra)
+          : (refundSelectedBooking.trang_thai === 'DA_COC' ? Math.round((refundSelectedBooking.tong_tien || 0) * 0.3) : Number(refundSelectedBooking.tong_tien || 0)));
+      return tienCoc > 0 ? tienCoc : Number(refundSelectedBooking.tong_tien || 0);
+    }
+    return Number(refundModal.data.so_tien_hoan || 0);
+  }, [refundIsExchangeRefund, refundRelatedExchange, refundSelectedBooking, refundModal.data.so_tien_hoan]);
+
+  // Chọn khách hàng trong Modal Hoàn tiền
+  const handleSelectCustomerForRefund = (customer: any) => {
+    setRefundSelectedCustomerPhone(customer.key);
+    setRefundIsChoosingCustomer(false);
+    setRefundCustomerSearch('');
+
+    const invoices = bookingList.filter(b => {
+      const phone = (b.so_dien_thoai || '').trim();
+      const name = (b.ten_khach_hang || '').trim();
+      const key = phone || name || `user_${b.ma_nguoi_dung}`;
+      if (key === customer.key) return true;
+      if (customer.ma_nguoi_dung && b.ma_nguoi_dung && customer.ma_nguoi_dung === b.ma_nguoi_dung) return true;
+      if (customer.so_dien_thoai && phone && customer.so_dien_thoai === phone && phone !== 'Chưa có SĐT') return true;
+      return false;
+    });
+
+    if (invoices.length === 1) {
+      handleSelectBookingForRefund(invoices[0]);
+    } else {
+      setRefundIsChoosingOrder(true);
+    }
+  };
+
+  // Chọn đơn đặt sân / hóa đơn của khách trong Modal Hoàn tiền
+  const handleSelectBookingForRefund = (booking: DonDatSan) => {
+    const ex = exchangeList.find(e => e.ma_don_dat === booking.id);
+    const isExWithRefund = ex && (Number(ex.tien_thua_hoan || 0) > 0 || Number(ex.tien_chenh_lech || 0) < 0);
+    const excessMoney = isExWithRefund ? (Number(ex.tien_thua_hoan) || Math.abs(Number(ex.tien_chenh_lech) || 0)) : 0;
+
+    const tienCoc = booking.tien_coc_da_tra !== undefined && booking.tien_coc_da_tra !== null
+      ? Number(booking.tien_coc_da_tra)
+      : (booking.so_tien_da_tra !== undefined && booking.so_tien_da_tra !== null
+        ? Number(booking.so_tien_da_tra)
+        : (booking.trang_thai === 'DA_COC' ? Math.round((booking.tong_tien || 0) * 0.3) : Number(booking.tong_tien || 0)));
+
+    const baseAmount = isExWithRefund ? excessMoney : (tienCoc > 0 ? tienCoc : Number(booking.tong_tien || 0));
+    const currentRatio = Number(refundModal.data.ty_le_hoan !== undefined && refundModal.data.ty_le_hoan !== null ? refundModal.data.ty_le_hoan : 100);
+    const suggestedRefund = Math.round(baseAmount * (currentRatio / 100));
+
+    setRefundModal(prev => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        ma_don_dat: booking.id,
+        so_tien_hoan: suggestedRefund > 0 ? suggestedRefund : baseAmount,
+        ly_do_huy: isExWithRefund
+          ? `Hoàn tiền thừa khi đổi sang sân giá thấp hơn (Đơn #${booking.id})`
+          : (prev.data.ly_do_huy || `Khách báo hủy đơn #${booking.id} (${booking.ten_san})`)
+      }
+    }));
+
+    setRefundIsChoosingOrder(false);
+  };
+
+  // Đồng bộ khách hàng khi mở modal Hoàn tiền (EDIT hoặc ADD)
+  useEffect(() => {
+    if (refundModal.isOpen) {
+      if (refundModal.data.ma_don_dat) {
+        const foundBooking = bookingList.find(b => b.id === Number(refundModal.data.ma_don_dat));
+        if (foundBooking) {
+          const phone = (foundBooking.so_dien_thoai || '').trim();
+          const name = (foundBooking.ten_khach_hang || '').trim();
+          const key = phone || name || `user_${foundBooking.ma_nguoi_dung}`;
+          setRefundSelectedCustomerPhone(key);
+        } else {
+          setRefundSelectedCustomerPhone('');
+        }
+        setRefundIsChoosingCustomer(false);
+        setRefundIsChoosingOrder(false);
+      } else {
+        setRefundSelectedCustomerPhone('');
+        setRefundIsChoosingCustomer(true);
+        setRefundIsChoosingOrder(false);
+      }
+      setRefundCustomerSearch('');
+    }
+  }, [refundModal.isOpen]);
 
   // Bộ lọc vai trò người dùng trong tab NGUOI_DUNG
   const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | 'ADMIN' | 'NHAN_VIEN' | 'KHACH_HANG'>('ALL');
@@ -1954,7 +2269,7 @@ export default function AdminDashboard() {
           body: JSON.stringify({
             ten_san: ten_san.trim(),
             ma_loai_san: Number(effectiveMaLoaiSan),
-            don_gia_phut: Number(don_gia_phut || 5000),
+            don_gia_phut: Number((don_gia_phut as any) !== '' && don_gia_phut !== undefined ? don_gia_phut : 5000),
             hinh_anh: finalImageUrl,
             trang_thai: trang_thai || 'SAN_SANG'
           })
@@ -1977,7 +2292,7 @@ export default function AdminDashboard() {
           body: JSON.stringify({
             ten_san: ten_san.trim(),
             ma_loai_san: Number(effectiveMaLoaiSan),
-            don_gia_phut: Number(don_gia_phut || 5000),
+            don_gia_phut: Number((don_gia_phut as any) !== '' && don_gia_phut !== undefined ? don_gia_phut : 5000),
             hinh_anh: finalImageUrl,
             trang_thai: trang_thai || 'SAN_SANG'
           })
@@ -2422,6 +2737,20 @@ export default function AdminDashboard() {
         vai_tro: vai_tro || u.vai_tro,
         anh_dai_dien: anh_dai_dien !== undefined ? anh_dai_dien : u.anh_dai_dien
       } : u)));
+      setCurrentAdminUser((prevAdmin) => {
+        if (!prevAdmin || (prevAdmin.id !== id && prevAdmin.email?.toLowerCase() !== email.toLowerCase())) return prevAdmin;
+        const updated = {
+          ...prevAdmin,
+          ho_ten,
+          email,
+          so_dien_thoai: so_dien_thoai || '',
+          anh_dai_dien: anh_dai_dien !== undefined ? anh_dai_dien : prevAdmin.anh_dai_dien
+        };
+        try {
+          localStorage.setItem('auth_user', JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      });
       setToastMessage({ type: 'success', message: `👤 Đã cập nhật tài khoản [${ho_ten}]!` });
     }
     setUserModal({ isOpen: false, mode: 'ADD', data: {} });
@@ -2908,17 +3237,34 @@ export default function AdminDashboard() {
   };
 
   // Helper kiểm tra trạng thái khung giờ trong Modal Đặt Sân & Thanh Toán
-  const getBookingModalSlotStatus = (timeStr: string, isEndTime: boolean = false) => {
-    const selectedSanId = Number(bookingModal.data.ma_san || courtList[0]?.id || 1);
+  const getBookingModalSlotStatus = (
+    timeStr: string,
+    isEndTime: boolean = false,
+    targetSanId?: number,
+    targetDateStr?: string
+  ) => {
+    const selectedSanIds: number[] = targetSanId
+      ? [Number(targetSanId)]
+      : (Array.isArray(bookingModal.data.danh_sach_ma_san) && bookingModal.data.danh_sach_ma_san.length > 0
+          ? bookingModal.data.danh_sach_ma_san.map(Number)
+          : [Number(bookingModal.data.ma_san || courtList[0]?.id || 1)]);
+
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    const selectedDateStr = bookingModal.data.ngay_da
-      ? String(bookingModal.data.ngay_da).substring(0, 10)
-      : (selectedDate ? String(selectedDate).substring(0, 10) : todayStr);
+    const selectedDateStr = targetDateStr
+      ? String(targetDateStr).substring(0, 10)
+      : (bookingModal.data.ngay_da
+          ? String(bookingModal.data.ngay_da).substring(0, 10)
+          : (selectedDate ? String(selectedDate).substring(0, 10) : todayStr));
 
-    const curStartMin = timeToMinutes(bookingModal.data.gio_bat_dau || '17:00');
+    let curStartTime = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
+    if (targetSanId && Array.isArray(bookingModal.data.chi_tiet_san)) {
+      const match = bookingModal.data.chi_tiet_san.find((d: any) => Number(d.ma_san) === Number(targetSanId));
+      if (match?.gio_bat_dau) curStartTime = match.gio_bat_dau.substring(0, 5);
+    }
+    const curStartMin = timeToMinutes(curStartTime);
     const tMin = timeToMinutes(timeStr);
 
     // 1. Kiểm tra xem thời gian này đã qua trong quá khứ chưa
@@ -2939,13 +3285,13 @@ export default function AdminDashboard() {
       };
     }
 
-    // 2. Kiểm tra trong danh sách đơn đã đặt trong CSDL (bookingList)
+    // 2. Kiểm tra trong danh sách đơn đã đặt trong CSDL (bookingList) cho TẤT CẢ các sân đang chọn
     const currentBookingId = bookingModal.mode === 'EDIT' ? Number(bookingModal.data.id) : null;
 
     let bookedCustomerName = '';
     const isBooked = bookingList.some((b) => {
       if (currentBookingId && Number(b.id) === currentBookingId) return false;
-      if (Number(b.ma_san) !== selectedSanId) return false;
+      if (!selectedSanIds.includes(Number(b.ma_san))) return false;
       const bDate = b.ngay_da ? String(b.ngay_da).substring(0, 10) : '';
       if (bDate !== selectedDateStr) return false;
       if (['DA_HUY', 'Da Huy', 'Đã hủy', 'DA_HUY_DON'].includes(b.trang_thai)) return false;
@@ -2953,23 +3299,24 @@ export default function AdminDashboard() {
       const bStartMin = timeToMinutes(b.gio_bat_dau);
       const bEndMin = timeToMinutes(b.gio_ket_thuc);
 
+      const courtName = courtList.find((c) => c.id === Number(b.ma_san))?.ten_san || `Sân #${b.ma_san}`;
+
       if (!isEndTime) {
         // Giờ bắt đầu trùng với khoảng thời gian đã đặt [bStart, bEnd)
         const inRange = tMin >= bStartMin && tMin < bEndMin;
-        if (inRange) bookedCustomerName = b.ten_khach_hang || 'Khách đặt';
+        if (inRange) bookedCustomerName = `${b.ten_khach_hang || 'Khách đặt'} (${courtName})`;
         return inRange;
       } else {
         // Giờ kết thúc nằm trong khoảng (bStart, bEnd] HOẶC khoảng [curStart, tMin] bao trùm qua đơn đặt của người khác
         const inSlot = tMin > bStartMin && tMin <= bEndMin;
         const overlaps = curStartMin < bStartMin && tMin > bStartMin;
-        if (inSlot || overlaps) bookedCustomerName = b.ten_khach_hang || 'Khách đặt';
+        if (inSlot || overlaps) bookedCustomerName = `${b.ten_khach_hang || 'Khách đặt'} (${courtName})`;
         return inSlot || overlaps;
       }
     });
 
     // 3. Kiểm tra xem có người đang giữ chỗ realtime không (lockedSlots)
-    const slotKeyRealtime = `${selectedDateStr}_${selectedSanId}_${timeStr}`;
-    const isHolding = lockedSlots.includes(slotKeyRealtime);
+    const isHolding = selectedSanIds.some((sId) => lockedSlots.includes(`${selectedDateStr}_${sId}_${timeStr}`));
 
     const isOccupied = isBooked || isHolding;
 
@@ -3038,10 +3385,149 @@ export default function AdminDashboard() {
     return Math.round(diffMinutes * donGiaPhut);
   };
 
+  // Helper tính lại tiền và đồng bộ danh sách sân đã chọn trong bookingModal
+  const recalculateBookingWithCourts = (newCourtIds: number[], overrideData?: any, updatedChiTiet?: any[]) => {
+    const curData = overrideData ? { ...bookingModal.data, ...overrideData } : bookingModal.data;
+    const ids = newCourtIds.length > 0 ? newCourtIds : [courtList[0]?.id || 1];
+    const curStart = (curData.gio_bat_dau || '17:00').substring(0, 5);
+    const curEnd = (curData.gio_ket_thuc || '18:30').substring(0, 5);
+    const curDate = curData.ngay_da ? String(curData.ngay_da).substring(0, 10) : (selectedDate ? String(selectedDate).substring(0, 10) : new Date().toISOString().substring(0, 10));
+    const modeGio = curData.che_do_gio || 'CHUNG';
+
+    // Xây dựng hoặc duy trì chi_tiet_san cho từng sân
+    const prevDetails: any[] = updatedChiTiet || curData.chi_tiet_san || [];
+    const nextDetails = ids.map((cId: number) => {
+      const existing = prevDetails.find((d: any) => Number(d.ma_san) === Number(cId));
+      const sStart = (modeGio === 'RIENG' && existing?.gio_bat_dau) ? existing.gio_bat_dau.substring(0, 5) : curStart;
+      const sEnd = (modeGio === 'RIENG' && existing?.gio_ket_thuc) ? existing.gio_ket_thuc.substring(0, 5) : curEnd;
+      const sDate = (modeGio === 'RIENG' && existing?.ngay_da) ? String(existing.ngay_da).substring(0, 10) : curDate;
+      const sPrice = calculateBookingPitchPrice(cId, sStart, sEnd);
+      return {
+        ma_san: cId,
+        ngay_da: sDate,
+        gio_bat_dau: sStart,
+        gio_ket_thuc: sEnd,
+        tien_san: sPrice
+      };
+    });
+
+    const autoPrice = nextDetails.reduce((sum, item) => sum + (item.tien_san || 0), 0);
+    const totalDv = (curData.dich_vu_list || []).reduce(
+      (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
+      0
+    );
+    const primaryCourt = courtList.find((c) => c.id === ids[0]);
+    const finalPrice = autoPrice > 0 ? autoPrice : (curData.tien_san || 0);
+    const finalTongTien = finalPrice + totalDv;
+
+    let nextSoTien = curData.so_tien;
+    if (curData.trang_thai === 'DA_THANH_TOAN') {
+      nextSoTien = finalTongTien;
+    } else if (curData.trang_thai === 'DA_COC') {
+      nextSoTien = Math.round(finalTongTien * 0.3);
+    }
+
+    setBookingModal((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        ...curData,
+        ma_san: ids[0],
+        danh_sach_ma_san: ids,
+        chi_tiet_san: nextDetails,
+        ten_san: primaryCourt?.ten_san,
+        tien_san: finalPrice,
+        tong_tien: finalTongTien,
+        so_tien: nextSoTien
+      }
+    }));
+  };
+
+  const handleUpdateCourtTime = (courtId: number, field: 'ngay_da' | 'gio_bat_dau' | 'gio_ket_thuc', value: string) => {
+    const curData = bookingModal.data;
+    const ids = Array.isArray(curData.danh_sach_ma_san) && curData.danh_sach_ma_san.length > 0
+      ? curData.danh_sach_ma_san.map(Number)
+      : [Number(curData.ma_san || 1)];
+    const curDetails: any[] = curData.chi_tiet_san || [];
+    
+    const updatedDetails = ids.map((cId: number) => {
+      const existing = curDetails.find((d: any) => Number(d.ma_san) === Number(cId)) || {
+        ma_san: cId,
+        ngay_da: curData.ngay_da,
+        gio_bat_dau: curData.gio_bat_dau || '17:00',
+        gio_ket_thuc: curData.gio_ket_thuc || '18:30'
+      };
+      if (cId === courtId) {
+        const nextStart = field === 'gio_bat_dau' ? value : existing.gio_bat_dau;
+        const nextEnd = field === 'gio_ket_thuc' ? value : existing.gio_ket_thuc;
+        const nextDate = field === 'ngay_da' ? value : existing.ngay_da;
+        const nextPrice = calculateBookingPitchPrice(cId, nextStart, nextEnd);
+        return {
+          ...existing,
+          [field]: value,
+          tien_san: nextPrice
+        };
+      }
+      return existing;
+    });
+
+    recalculateBookingWithCourts(ids, { che_do_gio: 'RIENG' }, updatedDetails);
+  };
+
+  const handleCopyFirstCourtTimeToAll = () => {
+    const curData = bookingModal.data;
+    const ids = Array.isArray(curData.danh_sach_ma_san) && curData.danh_sach_ma_san.length > 0
+      ? curData.danh_sach_ma_san.map(Number)
+      : [Number(curData.ma_san || 1)];
+    const curDetails: any[] = curData.chi_tiet_san || [];
+    const firstDetail = curDetails[0] || {
+      ngay_da: curData.ngay_da,
+      gio_bat_dau: curData.gio_bat_dau || '17:00',
+      gio_ket_thuc: curData.gio_ket_thuc || '18:30'
+    };
+
+    recalculateBookingWithCourts(ids, {
+      gio_bat_dau: firstDetail.gio_bat_dau,
+      gio_ket_thuc: firstDetail.gio_ket_thuc,
+      ngay_da: firstDetail.ngay_da
+    });
+  };
+
+  const handleAddOrToggleCourt = (courtId: number) => {
+    const current = Array.isArray(bookingModal.data.danh_sach_ma_san) && bookingModal.data.danh_sach_ma_san.length > 0
+      ? [...bookingModal.data.danh_sach_ma_san]
+      : [Number(bookingModal.data.ma_san || courtList[0]?.id || 1)];
+
+    let next: number[];
+    if (current.includes(courtId)) {
+      if (current.length > 1) {
+        next = current.filter((id) => id !== courtId);
+      } else {
+        next = current;
+      }
+    } else {
+      next = [...current, courtId];
+    }
+    recalculateBookingWithCourts(next);
+  };
+
+  const handleRemoveCourt = (courtId: number) => {
+    const current = Array.isArray(bookingModal.data.danh_sach_ma_san) && bookingModal.data.danh_sach_ma_san.length > 0
+      ? [...bookingModal.data.danh_sach_ma_san]
+      : [Number(bookingModal.data.ma_san || 1)];
+    if (current.length <= 1) return;
+    const next = current.filter((id) => id !== courtId);
+    recalculateBookingWithCourts(next);
+  };
+
   // 9. Thêm/Sửa Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan)
   const handleSaveDonDatThanhToan = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, dich_vu_list } = bookingModal.data;
+    const { id, ma_san, danh_sach_ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, dich_vu_list } = bookingModal.data;
+
+    const selectedSanIds = Array.isArray(danh_sach_ma_san) && danh_sach_ma_san.length > 0
+      ? danh_sach_ma_san.map(Number)
+      : [Number(ma_san || courtList[0]?.id || 1)];
 
     const cleanNgayDa = ngay_da ? String(ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10);
     const cleanGioBatDau = (gio_bat_dau && gio_bat_dau.length === 5) ? `${gio_bat_dau}:00` : (gio_bat_dau || '17:00:00');
@@ -3077,7 +3563,9 @@ export default function AdminDashboard() {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
-            ma_san: Number(ma_san),
+            ma_san: selectedSanIds[0],
+            danh_sach_ma_san: selectedSanIds,
+            chi_tiet_san: bookingModal.data.chi_tiet_san || [],
             ma_nguoi_dung: Number(ma_nguoi_dung || 1),
             ngay_da: cleanNgayDa,
             gio_bat_dau: cleanGioBatDau,
@@ -3095,7 +3583,10 @@ export default function AdminDashboard() {
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage({ type: 'success', message: '✅ Đã tạo đơn đặt sân & lưu CSDL SQL Server thành công!' });
+          const msg = selectedSanIds.length > 1
+            ? `✅ Đã tạo thành công ${selectedSanIds.length} đơn đặt sân & lưu CSDL SQL Server!`
+            : '✅ Đã tạo đơn đặt sân & lưu CSDL SQL Server thành công!';
+          setToastMessage({ type: 'success', message: msg });
           loadAllDataFromBackend();
           setBookingModal({ isOpen: false, mode: 'ADD', data: {} });
           return;
@@ -3108,7 +3599,9 @@ export default function AdminDashboard() {
           method: 'PUT',
           headers: getAuthHeaders(),
           body: JSON.stringify({
-            ma_san: Number(ma_san),
+            ma_san: selectedSanIds[0],
+            danh_sach_ma_san: selectedSanIds,
+            chi_tiet_san: bookingModal.data.chi_tiet_san || [],
             ma_nguoi_dung: ma_nguoi_dung ? Number(ma_nguoi_dung) : undefined,
             ngay_da: cleanNgayDa,
             gio_bat_dau: cleanGioBatDau,
@@ -3126,7 +3619,10 @@ export default function AdminDashboard() {
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage({ type: 'success', message: '✅ Đã cập nhật đơn đặt sân trong CSDL SQL Server!' });
+          const msg = selectedSanIds.length > 1
+            ? `✅ Đã cập nhật đơn #${id} và tạo thêm các sân bổ sung thành công!`
+            : '✅ Đã cập nhật đơn đặt sân trong CSDL SQL Server!';
+          setToastMessage({ type: 'success', message: msg });
           loadAllDataFromBackend();
           setBookingModal({ isOpen: false, mode: 'ADD', data: {} });
           return;
@@ -3677,13 +4173,15 @@ export default function AdminDashboard() {
     const defaultCourtId = courtList[0]?.id || '';
     const defaultCourt = courtList[0];
     const defaultPrice = defaultCourt ? Number(defaultCourt.don_gia_phut || 5000) * 90 : 350000;
+    const defaultCustomer = userList.find((u) => u.vai_tro === 'KHACH_HANG') || userList[0];
 
     setFixedScheduleModal({
       isOpen: true,
       data: {
+        ma_nguoi_dung: defaultCustomer ? defaultCustomer.id : '',
         ma_san: defaultCourtId,
-        ten_doi_bong: '',
-        so_dien_thoai: '',
+        ten_doi_bong: defaultCustomer ? defaultCustomer.ho_ten : '',
+        so_dien_thoai: defaultCustomer ? defaultCustomer.so_dien_thoai || '' : '',
         cac_thu_trong_tuan: ['2', '4', '6'],
         gio_bat_dau: '18:30',
         gio_ket_thuc: '20:00',
@@ -3775,6 +4273,7 @@ export default function AdminDashboard() {
   const handleSaveFixedSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     const {
+      ma_nguoi_dung,
       ma_san,
       ten_doi_bong,
       so_dien_thoai,
@@ -3789,8 +4288,10 @@ export default function AdminDashboard() {
       ghi_chu
     } = fixedScheduleModal.data;
 
-    if (!ma_san || !ten_doi_bong.trim() || !so_dien_thoai.trim() || cac_thu_trong_tuan.length === 0 || !tu_ngay || !den_ngay) {
-      setToastMessage({ type: 'error', message: '⚠️ Vui lòng điền đầy đủ các thông tin bắt buộc!' });
+    const customerName = (ten_doi_bong || '').trim() || userList.find((u) => u.id === Number(ma_nguoi_dung))?.ho_ten || 'Khách cố định';
+
+    if (!ma_san || !ma_nguoi_dung || !so_dien_thoai.trim() || cac_thu_trong_tuan.length === 0 || !tu_ngay || !den_ngay) {
+      setToastMessage({ type: 'error', message: '⚠️ Vui lòng chọn khách hàng và điền đầy đủ các thông tin bắt buộc!' });
       return;
     }
 
@@ -3799,8 +4300,9 @@ export default function AdminDashboard() {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
+          ma_nguoi_dung: Number(ma_nguoi_dung),
           ma_san: Number(ma_san),
-          ten_doi_bong: ten_doi_bong.trim(),
+          ten_doi_bong: customerName,
           so_dien_thoai: so_dien_thoai.trim(),
           cac_thu_trong_tuan: cac_thu_trong_tuan.join(','),
           gio_bat_dau,
@@ -3810,7 +4312,7 @@ export default function AdminDashboard() {
           don_gia_moi_buoi: Number(don_gia_moi_buoi || 0),
           tien_coc: Number(tien_coc || 0),
           bo_qua_ngay_trung: Boolean(bo_qua_ngay_trung),
-          ghi_chu: ghi_chu.trim()
+          ghi_chu: ghi_chu ? ghi_chu.trim() : undefined
         })
       });
       const data = await res.json();
@@ -3903,11 +4405,22 @@ export default function AdminDashboard() {
   };
 
   const handleOpenEditFixedSchedule = (lcd: any) => {
+    let matchedUserId = lcd.ma_nguoi_dung || '';
+    if (!matchedUserId && userList.length > 0) {
+      const found = userList.find(
+        (u) =>
+          (lcd.so_dien_thoai && u.so_dien_thoai === lcd.so_dien_thoai) ||
+          (lcd.ten_doi_bong && u.ho_ten?.toLowerCase() === lcd.ten_doi_bong?.toLowerCase())
+      );
+      if (found) matchedUserId = found.id;
+    }
+
     setEditFixedScheduleModal({
       isOpen: true,
       submitting: false,
       data: {
         id: lcd.id,
+        ma_nguoi_dung: matchedUserId,
         ten_doi_bong: lcd.ten_doi_bong || '',
         so_dien_thoai: lcd.so_dien_thoai || '',
         don_gia_moi_buoi: Number(lcd.don_gia_moi_buoi || 0),
@@ -3927,7 +4440,7 @@ export default function AdminDashboard() {
 
   const handleSaveEditFixedSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ten_doi_bong, so_dien_thoai, don_gia_moi_buoi, tien_coc, trang_thai, ghi_chu } = editFixedScheduleModal.data;
+    const { id, ma_nguoi_dung, ten_doi_bong, so_dien_thoai, don_gia_moi_buoi, tien_coc, trang_thai, ghi_chu } = editFixedScheduleModal.data;
     if (!ten_doi_bong.trim() || !so_dien_thoai.trim()) {
       setToastMessage({ type: 'error', message: 'Vui lòng nhập tên đội bóng và số điện thoại!' });
       return;
@@ -3938,6 +4451,7 @@ export default function AdminDashboard() {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({
+          ma_nguoi_dung: ma_nguoi_dung ? Number(ma_nguoi_dung) : undefined,
           ten_doi_bong: ten_doi_bong.trim(),
           so_dien_thoai: so_dien_thoai.trim(),
           don_gia_moi_buoi: Number(don_gia_moi_buoi),
@@ -4152,16 +4666,31 @@ export default function AdminDashboard() {
 
               {/* Thông tin Admin User */}
               <div className="flex items-center justify-between gap-2 overflow-hidden">
-                <div className="flex items-center gap-2 truncate justify-start lg:justify-center lg:group-hover/sidebar:justify-start w-full lg:w-auto">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-sm" title={currentAdminUser?.ho_ten || 'Admin'}>
+                <div className="flex items-center gap-2.5 truncate justify-start lg:justify-center lg:group-hover/sidebar:justify-start w-full lg:w-auto">
+                  {currentAdminUser?.anh_dai_dien ? (
+                    <img
+                      src={currentAdminUser.anh_dai_dien}
+                      alt={currentAdminUser.ho_ten || 'Admin'}
+                      title={currentAdminUser?.ho_ten || 'Admin'}
+                      className="w-9 h-9 rounded-xl object-cover border border-emerald-500/40 shadow-sm shrink-0"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const fallback = e.currentTarget.parentElement?.querySelector('.admin-avatar-fallback');
+                        if (fallback) (fallback as HTMLElement).style.display = 'flex';
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className={`admin-avatar-fallback w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white items-center justify-center font-black text-xs shrink-0 shadow-sm ${
+                      currentAdminUser?.anh_dai_dien ? 'hidden' : 'flex'
+                    }`}
+                    title={currentAdminUser?.ho_ten || 'Admin'}
+                  >
                     {currentAdminUser?.ho_ten ? currentAdminUser.ho_ten.charAt(0).toUpperCase() : 'AD'}
                   </div>
                   <div className="block lg:hidden lg:group-hover/sidebar:block truncate">
-                    <div className={`text-xs font-black truncate ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`}>
+                    <div className={`text-xs font-black truncate ${isDarkMode ? 'text-white' : 'text-[#0f172a]'}`} title={currentAdminUser?.ho_ten || 'Admin'}>
                       {currentAdminUser?.ho_ten || 'Admin Quản Trị'}
-                    </div>
-                    <div className={`text-[10px] font-mono truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-semibold'}`}>
-                      {currentAdminUser?.email || 'admin@sport247.vn'}
                     </div>
                   </div>
                 </div>
@@ -4367,9 +4896,6 @@ export default function AdminDashboard() {
                             Biểu Đồ Doanh Thu
                           </h3>
                         </div>
-                        <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-1">
-                          Thống kê doanh thu tiền sân bóng và dịch vụ phát sinh
-                        </p>
                       </div>
 
                       {/* Controls: Chọn Ngày / Tuần / Tháng & Chọn Cột / Đường */}
@@ -4659,9 +5185,6 @@ export default function AdminDashboard() {
                             Top Dịch Vụ Bán Chạy
                           </h3>
                         </div>
-                        <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-1">
-                          Các mặt hàng có doanh số cao nhất
-                        </p>
                       </div>
 
                       {/* View Mode Toggle: List vs Donut */}
@@ -4791,9 +5314,6 @@ export default function AdminDashboard() {
                           Bảng Đơn Đặt Sân Mới Nhất
                         </h3>
                       </div>
-                      <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-1">
-                        5 giao dịch đặt lịch thi đấu gần đây nhất trong hệ thống
-                      </p>
                     </div>
 
                     <button
@@ -4911,62 +5431,270 @@ export default function AdminDashboard() {
                       <Layers className="w-5 h-5 text-emerald-600" />
                       Danh Sách Sân
                     </h3>
-                    <p className={`text-xs font-bold mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Quản lý danh sách sân bóng và đơn giá thuê theo từng phút</p>
                   </div>
                   
                   {/* Thanh công cụ: Lọc Loại Sân & Trạng Thái & Nút Thêm Mới */}
                   <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-                    {/* Nút Lọc Loại Sân */}
-                    <div className="relative min-w-[170px] flex-1 sm:flex-none">
-                      <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-emerald-500">
-                        <Filter className="w-3.5 h-3.5" />
-                      </div>
-                      <select
-                        aria-label="Lọc theo loại sân"
-                        value={courtCategoryFilter}
-                        onChange={(e) => {
-                          setCourtCategoryFilter(e.target.value);
-                          setTabPage('SAN_BONG', 1);
+                    {/* Backdrop đóng dropdown khi click ra ngoài */}
+                    {(isCourtCategoryDropdownOpen || isCourtStatusDropdownOpen) && (
+                      <div
+                        className="fixed inset-0 z-20"
+                        onClick={() => {
+                          setIsCourtCategoryDropdownOpen(false);
+                          setIsCourtStatusDropdownOpen(false);
                         }}
-                        className={`w-full text-xs font-bold pl-8 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
-                          isDarkMode
-                            ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
-                            : 'bg-white border-slate-300 text-slate-700 shadow-xs hover:border-emerald-500 focus:border-emerald-500'
+                      />
+                    )}
+
+                    {/* 1. NÚT & DROPDOWN LỌC LOẠI SÂN */}
+                    <div className="relative min-w-[190px] flex-1 sm:flex-none z-30">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCourtCategoryDropdownOpen(!isCourtCategoryDropdownOpen);
+                          setIsCourtStatusDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between gap-2 text-xs font-bold pl-3 pr-3 py-2 rounded-xl border transition-all cursor-pointer shadow-xs ${
+                          isCourtCategoryDropdownOpen
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/20'
+                            : isDarkMode
+                              ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500'
+                              : 'bg-white border-slate-300 text-slate-700 hover:border-emerald-500'
                         }`}
                       >
-                        <option value="ALL">Tất cả loại sân ({courtList.length})</option>
-                        {categoryList.map((loai) => {
-                          const count = courtList.filter((c) => Number(c.ma_loai_san) === Number(loai.id)).length;
-                          return (
-                            <option key={loai.id} value={String(loai.id)}>
-                              {loai.ten_loai} ({count})
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                        <div className="flex items-center gap-2 truncate">
+                          <Filter className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span className="truncate">
+                            {courtCategoryFilter === 'ALL'
+                              ? `Tất cả loại sân (${courtList.length})`
+                              : `${getSportIcon(categoryList.find(l => String(l.id) === courtCategoryFilter)?.ten_loai)} ${categoryList.find(l => String(l.id) === courtCategoryFilter)?.ten_loai || 'Loại sân'} (${courtList.filter(c => Number(c.ma_loai_san) === Number(courtCategoryFilter)).length})`}
+                          </span>
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${isCourtCategoryDropdownOpen ? 'rotate-180 text-emerald-500' : ''}`} />
+                      </button>
+
+                      {/* Dropdown Menu Đổ Xuống Loại Sân */}
+                      {isCourtCategoryDropdownOpen && (
+                        <div className={`absolute left-0 mt-2 w-64 max-h-72 overflow-y-auto rounded-2xl border shadow-2xl p-1.5 z-30 animate-fade-in ${
+                          isDarkMode
+                            ? 'bg-[#0b132b] border-emerald-900/80 text-white shadow-emerald-950/60'
+                            : 'bg-white border-slate-200 text-slate-800 shadow-xl'
+                        }`}>
+                          <div className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/30 mb-1">
+                            <span>LỌC THEO LOẠI SÂN</span>
+                            <span className="font-mono text-emerald-500">{courtList.length} sân</span>
+                          </div>
+
+                          {/* Option ALL */}
+                          <div
+                            onClick={() => {
+                              setCourtCategoryFilter('ALL');
+                              setTabPage('SAN_BONG', 1);
+                              setIsCourtCategoryDropdownOpen(false);
+                            }}
+                            className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                              courtCategoryFilter === 'ALL'
+                                ? 'bg-emerald-500/15 text-emerald-500 font-black'
+                                : isDarkMode
+                                  ? 'hover:bg-emerald-950/40 text-slate-200'
+                                  : 'hover:bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">🏟️</span>
+                              <span>Tất cả loại sân</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                {courtList.length}
+                              </span>
+                              {courtCategoryFilter === 'ALL' && <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[3]" />}
+                            </div>
+                          </div>
+
+                          <div className="my-1 border-t border-slate-100 dark:border-emerald-900/30" />
+
+                          {/* Danh sách từng loại sân */}
+                          {categoryList.map((loai) => {
+                            const isSelected = courtCategoryFilter === String(loai.id);
+                            const count = courtList.filter((c) => Number(c.ma_loai_san) === Number(loai.id)).length;
+                            const icon = getSportIcon(loai.ten_loai);
+
+                            return (
+                              <div
+                                key={loai.id}
+                                onClick={() => {
+                                  setCourtCategoryFilter(String(loai.id));
+                                  setTabPage('SAN_BONG', 1);
+                                  setIsCourtCategoryDropdownOpen(false);
+                                }}
+                                className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-emerald-500/15 text-emerald-500 font-black'
+                                    : isDarkMode
+                                      ? 'hover:bg-emerald-950/40 text-slate-200'
+                                      : 'hover:bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="text-sm shrink-0">{icon}</span>
+                                  <span className="truncate">{loai.ten_loai}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                    {count}
+                                  </span>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[3]" />}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Nút Lọc Trạng Thái */}
-                    <div className="relative min-w-[130px] flex-1 sm:flex-none">
-                      <select
-                        aria-label="Lọc theo trạng thái"
-                        value={courtStatusFilter}
-                        onChange={(e) => {
-                          setCourtStatusFilter(e.target.value);
-                          setTabPage('SAN_BONG', 1);
+                    {/* 2. NÚT & DROPDOWN LỌC TRẠNG THÁI */}
+                    <div className="relative min-w-[155px] flex-1 sm:flex-none z-30">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCourtStatusDropdownOpen(!isCourtStatusDropdownOpen);
+                          setIsCourtCategoryDropdownOpen(false);
                         }}
-                        className={`w-full text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${
-                          isDarkMode
-                            ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
-                            : 'bg-white border-slate-300 text-slate-700 shadow-xs hover:border-emerald-500 focus:border-emerald-500'
+                        className={`w-full flex items-center justify-between gap-2 text-xs font-bold pl-3 pr-3 py-2 rounded-xl border transition-all cursor-pointer shadow-xs ${
+                          isCourtStatusDropdownOpen
+                            ? 'border-emerald-500 ring-2 ring-emerald-500/20'
+                            : isDarkMode
+                              ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500'
+                              : 'bg-white border-slate-300 text-slate-700 hover:border-emerald-500'
                         }`}
                       >
-                        <option value="ALL">Tất cả trạng thái</option>
-                        <option value="SAN_SANG">Sẵn Sàng</option>
-                        <option value="BAO_TRI">Bảo Trì</option>
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                        <div className="flex items-center gap-2">
+                          {courtStatusFilter === 'ALL' && <span className="w-2 h-2 rounded-full bg-slate-400" />}
+                          {courtStatusFilter === 'SAN_SANG' && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-500" />}
+                          {courtStatusFilter === 'BAO_TRI' && <span className="w-2 h-2 rounded-full bg-rose-500 shadow-sm shadow-rose-500" />}
+                          <span>
+                            {courtStatusFilter === 'ALL' && 'Tất cả trạng thái'}
+                            {courtStatusFilter === 'SAN_SANG' && 'Sẵn Sàng'}
+                            {courtStatusFilter === 'BAO_TRI' && 'Bảo Trì'}
+                          </span>
+                        </div>
+                        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${isCourtStatusDropdownOpen ? 'rotate-180 text-emerald-500' : ''}`} />
+                      </button>
+
+                      {/* Dropdown Menu Đổ Xuống Trạng Thái */}
+                      {isCourtStatusDropdownOpen && (
+                        <div className={`absolute right-0 sm:left-0 mt-2 w-56 rounded-2xl border shadow-2xl p-1.5 z-30 animate-fade-in ${
+                          isDarkMode
+                            ? 'bg-[#0b132b] border-emerald-900/80 text-white shadow-emerald-950/60'
+                            : 'bg-white border-slate-200 text-slate-800 shadow-xl'
+                        }`}>
+                          <div className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100 dark:border-emerald-900/30 mb-1">
+                            TRẠNG THÁI HOẠT ĐỘNG
+                          </div>
+
+                          {/* Option ALL */}
+                          <div
+                            onClick={() => {
+                              setCourtStatusFilter('ALL');
+                              setTabPage('SAN_BONG', 1);
+                              setIsCourtStatusDropdownOpen(false);
+                            }}
+                            className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                              courtStatusFilter === 'ALL'
+                                ? 'bg-emerald-500/15 text-emerald-500 font-black'
+                                : isDarkMode
+                                  ? 'hover:bg-emerald-950/40 text-slate-200'
+                                  : 'hover:bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-slate-400" />
+                              <span>Tất cả trạng thái</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                {courtList.length}
+                              </span>
+                              {courtStatusFilter === 'ALL' && <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[3]" />}
+                            </div>
+                          </div>
+
+                          <div className="my-1 border-t border-slate-100 dark:border-emerald-900/30" />
+
+                          {/* Option Sẵn Sàng */}
+                          {(() => {
+                            const readyCount = courtList.filter(c => c.trang_thai === 'SAN_SANG').length;
+                            const isSelected = courtStatusFilter === 'SAN_SANG';
+                            return (
+                              <div
+                                onClick={() => {
+                                  setCourtStatusFilter('SAN_SANG');
+                                  setTabPage('SAN_BONG', 1);
+                                  setIsCourtStatusDropdownOpen(false);
+                                }}
+                                className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-emerald-500/15 text-emerald-500 font-black'
+                                    : isDarkMode
+                                      ? 'hover:bg-emerald-950/40 text-slate-200'
+                                      : 'hover:bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                  <div>
+                                    <div>Sẵn Sàng</div>
+                                    <div className="text-[10px] text-emerald-600/80 font-normal">Đang hoạt động tốt</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-600 font-bold">
+                                    {readyCount}
+                                  </span>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[3]" />}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Option Bảo Trì */}
+                          {(() => {
+                            const maintCount = courtList.filter(c => c.trang_thai === 'BAO_TRI').length;
+                            const isSelected = courtStatusFilter === 'BAO_TRI';
+                            return (
+                              <div
+                                onClick={() => {
+                                  setCourtStatusFilter('BAO_TRI');
+                                  setTabPage('SAN_BONG', 1);
+                                  setIsCourtStatusDropdownOpen(false);
+                                }}
+                                className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-rose-500/15 text-rose-500 font-black'
+                                    : isDarkMode
+                                      ? 'hover:bg-emerald-950/40 text-slate-200'
+                                      : 'hover:bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                                  <div>
+                                    <div>Bảo Trì</div>
+                                    <div className="text-[10px] text-rose-500/80 font-normal">Tạm ngưng phục vụ</div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/10 text-rose-500 font-bold">
+                                    {maintCount}
+                                  </span>
+                                  {isSelected && <Check className="w-3.5 h-3.5 text-rose-500 stroke-[3]" />}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </div>
 
                     {/* Nút Xóa Lọc nhanh */}
@@ -5096,7 +5824,6 @@ export default function AdminDashboard() {
                       <h3 className="text-base font-black flex items-center gap-2">
                         <Layers className="w-5 h-5 text-emerald-600" /> Bảng Loại Sân (Loai_San)
                       </h3>
-                      <p className={`text-xs font-bold mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Định nghĩa các loại sân thể thao (Sân 5, Sân 7, Sân 11...)</p>
                     </div>
                     <button onClick={() => setLoaiSanModal({ isOpen: true, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer">
                       <Plus className="w-4 h-4 stroke-[3]" /> Thêm Loại Sân
@@ -5289,9 +6016,6 @@ export default function AdminDashboard() {
                       <Receipt className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                       Bảng Đơn Đặt Sân & Thanh Toán
                     </h3>
-                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
-                      Quản lý toàn bộ thông tin lịch đặt sân, khách hàng và giao dịch thanh toán / cọc sân.
-                    </p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2.5">
@@ -5363,6 +6087,15 @@ export default function AdminDashboard() {
                           mode: 'ADD',
                           data: {
                             ma_san: initSan,
+                            danh_sach_ma_san: [initSan],
+                            che_do_gio: 'CHUNG',
+                            chi_tiet_san: [{
+                              ma_san: initSan,
+                              ngay_da: selectedDate,
+                              gio_bat_dau: initStart,
+                              gio_ket_thuc: initEnd,
+                              tien_san: initPrice
+                            }],
                             ma_nguoi_dung: userList[0]?.id || 1,
                             ngay_da: selectedDate,
                             gio_bat_dau: initStart,
@@ -5555,6 +6288,15 @@ export default function AdminDashboard() {
                                       data: {
                                         id: b.id,
                                         ma_san: b.ma_san,
+                                        danh_sach_ma_san: [Number(b.ma_san)],
+                                        che_do_gio: 'CHUNG',
+                                        chi_tiet_san: [{
+                                          ma_san: Number(b.ma_san),
+                                          ngay_da: b.ngay_da ? String(b.ngay_da).split('T')[0] : '',
+                                          gio_bat_dau: (b.gio_bat_dau || '17:00').substring(0, 5),
+                                          gio_ket_thuc: (b.gio_ket_thuc || '18:30').substring(0, 5),
+                                          tien_san: Number(b.tien_san || 0)
+                                        }],
                                         ma_nguoi_dung: b.ma_nguoi_dung,
                                         ngay_da: b.ngay_da,
                                         gio_bat_dau: b.gio_bat_dau,
@@ -5701,9 +6443,6 @@ export default function AdminDashboard() {
                           <CalendarClock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                           Hợp Đồng Thuê Sân Cố Định (Lịch Tháng)
                         </h3>
-                        <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
-                          Quản lý các đội bóng/công ty thuê sân định kỳ. Hệ thống tự động sinh lịch và đồng bộ ma trận giờ đá trên Trang chủ.
-                        </p>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2.5">
@@ -6078,16 +6817,19 @@ export default function AdminDashboard() {
                           <h3 className="text-base font-black flex items-center gap-2">
                             <RefreshCw className="w-5 h-5 text-rose-500" /> Bảng Lịch Sử Hoàn Tiền Khi Hủy Sân
                           </h3>
-                          <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
-                            Ghi nhận và quản lý các giao dịch hoàn cọc do khách hủy lịch hoặc trả sân.
-                          </p>
                         </div>
                         <button
-                          onClick={() => setRefundModal({
-                            isOpen: true,
-                            mode: 'ADD',
-                            data: { ma_don_dat: bookingList[0]?.id || 101, so_tien_hoan: 150000, ty_le_hoan: 100, ly_do_huy: 'Báo hủy trước 24h theo quy định' }
-                          })}
+                          onClick={() => {
+                            setRefundSelectedCustomerPhone('');
+                            setRefundIsChoosingCustomer(true);
+                            setRefundIsChoosingOrder(false);
+                            setRefundCustomerSearch('');
+                            setRefundModal({
+                              isOpen: true,
+                              mode: 'ADD',
+                              data: { ty_le_hoan: 100, ly_do_huy: 'Báo hủy trước 24h theo quy định' }
+                            });
+                          }}
                           className="px-4 py-2.5 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
                         >
                           <Plus className="w-4 h-4 stroke-[3]" /> Thêm Phiếu Hoàn
@@ -6215,9 +6957,6 @@ export default function AdminDashboard() {
                           <h3 className="text-base font-black flex items-center gap-2">
                             <ArrowLeftRight className="w-5 h-5 text-emerald-500" /> Bảng Lịch Sử Đổi Sân & Dời Giờ Thi Đấu
                           </h3>
-                          <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
-                            Quản lý, theo dõi các yêu cầu đổi sân, chuyển ca giờ và xử lý chênh lệch thanh toán.
-                          </p>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="relative">
@@ -6269,11 +7008,11 @@ export default function AdminDashboard() {
                             <tr className={`border-b font-black uppercase ${isDarkMode ? 'bg-[#070d1e] text-emerald-300' : 'bg-slate-100 text-[#0f172a]'}`}>
                               <th className="p-4">ĐƠN / KHÁCH HÀNG</th>
                               <th className="p-4">SÂN CŨ ➔ SÂN MỚI</th>
-                              <th className="p-4">NGÀY & CA GIỜ</th>
+                              <th className="p-4">NGÀY & THỜI GIAN SỬ DỤNG</th>
                               <th className="p-4">TIỀN SÂN & CHÊNH LỆCH</th>
                               <th className="p-4">XỬ LÝ CHÊNH LỆCH</th>
                               <th className="p-4">LÝ DO ĐỔI</th>
-                              <th className="p-4">NGÀY ĐỔI / NGƯỜI LÀM</th>
+                              <th className="p-4">NGÀY ĐỔI</th>
                               <th className="p-4 text-right">THAO TÁC</th>
                             </tr>
                           </thead>
@@ -6305,10 +7044,10 @@ export default function AdminDashboard() {
                                   </td>
                                   <td className="p-4">
                                     <div className="text-[11px] text-slate-400 line-through">
-                                      {formatVNDate(ex.ngay_da_cu)} ({ex.gio_bat_dau_cu} - {ex.gio_ket_thuc_cu})
+                                      {formatVNDate(ex.ngay_da_cu)} ({formatTimeSlot(ex.gio_bat_dau_cu)} - {formatTimeSlot(ex.gio_ket_thuc_cu)})
                                     </div>
                                     <div className="text-xs font-bold text-emerald-400 mt-0.5">
-                                      {formatVNDate(ex.ngay_da_moi)} ({ex.gio_bat_dau_moi} - {ex.gio_ket_thuc_moi})
+                                      {formatVNDate(ex.ngay_da_moi)} ({formatTimeSlot(ex.gio_bat_dau_moi)} - {formatTimeSlot(ex.gio_ket_thuc_moi)})
                                     </div>
                                   </td>
                                   <td className="p-4">
@@ -6347,7 +7086,7 @@ export default function AdminDashboard() {
                                         </span>
                                       ) : (
                                         <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-bold text-[11px]">
-                                          💵 Tại quầy lễ tân
+                                          💵 Tại quầy
                                         </span>
                                       )}
                                     </div>
@@ -6365,9 +7104,6 @@ export default function AdminDashboard() {
                                   <td className="p-4">
                                     <div className="font-mono font-bold text-slate-600 dark:text-slate-300">
                                       {formatVNDate(ex.ngay_doi)}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 mt-0.5">
-                                      Bởi: {ex.nguoi_thuc_hien || 'Hệ thống'}
                                     </div>
                                   </td>
                                   <td className="p-4 text-right space-x-2 whitespace-nowrap">
@@ -6417,9 +7153,6 @@ export default function AdminDashboard() {
                       <Clock className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                       Bảng Khung Giờ Hoạt Động
                     </h3>
-                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
-                      Quản lý danh sách các mốc thời gian đá bóng (6h00 - 19h30). Dữ liệu được đồng bộ trực tiếp với CSDL SQL Server.
-                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -6518,7 +7251,6 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <User className="w-5 h-5 text-emerald-600" /> Danh Sách Tài Khoản Người Dùng
                     </h3>
-                    <p className={`text-xs font-bold mt-1 ${isDarkMode ? 'text-slate-400' : 'text-slate-700'}`}>Quản lý danh sách người dùng, mật khẩu, phân quyền và ảnh đại diện</p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {/* Bộ lọc vai trò */}
@@ -6706,9 +7438,6 @@ export default function AdminDashboard() {
                       <h3 className="text-base font-black flex items-center gap-2">
                         <SlidersHorizontal className="w-5 h-5 text-emerald-600" /> Quản Lý Chức Năng Hệ Thống (Feature Flags)
                       </h3>
-                      <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
-                        Bật/Tắt linh hoạt các dịch vụ của toàn bộ trang web qua CSDL SQL Server (Stored Procedure: <code className="text-emerald-700 dark:text-emerald-400 font-bold">sp_LayDanhSachCauHinh</code>, <code className="text-emerald-700 dark:text-emerald-400 font-bold">sp_CapNhatCauHinh</code>).
-                      </p>
                     </div>
                     <button
                       onClick={() => loadAllDataFromBackend(true)}
@@ -6856,9 +7585,6 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Sparkles className="w-5 h-5 text-emerald-500" /> Quản Lý Thông Tin Về Chúng Tôi (About Us)
                     </h3>
-                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">
-                      Cập nhật nội dung giới thiệu trung tâm, số hotline, email, địa chỉ và bản đồ hiển thị trên trang About Us và chân trang.
-                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <a
@@ -7079,7 +7805,6 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <ImageIcon className="w-5 h-5 text-emerald-600" /> Quản Lý Banner Quảng Cáo Trang Chủ
                     </h3>
-                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">Hiển thị slider hình ảnh và video quảng cáo ngoài trang chủ website</p>
                   </div>
                   <button
                     onClick={() => setBannerModal({ isOpen: true, mode: 'ADD', data: { loai_banner: 'IMAGE', thu_tu: bannerList.length + 1, trang_thai: 1 } })}
@@ -7199,7 +7924,6 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Mail className="w-5 h-5 text-emerald-600" /> Quản Lý Phản Hồi & Thắc Mắc Từ Khách Hàng
                     </h3>
-                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">Danh sách các thư liên hệ gửi từ form liên hệ ngoài website</p>
                   </div>
                   <div className="flex items-center gap-2 text-xs font-bold">
                     <span className="px-3 py-1.5 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
@@ -7321,7 +8045,6 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <FolderTree className="w-5 h-5 text-emerald-600" /> Quản Lý Loại / Danh Mục Tin Tức
                     </h3>
-                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">Phân loại các bài viết tin tức: Giải đấu, Khuyến mãi, Hướng dẫn, Cẩm nang sân bóng...</p>
                   </div>
                   <button
                     onClick={() => setLoaiTinModal({ isOpen: true, mode: 'ADD', data: { ten_loai: '', trang_thai: 1 } })}
@@ -7426,7 +8149,6 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <FileText className="w-5 h-5 text-emerald-600" /> Quản Lý Tin Tức & Bài Viết
                     </h3>
-                    <p className="text-xs text-slate-700 dark:text-slate-400 font-medium mt-0.5">Soạn thảo, đăng tải các bài viết thể thao, tin giải đấu và sự kiện sân bóng</p>
                   </div>
                   <button
                     onClick={() => {
@@ -7611,14 +8333,15 @@ export default function AdminDashboard() {
                     <input
                       type="number"
                       step="any"
+                      min="0"
                       required
-                      value={courtModal.data.don_gia_phut !== undefined ? courtModal.data.don_gia_phut : 5000}
-                      onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, don_gia_phut: Number(e.target.value) } })}
+                      value={courtModal.data.don_gia_phut !== undefined && courtModal.data.don_gia_phut !== null ? courtModal.data.don_gia_phut : ''}
+                      onChange={(e) => setCourtModal({ ...courtModal, data: { ...courtModal.data, don_gia_phut: parseCleanNumberInput(e.target.value, true) } })}
                       placeholder="Ví dụ: 5000"
                       className={`w-full px-3 py-2 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                     />
                     <div className="text-[10px] text-slate-500 mt-1 font-medium">
-                      💡 {Number(courtModal.data.don_gia_phut || 5000).toLocaleString('vi-VN')} đ/phút = {(Number(courtModal.data.don_gia_phut || 5000) * 60).toLocaleString('vi-VN')} đ/giờ
+                      💡 {Number(courtModal.data.don_gia_phut || 0).toLocaleString('vi-VN')} đ/phút = {(Number(courtModal.data.don_gia_phut || 0) * 60).toLocaleString('vi-VN')} đ/giờ
                     </div>
                   </div>
 
@@ -7808,8 +8531,8 @@ export default function AdminDashboard() {
                     required
                     min="0"
                     placeholder="Ví dụ: 15000"
-                    value={serviceModal.data.don_gia !== undefined ? serviceModal.data.don_gia : ''}
-                    onChange={(e) => setServiceModal({ ...serviceModal, data: { ...serviceModal.data, don_gia: Number(e.target.value) } })}
+                    value={serviceModal.data.don_gia !== undefined && serviceModal.data.don_gia !== null ? serviceModal.data.don_gia : ''}
+                    onChange={(e) => setServiceModal({ ...serviceModal, data: { ...serviceModal.data, don_gia: parseCleanNumberInput(e.target.value) } })}
                     className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
@@ -7859,10 +8582,10 @@ export default function AdminDashboard() {
                           <input
                             type="number"
                             min="1"
-                            value={serviceModal.data.so_luong_nhap ?? 50}
+                            value={serviceModal.data.so_luong_nhap !== undefined && serviceModal.data.so_luong_nhap !== null ? serviceModal.data.so_luong_nhap : ''}
                             onChange={(e) => setServiceModal({
                               ...serviceModal,
-                              data: { ...serviceModal.data, so_luong_nhap: Number(e.target.value) }
+                              data: { ...serviceModal.data, so_luong_nhap: parseCleanNumberInput(e.target.value) }
                             })}
                             className={`w-full p-2 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                           />
@@ -7872,10 +8595,10 @@ export default function AdminDashboard() {
                           <input
                             type="number"
                             min="0"
-                            value={serviceModal.data.gia_nhap ?? 10000}
+                            value={serviceModal.data.gia_nhap !== undefined && serviceModal.data.gia_nhap !== null ? serviceModal.data.gia_nhap : ''}
                             onChange={(e) => setServiceModal({
                               ...serviceModal,
-                              data: { ...serviceModal.data, gia_nhap: Number(e.target.value) }
+                              data: { ...serviceModal.data, gia_nhap: parseCleanNumberInput(e.target.value) }
                             })}
                             className={`w-full p-2 rounded-xl border font-bold ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                           />
@@ -7944,8 +8667,9 @@ export default function AdminDashboard() {
                 <input
                   type="number"
                   min="1"
-                  value={importStockModal.data.so_luong_nhap || 50}
-                  onChange={(e) => setImportStockModal({ ...importStockModal, data: { ...importStockModal.data, so_luong_nhap: Number(e.target.value) } })}
+                  value={importStockModal.data.so_luong_nhap !== undefined && importStockModal.data.so_luong_nhap !== null ? importStockModal.data.so_luong_nhap : ''}
+                  onChange={(e) => setImportStockModal({ ...importStockModal, data: { ...importStockModal.data, so_luong_nhap: parseCleanNumberInput(e.target.value) } })}
+                  placeholder="Ví dụ: 50"
                   className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
@@ -7954,8 +8678,9 @@ export default function AdminDashboard() {
                 <input
                   type="number"
                   min="0"
-                  value={importStockModal.data.gia_nhap || 12000}
-                  onChange={(e) => setImportStockModal({ ...importStockModal, data: { ...importStockModal.data, gia_nhap: Number(e.target.value) } })}
+                  value={importStockModal.data.gia_nhap !== undefined && importStockModal.data.gia_nhap !== null ? importStockModal.data.gia_nhap : ''}
+                  onChange={(e) => setImportStockModal({ ...importStockModal, data: { ...importStockModal.data, gia_nhap: parseCleanNumberInput(e.target.value) } })}
+                  placeholder="Ví dụ: 12000"
                   className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
@@ -7969,8 +8694,15 @@ export default function AdminDashboard() {
       )}
 
       {/* 6. Modal Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan) - Thiết kế giao diện ngang rộng rãi & hiện đại */}
-      {bookingModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-md animate-fade-in">
+      {bookingModal.isOpen && (() => {
+        const selectedCourtIds: number[] = Array.isArray(bookingModal.data.danh_sach_ma_san) && bookingModal.data.danh_sach_ma_san.length > 0
+          ? bookingModal.data.danh_sach_ma_san.map(Number)
+          : [Number(bookingModal.data.ma_san || courtList[0]?.id || 1)];
+        const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
+        const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-md animate-fade-in">
           <div
             className={`w-full max-w-5xl max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden animate-zoom-in ${
               isDarkMode
@@ -8031,58 +8763,88 @@ export default function AdminDashboard() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
                   {/* ================= CỘT TRÁI (7 PHẦN): THÔNG TIN SÂN & THỜI GIAN ================= */}
                   <div className="lg:col-span-7 space-y-4">
-                    {/* KHỐI 1: SÂN BÓNG VÀ NGƯỜI ĐẶT */}
+                    {/* KHỐI 1: SÂN BÓNG VÀ NGƯỜI ĐẶT (HỖ TRỢ ĐẶT NHIỀU SÂN CÙNG LÚC) */}
                     <div
                       className={`p-4 rounded-2xl border space-y-3.5 ${
                         isDarkMode ? 'bg-[#070d1e]/60 border-emerald-950/80' : 'bg-slate-50/70 border-slate-200'
                       }`}
                     >
-                      <div className="flex items-center gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-800">
-                        <Trophy className="w-4 h-4 text-emerald-500" />
-                        <h4 className="font-black text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                          1. Thông Tin Sân Bóng & Khách Hàng
-                        </h4>
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200/80 dark:border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <Trophy className="w-4 h-4 text-emerald-500" />
+                          <h4 className="font-black text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                            1. Thông Tin Sân Bóng & Khách Hàng
+                          </h4>
+                        </div>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                          {selectedCourtIds.length > 1 ? `Đã chọn: ${selectedCourtIds.length} sân` : '1 sân'}
+                        </span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block font-black uppercase mb-1">Chọn Sân Bóng *</label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block font-black uppercase">Chọn Sân Bóng *</label>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              (Có thể đặt nhiều sân)
+                            </span>
+                          </div>
+
+                          {/* Dropdown để chọn thêm sân khác */}
                           <select
-                            value={bookingModal.data.ma_san || 1}
+                            value=""
                             onChange={(e) => {
                               const ms = Number(e.target.value);
-                              const s = courtList.find((c) => c.id === ms);
-                              const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
-                              const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
-                              const autoPrice = calculateBookingPitchPrice(ms, curStart, curEnd);
-                              const totalDv = (bookingModal.data.dich_vu_list || []).reduce(
-                                (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
-                                0
-                              );
-                              const finalPrice = autoPrice > 0 ? autoPrice : bookingModal.data.tien_san || 0;
-                              setBookingModal({
-                                ...bookingModal,
-                                data: {
-                                  ...bookingModal.data,
-                                  ma_san: ms,
-                                  ten_san: s?.ten_san,
-                                  tien_san: finalPrice,
-                                  tong_tien: finalPrice + totalDv,
-                                },
-                              });
+                              if (ms) {
+                                handleAddOrToggleCourt(ms);
+                              }
                             }}
-                            className={`w-full p-2.5 rounded-xl border font-bold text-xs cursor-pointer ${
+                            className={`w-full p-2.5 rounded-xl border font-bold text-xs cursor-pointer mb-2.5 ${
                               isDarkMode
                                 ? 'bg-[#0b132b] border-emerald-800/40 text-white'
                                 : 'bg-white border-slate-300 text-[#0f172a]'
                             }`}
                           >
-                            {courtList.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.ten_san} ({Number(c.don_gia_phut || 0).toLocaleString('vi-VN')} đ/phút)
-                              </option>
-                            ))}
+                            <option value="">➕ Bấm để chọn thêm sân khác...</option>
+                            {courtList
+                              .filter((c) => !selectedCourtIds.includes(c.id))
+                              .map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  + {c.ten_san} ({Number(c.don_gia_phut || 0).toLocaleString('vi-VN')} đ/phút)
+                                </option>
+                              ))}
                           </select>
+
+                          {/* Danh sách các sân đang được chọn */}
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedCourtIds.map((cId) => {
+                              const s = courtList.find((c) => c.id === cId);
+                              const singlePrice = calculateBookingPitchPrice(cId, curStart, curEnd);
+                              return (
+                                <span
+                                  key={cId}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shadow-xs"
+                                >
+                                  <span>{s?.ten_san || `Sân #${cId}`}</span>
+                                  {singlePrice > 0 && (
+                                    <span className="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                                      ({singlePrice.toLocaleString('vi-VN')} đ)
+                                    </span>
+                                  )}
+                                  {selectedCourtIds.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveCourt(cId)}
+                                      className="p-0.5 rounded-md hover:bg-rose-500 hover:text-white transition-colors cursor-pointer text-slate-400 ml-0.5"
+                                      title={`Bỏ chọn ${s?.ten_san || 'sân này'}`}
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </span>
+                              );
+                            })}
+                          </div>
                         </div>
 
                         <div>
@@ -8109,259 +8871,492 @@ export default function AdminDashboard() {
                           </select>
                         </div>
                       </div>
+
+                      {/* Thanh chọn nhanh tất cả sân bóng */}
+                      <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/80">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                            <Zap className="w-3 h-3 text-amber-500" />
+                            <span>Bấm nhanh để chọn / bỏ sân:</span>
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {courtList.map((c) => {
+                            const isSelected = selectedCourtIds.includes(c.id);
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => handleAddOrToggleCourt(c.id)}
+                                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border ${
+                                  isSelected
+                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black border-emerald-400 shadow-sm'
+                                    : isDarkMode
+                                    ? 'bg-[#0b132b] border-slate-700 text-slate-300 hover:border-emerald-500 hover:text-white'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:border-emerald-500 hover:text-emerald-700 shadow-xs'
+                                }`}
+                              >
+                                {isSelected ? (
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                ) : (
+                                  <Plus className="w-3.5 h-3.5 opacity-60" />
+                                )}
+                                <span>{c.ten_san}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
 
-                    {/* KHỐI 2: THỜI GIAN ĐÁ & KHUNG GIỜ 24H */}
+                    {/* KHỐI 2: THỜI GIAN ĐÁ & KHUNG GIỜ 24H (HỖ TRỢ CÙNG GIỜ HOẶC GIỜ RIÊNG TỪNG SÂN) */}
                     <div
                       className={`p-4 rounded-2xl border space-y-3.5 ${
                         isDarkMode ? 'bg-[#070d1e]/60 border-emerald-950/80' : 'bg-slate-50/70 border-slate-200'
                       }`}
                     >
-                      <div className="flex items-center justify-between pb-2 border-b border-slate-200/80 dark:border-slate-800">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-800">
                         <div className="flex items-center gap-2">
                           <CalendarClock className="w-4 h-4 text-emerald-500" />
                           <h4 className="font-black text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                             2. Lịch Đá & Khung Giờ Hoạt Động (24h)
                           </h4>
                         </div>
-                        {bookingModal.data.gio_bat_dau && bookingModal.data.gio_ket_thuc && (
-                          <span className="font-mono text-[11px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                            {(bookingModal.data.gio_bat_dau || '').substring(0, 5)} - {(bookingModal.data.gio_ket_thuc || '').substring(0, 5)}
-                          </span>
+
+                        {selectedCourtIds.length > 1 ? (
+                          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-200/80 dark:bg-slate-800/80 text-[11px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => recalculateBookingWithCourts(selectedCourtIds, { che_do_gio: 'CHUNG' })}
+                              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                                (bookingModal.data.che_do_gio || 'CHUNG') === 'CHUNG'
+                                  ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                              }`}
+                            >
+                              <Zap className="w-3 h-3" />
+                              <span>Cùng khung giờ ({selectedCourtIds.length} sân)</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => recalculateBookingWithCourts(selectedCourtIds, { che_do_gio: 'RIENG' })}
+                              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                                bookingModal.data.che_do_gio === 'RIENG'
+                                  ? 'bg-emerald-500 text-slate-950 font-black shadow-sm'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                              }`}
+                            >
+                              <Clock className="w-3 h-3" />
+                              <span>Giờ riêng từng sân</span>
+                            </button>
+                          </div>
+                        ) : (
+                          bookingModal.data.gio_bat_dau && bookingModal.data.gio_ket_thuc && (
+                            <span className="font-mono text-[11px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                              {(bookingModal.data.gio_bat_dau || '').substring(0, 5)} - {(bookingModal.data.gio_ket_thuc || '').substring(0, 5)}
+                            </span>
+                          )
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {/* NGÀY ĐÁ */}
-                        <div>
-                          <label className="block font-black uppercase mb-1">Ngày Đá *</label>
-                          <div
-                            className={`relative flex items-center justify-between p-2.5 rounded-xl border font-bold cursor-pointer transition-colors ${
-                              isDarkMode
-                                ? 'bg-[#0b132b] border-emerald-800/40 text-white hover:border-emerald-500'
-                                : 'bg-white border-slate-300 text-[#0f172a] hover:border-emerald-600'
-                            }`}
-                          >
-                            <span className="font-bold tracking-wide">
-                              {formatVNDate(
-                                bookingModal.data.ngay_da
-                                  ? String(bookingModal.data.ngay_da).split('T')[0]
-                                  : new Date().toISOString().split('T')[0]
-                              )}
-                            </span>
-                            <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 pointer-events-none" />
-                            <input
-                              type="date"
-                              required
-                              value={
-                                bookingModal.data.ngay_da
-                                  ? String(bookingModal.data.ngay_da).split('T')[0]
-                                  : new Date().toISOString().split('T')[0]
-                              }
-                              onClick={(e) => {
-                                try {
-                                  (e.target as any).showPicker?.();
-                                } catch (_) {}
-                              }}
-                              onChange={(e) =>
-                                setBookingModal({
-                                  ...bookingModal,
-                                  data: { ...bookingModal.data, ngay_da: e.target.value },
-                                })
-                              }
-                              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                            />
+                      {/* NẾU CHỌN NHIỀU SÂN VÀ ĐANG BẬT CHẾ ĐỘ GIỜ RIÊNG TỪNG SÂN */}
+                      {selectedCourtIds.length > 1 && bookingModal.data.che_do_gio === 'RIENG' ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                            <span>Tuỳ chỉnh ngày đá và giờ thi đấu độc lập cho từng sân:</span>
+                            <button
+                              type="button"
+                              onClick={handleCopyFirstCourtTimeToAll}
+                              className="text-emerald-600 dark:text-emerald-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                              title="Áp dụng ngày & giờ của sân đầu tiên cho tất cả sân còn lại"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Đồng bộ theo sân đầu tiên</span>
+                            </button>
+                          </div>
+
+                          <div className="space-y-3">
+                            {selectedCourtIds.map((cId, idx) => {
+                              const court = courtList.find((c) => c.id === cId);
+                              const courtDetail = (bookingModal.data.chi_tiet_san || []).find((d: any) => Number(d.ma_san) === Number(cId)) || {
+                                ma_san: cId,
+                                ngay_da: bookingModal.data.ngay_da,
+                                gio_bat_dau: bookingModal.data.gio_bat_dau || '17:00',
+                                gio_ket_thuc: bookingModal.data.gio_ket_thuc || '18:30',
+                                tien_san: calculateBookingPitchPrice(cId, bookingModal.data.gio_bat_dau || '17:00', bookingModal.data.gio_ket_thuc || '18:30')
+                              };
+                              const itemStart = (courtDetail.gio_bat_dau || '17:00').substring(0, 5);
+                              const itemEnd = (courtDetail.gio_ket_thuc || '18:30').substring(0, 5);
+                              const itemDate = courtDetail.ngay_da
+                                ? String(courtDetail.ngay_da).substring(0, 10)
+                                : (bookingModal.data.ngay_da ? String(bookingModal.data.ngay_da).substring(0, 10) : new Date().toISOString().substring(0, 10));
+                              const itemPrice = calculateBookingPitchPrice(cId, itemStart, itemEnd);
+
+                              const startM = timeToMinutes(itemStart);
+                              const endM = timeToMinutes(itemEnd);
+                              const diffM = Math.max(0, endM - startM);
+
+                              return (
+                                <div
+                                  key={`court_slot_${cId}`}
+                                  className={`p-3 rounded-2xl border transition-all ${
+                                    isDarkMode
+                                      ? 'bg-[#0b132b]/80 border-emerald-950/80 hover:border-emerald-700/60'
+                                      : 'bg-white border-slate-200 hover:border-emerald-400 shadow-xs'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black text-[10px] flex items-center justify-center">
+                                        {idx + 1}
+                                      </span>
+                                      <span className="font-black text-xs text-slate-900 dark:text-white">
+                                        {court?.ten_san || `Sân #${cId}`}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400 font-medium">
+                                        ({Number(court?.don_gia_phut || 0).toLocaleString('vi-VN')} đ/phút)
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                        {diffM} phút
+                                      </span>
+                                      <span className="font-mono text-xs font-black text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                                        {itemPrice.toLocaleString('vi-VN')} đ
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                    {/* NGÀY ĐÁ CHO SÂN NÀY */}
+                                    <div>
+                                      <label className="block font-black uppercase text-[10px] mb-1 text-slate-500 dark:text-slate-400">
+                                        Ngày đá *
+                                      </label>
+                                      <div
+                                        className={`relative flex items-center justify-between p-2 rounded-xl border font-bold cursor-pointer transition-colors ${
+                                          isDarkMode
+                                            ? 'bg-[#070d1e] border-emerald-900/40 text-white hover:border-emerald-500'
+                                            : 'bg-slate-50 border-slate-300 text-[#0f172a] hover:border-emerald-600'
+                                        }`}
+                                      >
+                                        <span className="font-bold tracking-wide text-xs">
+                                          {formatVNDate(itemDate)}
+                                        </span>
+                                        <Calendar className="w-3.5 h-3.5 text-emerald-500 pointer-events-none" />
+                                        <input
+                                          type="date"
+                                          required
+                                          value={itemDate}
+                                          onClick={(e) => {
+                                            try {
+                                              (e.target as any).showPicker?.();
+                                            } catch (_) {}
+                                          }}
+                                          onChange={(e) => handleUpdateCourtTime(cId, 'ngay_da', e.target.value)}
+                                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    {/* GIỜ BẮT ĐẦU CHO SÂN NÀY */}
+                                    <div>
+                                      <label className="block font-black uppercase text-[10px] mb-1 text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                        <Clock className="w-3 h-3 text-emerald-400" />
+                                        <span>Bắt đầu *</span>
+                                      </label>
+                                      <select
+                                        required
+                                        value={itemStart}
+                                        onChange={(e) => handleUpdateCourtTime(cId, 'gio_bat_dau', e.target.value)}
+                                        className={`w-full p-2 rounded-xl border font-bold font-mono text-xs cursor-pointer ${
+                                          isDarkMode
+                                            ? 'bg-[#070d1e] border-emerald-900/40 text-white'
+                                            : 'bg-slate-50 border-slate-300 text-[#0f172a]'
+                                        }`}
+                                      >
+                                        {!TIME_OPTIONS_24H.includes(itemStart) && (
+                                          <option value={itemStart}>{itemStart} (Tùy chỉnh)</option>
+                                        )}
+                                        {TIME_OPTIONS_24H.map((t) => {
+                                          const status = getBookingModalSlotStatus(t, false, cId, itemDate);
+                                          if (status.isHidden) return null;
+                                          return (
+                                            <option
+                                              key={`item_start_${cId}_${t}`}
+                                              value={t}
+                                              disabled={status.disabled}
+                                              className={status.isOccupied ? 'text-amber-600 font-bold' : ''}
+                                            >
+                                              {status.label}
+                                            </option>
+                                          );
+                                        })}
+                                      </select>
+                                    </div>
+
+                                    {/* GIỜ KẾT THÚC CHO SÂN NÀY */}
+                                    <div>
+                                      <label className="block font-black uppercase text-[10px] mb-1 text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                        <Clock className="w-3 h-3 text-emerald-400" />
+                                        <span>Kết thúc *</span>
+                                      </label>
+                                      <select
+                                        required
+                                        value={itemEnd}
+                                        onChange={(e) => handleUpdateCourtTime(cId, 'gio_ket_thuc', e.target.value)}
+                                        className={`w-full p-2 rounded-xl border font-bold font-mono text-xs cursor-pointer ${
+                                          isDarkMode
+                                            ? 'bg-[#070d1e] border-emerald-900/40 text-white'
+                                            : 'bg-slate-50 border-slate-300 text-[#0f172a]'
+                                        }`}
+                                      >
+                                        {!TIME_OPTIONS_24H.includes(itemEnd) && (
+                                          <option value={itemEnd}>{itemEnd} (Tùy chỉnh)</option>
+                                        )}
+                                        {TIME_OPTIONS_24H.map((t) => {
+                                          const status = getBookingModalSlotStatus(t, true, cId, itemDate);
+                                          if (status.isHidden) return null;
+                                          return (
+                                            <option
+                                              key={`item_end_${cId}_${t}`}
+                                              value={t}
+                                              disabled={status.disabled}
+                                              className={status.isOccupied ? 'text-amber-600 font-bold' : ''}
+                                            >
+                                              {status.label}
+                                            </option>
+                                          );
+                                        })}
+                                      </select>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
+                      ) : (
+                        /* GIAO DIỆN CHUNG 1 KHUNG GIỜ (MẶC ĐỊNH HOẶC KHI CHỌN 1 SÂN) */
+                        <>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {/* NGÀY ĐÁ */}
+                            <div>
+                              <label className="block font-black uppercase mb-1">Ngày Đá *</label>
+                              <div
+                                className={`relative flex items-center justify-between p-2.5 rounded-xl border font-bold cursor-pointer transition-colors ${
+                                  isDarkMode
+                                    ? 'bg-[#0b132b] border-emerald-800/40 text-white hover:border-emerald-500'
+                                    : 'bg-white border-slate-300 text-[#0f172a] hover:border-emerald-600'
+                                }`}
+                              >
+                                <span className="font-bold tracking-wide">
+                                  {formatVNDate(
+                                    bookingModal.data.ngay_da
+                                      ? String(bookingModal.data.ngay_da).split('T')[0]
+                                      : new Date().toISOString().split('T')[0]
+                                  )}
+                                </span>
+                                <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 pointer-events-none" />
+                                <input
+                                  type="date"
+                                  required
+                                  value={
+                                    bookingModal.data.ngay_da
+                                      ? String(bookingModal.data.ngay_da).split('T')[0]
+                                      : new Date().toISOString().split('T')[0]
+                                  }
+                                  onClick={(e) => {
+                                    try {
+                                      (e.target as any).showPicker?.();
+                                    } catch (_) {}
+                                  }}
+                                  onChange={(e) => {
+                                    const nextDate = e.target.value;
+                                    recalculateBookingWithCourts(selectedCourtIds, { ngay_da: nextDate });
+                                  }}
+                                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                                />
+                              </div>
+                            </div>
 
-                        {/* GIỜ BẮT ĐẦU */}
-                        <div>
-                          <label className="block font-black uppercase mb-1 flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Giờ Bắt Đầu (24h) *</span>
-                          </label>
-                          <select
-                            id="modal_gio_bat_dau"
-                            required
-                            value={(bookingModal.data.gio_bat_dau || '17:00').substring(0, 5)}
-                            onChange={(e) => {
-                              const newStart = e.target.value;
-                              const curEnd = (bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5);
-                              const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
-                              const autoPrice = calculateBookingPitchPrice(curSanId, newStart, curEnd);
-                              const totalDv = (bookingModal.data.dich_vu_list || []).reduce(
-                                (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
-                                0
-                              );
-                              const finalPrice = autoPrice > 0 ? autoPrice : bookingModal.data.tien_san || 0;
-                              setBookingModal({
-                                ...bookingModal,
-                                data: {
-                                  ...bookingModal.data,
-                                  gio_bat_dau: newStart,
-                                  tien_san: finalPrice,
-                                  tong_tien: finalPrice + totalDv,
-                                },
-                              });
-                            }}
-                            className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${
-                              isDarkMode
-                                ? 'bg-[#0b132b] border-emerald-800/40 text-white'
-                                : 'bg-white border-slate-300 text-[#0f172a]'
-                            }`}
-                          >
-                            {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_bat_dau || '').substring(0, 5)) &&
-                              bookingModal.data.gio_bat_dau &&
-                              (() => {
-                                const customTime = (bookingModal.data.gio_bat_dau || '').substring(0, 5);
-                                const status = getBookingModalSlotStatus(customTime, false);
-                                return (
-                                  <option
-                                    value={customTime}
-                                    disabled={status.disabled}
-                                    className={
-                                      status.isOccupied
-                                        ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
-                                        : ''
-                                    }
-                                    style={
-                                      status.isOccupied
-                                        ? {
-                                            color: '#d97706',
-                                            backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
-                                            fontWeight: 'bold',
-                                          }
-                                        : undefined
-                                    }
-                                  >
-                                    {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
-                                  </option>
-                                );
-                              })()}
-                            {TIME_OPTIONS_24H.map((t) => {
-                              const status = getBookingModalSlotStatus(t, false);
-                              if (status.isHidden) return null;
-                              return (
-                                <option
-                                  key={`start_${t}`}
-                                  value={t}
-                                  disabled={status.disabled}
-                                  className={
-                                    status.isOccupied
-                                      ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
-                                      : ''
-                                  }
-                                  style={
-                                    status.isOccupied
-                                      ? {
-                                          color: '#d97706',
-                                          backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
-                                          fontWeight: 'bold',
+                            {/* GIỜ BẮT ĐẦU */}
+                            <div>
+                              <label className="block font-black uppercase mb-1 flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Giờ Bắt Đầu (24h) *</span>
+                              </label>
+                              <select
+                                id="modal_gio_bat_dau"
+                                required
+                                value={(bookingModal.data.gio_bat_dau || '17:00').substring(0, 5)}
+                                onChange={(e) => {
+                                  const newStart = e.target.value;
+                                  recalculateBookingWithCourts(selectedCourtIds, {
+                                    gio_bat_dau: newStart,
+                                  });
+                                }}
+                                className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${
+                                  isDarkMode
+                                    ? 'bg-[#0b132b] border-emerald-800/40 text-white'
+                                    : 'bg-white border-slate-300 text-[#0f172a]'
+                                }`}
+                              >
+                                {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_bat_dau || '').substring(0, 5)) &&
+                                  bookingModal.data.gio_bat_dau &&
+                                  (() => {
+                                    const customTime = (bookingModal.data.gio_bat_dau || '').substring(0, 5);
+                                    const status = getBookingModalSlotStatus(customTime, false);
+                                    return (
+                                      <option
+                                        value={customTime}
+                                        disabled={status.disabled}
+                                        className={
+                                          status.isOccupied
+                                            ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
+                                            : ''
                                         }
-                                      : undefined
-                                  }
-                                >
-                                  {status.label}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </div>
+                                        style={
+                                          status.isOccupied
+                                            ? {
+                                                color: '#d97706',
+                                                backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
+                                                fontWeight: 'bold',
+                                              }
+                                            : undefined
+                                        }
+                                      >
+                                        {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
+                                      </option>
+                                    );
+                                  })()}
+                                {TIME_OPTIONS_24H.map((t) => {
+                                  const status = getBookingModalSlotStatus(t, false);
+                                  if (status.isHidden) return null;
+                                  return (
+                                    <option
+                                      key={`start_${t}`}
+                                      value={t}
+                                      disabled={status.disabled}
+                                      className={
+                                        status.isOccupied
+                                          ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
+                                          : ''
+                                      }
+                                      style={
+                                        status.isOccupied
+                                          ? {
+                                              color: '#d97706',
+                                              backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
+                                              fontWeight: 'bold',
+                                            }
+                                          : undefined
+                                      }
+                                    >
+                                      {status.label}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
 
-                        {/* GIỜ KẾT THÚC */}
-                        <div>
-                          <label className="block font-black uppercase mb-1 flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Giờ Kết Thúc (24h) *</span>
-                          </label>
-                          <select
-                            id="modal_gio_ket_thuc"
-                            required
-                            value={(bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5)}
-                            onChange={(e) => {
-                              const newEnd = e.target.value;
-                              const curStart = (bookingModal.data.gio_bat_dau || '17:00').substring(0, 5);
-                              const curSanId = bookingModal.data.ma_san || courtList[0]?.id || 1;
-                              const autoPrice = calculateBookingPitchPrice(curSanId, curStart, newEnd);
-                              const totalDv = (bookingModal.data.dich_vu_list || []).reduce(
-                                (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
-                                0
-                              );
-                              const finalPrice = autoPrice > 0 ? autoPrice : bookingModal.data.tien_san || 0;
-                              setBookingModal({
-                                ...bookingModal,
-                                data: {
-                                  ...bookingModal.data,
-                                  gio_ket_thuc: newEnd,
-                                  tien_san: finalPrice,
-                                  tong_tien: finalPrice + totalDv,
-                                },
-                              });
-                            }}
-                            className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${
-                              isDarkMode
-                                ? 'bg-[#0b132b] border-emerald-800/40 text-white'
-                                : 'bg-white border-slate-300 text-[#0f172a]'
-                            }`}
-                          >
-                            {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_ket_thuc || '').substring(0, 5)) &&
-                              bookingModal.data.gio_ket_thuc &&
-                              (() => {
-                                const customTime = (bookingModal.data.gio_ket_thuc || '').substring(0, 5);
-                                const status = getBookingModalSlotStatus(customTime, true);
-                                return (
-                                  <option
-                                    value={customTime}
-                                    disabled={status.disabled}
-                                    className={
-                                      status.isOccupied
-                                        ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
-                                        : ''
-                                    }
-                                    style={
-                                      status.isOccupied
-                                        ? {
-                                            color: '#d97706',
-                                            backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
-                                            fontWeight: 'bold',
-                                          }
-                                        : undefined
-                                    }
-                                  >
-                                    {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
-                                  </option>
-                                );
-                              })()}
-                            {TIME_OPTIONS_24H.map((t) => {
-                              const status = getBookingModalSlotStatus(t, true);
-                              if (status.isHidden) return null;
-                              return (
-                                <option
-                                  key={`end_${t}`}
-                                  value={t}
-                                  disabled={status.disabled}
-                                  className={
-                                    status.isOccupied
-                                      ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
-                                      : ''
-                                  }
-                                  style={
-                                    status.isOccupied
-                                      ? {
-                                          color: '#d97706',
-                                          backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
-                                          fontWeight: 'bold',
+                            {/* GIỜ KẾT THÚC */}
+                            <div>
+                              <label className="block font-black uppercase mb-1 flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Giờ Kết Thúc (24h) *</span>
+                              </label>
+                              <select
+                                id="modal_gio_ket_thuc"
+                                required
+                                value={(bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5)}
+                                onChange={(e) => {
+                                  const newEnd = e.target.value;
+                                  recalculateBookingWithCourts(selectedCourtIds, {
+                                    gio_ket_thuc: newEnd,
+                                  });
+                                }}
+                                className={`w-full p-2.5 rounded-xl border font-bold font-mono text-xs cursor-pointer ${
+                                  isDarkMode
+                                    ? 'bg-[#0b132b] border-emerald-800/40 text-white'
+                                    : 'bg-white border-slate-300 text-[#0f172a]'
+                                }`}
+                              >
+                                {!TIME_OPTIONS_24H.includes((bookingModal.data.gio_ket_thuc || '').substring(0, 5)) &&
+                                  bookingModal.data.gio_ket_thuc &&
+                                  (() => {
+                                    const customTime = (bookingModal.data.gio_ket_thuc || '').substring(0, 5);
+                                    const status = getBookingModalSlotStatus(customTime, true);
+                                    return (
+                                      <option
+                                        value={customTime}
+                                        disabled={status.disabled}
+                                        className={
+                                          status.isOccupied
+                                            ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
+                                            : ''
                                         }
-                                      : undefined
-                                  }
-                                >
-                                  {status.label}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </div>
-                      </div>
+                                        style={
+                                          status.isOccupied
+                                            ? {
+                                                color: '#d97706',
+                                                backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
+                                                fontWeight: 'bold',
+                                              }
+                                            : undefined
+                                        }
+                                      >
+                                        {status.disabled ? status.label : `${customTime} (Tùy chỉnh)`}
+                                      </option>
+                                    );
+                                  })()}
+                                {TIME_OPTIONS_24H.map((t) => {
+                                  const status = getBookingModalSlotStatus(t, true);
+                                  if (status.isHidden) return null;
+                                  return (
+                                    <option
+                                      key={`end_${t}`}
+                                      value={t}
+                                      disabled={status.disabled}
+                                      className={
+                                        status.isOccupied
+                                          ? 'text-amber-600 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-400 font-bold'
+                                          : ''
+                                      }
+                                      style={
+                                        status.isOccupied
+                                          ? {
+                                              color: '#d97706',
+                                              backgroundColor: isDarkMode ? '#291805' : '#fffbeb',
+                                              fontWeight: 'bold',
+                                            }
+                                          : undefined
+                                      }
+                                    >
+                                      {status.label}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+                          </div>
+
+                          {selectedCourtIds.length > 1 && (
+                            <div className="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-700 dark:text-emerald-300 flex items-center justify-between flex-wrap gap-2">
+                              <span>
+                                ⚡ Khung giờ trên đang áp dụng đồng loạt cho cả <b>{selectedCourtIds.length} sân thi đấu</b>.
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => recalculateBookingWithCourts(selectedCourtIds, { che_do_gio: 'RIENG' })}
+                                className="font-bold underline hover:text-emerald-500 cursor-pointer"
+                              >
+                                Đổi sang chọn giờ riêng từng sân →
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
 
                       {/* CHÚ THÍCH TRẠNG THÁI KHUNG GIỜ */}
                       <div className="flex flex-wrap items-center gap-3 px-3 py-2 rounded-xl bg-white dark:bg-[#0b132b] border border-slate-200 dark:border-emerald-950/60 text-[11px] font-bold">
@@ -8393,7 +9388,7 @@ export default function AdminDashboard() {
                             {bookingModal.data.ma_san && (
                               <span className="text-[10px] text-emerald-500 font-mono font-bold flex items-center gap-1">
                                 <Zap className="w-3 h-3 text-amber-400 fill-amber-400" />
-                                <span>Tự động tính</span>
+                                <span>{selectedCourtIds.length > 1 ? `Tự động tính (${selectedCourtIds.length} sân)` : 'Tự động tính'}</span>
                               </span>
                             )}
                           </div>
@@ -8402,16 +9397,17 @@ export default function AdminDashboard() {
                               type="number"
                               min="0"
                               step="any"
-                              value={bookingModal.data.tien_san !== undefined ? bookingModal.data.tien_san : ''}
+                              value={bookingModal.data.tien_san !== undefined && bookingModal.data.tien_san !== null ? bookingModal.data.tien_san : ''}
                               onChange={(e) => {
-                                const ts = Number(e.target.value);
+                                const tsVal = parseCleanNumberInput(e.target.value, true);
+                                const ts = tsVal === '' ? 0 : tsVal;
                                 const totalDv = (bookingModal.data.dich_vu_list || []).reduce(
                                   (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
                                   0
                                 );
                                 setBookingModal({
                                   ...bookingModal,
-                                  data: { ...bookingModal.data, tien_san: ts, tong_tien: ts + totalDv },
+                                  data: { ...bookingModal.data, tien_san: tsVal, tong_tien: ts + totalDv },
                                 });
                               }}
                               className={`w-full p-2.5 rounded-xl border font-black font-mono text-sm ${
@@ -8424,6 +9420,23 @@ export default function AdminDashboard() {
                               đ
                             </span>
                           </div>
+
+                          {selectedCourtIds.length > 1 && (
+                            <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap gap-1.5">
+                              {selectedCourtIds.map((cId) => {
+                                const court = courtList.find((c) => c.id === cId);
+                                const courtPrice = calculateBookingPitchPrice(cId, curStart, curEnd);
+                                return (
+                                  <span
+                                    key={cId}
+                                    className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-[#101c3d] border border-slate-200 dark:border-slate-800 font-mono text-[10px]"
+                                  >
+                                    {court?.ten_san || `Sân #${cId}`}: <b className="text-emerald-600 dark:text-emerald-400">{courtPrice.toLocaleString('vi-VN')} đ</b>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
 
                         <div>
@@ -8809,7 +9822,7 @@ export default function AdminDashboard() {
                 <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 truncate">
                   <Sparkles className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                   <span className="truncate">
-                    {courtList.find((c) => c.id === Number(bookingModal.data.ma_san))?.ten_san || 'Sân bóng'} •{' '}
+                    {selectedCourtIds.map((id) => courtList.find((c) => c.id === id)?.ten_san || `Sân #${id}`).join(', ')} •{' '}
                     {(bookingModal.data.gio_bat_dau || '17:00').substring(0, 5)} -{' '}
                     {(bookingModal.data.gio_ket_thuc || '18:30').substring(0, 5)} •{' '}
                     {formatVNDate(
@@ -8838,14 +9851,23 @@ export default function AdminDashboard() {
                     className="px-6 py-2.5 rounded-xl text-xs font-black text-slate-950 bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 shadow-lg shadow-emerald-500/25 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
                   >
                     <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                    <span>{bookingModal.mode === 'ADD' ? 'Lưu Đơn Đặt Sân' : 'Cập Nhật Đơn Đặt'}</span>
+                    <span>
+                      {bookingModal.mode === 'ADD'
+                        ? selectedCourtIds.length > 1
+                          ? `Lưu ${selectedCourtIds.length} Đơn Đặt Sân`
+                          : 'Lưu Đơn Đặt Sân'
+                        : selectedCourtIds.length > 1
+                          ? `Cập Nhật & Thêm (${selectedCourtIds.length} Sân)`
+                          : 'Cập Nhật Đơn Đặt'}
+                    </span>
                   </button>
                 </div>
               </div>
             </form>
           </div>
         </div>
-      )}
+      );
+    })()}
 
       {/* 6b. Modal Khung Giờ (Khung_Gio) */}
       {khungGioModal.isOpen && (
@@ -8897,8 +9919,9 @@ export default function AdminDashboard() {
                   <input
                     type="number"
                     min="1"
-                    value={khungGioModal.data.thu_tu || 1}
-                    onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, thu_tu: Number(e.target.value) } })}
+                    value={khungGioModal.data.thu_tu !== undefined && khungGioModal.data.thu_tu !== null ? khungGioModal.data.thu_tu : ''}
+                    onChange={(e) => setKhungGioModal({ ...khungGioModal, data: { ...khungGioModal.data, thu_tu: parseCleanNumberInput(e.target.value) } })}
+                    placeholder="Ví dụ: 1"
                     className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
@@ -8923,55 +9946,491 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* 7. Modal Hoàn Tiền (Lich_Su_Hoan_Tien) */}
+      {/* 7. Modal Hoàn Tiền (Lich_Su_Hoan_Tien) - GIAO DIỆN NGANG GỌN GÀNG CHO CẢ THÊM VÀ SỬA */}
       {refundModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
-          <div className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className={`w-full max-w-4xl lg:max-w-5xl p-5 sm:p-6 rounded-3xl border shadow-2xl my-auto max-h-[92vh] overflow-y-auto ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}>
+            {/* HEADER MODAL */}
             <div className="flex items-center justify-between pb-3 border-b mb-4">
-              <h3 className="font-black text-base">{refundModal.mode === 'ADD' ? '💸 Tạo Phiếu Hoàn Tiền' : '✏️ Cập Nhật Phiếu Hoàn'}</h3>
-              <button onClick={() => setRefundModal({ isOpen: false, mode: 'ADD', data: {} })}><X className="w-5 h-5" /></button>
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-rose-500/10 text-rose-500 text-lg">💸</span>
+                <div>
+                  <h3 className="font-black text-base">{refundModal.mode === 'ADD' ? 'Tạo Phiếu Hoàn Tiền' : 'Cập Nhật Phiếu Hoàn'}</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {refundModal.mode === 'ADD' ? 'Tìm khách hàng, chọn hóa đơn tương ứng và xác nhận số tiền hoàn cọc' : 'Điều chỉnh thông tin phiếu hoàn tiền cọc'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRefundModal({ isOpen: false, mode: 'ADD', data: {} })}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
+
             <form onSubmit={handleSaveRefund} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-black uppercase mb-1">Mã Đơn Đặt Sân</label>
-                <input
-                  type="number"
-                  value={refundModal.data.ma_don_dat || 101}
-                  onChange={(e) => setRefundModal({ ...refundModal, data: { ...refundModal.data, ma_don_dat: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
+              {/* BỐ CỤC DÀN HÀNG NGANG 2 CỘT */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                {/* CỘT TRÁI: 1. KHÁCH HÀNG & 2. CHỌN HÓA ĐƠN TƯƠNG ỨNG */}
+                <div className="space-y-3.5">
+                  {/* 1. KHÁCH HÀNG */}
+                  <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-[#070d1e]/80 border-emerald-900/40' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="font-black uppercase flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+                        <User className="w-3.5 h-3.5" /> 1. Khách Hàng Cần Hoàn Tiền
+                      </label>
+                      {refundSelectedCustomer && !refundIsChoosingCustomer && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRefundIsChoosingCustomer(true);
+                            setRefundCustomerSearch('');
+                          }}
+                          className="text-[11px] font-bold text-emerald-600 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Search className="w-3 h-3" /> Tìm/Đổi khách khác
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Nếu chưa chọn khách hàng HOẶC đang bấm đổi khách hàng */}
+                    {(!refundSelectedCustomer || refundIsChoosingCustomer) ? (
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type="text"
+                              value={refundCustomerSearch}
+                              onChange={(e) => setRefundCustomerSearch(e.target.value)}
+                              placeholder="Tìm theo Tên, SĐT, Email..."
+                              className={`w-full pl-8 pr-7 py-2 rounded-xl border text-xs font-bold ${
+                                isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white placeholder-slate-500' : 'bg-white border-slate-300 text-[#0f172a] placeholder-slate-400'
+                              }`}
+                            />
+                            {refundCustomerSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setRefundCustomerSearch('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="px-3 py-2 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 shrink-0 cursor-pointer shadow-sm text-xs"
+                          >
+                            <Filter className="w-3 h-3" /> Lọc
+                          </button>
+                          {refundSelectedCustomer && (
+                            <button
+                              type="button"
+                              onClick={() => setRefundIsChoosingCustomer(false)}
+                              className="px-2.5 py-2 rounded-xl font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 shrink-0 cursor-pointer text-xs"
+                            >
+                              Đóng
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Danh sách kết quả tìm kiếm/lọc khách hàng */}
+                        <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
+                          {refundFilteredCustomers.length === 0 ? (
+                            <div className="p-3 text-center text-slate-400 italic bg-white/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-[11px]">
+                              Không tìm thấy khách hàng nào khớp với từ khóa "{refundCustomerSearch}"
+                            </div>
+                          ) : (
+                            refundFilteredCustomers.slice(0, 15).map((cust) => (
+                              <div
+                                key={cust.key}
+                                onClick={() => handleSelectCustomerForRefund(cust)}
+                                className={`p-2 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
+                                  refundSelectedCustomer?.key === cust.key
+                                    ? 'bg-emerald-500/15 border-emerald-500 shadow-sm'
+                                    : isDarkMode
+                                      ? 'bg-[#0b132b] hover:bg-emerald-950/40 border-slate-800'
+                                      : 'bg-white hover:bg-emerald-50/50 border-slate-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="w-6 h-6 rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black text-[11px] shrink-0">
+                                    {cust.ten_khach_hang.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="truncate">
+                                    <div className="font-black text-xs text-slate-800 dark:text-white truncate">
+                                      {cust.ten_khach_hang}
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 truncate">
+                                      <span className="font-mono text-emerald-600 dark:text-emerald-400 font-bold">{cust.so_dien_thoai}</span>
+                                      {cust.email && <span className="truncate">({cust.email})</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                    {cust.totalBookings} đơn
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer"
+                                  >
+                                    Chọn
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Thẻ hiển thị khách hàng đã chọn */
+                      <div className={`p-2.5 rounded-xl border flex items-center justify-between ${
+                        isDarkMode ? 'bg-emerald-950/30 border-emerald-800/40' : 'bg-emerald-50 border-emerald-200'
+                      }`}>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-xs shadow shrink-0">
+                            {refundSelectedCustomer.ten_khach_hang.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="truncate">
+                            <div className="font-black text-xs text-slate-900 dark:text-white flex items-center gap-2 truncate">
+                              <span className="truncate">{refundSelectedCustomer.ten_khach_hang}</span>
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 shrink-0">
+                                {refundCustomerInvoices.length} đơn
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-2 mt-0.5 truncate">
+                              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">📞 {refundSelectedCustomer.so_dien_thoai}</span>
+                              {refundSelectedCustomer.email && <span className="truncate">✉️ {refundSelectedCustomer.email}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRefundIsChoosingCustomer(true);
+                            setRefundCustomerSearch('');
+                          }}
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 cursor-pointer shrink-0 ml-2"
+                        >
+                          Đổi khách
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. CHỌN HÓA ĐƠN TƯƠNG ỨNG */}
+                  <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-[#070d1e]/80 border-emerald-900/40' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="font-black uppercase flex items-center gap-1.5 text-[11px] text-sky-600 dark:text-sky-400">
+                        <Receipt className="w-3.5 h-3.5" /> 2. Chọn Hóa Đơn Tương Ứng
+                      </label>
+                      {refundSelectedBooking && !refundIsChoosingOrder && (
+                        <button
+                          type="button"
+                          onClick={() => setRefundIsChoosingOrder(true)}
+                          className="text-[11px] font-bold text-sky-600 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" /> Đổi hóa đơn
+                        </button>
+                      )}
+                    </div>
+
+                    {!refundSelectedCustomer ? (
+                      <div className="p-4 text-center text-slate-400 italic bg-white/40 dark:bg-slate-900/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-[11px]">
+                        👆 Vui lòng chọn khách hàng ở trên để hiển thị danh sách hóa đơn
+                      </div>
+                    ) : (!refundModal.data.ma_don_dat || refundIsChoosingOrder) ? (
+                      <div className="space-y-2">
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                          <span>Hóa đơn của <b className="text-emerald-600 dark:text-emerald-400">{refundSelectedCustomer.ten_khach_hang}</b>:</span>
+                          <span className="font-bold text-[10px]">{refundCustomerInvoices.length} đơn</span>
+                        </div>
+
+                        <div className="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+                          {refundCustomerInvoices.length === 0 ? (
+                            <div className="p-3 text-center text-slate-400 italic bg-white/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-[11px]">
+                              Khách hàng này chưa có đơn đặt sân nào trên hệ thống.
+                            </div>
+                          ) : (
+                            refundCustomerInvoices.map((inv) => {
+                              const isCurrentSelected = Number(refundModal.data.ma_don_dat) === inv.id;
+                              const tienCoc = inv.tien_coc_da_tra !== undefined && inv.tien_coc_da_tra !== null
+                                ? Number(inv.tien_coc_da_tra)
+                                : (inv.so_tien_da_tra !== undefined && inv.so_tien_da_tra !== null
+                                  ? Number(inv.so_tien_da_tra)
+                                  : (inv.trang_thai === 'DA_COC' ? Math.round((inv.tong_tien || 0) * 0.3) : Number(inv.tong_tien || 0)));
+
+                              return (
+                                <div
+                                  key={inv.id}
+                                  onClick={() => handleSelectBookingForRefund(inv)}
+                                  className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                                    isCurrentSelected
+                                      ? 'bg-sky-500/15 border-sky-500 shadow-sm'
+                                      : isDarkMode
+                                        ? 'bg-[#0b132b] hover:bg-sky-950/30 border-slate-800'
+                                        : 'bg-white hover:bg-sky-50/50 border-slate-200'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-mono font-black text-xs text-sky-600 dark:text-sky-400">
+                                        #{inv.id}
+                                      </span>
+                                      <span className="font-black text-xs text-slate-800 dark:text-white">
+                                        {inv.ten_san || `Sân ${inv.ma_san}`}
+                                      </span>
+                                    </div>
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                                      inv.trang_thai === 'DA_HUY'
+                                        ? 'bg-rose-500/20 text-rose-500'
+                                        : inv.trang_thai === 'DA_THANH_TOAN'
+                                          ? 'bg-emerald-500/20 text-emerald-500'
+                                          : 'bg-amber-500/20 text-amber-500'
+                                    }`}>
+                                      {inv.trang_thai || 'ĐÃ ĐẶT'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                                    <div>
+                                      📅 {formatBookingDateDMY(inv.ngay_da)} {formatBookingTimeRange(inv.gio_bat_dau, inv.gio_ket_thuc)}
+                                    </div>
+                                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                                      Đã cọc/trả: <span className="text-rose-500 font-mono">{tienCoc.toLocaleString('vi-VN')} đ</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {refundSelectedBooking && (
+                          <div className="flex justify-end pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setRefundIsChoosingOrder(false)}
+                              className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 cursor-pointer"
+                            >
+                              Đóng danh sách
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* Thẻ hiển thị hóa đơn đã chọn */
+                      <div className={`p-2.5 rounded-xl border flex items-center justify-between ${
+                        isDarkMode ? 'bg-sky-950/30 border-sky-800/40' : 'bg-sky-50 border-sky-200'
+                      }`}>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="px-1.5 py-0.5 rounded-md font-mono font-black text-[11px] bg-sky-600 text-white">
+                              #{refundModal.data.ma_don_dat}
+                            </span>
+                            <span className="font-black text-xs text-slate-900 dark:text-white truncate">
+                              {refundSelectedBooking?.ten_san || `Sân #${refundSelectedBooking?.ma_san || ''}`}
+                            </span>
+                            {refundSelectedBooking?.trang_thai && (
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/20 text-rose-500">
+                                {refundSelectedBooking.trang_thai}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-600 dark:text-slate-300 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                            <span>📅 {formatBookingDateDMY(refundSelectedBooking?.ngay_da)} {formatBookingTimeRange(refundSelectedBooking?.gio_bat_dau, refundSelectedBooking?.gio_ket_thuc)}</span>
+                            <span>Tổng: <b className="font-mono">{Number(refundSelectedBooking?.tong_tien || 0).toLocaleString('vi-VN')} đ</b></span>
+                            <span className="text-rose-500">Đã cọc: <b className="font-mono">{(refundSelectedBooking?.tien_coc_da_tra || refundSelectedBooking?.so_tien_da_tra || 0).toLocaleString('vi-VN')} đ</b></span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setRefundIsChoosingOrder(true)}
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold border border-sky-500/40 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 cursor-pointer shrink-0 ml-2"
+                        >
+                          Đổi đơn
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* CỘT PHẢI: 3. THÔNG TIN PHIẾU HOÀN TIỀN */}
+                <div className="space-y-3.5">
+                  <div className={`p-3.5 rounded-2xl border ${isDarkMode ? 'bg-[#070d1e]/80 border-emerald-900/40' : 'bg-slate-50 border-slate-200'}`}>
+                    <label className="font-black uppercase flex items-center gap-1.5 text-[11px] text-rose-600 dark:text-rose-400 mb-2">
+                      <DollarSign className="w-3.5 h-3.5" /> 3. Thông Tin Hoàn Tiền Cọc
+                    </label>
+
+                    <div className="space-y-3">
+                      {/* MÃ ĐƠN ĐẶT SÂN */}
+                      <div>
+                        <label className="block font-black uppercase mb-1 flex items-center justify-between text-[11px]">
+                          <span>Mã Đơn Đặt Sân *</span>
+                          <span className="text-[10px] text-slate-400 font-normal">
+                            (Chọn ở bên trái hoặc gõ trực tiếp)
+                          </span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            required
+                            value={refundModal.data.ma_don_dat !== undefined && refundModal.data.ma_don_dat !== null ? refundModal.data.ma_don_dat : ''}
+                            onChange={(e) => {
+                              const val = parseCleanNumberInput(e.target.value);
+                              setRefundModal(prev => ({ ...prev, data: { ...prev.data, ma_don_dat: val } }));
+                              if (val) {
+                                const b = bookingList.find(item => item.id === Number(val));
+                                if (b) {
+                                  const phone = (b.so_dien_thoai || '').trim();
+                                  const name = (b.ten_khach_hang || '').trim();
+                                  const key = phone || name || `user_${b.ma_nguoi_dung}`;
+                                  setRefundSelectedCustomerPhone(key);
+                                }
+                              }
+                            }}
+                            placeholder="Ví dụ: 181"
+                            className={`w-full p-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          />
+                          {refundSelectedBooking && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-emerald-500 font-bold flex items-center gap-1">
+                              <Check className="w-3 h-3 stroke-[3]" /> Khớp đơn
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* SỐ TIỀN HOÀN & TỶ LỆ HOÀN */}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block font-black uppercase mb-1 text-[11px]">Số Tiền Hoàn (VNĐ) *</label>
+                          <input
+                            type="number"
+                            required
+                            value={refundModal.data.so_tien_hoan !== undefined && refundModal.data.so_tien_hoan !== null ? refundModal.data.so_tien_hoan : ''}
+                            onChange={(e) => setRefundModal({ ...refundModal, data: { ...refundModal.data, so_tien_hoan: parseCleanNumberInput(e.target.value) } })}
+                            placeholder="Ví dụ: 100000"
+                            className={`w-full p-2.5 rounded-xl border font-bold text-xs text-rose-500 ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-rose-400' : 'bg-white border-slate-300 text-rose-600'}`}
+                          />
+                          {refundIsExchangeRefund ? (
+                            <div className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-bold leading-tight">
+                              💡 Đổi sang sân giá thấp: Đã trả {Number(refundSelectedBooking?.tien_coc_da_tra || refundSelectedBooking?.so_tien_da_tra || 27000).toLocaleString('vi-VN')} đ - Sân mới {Number(refundSelectedBooking?.tong_tien || 18000).toLocaleString('vi-VN')} đ → Tiền thừa 100%: <b className="text-rose-600 dark:text-rose-400 font-mono">{refundBaseAmount.toLocaleString('vi-VN')} đ</b>
+                            </div>
+                          ) : refundSelectedBooking ? (
+                            <div className="text-[10px] text-slate-400 mt-1 truncate">
+                              Tiền cọc/đã trả: <b className="text-slate-600 dark:text-slate-300 font-mono">{refundBaseAmount.toLocaleString('vi-VN')} đ</b>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div>
+                          <label className="block font-black uppercase mb-1 text-[11px]">Tỷ Lệ Hoàn (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={refundModal.data.ty_le_hoan !== undefined && refundModal.data.ty_le_hoan !== null ? refundModal.data.ty_le_hoan : ''}
+                            onChange={(e) => {
+                              const ratio = parseCleanNumberInput(e.target.value);
+                              setRefundModal(prev => {
+                                let nextRefund = prev.data.so_tien_hoan;
+                                if (refundBaseAmount > 0 && ratio !== '') {
+                                  nextRefund = Math.round(refundBaseAmount * (Number(ratio) / 100));
+                                }
+                                return {
+                                  ...prev,
+                                  data: {
+                                    ...prev.data,
+                                    ty_le_hoan: ratio,
+                                    so_tien_hoan: nextRefund
+                                  }
+                                };
+                              });
+                            }}
+                            placeholder="100"
+                            className={`w-full p-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                          />
+                          {/* Nút chọn nhanh % */}
+                          <div className="flex gap-1 mt-1">
+                            {[100, 80, 50, 30].map((pct) => (
+                              <button
+                                type="button"
+                                key={pct}
+                                onClick={() => {
+                                  setRefundModal(prev => {
+                                    let nextRefund = prev.data.so_tien_hoan;
+                                    if (refundBaseAmount > 0) {
+                                      nextRefund = Math.round(refundBaseAmount * (pct / 100));
+                                    }
+                                    return {
+                                      ...prev,
+                                      data: {
+                                        ...prev.data,
+                                        ty_le_hoan: pct,
+                                        so_tien_hoan: nextRefund
+                                      }
+                                    };
+                                  });
+                                }}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold border transition-colors cursor-pointer ${
+                                  Number(refundModal.data.ty_le_hoan) === pct
+                                    ? 'bg-rose-500 text-white border-rose-500'
+                                    : 'border-slate-300 dark:border-slate-700 text-slate-500 hover:border-rose-400'
+                                }`}
+                              >
+                                {pct}%
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* LÝ DO HỦY SÂN */}
+                      <div>
+                        <label className="block font-black uppercase mb-1 text-[11px]">Lý Do Hủy Sân</label>
+                        <input
+                          type="text"
+                          value={refundModal.data.ly_do_huy || ''}
+                          onChange={(e) => setRefundModal({ ...refundModal, data: { ...refundModal.data, ly_do_huy: e.target.value } })}
+                          placeholder="Khách báo hủy trước 24h theo quy định"
+                          className={`w-full p-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#0b132b] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
+                        />
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {['Báo hủy trước 24h', 'Khách bận đột xuất', 'Thời tiết mưa lớn', 'Đổi lịch sang ngày khác'].map((reason) => (
+                            <button
+                              type="button"
+                              key={reason}
+                              onClick={() => setRefundModal(prev => ({ ...prev, data: { ...prev.data, ly_do_huy: reason } }))}
+                              className="px-2 py-0.5 rounded text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                            >
+                              + {reason}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Số Tiền Hoàn (VNĐ) *</label>
-                <input
-                  type="number"
-                  value={refundModal.data.so_tien_hoan || 100000}
-                  onChange={(e) => setRefundModal({ ...refundModal, data: { ...refundModal.data, so_tien_hoan: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
-              </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Tỷ Lệ Hoàn Cọc (%)</label>
-                <input
-                  type="number"
-                  value={refundModal.data.ty_le_hoan || 100}
-                  onChange={(e) => setRefundModal({ ...refundModal, data: { ...refundModal.data, ty_le_hoan: Number(e.target.value) } })}
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
-              </div>
-              <div>
-                <label className="block font-black uppercase mb-1">Lý Do Hủy Sân</label>
-                <input
-                  type="text"
-                  value={refundModal.data.ly_do_huy || ''}
-                  onChange={(e) => setRefundModal({ ...refundModal, data: { ...refundModal.data, ly_do_huy: e.target.value } })}
-                  placeholder="Khách báo hủy trước 24h"
-                  className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setRefundModal({ isOpen: false, mode: 'ADD', data: {} })} className="px-4 py-2 rounded-xl font-bold bg-slate-200 text-slate-800 cursor-pointer">Hủy</button>
-                <button type="submit" className="px-5 py-2 rounded-xl font-black bg-rose-600 text-white cursor-pointer">Lưu Phiếu Hoàn</button>
+
+              {/* FOOTER ACTIONS - DÀN HÀNG NGANG GỌN GÀNG */}
+              <div className="flex justify-end items-center gap-3 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setRefundModal({ isOpen: false, mode: 'ADD', data: {} })}
+                  className="px-5 py-2.5 rounded-xl font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors text-xs"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl font-black bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 cursor-pointer flex items-center gap-2 transition-all hover:scale-[1.02] text-xs"
+                >
+                  <RefreshCw className="w-4 h-4" /> {refundModal.mode === 'ADD' ? 'Lưu Phiếu Hoàn' : 'Cập Nhật Phiếu Hoàn'}
+                </button>
               </div>
             </form>
           </div>
@@ -9128,11 +10587,13 @@ export default function AdminDashboard() {
                       <label className="block font-black uppercase mb-1">Tiền Sân Mới (VNĐ)</label>
                       <input
                         type="number"
-                        value={exchangeModal.data.tien_san_moi || 0}
+                        min="0"
+                        value={exchangeModal.data.tien_san_moi !== undefined && exchangeModal.data.tien_san_moi !== null ? exchangeModal.data.tien_san_moi : ''}
                         onChange={(e) => {
-                          const p = Number(e.target.value);
+                          const pVal = parseCleanNumberInput(e.target.value, true);
+                          const p = pVal === '' ? 0 : pVal;
                           const diff = p - Number(exchangeModal.data.tien_san_cu || 0);
-                          setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, tien_san_moi: p, tien_chenh_lech: diff } });
+                          setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, tien_san_moi: pVal, tien_chenh_lech: diff } });
                         }}
                         className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                         required
@@ -9174,7 +10635,7 @@ export default function AdminDashboard() {
                   onChange={(e) => setExchangeModal({ ...exchangeModal, data: { ...exchangeModal.data, hinh_thuc_xu_ly: e.target.value } })}
                   className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 >
-                  <option value="NHAN_TAI_QUAY">💵 Nhận / Thanh toán tại quầy lễ tân</option>
+                  <option value="NHAN_TAI_QUAY">💵 Nhận / Thanh toán tại quầy</option>
                   <option value="HOAN_TIEN_NGAN_HANG">🏦 Chuyển khoản ngân hàng (Hoàn tiền thừa)</option>
                   <option value="THANH_TOAN_BU">💳 Thanh toán bù trực tuyến trên Web</option>
                   <option value="KHONG_DOI_TIEN">⚖️ Không đổi tiền (Đồng giá hoặc giữ nguyên)</option>
@@ -9323,6 +10784,33 @@ export default function AdminDashboard() {
                   alt="VietQR Refund"
                   className="w-56 h-auto mx-auto rounded"
                 />
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(qrUrl);
+                      const blob = await res.blob();
+                      const u = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = u;
+                      a.download = `VietQR_HoanTien_Don${adminRefundQRModal.ma_don_dat}.png`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(u);
+                    } catch {
+                      window.open(qrUrl, '_blank');
+                    }
+                  }}
+                  className="mt-2.5 px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 cursor-pointer active:scale-95 transition-all"
+                  title="Tải ảnh mã QR hoàn tiền về máy"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Tải ảnh mã QR</span>
+                </button>
               </div>
 
               <div className="mt-3 text-xs space-y-1 text-left bg-slate-950/60 p-3 rounded-xl border border-slate-800">
@@ -9711,8 +11199,9 @@ export default function AdminDashboard() {
                 <input
                   type="number"
                   min="1"
-                  value={miniPosModal.soLuong}
-                  onChange={(e) => setMiniPosModal({ ...miniPosModal, soLuong: Number(e.target.value) })}
+                  value={miniPosModal.soLuong !== undefined && miniPosModal.soLuong !== null ? miniPosModal.soLuong : ''}
+                  onChange={(e) => setMiniPosModal({ ...miniPosModal, soLuong: parseCleanNumberInput(e.target.value) as any })}
+                  placeholder="Ví dụ: 1"
                   className={`w-full p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                 />
               </div>
@@ -9869,8 +11358,9 @@ export default function AdminDashboard() {
                   <input
                     type="number"
                     min="1"
-                    value={bannerModal.data.thu_tu ?? 1}
-                    onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, thu_tu: parseInt(e.target.value) || 1 } })}
+                    value={bannerModal.data.thu_tu !== undefined && bannerModal.data.thu_tu !== null ? bannerModal.data.thu_tu : ''}
+                    onChange={(e) => setBannerModal({ ...bannerModal, data: { ...bannerModal.data, thu_tu: parseCleanNumberInput(e.target.value) } })}
+                    placeholder="Ví dụ: 1"
                     className={`w-full px-3 py-2.5 rounded-xl border font-bold text-xs ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
                 </div>
@@ -10130,7 +11620,6 @@ export default function AdminDashboard() {
                   <MessageSquareReply className="w-5 h-5" />
                   <span>Soạn Thư Phản Hồi Khách Hàng</span>
                 </h3>
-                <p className="text-[11px] text-slate-700 dark:text-slate-400 font-medium mt-0.5">Gửi thư trả lời trực tiếp đến Gmail của khách hàng</p>
               </div>
               <button
                 onClick={() => setReplyLienHeModal({ isOpen: false, data: null, tieu_de_tra_loi: '', noi_dung_tra_loi: '', isSubmitting: false })}
@@ -10566,26 +12055,41 @@ export default function AdminDashboard() {
                   </select>
                 </div>
 
-                {/* Tên Đội Bóng / Khách Hàng */}
+                {/* Khách Hàng Đã Có Tài Khoản */}
                 <div>
                   <label className="block font-bold mb-1 text-slate-700 dark:text-slate-300">
-                    Tên Đội Bóng / Đại Diện <span className="text-rose-500">*</span>
+                    Khách Hàng (Đã Có Tài Khoản) <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={fixedScheduleModal.data.ten_doi_bong}
-                    onChange={(e) =>
+                  <select
+                    value={fixedScheduleModal.data.ma_nguoi_dung || ''}
+                    onChange={(e) => {
+                      const uId = Number(e.target.value);
+                      const selectedUser = userList.find((u) => u.id === uId);
                       setFixedScheduleModal((prev) => ({
                         ...prev,
-                        data: { ...prev.data, ten_doi_bong: e.target.value }
-                      }))
-                    }
-                    placeholder="VD: FC Tuổi Trẻ, Công ty FPT..."
+                        data: {
+                          ...prev.data,
+                          ma_nguoi_dung: uId || '',
+                          ten_doi_bong: selectedUser ? selectedUser.ho_ten : prev.data.ten_doi_bong,
+                          so_dien_thoai: selectedUser?.so_dien_thoai || prev.data.so_dien_thoai
+                        }
+                      }));
+                    }}
                     required
-                    className={`w-full p-2.5 rounded-xl border font-semibold outline-none ${
-                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300'
+                    className={`w-full p-2.5 rounded-xl border font-bold outline-none cursor-pointer ${
+                      isDarkMode ? 'bg-[#070d1e] border-emerald-900/60 text-white' : 'bg-white border-slate-300 text-[#0f172a]'
                     }`}
-                  />
+                  >
+                    <option value="">-- Chọn khách hàng đã có tài khoản --</option>
+                    {userList
+                      .slice()
+                      .sort((a, b) => (a.ho_ten || '').localeCompare(b.ho_ten || '', 'vi'))
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.ho_ten} {u.so_dien_thoai ? `• ${u.so_dien_thoai}` : ''} {u.email ? `(${u.email})` : ''}
+                        </option>
+                      ))}
+                  </select>
                 </div>
               </div>
 
@@ -10619,11 +12123,11 @@ export default function AdminDashboard() {
                   </label>
                   <input
                     type="number"
-                    value={fixedScheduleModal.data.don_gia_moi_buoi}
+                    value={fixedScheduleModal.data.don_gia_moi_buoi !== undefined && fixedScheduleModal.data.don_gia_moi_buoi !== null ? fixedScheduleModal.data.don_gia_moi_buoi : ''}
                     onChange={(e) =>
                       setFixedScheduleModal((prev) => ({
                         ...prev,
-                        data: { ...prev.data, don_gia_moi_buoi: Number(e.target.value) },
+                        data: { ...prev.data, don_gia_moi_buoi: parseCleanNumberInput(e.target.value) as any },
                         checkResult: { checked: false, loading: false }
                       }))
                     }
@@ -10778,11 +12282,11 @@ export default function AdminDashboard() {
                   </label>
                   <input
                     type="number"
-                    value={fixedScheduleModal.data.tien_coc}
+                    value={fixedScheduleModal.data.tien_coc !== undefined && fixedScheduleModal.data.tien_coc !== null ? fixedScheduleModal.data.tien_coc : ''}
                     onChange={(e) =>
                       setFixedScheduleModal((prev) => ({
                         ...prev,
-                        data: { ...prev.data, tien_coc: Number(e.target.value) }
+                        data: { ...prev.data, tien_coc: parseCleanNumberInput(e.target.value) as any }
                       }))
                     }
                     step={50000}
@@ -11072,25 +12576,40 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold mb-1 text-slate-400">
-                    Tên Đội Bóng / Khách Hàng <span className="text-rose-500">*</span>
+                    Khách Hàng (Đã Có Tài Khoản) <span className="text-rose-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={editFixedScheduleModal.data.ten_doi_bong}
-                    onChange={(e) =>
+                  <select
+                    value={editFixedScheduleModal.data.ma_nguoi_dung || ''}
+                    onChange={(e) => {
+                      const uId = Number(e.target.value);
+                      const selectedUser = userList.find((u) => u.id === uId);
                       setEditFixedScheduleModal((prev) => ({
                         ...prev,
-                        data: { ...prev.data, ten_doi_bong: e.target.value }
-                      }))
-                    }
-                    className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden ${
+                        data: {
+                          ...prev.data,
+                          ma_nguoi_dung: uId || '',
+                          ten_doi_bong: selectedUser ? selectedUser.ho_ten : prev.data.ten_doi_bong,
+                          so_dien_thoai: selectedUser?.so_dien_thoai || prev.data.so_dien_thoai
+                        }
+                      }));
+                    }}
+                    required
+                    className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden font-bold cursor-pointer ${
                       isDarkMode
                         ? 'bg-slate-900/60 border-slate-700 text-white focus:border-emerald-500'
                         : 'bg-slate-50 border-slate-300 text-slate-900 focus:border-emerald-500'
                     }`}
-                    placeholder="VD: FC Barcelona..."
-                  />
+                  >
+                    <option value="">-- Chọn khách hàng đã có tài khoản --</option>
+                    {userList
+                      .slice()
+                      .sort((a, b) => (a.ho_ten || '').localeCompare(b.ho_ten || '', 'vi'))
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.ho_ten} {u.so_dien_thoai ? `• ${u.so_dien_thoai}` : ''} {u.email ? `(${u.email})` : ''}
+                        </option>
+                      ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-bold mb-1 text-slate-400">
@@ -11125,11 +12644,11 @@ export default function AdminDashboard() {
                     type="number"
                     min="0"
                     step="1000"
-                    value={editFixedScheduleModal.data.don_gia_moi_buoi}
+                    value={editFixedScheduleModal.data.don_gia_moi_buoi !== undefined && editFixedScheduleModal.data.don_gia_moi_buoi !== null ? editFixedScheduleModal.data.don_gia_moi_buoi : ''}
                     onChange={(e) =>
                       setEditFixedScheduleModal((prev) => ({
                         ...prev,
-                        data: { ...prev.data, don_gia_moi_buoi: Math.max(0, Number(e.target.value) || 0) }
+                        data: { ...prev.data, don_gia_moi_buoi: parseCleanNumberInput(e.target.value) as any }
                       }))
                     }
                     className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden font-mono font-bold ${
@@ -11147,11 +12666,11 @@ export default function AdminDashboard() {
                     type="number"
                     min="0"
                     step="1000"
-                    value={editFixedScheduleModal.data.tien_coc}
+                    value={editFixedScheduleModal.data.tien_coc !== undefined && editFixedScheduleModal.data.tien_coc !== null ? editFixedScheduleModal.data.tien_coc : ''}
                     onChange={(e) =>
                       setEditFixedScheduleModal((prev) => ({
                         ...prev,
-                        data: { ...prev.data, tien_coc: Math.max(0, Number(e.target.value) || 0) }
+                        data: { ...prev.data, tien_coc: parseCleanNumberInput(e.target.value) as any }
                       }))
                     }
                     className={`w-full px-3 py-2 text-xs rounded-xl border focus:outline-hidden font-mono font-bold ${

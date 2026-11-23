@@ -29,6 +29,8 @@ import baoCaoRoutes from './src/routes/baoCaoRoutes';
 import uploadRoutes from './src/routes/uploadRoutes';
 import contentRoutes from './src/routes/contentRoutes';
 import reviewRoutes from './src/routes/reviewRoutes';
+import thongBaoRoutes from './src/routes/thongBaoRoutes';
+import { startBookingReminderCron } from './src/services/reminderService';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -69,6 +71,7 @@ app.use('/api/thanh-toan', thanhToanRoutes);
 app.use('/api/bao-cao', baoCaoRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/thong-bao', thongBaoRoutes);
 app.use('/api', contentRoutes);
 
 // Cung cấp giao diện Swagger UI trực quan tương tác (/api-docs)
@@ -244,6 +247,31 @@ io.on('connection', (socket) => {
         }
     });
 
+    // 3.5 SỰ KIỆN NHẢ NHIỀU Ô CỤ THỂ HOẶC TOÀN BỘ CỦA USER (unlock_slots)
+    socket.on('unlock_slots', (slotIds?: string[]) => {
+        let hasChanges = false;
+        if (Array.isArray(slotIds) && slotIds.length > 0) {
+            slotIds.forEach((slotId) => {
+                const record = lockedSlots.get(slotId);
+                if (record && record.socketId === socket.id) {
+                    lockedSlots.delete(slotId);
+                    hasChanges = true;
+                }
+            });
+        } else {
+            for (const [slotId, record] of lockedSlots.entries()) {
+                if (record.socketId === socket.id) {
+                    lockedSlots.delete(slotId);
+                    hasChanges = true;
+                }
+            }
+        }
+        if (hasChanges) {
+            console.log(`🔓 [Unlock Slots]: Socket ${socket.id} đã nhả các ô:`, slotIds);
+            io.emit('slots_updated', Array.from(lockedSlots.keys()));
+        }
+    });
+
     // 4. SỰ KIỆN NHẢ 1 Ô CỤ THỂ (unlock_slot & force_unlock_slot)
     socket.on('unlock_slot', (slotId: string) => {
         if (!slotId) return;
@@ -305,4 +333,7 @@ server.listen(PORT, () => {
     console.log(`🚀 Máy chủ Backend + Socket.io đang lắng nghe tại: http://localhost:${PORT}`);
     console.log(`📌 Môi trường: ${process.env.NODE_ENV || 'development'}`);
     console.log(`====================================================`);
+
+    // Khởi động Background Cron tự động gửi email và thông báo nhắc lịch đá bóng trước 1 tiếng
+    startBookingReminderCron(io);
 });

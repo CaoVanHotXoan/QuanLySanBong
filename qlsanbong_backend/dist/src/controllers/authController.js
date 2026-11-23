@@ -515,7 +515,7 @@ const suaNguoiDung = async (req, res) => {
                 .input('ho_ten', db_1.sql.NVarChar(100), ho_ten)
                 .input('email', db_1.sql.VarChar(255), email)
                 .input('so_dien_thoai', db_1.sql.VarChar(15), so_dien_thoai || null)
-                .input('vai_tro', db_1.sql.VarChar(20), vai_tro || 'KHACH_HANG')
+                .input('vai_tro', db_1.sql.VarChar(20), vai_tro || null)
                 .input('mat_khau', db_1.sql.VarChar(255), hashedPassword)
                 .input('dia_chi', db_1.sql.NVarChar(255), userDiaChi)
                 .execute('sp_SuaNguoiDung');

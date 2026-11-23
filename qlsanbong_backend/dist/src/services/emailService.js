@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendRefundSuccessEmail = exports.sendCancelBookingEmail = exports.sendOtpEmail = exports.sendContactReplyEmail = exports.sendContactEmailToAdmin = exports.isMailServiceEnabled = void 0;
+exports.sendBookingReminderEmail = exports.sendRefundSuccessEmail = exports.sendCancelBookingEmail = exports.sendOtpEmail = exports.sendContactReplyEmail = exports.sendContactEmailToAdmin = exports.isMailServiceEnabled = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const cacheService_1 = __importDefault(require("./cacheService"));
 const db_1 = require("../config/db");
@@ -651,7 +651,7 @@ const sendRefundSuccessEmail = async (payload) => {
             <p>Ban quản lý Sport247 đã hoàn tất chuyển khoản tiền hoàn cho đơn đặt sân <strong>#${payload.bookingId}</strong>.</p>
 
             <div class="success-box">
-              <div style="font-size: 13px; color: #166534; font-weight: 600; text-transform: uppercase;">Số tiền đã chuyển khoản:</div>
+              <div style="font-size: 13px; color: #166534; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Số tiền đã chuyển khoản:</div>
               <div class="amount">${formatVND(payload.refundAmount)}</div>
               ${payload.bankAccount ? `
                 <div style="margin-top: 12px; font-size: 13px; color: #14532d;">
@@ -659,7 +659,16 @@ const sendRefundSuccessEmail = async (payload) => {
                   Chủ thẻ: <strong>${payload.accountHolder || payload.customerName}</strong>
                 </div>
               ` : ''}
-              ${payload.adminNote ? `<div style="margin-top: 8px; font-size: 12px; color: #166534; font-style: italic;">Ghi chú: ${payload.adminNote}</div>` : ''}
+            </div>
+
+            <!-- THÔNG TIN CHI TIẾT ĐƠN HỦY SÂN & HOÀN TIỀN -->
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin: 18px 0; font-size: 13px; color: #334155; line-height: 1.8;">
+              <div style="font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">
+                📋 CHI TIẾT ĐƠN HỦY & HOÀN TIỀN
+              </div>
+              <div style="margin-bottom: 4px;">🏟️ <strong>Tên sân:</strong> <span style="color: #0f172a; font-weight: 700;">${payload.pitchName || 'Sân bóng Sport247'}</span></div>
+              <div style="margin-bottom: 4px;">⏰ <strong>Thời gian sử dụng:</strong> <span style="color: #0f172a; font-weight: 700;">${payload.playDate || ''}${payload.playTime ? ` (${payload.playTime})` : ''}</span></div>
+              ${payload.cancelReason ? `<div>❌ <strong>Lý do hủy sân:</strong> <span style="color: #dc2626; font-weight: 700;">${payload.cancelReason}</span></div>` : ''}
             </div>
 
             <p style="font-size: 14px; color: #475569;">
@@ -688,3 +697,119 @@ const sendRefundSuccessEmail = async (payload) => {
     }
 };
 exports.sendRefundSuccessEmail = sendRefundSuccessEmail;
+/**
+ * Gửi email nhắc nhở khách hàng trước 1 tiếng khi thời gian sử dụng sân bắt đầu
+ */
+const sendBookingReminderEmail = async (payload) => {
+    try {
+        if (!payload.toEmail || !payload.toEmail.includes('@')) {
+            return false;
+        }
+        const mailEnabled = await (0, exports.isMailServiceEnabled)();
+        if (!mailEnabled) {
+            console.log(`ℹ️ [MAIL SERVICE TẮT] Bỏ qua gửi email nhắc lịch thi đấu tới ${payload.toEmail}.`);
+            return true;
+        }
+        const mailFrom = process.env.MAIL_FROM || process.env.MAIL_USER || 'Sport247 <no-reply@sport247.vn>';
+        const transporter = createTransporter();
+        const subject = `⏰ [Sport247] Nhắc lịch đá bóng: Sân ${payload.pitchName} lúc ${payload.startTime} hôm nay!`;
+        const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="vi">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #0f172a; margin: 0; padding: 20px; color: #1e293b; }
+          .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+          .header { background: linear-gradient(135deg, #064e3b 0%, #047857 50%, #10b981 100%); padding: 32px 24px; text-align: center; color: white; }
+          .logo { font-size: 28px; font-weight: 900; letter-spacing: 1px; }
+          .logo span { color: #facc15; }
+          .subtitle { color: #a7f3d0; font-size: 13px; margin-top: 6px; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+          .body { padding: 30px 24px; }
+          .badge { display: inline-block; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-size: 13px; font-weight: 900; padding: 8px 18px; border-radius: 30px; margin-bottom: 20px; }
+          .alert-box { background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 12px; padding: 14px 18px; margin: 20px 0; color: #92400e; font-size: 13px; line-height: 1.6; }
+          .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; background: #f8fafc; border-radius: 14px; overflow: hidden; border: 1px solid #e2e8f0; }
+          .info-table td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #edf2f7; }
+          .info-table tr:last-child td { border-bottom: none; }
+          .info-table td.label { color: #64748b; font-weight: 600; width: 38%; }
+          .info-table td.value { color: #0f172a; font-weight: 800; }
+          .guideline { background: #f0fdf4; border: 1px dashed #34d399; border-radius: 14px; padding: 16px 20px; margin: 22px 0; }
+          .guideline-title { font-weight: 800; color: #065f46; font-size: 14px; margin-bottom: 8px; display: flex; items-center; }
+          .guideline-item { font-size: 13px; color: #166534; margin: 4px 0; }
+          .footer { background: #f8fafc; padding: 22px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="logo">⚽ SPORT<span>247</span></div>
+            <div class="subtitle">THÔNG BÁO NHẮC LỊCH SỬ DỤNG SÂN</div>
+          </div>
+          <div class="body">
+            <div class="badge">⏰ CÒN 1 TIẾNG NỮA SẼ ĐẾN GIỜ THI ĐẤU</div>
+            <p style="font-size: 16px; margin-top: 0;">Xin chào <strong>${payload.customerName}</strong>,</p>
+            <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+              Hệ thống <strong>Sport247</strong> xin nhắc bạn có lịch thi đấu bóng đá sắp bắt đầu vào lúc 
+              <strong style="color: #059669; font-size: 16px;">${payload.startTime}</strong> hôm nay.
+            </p>
+
+            <table class="info-table">
+              <tr>
+                <td class="label">Mã đơn đặt:</td>
+                <td class="value">#${payload.bookingId}</td>
+              </tr>
+              <tr>
+                <td class="label">🏟️ Tên sân:</td>
+                <td class="value" style="color: #047857; font-size: 15px;">${payload.pitchName} ${payload.pitchCategory ? `(${payload.pitchCategory})` : ''}</td>
+              </tr>
+              <tr>
+                <td class="label">📅 Ngày đá:</td>
+                <td class="value">${payload.playDate}</td>
+              </tr>
+              <tr>
+                <td class="label">⏰ Khung giờ:</td>
+                <td class="value" style="color: #059669;">${payload.startTime} - ${payload.endTime || ''}</td>
+              </tr>
+              <tr>
+                <td class="label">📍 Địa chỉ trung tâm:</td>
+                <td class="value">Biên Hòa - Đồng Nai</td>
+              </tr>
+              <tr>
+                <td class="label">📞 Hotline hỗ trợ:</td>
+                <td class="value"><a href="tel:0816344504" style="color: #059669; text-decoration: none;">0816.344.504</a></td>
+              </tr>
+            </table>
+
+            <div class="guideline">
+              <div class="guideline-title">📌 LƯU Ý KHI ĐẾN NHẬN SÂN:</div>
+              <div class="guideline-item">• Quý khách vui lòng có mặt tại sân trước <strong>10 - 15 phút</strong> để khởi động và làm thủ tục nhận sân.</div>
+              <div class="guideline-item">• Xuất trình mã đơn <strong>#${payload.bookingId}</strong> hoặc Số điện thoại đăng ký tại quầy lễ tân / POS.</div>
+              <div class="guideline-item">• Trung tâm có sẵn dịch vụ nước uống, đồ ăn nhẹ và cho thuê trang phục, bóng thi đấu.</div>
+            </div>
+
+            <p style="font-size: 14px; color: #475569; text-align: center; margin-top: 24px; font-weight: 600;">
+              Chúc bạn và đồng đội có một trận đấu thật bùng nổ, vui vẻ và fairplay! 🔥⚽
+            </p>
+          </div>
+          <div class="footer">
+            Sport247 • Sân Thể Thao 24/7 • Hotline: <strong>0816.344.504</strong>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+        await transporter.sendMail({
+            from: mailFrom,
+            to: payload.toEmail,
+            subject,
+            html: htmlContent
+        });
+        console.log(`✅ [Nhắc Lịch Thi Đấu] Đã gửi email nhắc trước 1 tiếng cho đơn #${payload.bookingId} tới: ${payload.toEmail}`);
+        return true;
+    }
+    catch (error) {
+        console.error(`❌ [Nhắc Lịch Thi Đấu] Lỗi gửi email nhắc nhở đơn #${payload.bookingId} tới ${payload.toEmail}:`, error.message);
+        return false;
+    }
+};
+exports.sendBookingReminderEmail = sendBookingReminderEmail;

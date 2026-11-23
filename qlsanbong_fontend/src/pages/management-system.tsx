@@ -55,6 +55,7 @@ import {
   Bell,
   QrCode,
   Copy,
+  Download,
   Banknote,
   Smartphone,
   ArrowRightLeft,
@@ -689,6 +690,20 @@ export default function ManagementSystem() {
   const [cashAmountDue, setCashAmountDue] = useState<number>(0);
   const [cashReceivedInput, setCashReceivedInput] = useState<string>('');
   const [pendingCashPaymentInvoice, setPendingCashPaymentInvoice] = useState<DonDatSanPOS | undefined>(undefined);
+
+  // State Modal Mã QR Chuyển Khoản VietQR (MB Bank)
+  const [isQRPaymentModalOpen, setIsQRPaymentModalOpen] = useState<boolean>(false);
+  const [qrAmountDue, setQrAmountDue] = useState<number>(0);
+  const [qrTransferContent, setQrTransferContent] = useState<string>('');
+  const [pendingQRPaymentInvoice, setPendingQRPaymentInvoice] = useState<DonDatSanPOS | undefined>(undefined);
+  const [qrOrderDetails, setQrOrderDetails] = useState<{
+    customerName: string;
+    customerPhone: string;
+    pitchName: string;
+    timeSlot: string;
+    date: string;
+  } | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // State Chuông Thông Báo (Bell notifications - Tiền vào / Đặt sân)
   const [notifications, setNotifications] = useState<POSNotification[]>([
@@ -3123,6 +3138,40 @@ export default function ManagementSystem() {
     }
   };
 
+  const handleCopyText = (text: string, label: string) => {
+    if (typeof window !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedField(label);
+      showToast(`Đã sao chép ${label} vào clipboard!`, 'info', 'Đã Sao Chép');
+      setTimeout(() => setCopiedField(null), 2500);
+    }
+  };
+
+  const handleDownloadQRCode = async (qrUrl: string, fileName: string = 'Sport247_VietQR_POS.png') => {
+    if (!qrUrl) return;
+    try {
+      showToast('Đang tải ảnh mã QR VietQR...', 'info');
+      const response = await fetch(qrUrl);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+      showToast('Tải mã QR thành công!', 'success');
+    } catch (_e) {
+      window.open(qrUrl, '_blank');
+    }
+  };
+
+  const handleConfirmQRPayment = async () => {
+    setIsQRPaymentModalOpen(false);
+    await handlePayOrder(pendingQRPaymentInvoice, true, true);
+  };
+
   const handlePayOrder = async (invoiceToPay?: DonDatSanPOS, skipQRCheck: boolean = false, skipCashCheck: boolean = false) => {
     if (!invoiceToPay && selectedPitches.length === 0 && selectedServices.length === 0) {
       showToast('Giỏ hàng đang trống! Vui lòng chọn sân hoặc dịch vụ trước khi thanh toán.', 'warning', 'Giỏ Hàng Trống');
@@ -3138,6 +3187,48 @@ export default function ManagementSystem() {
       setCashAmountDue(orderTotal);
       setCashReceivedInput(String(orderTotal));
       setIsCashCalculatorModalOpen(true);
+      return;
+    }
+
+    if (paymentMethod === 'CHUYEN_KHOAN' && !skipQRCheck) {
+      const orderTotal = invoiceToPay
+        ? (Number(invoiceToPay.tong_tien || invoiceToPay.tien_san || 0) - Number(invoiceToPay.so_tien_da_tra || 0) > 0
+          ? Number(invoiceToPay.tong_tien || invoiceToPay.tien_san || 0) - Number(invoiceToPay.so_tien_da_tra || 0)
+          : Number(invoiceToPay.tong_tien || invoiceToPay.tien_san || 0))
+        : (amountDueToPay > 0 ? amountDueToPay : grandTotal);
+
+      if (orderTotal <= 0) {
+        showToast('Đơn đặt sân này đã thanh toán đủ 100%!', 'info', 'Đã Thanh Toán Đủ');
+        return;
+      }
+
+      const rawMaDon = invoiceToPay
+        ? (invoiceToPay.ma_don_dat || `HD${invoiceToPay.id}`)
+        : (editingInvoiceId ? `HD${editingInvoiceId}` : `POS${Date.now().toString().slice(-6)}`);
+      
+      const cleanMaDon = String(rawMaDon).replace(/[^a-zA-Z0-9]/g, '');
+      const transferContent = `TT POS ${cleanMaDon}`;
+
+      const khach = customerName.trim() || invoiceToPay?.ten_khach_hang || 'Khách vãng lai';
+      const sdt = customerPhone.trim() || invoiceToPay?.so_dien_thoai || '';
+      const san = selectedPitches.length > 0
+        ? selectedPitches.map((s) => s.pitch.ten_san).join(', ')
+        : (invoiceToPay?.ten_san || 'Dịch vụ tại quầy');
+      const timeStr = selectedPitches.length > 0
+        ? selectedPitches.map((s) => `${s.startTime}-${s.endTime}`).join(', ')
+        : (invoiceToPay ? `${invoiceToPay.gio_bat_dau || ''} - ${invoiceToPay.gio_ket_thuc || ''}` : '');
+
+      setPendingQRPaymentInvoice(invoiceToPay);
+      setQrAmountDue(orderTotal);
+      setQrTransferContent(transferContent);
+      setQrOrderDetails({
+        customerName: khach,
+        customerPhone: sdt,
+        pitchName: san,
+        timeSlot: timeStr,
+        date: formattedDateISO,
+      });
+      setIsQRPaymentModalOpen(true);
       return;
     }
 
@@ -4417,9 +4508,17 @@ export default function ManagementSystem() {
               {/* User badge */}
               {currentUser && (
                 <div className={`hidden md:flex items-center gap-2 pl-2.5 border-l ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-                  <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-black text-xs">
-                    {currentUser.ho_ten?.charAt(0) || 'U'}
-                  </div>
+                  {currentUser.anh_dai_dien ? (
+                    <img
+                      src={currentUser.anh_dai_dien}
+                      alt={currentUser.ho_ten || 'Avatar'}
+                      className="w-7 h-7 rounded-full object-cover border border-emerald-500/40 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-black text-xs">
+                      {currentUser.ho_ten?.charAt(0) || 'U'}
+                    </div>
+                  )}
                   <div className="text-left leading-tight">
                     <div className="text-[11px] font-bold truncate max-w-[110px]">{currentUser.ho_ten}</div>
                     <div className="text-[9px] text-emerald-400 font-mono font-bold uppercase">{getDisplayRole(currentUser)}</div>
@@ -7772,9 +7871,17 @@ export default function ManagementSystem() {
                   {currentUser ? (
                     <div className="space-y-2.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-black text-xs">
-                          {currentUser.ho_ten?.charAt(0) || 'U'}
-                        </div>
+                        {currentUser.anh_dai_dien ? (
+                          <img
+                            src={currentUser.anh_dai_dien}
+                            alt={currentUser.ho_ten || 'Avatar'}
+                            className="w-9 h-9 rounded-full object-cover border border-emerald-500/40 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-black text-xs">
+                            {currentUser.ho_ten?.charAt(0) || 'U'}
+                          </div>
+                        )}
                         <div className="overflow-hidden">
                           <div className="text-xs font-bold truncate">{currentUser.ho_ten}</div>
                           <div className="text-[10px] text-emerald-400 font-mono font-bold uppercase">{getDisplayRole(currentUser)}</div>
@@ -8077,6 +8184,239 @@ export default function ManagementSystem() {
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>Xác Nhận Thanh Toán</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL MÃ QR CHUYỂN KHOẢN VIETQR (POS QUẦY THU NGÂN) */}
+      {/* ========================================================================= */}
+      {isQRPaymentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+          <div className={`w-full max-w-lg rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[92vh] transition-all ${
+            isDarkMode 
+              ? 'bg-slate-900 border-blue-500/40 shadow-blue-950/50 text-white' 
+              : 'bg-white border-blue-300 shadow-slate-300/60 text-slate-900'
+          }`}>
+
+            {/* Header */}
+            <div className={`p-4 sm:p-5 border-b flex items-center justify-between ${
+              isDarkMode ? 'border-slate-800 bg-slate-950/70' : 'border-slate-200 bg-slate-50'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/30">
+                  <QrCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className={`font-extrabold text-base flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    <span>Quét Mã QR Chuyển Khoản</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-500/20 text-blue-400 border border-blue-500/30">VietQR</span>
+                  </h3>
+                  <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'}`}>
+                    MB Bank • Quét nhanh bằng mọi ứng dụng ngân hàng & ví điện tử
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsQRPaymentModalOpen(false)}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                  isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Nội dung chính cuộn nếu màn hình nhỏ */}
+            <div className="p-4 sm:p-5 space-y-4 overflow-y-auto">
+              
+              {/* KHỐI HIỂN THỊ MÃ QR */}
+              <div className="text-center">
+                <div className="p-3 bg-white rounded-2xl border-2 border-blue-500/40 shadow-xl inline-block relative">
+                  <img
+                    src={`https://img.vietqr.io/image/970422-VQRQAMKSW8778-compact2.png?amount=${qrAmountDue}&addInfo=${encodeURIComponent(qrTransferContent)}&accountName=${encodeURIComponent('CAO VAN HOT XOAN')}`}
+                    alt="Mã QR VietQR MB Bank"
+                    className="w-44 h-44 sm:w-52 sm:h-52 object-contain rounded-xl mx-auto"
+                  />
+                  <div className="mt-1 flex items-center justify-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-600">MB Bank • CAO VAN HOT XOAN</span>
+                  </div>
+                </div>
+
+                <div className="mt-2.5 flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadQRCode(
+                      `https://img.vietqr.io/image/970422-VQRQAMKSW8778-compact2.png?amount=${qrAmountDue}&addInfo=${encodeURIComponent(qrTransferContent)}&accountName=${encodeURIComponent('CAO VAN HOT XOAN')}`,
+                      `Sport247_VietQR_${qrTransferContent}.png`
+                    )}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shadow-sm ${
+                      isDarkMode
+                        ? 'bg-slate-800 hover:bg-slate-700 text-blue-400 border-slate-700 hover:border-blue-500/40'
+                        : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'
+                    }`}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Tải ảnh mã QR</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* THÔNG TIN THANH TOÁN CHI TIẾT */}
+              <div className={`p-3.5 rounded-2xl border space-y-2 text-xs ${
+                isDarkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}>
+                {/* Số tiền cần thanh toán */}
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800/60">
+                  <span className={`font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>Số tiền cần trả:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-black text-lg text-emerald-500">
+                      {qrAmountDue.toLocaleString('vi-VN')} VNĐ
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(String(qrAmountDue), 'Số tiền')}
+                      className="p-1 rounded hover:bg-emerald-500/20 text-emerald-400 transition-colors cursor-pointer"
+                      title="Sao chép số tiền"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Ngân hàng */}
+                <div className="flex items-center justify-between">
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Ngân hàng thụ hưởng:</span>
+                  <span className="font-bold flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-blue-600 text-white">MB</span>
+                    <span>MB Bank (Quân Đội)</span>
+                  </span>
+                </div>
+
+                {/* Số tài khoản */}
+                <div className="flex items-center justify-between">
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Số tài khoản:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-black tracking-wider text-cyan-400 text-sm">
+                      VQRQAMKSW8778
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText('VQRQAMKSW8778', 'Số tài khoản')}
+                      className="p-1 rounded hover:bg-cyan-500/20 text-cyan-400 transition-colors cursor-pointer"
+                      title="Sao chép số tài khoản"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chủ tài khoản */}
+                <div className="flex items-center justify-between">
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Chủ tài khoản:</span>
+                  <span className="font-bold tracking-wide">CAO VAN HOT XOAN</span>
+                </div>
+
+                {/* Nội dung chuyển khoản */}
+                <div className="flex items-center justify-between pt-1 border-t border-slate-800/40">
+                  <span className={isDarkMode ? 'text-slate-400' : 'text-slate-600'}>Nội dung CK:</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs">
+                      {qrTransferContent}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyText(qrTransferContent, 'Nội dung chuyển khoản')}
+                      className="p-1 rounded hover:bg-amber-500/20 text-amber-400 transition-colors cursor-pointer"
+                      title="Sao chép nội dung chuyển khoản"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* TÓM TẮT ĐƠN HÀNG */}
+              {qrOrderDetails && (
+                <div className={`p-3 rounded-2xl border text-[11px] space-y-1 ${
+                  isDarkMode ? 'bg-slate-950/40 border-slate-800/80 text-slate-300' : 'bg-slate-100/70 border-slate-200 text-slate-700'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span>Khách hàng:</span>
+                    <span className="font-bold">{qrOrderDetails.customerName} {qrOrderDetails.customerPhone ? `(${qrOrderDetails.customerPhone})` : ''}</span>
+                  </div>
+                  {qrOrderDetails.pitchName && (
+                    <div className="flex items-center justify-between">
+                      <span>Sân bóng:</span>
+                      <span className="font-bold text-emerald-400">{qrOrderDetails.pitchName}</span>
+                    </div>
+                  )}
+                  {qrOrderDetails.timeSlot && (
+                    <div className="flex items-center justify-between">
+                      <span>Khung giờ:</span>
+                      <span className="font-mono font-semibold">{qrOrderDetails.timeSlot}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Hướng dẫn thu ngân */}
+              <div className={`p-2.5 rounded-xl border flex items-center gap-2 text-xs ${
+                isDarkMode ? 'bg-blue-950/30 border-blue-500/30 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-900'
+              }`}>
+                <Sparkles className="w-4 h-4 text-blue-400 shrink-0 animate-pulse" />
+                <span>
+                  Yêu cầu khách quét mã QR để chuyển khoản. Sau khi tiền đã vào tài khoản, nhấn <strong>"Xác Nhận Đã Nhận Tiền"</strong>.
+                </span>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div className={`p-4 sm:p-5 border-t space-y-2.5 ${
+              isDarkMode ? 'border-slate-800 bg-slate-950/60' : 'border-slate-200 bg-slate-50'
+            }`}>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsQRPaymentModalOpen(false)}
+                  className={`py-3 px-4 rounded-2xl font-bold text-sm border transition-all cursor-pointer ${
+                    isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                  }`}
+                >
+                  Hủy / Đóng
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmQRPayment}
+                  className="py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all cursor-pointer active:scale-95"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Xác Nhận Đã Nhận Tiền</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsQRPaymentModalOpen(false);
+                  setPaymentMethod('TIEN_MAT');
+                  const currentInvoice = pendingQRPaymentInvoice;
+                  setTimeout(() => {
+                    handlePayOrder(currentInvoice, true, false);
+                  }, 100);
+                }}
+                className={`w-full py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  isDarkMode ? 'bg-slate-900 hover:bg-slate-800 text-amber-400 border-slate-800 hover:border-amber-500/40' : 'bg-white hover:bg-amber-50 text-amber-700 border-slate-200 hover:border-amber-300'
+                }`}
+              >
+                <Banknote className="w-3.5 h-3.5 text-amber-500" />
+                <span>Khách đổi ý trả Tiền Mặt? Bấm để chuyển sang tính tiền mặt</span>
               </button>
             </div>
 

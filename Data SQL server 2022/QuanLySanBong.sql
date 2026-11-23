@@ -145,6 +145,8 @@ CREATE TABLE Don_Dat_San (
     trang_thai VARCHAR(30) CHECK (trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN', 'CHO_XAC_NHAN', 'DA_COC', 'DANG_DA', 'DA_THANH_TOAN', 'Da Thanh Toan', 'HOAN_THANH', 'DA_HUY', 'DA_CHOT')) DEFAULT 'CHO_THANH_TOAN',
     da_vao_san BIT DEFAULT 0,
     gio_vao_san TIME NULL,
+    da_gui_nhac_nho BIT DEFAULT 0,
+    thoi_gian_nhac_nho DATETIME NULL,
     ngay_tao DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
     FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE CASCADE,
@@ -369,6 +371,21 @@ CREATE TABLE Lich_Su_Doi_San (
     FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id) ON DELETE CASCADE,
     FOREIGN KEY (ma_san_cu) REFERENCES San_Bong(id) ON DELETE NO ACTION,
     FOREIGN KEY (ma_san_moi) REFERENCES San_Bong(id) ON DELETE NO ACTION
+);
+GO
+
+-- 3.21. Bảng Thong_Bao (Lưu trữ thông báo hệ thống và nhắc lịch đặt sân cho người dùng)
+CREATE TABLE Thong_Bao (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ma_nguoi_dung INT NOT NULL,
+    tieu_de NVARCHAR(255) NOT NULL,
+    noi_dung NVARCHAR(MAX) NOT NULL,
+    loai_thong_bao VARCHAR(50) DEFAULT 'NHAC_LICH', -- 'NHAC_LICH', 'DAT_SAN', 'DOI_SAN', 'HOAN_TIEN', 'HE_THONG'
+    ma_don_dat INT NULL,
+    da_doc BIT DEFAULT 0,
+    ngay_tao DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE NO ACTION,
+    FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id) ON DELETE NO ACTION
 );
 GO
 

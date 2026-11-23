@@ -17,6 +17,9 @@ import {
   ShieldCheck,
   Lock,
   Sparkles,
+  CheckCheck,
+  Trash2,
+  Clock,
 } from "lucide-react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
@@ -24,6 +27,20 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/a
 // =====================================================================
 // ĐỊNH NGHĨA KIỂU DỮ LIỆU (INTERFACES)
 // =====================================================================
+
+export interface ThongBaoItem {
+  id: number;
+  ma_nguoi_dung: number;
+  tieu_de: string;
+  noi_dung: string;
+  loai_thong_bao: string;
+  ma_don_dat?: number;
+  da_doc: boolean | number;
+  ngay_tao: string;
+  ngay_da?: string;
+  gio_bat_dau?: string;
+  ten_san?: string;
+}
 
 export interface UserProfileData {
   hoTen: string;
@@ -39,9 +56,10 @@ export interface ProfileProps {
   onLogout?: () => void;
   onClose?: () => void;
   initialData?: Partial<UserProfileData>;
+  onUpdateUser?: (userData: any) => void;
 }
 
-export default function Profile({ onLogout, onClose, initialData }: ProfileProps) {
+export default function Profile({ onLogout, onClose, initialData, onUpdateUser }: ProfileProps) {
   // 1. STATE QUẢN LÝ TAB ĐIỀU HƯỚNG HIỆN TẠI
   const [activeTab, setActiveTab] = useState<TabType>("account");
 
@@ -84,6 +102,75 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState<boolean>(false);
   const [avatarError, setAvatarError] = useState<boolean>(false);
+
+  // 6. STATE THÔNG BÁO HỆ THỐNG & NHẮC LỊCH
+  const [notifications, setNotifications] = useState<ThongBaoItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [loadingNotifications, setLoadingNotifications] = useState<boolean>(false);
+
+  const fetchNotifications = async () => {
+    try {
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('auth_token') || localStorage.getItem('token') || '')
+        : '';
+      if (!token) return;
+
+      setLoadingNotifications(true);
+      const res = await fetch(`${API_BASE_URL}/thong-bao`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setNotifications(data.data);
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (err) {
+      console.error('Lỗi tải thông báo:', err);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  };
+
+  const handleMarkAsRead = async (id: number) => {
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+      await fetch(`${API_BASE_URL}/thong-bao/${id}/da-doc`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, da_doc: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (e) {}
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+      await fetch(`${API_BASE_URL}/thong-bao/doc-tat-ca`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, da_doc: true })));
+      setUnreadCount(0);
+      showToast('Đã đánh dấu tất cả thông báo là đã đọc!', 'success');
+    } catch (e) {}
+  };
+
+  const handleDeleteNotification = async (id: number) => {
+    try {
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+      await fetch(`${API_BASE_URL}/thong-bao/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      showToast('Đã xóa thông báo!', 'info');
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
   // Tự động load thông tin đã đăng nhập từ localStorage và props
   useEffect(() => {
@@ -169,12 +256,14 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
       // 3. Lưu vào localStorage
       const savedAuth = localStorage.getItem("auth_user") || localStorage.getItem("soccer_current_user");
       let userId: number | null = null;
+      let finalAuthObj: any = null;
       if (savedAuth) {
         const parsed = JSON.parse(savedAuth);
         userId = parsed.id || null;
         parsed.anh_dai_dien = newAvatarUrl;
         parsed.avatarUrl = newAvatarUrl;
         localStorage.setItem("auth_user", JSON.stringify(parsed));
+        finalAuthObj = parsed;
       }
       localStorage.setItem("soccer_current_user", JSON.stringify({ ...userData, avatarUrl: newAvatarUrl }));
 
@@ -190,6 +279,14 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
             anh_dai_dien: newAvatarUrl,
           }),
         });
+      }
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("app:user-updated", { detail: finalAuthObj || { anh_dai_dien: newAvatarUrl } }));
+        window.dispatchEvent(new Event("storage"));
+      }
+      if (onUpdateUser && finalAuthObj) {
+        onUpdateUser(finalAuthObj);
       }
 
       showToast("🎉 Đã cập nhật ảnh đại diện thành công!", "success");
@@ -240,6 +337,7 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
 
     try {
       let userId: number | null = null;
+      let finalAuthObj: any = null;
       const savedAuth = localStorage.getItem("auth_user") || localStorage.getItem("soccer_current_user");
       if (savedAuth) {
         const parsed = JSON.parse(savedAuth);
@@ -251,12 +349,22 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
         parsed.diaChi = updatedData.diaChi;
         parsed.dia_chi = updatedData.diaChi;
         localStorage.setItem("auth_user", JSON.stringify(parsed));
+        finalAuthObj = parsed;
+      } else {
+        finalAuthObj = {
+          ho_ten: updatedData.hoTen,
+          hoTen: updatedData.hoTen,
+          email: userData.email,
+          so_dien_thoai: updatedData.soDienThoai,
+          dia_chi: updatedData.diaChi
+        };
+        localStorage.setItem("auth_user", JSON.stringify(finalAuthObj));
       }
       localStorage.setItem("soccer_current_user", JSON.stringify(updatedData));
 
       // Đồng bộ trực tiếp vào CSDL SQL Server qua API
       if (userId) {
-        await fetch(`${API_BASE_URL}/auth/users/${userId}`, {
+        const res = await fetch(`${API_BASE_URL}/auth/users/${userId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -266,13 +374,28 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
             dia_chi: updatedData.diaChi,
             diaChi: updatedData.diaChi,
             anh_dai_dien: userData.avatarUrl,
+            vai_tro: finalAuthObj?.vai_tro || undefined
           }),
         });
+        const resJson = await res.json();
+        if (resJson.success && resJson.data) {
+          finalAuthObj = {
+            ...finalAuthObj,
+            ...resJson.data,
+            ho_ten: resJson.data.ho_ten || updatedData.hoTen,
+            hoTen: resJson.data.ho_ten || updatedData.hoTen
+          };
+          localStorage.setItem("auth_user", JSON.stringify(finalAuthObj));
+        }
       }
 
       // Kích hoạt sự kiện để Navbar và các thành phần khác đồng bộ ngay
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("app:user-updated"));
+        window.dispatchEvent(new CustomEvent("app:user-updated", { detail: finalAuthObj }));
+        window.dispatchEvent(new Event("storage"));
+      }
+      if (onUpdateUser && finalAuthObj) {
+        onUpdateUser(finalAuthObj);
       }
     } catch (err) {
       console.warn("Lỗi lưu thông tin:", err);
@@ -400,7 +523,10 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
 
             <button
               type="button"
-              onClick={() => setActiveTab("notifications")}
+              onClick={() => {
+                setActiveTab("notifications");
+                fetchNotifications();
+              }}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                 activeTab === "notifications"
                   ? "bg-emerald-500 text-slate-950 shadow-md font-black"
@@ -410,8 +536,12 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
               <Bell className="w-3.5 h-3.5" />
               <span>Thông báo</span>
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                activeTab === "notifications" ? "bg-emerald-800 text-white" : "bg-slate-900 text-slate-400 border border-slate-800"
-              }`}>0</span>
+                unreadCount > 0
+                  ? "bg-rose-500 text-white animate-pulse"
+                  : activeTab === "notifications"
+                  ? "bg-emerald-800 text-white"
+                  : "bg-slate-900 text-slate-400 border border-slate-800"
+              }`}>{unreadCount}</span>
             </button>
           </nav>
 
@@ -544,14 +674,126 @@ export default function Profile({ onLogout, onClose, initialData }: ProfileProps
 
             {/* TAB 2: THÔNG BÁO */}
             {activeTab === "notifications" && (
-              <div className="flex flex-col justify-center items-center py-10 text-center space-y-2">
-                <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500">
-                  <Bell className="w-6 h-6" />
+              <div className="space-y-3">
+                {/* Header thanh công cụ thông báo */}
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Bell className="w-4 h-4 text-emerald-400" />
+                    <span>Hộp thư thông báo ({notifications.length})</span>
+                    {unreadCount > 0 && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold">
+                        {unreadCount} chưa đọc
+                      </span>
+                    )}
+                  </div>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllAsRead}
+                      className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span>Đánh dấu tất cả đã đọc</span>
+                    </button>
+                  )}
                 </div>
-                <h4 className="text-sm font-bold text-slate-200">Không có thông báo mới</h4>
-                <p className="text-xs text-slate-400 max-w-xs">
-                  Hiện tại bạn chưa có thông báo mới nào từ hệ thống.
-                </p>
+
+                {loadingNotifications ? (
+                  <div className="py-8 text-center text-xs text-slate-400">
+                    <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                    Đang tải thông báo...
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="flex flex-col justify-center items-center py-10 text-center space-y-2">
+                    <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-slate-500">
+                      <Bell className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-200">Không có thông báo mới</h4>
+                    <p className="text-xs text-slate-400 max-w-xs">
+                      Hiện tại bạn chưa có thông báo mới nào từ hệ thống.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+                    {notifications.map((n) => {
+                      const isUnread = !n.da_doc || n.da_doc === 0;
+                      const isReminder = n.loai_thong_bao === 'NHAC_LICH';
+
+                      return (
+                        <div
+                          key={n.id}
+                          className={`p-3.5 rounded-2xl border transition-all relative group ${
+                            isUnread
+                              ? 'bg-slate-800/90 border-emerald-500/40 shadow-md ring-1 ring-emerald-500/30'
+                              : 'bg-slate-950/70 border-slate-800/80 text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
+                              isReminder
+                                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            }`}>
+                              {isReminder ? <Clock className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <h5 className={`text-xs font-black truncate ${isUnread ? 'text-white' : 'text-slate-200'}`}>
+                                  {n.tieu_de}
+                                </h5>
+                                <span className="text-[10px] text-slate-400 font-mono shrink-0">
+                                  {n.ngay_tao ? new Date(n.ngay_tao).toLocaleDateString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : ''}
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-slate-300 leading-relaxed break-words whitespace-pre-line">
+                                {n.noi_dung}
+                              </p>
+
+                              <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-700/50">
+                                <div className="flex items-center gap-1.5">
+                                  {isUnread && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-full">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                      Mới
+                                    </span>
+                                  )}
+                                  {n.ten_san && (
+                                    <span className="text-[10px] text-slate-400 font-medium">
+                                      🏟️ {n.ten_san}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                  {isUnread && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMarkAsRead(n.id)}
+                                      className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded-lg hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                                      title="Đánh dấu đã đọc"
+                                    >
+                                      Đã đọc
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteNotification(n.id)}
+                                    className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                    title="Xóa thông báo"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

@@ -1263,7 +1263,18 @@ BEGIN
                 CAST(NULL AS NVARCHAR(100)) AS ten_ngan_hang,
                 CAST(NULL AS VARCHAR(50)) AS so_tai_khoan,
                 CAST(NULL AS NVARCHAR(100)) AS ten_chu_tai_khoan,
-                CAST(NULL AS DATETIME) AS ngay_chuyen_khoan
+                CAST(NULL AS DATETIME) AS ngay_chuyen_khoan,
+                0 AS da_doi_san,
+                0 AS so_lan_doi,
+                CAST(NULL AS NVARCHAR(100)) AS ten_san_cu,
+                CAST(NULL AS VARCHAR(10)) AS ngay_da_cu,
+                CAST(NULL AS VARCHAR(10)) AS ngay_da_cu_dmy,
+                CAST(NULL AS VARCHAR(5)) AS gio_bat_dau_cu,
+                CAST(NULL AS VARCHAR(5)) AS gio_ket_thuc_cu,
+                CAST(0 AS DECIMAL(10,2)) AS tien_san_cu,
+                CAST(0 AS DECIMAL(10,2)) AS chenh_lech_doi_san,
+                CAST(NULL AS DATETIME) AS ngay_doi_san,
+                CAST(NULL AS NVARCHAR(255)) AS ly_do_doi_san
             FROM Don_Dat_San d
             LEFT JOIN San_Bong sb ON d.ma_san = sb.id
             LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
@@ -1339,7 +1350,18 @@ BEGIN
             ht.ten_ngan_hang,
             ht.so_tai_khoan,
             ht.ten_chu_tai_khoan,
-            ht.ngay_chuyen_khoan
+            ht.ngay_chuyen_khoan,
+            ISNULL(ex.da_doi_san, 0) AS da_doi_san,
+            ISNULL(ex.so_lan_doi, 0) AS so_lan_doi,
+            ex.ten_san_cu,
+            ex.ngay_da_cu,
+            ex.ngay_da_cu_dmy,
+            ex.gio_bat_dau_cu,
+            ex.gio_ket_thuc_cu,
+            ex.tien_san_cu,
+            ex.chenh_lech_tien AS chenh_lech_doi_san,
+            ex.ngay_doi AS ngay_doi_san,
+            ex.ly_do_doi AS ly_do_doi_san
         FROM Don_Dat_San d
         LEFT JOIN San_Bong sb ON d.ma_san = sb.id
         LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
@@ -1357,6 +1379,24 @@ BEGIN
             WHERE ht_sub.ma_don_dat = d.id
             ORDER BY ht_sub.id DESC
         ) ht
+        OUTER APPLY (
+            SELECT TOP 1
+                1 AS da_doi_san,
+                (SELECT COUNT(1) FROM Lich_Su_Doi_San ls_cnt WHERE ls_cnt.ma_don_dat = d.id) AS so_lan_doi,
+                sc_sub.ten_san AS ten_san_cu,
+                CONVERT(VARCHAR(10), ls_sub.ngay_da_cu, 120) AS ngay_da_cu,
+                CONVERT(VARCHAR(10), ls_sub.ngay_da_cu, 103) AS ngay_da_cu_dmy,
+                CONVERT(VARCHAR(5), ls_sub.gio_bat_dau_cu, 108) AS gio_bat_dau_cu,
+                CONVERT(VARCHAR(5), ls_sub.gio_ket_thuc_cu, 108) AS gio_ket_thuc_cu,
+                ls_sub.tien_san_cu,
+                ls_sub.chenh_lech_tien,
+                ls_sub.ngay_doi,
+                ls_sub.ly_do_doi
+            FROM Lich_Su_Doi_San ls_sub
+            LEFT JOIN San_Bong sc_sub ON ls_sub.ma_san_cu = sc_sub.id
+            WHERE ls_sub.ma_don_dat = d.id
+            ORDER BY ls_sub.id DESC
+        ) ex
         WHERE (
             (@ma_nguoi_dung IS NOT NULL AND d.ma_nguoi_dung = @ma_nguoi_dung)
             OR (@clean_phone IS NOT NULL AND REPLACE(REPLACE(nd.so_dien_thoai, ' ', ''), '.', '') = @clean_phone)
@@ -1483,6 +1523,7 @@ BEGIN
             JOIN #TempSanDat t ON d.ma_san = t.ma_san AND d.ngay_da = t.ngay_da
             WHERE d.trang_thai NOT IN ('DA_HUY', N'Đã hủy')
               AND NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%')
+              AND NOT EXISTS (SELECT 1 FROM Chi_Tiet_Don_Dat ct_check WHERE ct_check.ma_don_dat = d.id)
               AND t.gio_bat_dau < d.gio_ket_thuc 
               AND t.gio_ket_thuc > d.gio_bat_dau
         ) OR EXISTS (
@@ -1494,6 +1535,13 @@ BEGIN
               AND NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%')
               AND t.gio_bat_dau < ct.gio_ket_thuc 
               AND t.gio_ket_thuc > ct.gio_bat_dau
+        ) OR EXISTS (
+            SELECT 1 
+            FROM #TempSanDat t1
+            JOIN #TempSanDat t2 ON t1.ma_san = t2.ma_san AND t1.ngay_da = t2.ngay_da
+            WHERE (t1.gio_bat_dau <> t2.gio_bat_dau OR t1.gio_ket_thuc <> t2.gio_ket_thuc)
+              AND t1.gio_bat_dau < t2.gio_ket_thuc 
+              AND t1.gio_ket_thuc > t2.gio_bat_dau
         )
         BEGIN
             ;THROW 50023, N'Một trong các sân bạn chọn đã có người đặt trong khung giờ này. Vui lòng chọn lại!', 1;
@@ -2127,6 +2175,8 @@ BEGIN
             sb.ten_san,
             d.ngay_da,
             CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da_dmy,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
             ht.so_tien_hoan,
             ht.ty_le_hoan,
             ht.ly_do_huy,
@@ -2525,6 +2575,8 @@ BEGIN
             sb.ten_san,
             d.ngay_da,
             CONVERT(VARCHAR(10), d.ngay_da, 103) AS ngay_da_dmy,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
             ht.so_tien_hoan,
             ht.ty_le_hoan,
             ht.ly_do_huy,
@@ -2663,19 +2715,97 @@ BEGIN
                 ;THROW 50031, N'Loại sân không tồn tại.', 1;
             END;
 
-            -- 1. Xóa các đơn đặt sân liên quan đến các sân thuộc loại sân này
+            -- 0. Xóa lịch sử đổi sân nếu có tham chiếu đến sân thuộc loại này
+            IF OBJECT_ID('Lich_Su_Doi_San', 'U') IS NOT NULL
+            BEGIN
+                DELETE FROM Lich_Su_Doi_San 
+                WHERE ma_san_cu IN (SELECT id FROM San_Bong WHERE ma_loai_san = @id)
+                   OR ma_san_moi IN (SELECT id FROM San_Bong WHERE ma_loai_san = @id);
+            END;
+
+            -- 1. Xóa lịch cố định liên quan đến các sân thuộc loại này
+            IF OBJECT_ID('Lich_Co_Dinh', 'U') IS NOT NULL
+            BEGIN
+                DELETE FROM Lich_Co_Dinh 
+                WHERE ma_san IN (SELECT id FROM San_Bong WHERE ma_loai_san = @id);
+            END;
+
+            -- 2. Xóa các đơn đặt sân liên quan đến các sân thuộc loại sân này
             DELETE FROM Don_Dat_San 
             WHERE ma_san IN (SELECT id FROM San_Bong WHERE ma_loai_san = @id);
 
-            -- 2. Xóa tất cả các sân bóng thuộc loại sân này
+            -- 3. Xóa tất cả các sân bóng thuộc loại sân này
             DELETE FROM San_Bong 
             WHERE ma_loai_san = @id;
 
-            -- 3. Xóa loại sân
+            -- 4. Xóa loại sân
             DELETE FROM Loai_San 
             WHERE id = @id;
 
         COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- Thủ tục: sp_XoaLoaiSanDuBi (Xóa bỏ hoàn toàn tính năng và dữ liệu sân dự bị)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_XoaLoaiSanDuBi
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+            -- 1. Tìm ID của các loại sân mang tên 'Dự Bị', 'Du Bi', 'Dự phòng'
+            DECLARE @DuBiTable TABLE (id INT);
+            INSERT INTO @DuBiTable (id)
+            SELECT id FROM Loai_San 
+            WHERE LOWER(ten_loai) LIKE N'%dự bị%' 
+               OR LOWER(ten_loai) LIKE N'%du bi%'
+               OR LOWER(ten_loai) LIKE N'%dự phòng%'
+               OR LOWER(ten_loai) LIKE N'%du phong%'
+               OR id = 3;
+
+            -- 2. Tìm ID của các sân bóng thuộc loại dự bị hoặc có tên dự bị
+            DECLARE @SanDuBiTable TABLE (id INT);
+            INSERT INTO @SanDuBiTable (id)
+            SELECT id FROM San_Bong 
+            WHERE ma_loai_san IN (SELECT id FROM @DuBiTable)
+               OR LOWER(ten_san) LIKE N'%dự bị%'
+               OR LOWER(ten_san) LIKE N'%du bi%';
+
+            -- 3. Xóa các bảng phụ thuộc nếu có tham chiếu
+            IF OBJECT_ID('Lich_Su_Doi_San', 'U') IS NOT NULL
+            BEGIN
+                DELETE FROM Lich_Su_Doi_San 
+                WHERE ma_san_cu IN (SELECT id FROM @SanDuBiTable)
+                   OR ma_san_moi IN (SELECT id FROM @SanDuBiTable);
+            END;
+
+            IF OBJECT_ID('Lich_Co_Dinh', 'U') IS NOT NULL
+            BEGIN
+                DELETE FROM Lich_Co_Dinh 
+                WHERE ma_san IN (SELECT id FROM @SanDuBiTable);
+            END;
+
+            DELETE FROM Don_Dat_San 
+            WHERE ma_san IN (SELECT id FROM @SanDuBiTable);
+
+            -- 4. Xóa các sân bóng dự bị
+            DELETE FROM San_Bong 
+            WHERE id IN (SELECT id FROM @SanDuBiTable);
+
+            -- 5. Xóa các loại sân dự bị
+            DELETE FROM Loai_San 
+            WHERE id IN (SELECT id FROM @DuBiTable);
+
+        COMMIT TRANSACTION;
+        SELECT 1 AS success, N'Đã xóa toàn bộ loại sân dự bị và sân dự bị thành công' AS message;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0
@@ -2800,12 +2930,17 @@ CREATE OR ALTER PROCEDURE sp_ThemDonDatVaThanhToan
     @so_tien DECIMAL(10, 2) = NULL,
     @trang_thai_gd VARCHAR(20) = 'THANH_CONG',
     @ten_khach_hang NVARCHAR(100) = NULL,
-    @so_dien_thoai VARCHAR(20) = NULL
+    @so_dien_thoai VARCHAR(20) = NULL,
+    @danh_sach_ma_san VARCHAR(500) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     BEGIN TRANSACTION;
     BEGIN TRY
+        IF @ma_san IS NULL AND @danh_sach_ma_san IS NOT NULL
+        BEGIN
+            SET @ma_san = CAST((SELECT TOP 1 value FROM STRING_SPLIT(@danh_sach_ma_san, ',')) AS INT);
+        END;
         DECLARE @clean_gbd VARCHAR(8) = CASE 
             WHEN @gio_bat_dau LIKE '24:00%' THEN '23:59:59'
             WHEN LEN(LTRIM(RTRIM(@gio_bat_dau))) = 5 THEN CONCAT(LTRIM(RTRIM(@gio_bat_dau)), ':00')
@@ -2943,7 +3078,8 @@ CREATE OR ALTER PROCEDURE sp_SuaDonDatVaThanhToan
     @so_tien DECIMAL(10, 2) = NULL,
     @trang_thai_gd VARCHAR(20) = 'THANH_CONG',
     @ten_khach_hang NVARCHAR(100) = NULL,
-    @so_dien_thoai VARCHAR(20) = NULL
+    @so_dien_thoai VARCHAR(20) = NULL,
+    @danh_sach_ma_san VARCHAR(500) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -2952,6 +3088,11 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM Don_Dat_San WHERE id = @id)
         BEGIN
             ;THROW 50055, N'Đơn đặt sân không tồn tại.', 1;
+        END;
+
+        IF @ma_san IS NULL AND @danh_sach_ma_san IS NOT NULL
+        BEGIN
+            SET @ma_san = CAST((SELECT TOP 1 value FROM STRING_SPLIT(@danh_sach_ma_san, ',')) AS INT);
         END;
 
         DECLARE @clean_gbd VARCHAR(8) = CASE 
@@ -5896,7 +6037,18 @@ BEGIN
 
         -- Xác định hoặc tạo người dùng nếu cần
         DECLARE @final_user_id INT = @ma_nguoi_dung;
-        IF @final_user_id IS NULL AND @so_dien_thoai IS NOT NULL
+        IF @final_user_id IS NOT NULL
+        BEGIN
+            IF (@ten_doi_bong IS NULL OR LTRIM(RTRIM(@ten_doi_bong)) = '')
+            BEGIN
+                SELECT TOP 1 @ten_doi_bong = ho_ten FROM Nguoi_Dung WHERE id = @final_user_id;
+            END;
+            IF (@so_dien_thoai IS NULL OR LTRIM(RTRIM(@so_dien_thoai)) = '')
+            BEGIN
+                SELECT TOP 1 @so_dien_thoai = so_dien_thoai FROM Nguoi_Dung WHERE id = @final_user_id;
+            END;
+        END
+        ELSE IF @so_dien_thoai IS NOT NULL
         BEGIN
             SELECT TOP 1 @final_user_id = id FROM Nguoi_Dung WHERE so_dien_thoai = @so_dien_thoai;
             IF @final_user_id IS NULL
@@ -6085,6 +6237,7 @@ GO
 -- =====================================================================
 CREATE OR ALTER PROCEDURE sp_CapNhatLichCoDinh
     @id INT,
+    @ma_nguoi_dung INT = NULL,
     @ten_doi_bong NVARCHAR(100) = NULL,
     @so_dien_thoai VARCHAR(20) = NULL,
     @don_gia_moi_buoi DECIMAL(10, 2) = NULL,
@@ -6112,6 +6265,7 @@ BEGIN
 
         UPDATE Lich_Co_Dinh
         SET 
+            ma_nguoi_dung = ISNULL(@ma_nguoi_dung, ma_nguoi_dung),
             ten_doi_bong = ISNULL(@ten_doi_bong, ten_doi_bong),
             so_dien_thoai = ISNULL(@so_dien_thoai, so_dien_thoai),
             don_gia_moi_buoi = @currentDonGia,
@@ -6120,6 +6274,14 @@ BEGIN
             trang_thai = ISNULL(@trang_thai, trang_thai),
             ghi_chu = @ghi_chu
         WHERE id = @id;
+
+        IF @ma_nguoi_dung IS NOT NULL
+        BEGIN
+            UPDATE Don_Dat_San
+            SET ma_nguoi_dung = @ma_nguoi_dung
+            WHERE ma_lich_co_dinh = @id
+              AND ngay_da >= CAST(GETDATE() AS DATE);
+        END;
 
         -- Nếu chuyển trạng thái sang DA_HUY, tự động hủy các buổi chưa diễn ra
         IF @trang_thai = 'DA_HUY'
@@ -6664,6 +6826,12 @@ BEGIN
             ;THROW 50052, N'Đơn đặt sân đang diễn ra hoặc đã hoàn thành, không thể đổi sân.', 1;
         END;
 
+        -- Mỗi đơn đặt sân chỉ được đổi sân 1 lần duy nhất
+        IF EXISTS (SELECT 1 FROM Lich_Su_Doi_San WHERE ma_don_dat = @ma_don_dat)
+        BEGIN
+            ;THROW 50059, N'Mỗi đơn đặt sân chỉ được phép đổi sân tối đa 1 lần duy nhất!', 1;
+        END;
+
         -- 2. Kiểm tra điều kiện thời gian tối thiểu 30 phút trước giờ đá cũ
         DECLARE @thoi_diem_da_cu DATETIME2;
         SET @thoi_diem_da_cu = DATEADD(second, DATEDIFF(second, '00:00:00', @gio_bat_dau_cu), CAST(@ngay_da_cu AS DATETIME2));
@@ -6884,6 +7052,12 @@ BEGIN
         IF @trang_thai_cu IN ('HOAN_THANH', 'DANG_DA')
         BEGIN
             ;THROW 50052, N'Đơn đặt sân đang diễn ra hoặc đã hoàn thành, không thể đổi sân.', 1;
+        END;
+
+        -- Mỗi đơn đặt sân chỉ được đổi sân 1 lần duy nhất
+        IF EXISTS (SELECT 1 FROM Lich_Su_Doi_San WHERE ma_don_dat = @ma_don_dat)
+        BEGIN
+            ;THROW 50059, N'Mỗi đơn đặt sân chỉ được phép đổi sân tối đa 1 lần duy nhất!', 1;
         END;
 
         -- Kiểm tra quyền sở hữu đơn
@@ -7134,10 +7308,10 @@ BEGIN
             CONVERT(VARCHAR(10), ls.ngay_da_cu, 103) AS ngay_da_cu_dmy,
             ls.ngay_da_moi,
             CONVERT(VARCHAR(10), ls.ngay_da_moi, 103) AS ngay_da_moi_dmy,
-            ls.gio_bat_dau_cu,
-            ls.gio_ket_thuc_cu,
-            ls.gio_bat_dau_moi,
-            ls.gio_ket_thuc_moi,
+            CONVERT(VARCHAR(5), ls.gio_bat_dau_cu, 108) AS gio_bat_dau_cu,
+            CONVERT(VARCHAR(5), ls.gio_ket_thuc_cu, 108) AS gio_ket_thuc_cu,
+            CONVERT(VARCHAR(5), ls.gio_bat_dau_moi, 108) AS gio_bat_dau_moi,
+            CONVERT(VARCHAR(5), ls.gio_ket_thuc_moi, 108) AS gio_ket_thuc_moi,
             ls.tien_san_cu,
             ls.tien_san_moi,
             ls.da_thanh_toan_cu,
@@ -7201,6 +7375,14 @@ BEGIN
         IF @ma_san_cu IS NULL
         BEGIN
             RAISERROR(N'Không tìm thấy đơn đặt sân!', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END;
+
+        -- Mỗi đơn đặt sân chỉ được đổi sân 1 lần duy nhất
+        IF EXISTS (SELECT 1 FROM Lich_Su_Doi_San WHERE ma_don_dat = @ma_don_dat)
+        BEGIN
+            RAISERROR(N'Mỗi đơn đặt sân chỉ được phép đổi sân tối đa 1 lần duy nhất!', 16, 1);
             ROLLBACK TRANSACTION;
             RETURN;
         END;
@@ -7322,6 +7504,192 @@ BEGIN
         DELETE FROM Lich_Su_Doi_San WHERE id = @id;
 
         SELECT @id AS id, N'Đã xóa bản ghi đổi sân thành công!' AS thong_bao;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 135. THỦ TỤC THÊM THÔNG BÁO CHO NGƯỜI DÙNG (sp_ThemThongBao)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_ThemThongBao
+    @ma_nguoi_dung INT,
+    @tieu_de NVARCHAR(255),
+    @noi_dung NVARCHAR(MAX),
+    @loai_thong_bao VARCHAR(50) = 'NHAC_LICH',
+    @ma_don_dat INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        INSERT INTO Thong_Bao (ma_nguoi_dung, tieu_de, noi_dung, loai_thong_bao, ma_don_dat, da_doc, ngay_tao)
+        VALUES (@ma_nguoi_dung, @tieu_de, @noi_dung, @loai_thong_bao, @ma_don_dat, 0, GETDATE());
+
+        SELECT SCOPE_IDENTITY() AS id, N'Thêm thông báo thành công' AS thong_bao;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 136. THỦ TỤC LẤY DANH SÁCH THÔNG BÁO CỦA NGƯỜI DÙNG (sp_LayDanhSachThongBao)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_LayDanhSachThongBao
+    @ma_nguoi_dung INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT 
+            tb.id,
+            tb.ma_nguoi_dung,
+            tb.tieu_de,
+            tb.noi_dung,
+            tb.loai_thong_bao,
+            tb.ma_don_dat,
+            tb.da_doc,
+            tb.ngay_tao,
+            d.ngay_da,
+            d.gio_bat_dau,
+            sb.ten_san
+        FROM Thong_Bao tb
+        LEFT JOIN Don_Dat_San d ON tb.ma_don_dat = d.id
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        WHERE tb.ma_nguoi_dung = @ma_nguoi_dung
+        ORDER BY tb.ngay_tao DESC, tb.id DESC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 137. THỦ TỤC ĐÁNH DẤU THÔNG BÁO ĐÃ ĐỌC (sp_DanhDauDaDocThongBao)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_DanhDauDaDocThongBao
+    @id INT,
+    @ma_nguoi_dung INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        UPDATE Thong_Bao
+        SET da_doc = 1
+        WHERE id = @id AND ma_nguoi_dung = @ma_nguoi_dung;
+
+        SELECT 1 AS thanh_cong, N'Đã đánh dấu thông báo đã đọc' AS thong_bao;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 138. THỦ TỤC ĐÁNH DẤU TẤT CẢ THÔNG BÁO ĐÃ ĐỌC (sp_DanhDauDocTatCaThongBao)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_DanhDauDocTatCaThongBao
+    @ma_nguoi_dung INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        UPDATE Thong_Bao
+        SET da_doc = 1
+        WHERE ma_nguoi_dung = @ma_nguoi_dung AND da_doc = 0;
+
+        SELECT 1 AS thanh_cong, N'Đã đánh dấu tất cả thông báo là đã đọc' AS thong_bao;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 139. THỦ TỤC XÓA THÔNG BÁO (sp_XoaThongBao)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_XoaThongBao
+    @id INT,
+    @ma_nguoi_dung INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        DELETE FROM Thong_Bao
+        WHERE id = @id AND ma_nguoi_dung = @ma_nguoi_dung;
+
+        SELECT 1 AS thanh_cong, N'Đã xóa thông báo' AS thong_bao;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 140. THỦ TỤC LẤY ĐƠN ĐẶT SÂN CẦN GỬI NHẮC NHỞ TRƯỚC 1 TIẾNG (sp_LayDonDatSanCanNhacNho)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_LayDonDatSanCanNhacNho
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        DECLARE @now DATETIME = GETDATE();
+
+        SELECT 
+            d.id AS ma_don_dat,
+            d.ma_nguoi_dung,
+            nd.ho_ten AS ten_khach_hang,
+            nd.email,
+            nd.so_dien_thoai,
+            d.ma_san,
+            sb.ten_san,
+            ls.ten_loai AS ten_loai_san,
+            d.ngay_da,
+            CONVERT(VARCHAR(5), d.gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
+            d.tong_tien,
+            d.trang_thai,
+            DATEDIFF(MINUTE, @now, CAST(CONCAT(CONVERT(VARCHAR(10), d.ngay_da, 120), ' ', CONVERT(VARCHAR(8), d.gio_bat_dau, 108)) AS DATETIME)) AS phut_con_lai
+        FROM Don_Dat_San d
+        INNER JOIN Nguoi_Dung nd ON d.ma_nguoi_dung = nd.id
+        LEFT JOIN San_Bong sb ON d.ma_san = sb.id
+        LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
+        WHERE ISNULL(d.da_gui_nhac_nho, 0) = 0
+          AND d.da_vao_san = 0
+          AND d.trang_thai NOT IN ('DA_HUY', 'CHO_THANH_TOAN')
+          AND nd.email IS NOT NULL AND LTRIM(RTRIM(nd.email)) <> ''
+          -- Quét các đơn bắt đầu trong vòng 60 phút tới (cho phép sai số 15 phút nếu chạy trễ hoặc vừa tới giờ)
+          AND DATEDIFF(MINUTE, @now, CAST(CONCAT(CONVERT(VARCHAR(10), d.ngay_da, 120), ' ', CONVERT(VARCHAR(8), d.gio_bat_dau, 108)) AS DATETIME)) BETWEEN -15 AND 65
+        ORDER BY d.ngay_da ASC, d.gio_bat_dau ASC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 141. THỦ TỤC ĐÁNH DẤU ĐÃ GỬI NHẮC NHỞ CHO ĐƠN ĐẶT SÂN (sp_DanhDauDaGuiNhacNhoDonDatSan)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_DanhDauDaGuiNhacNhoDonDatSan
+    @ma_don_dat INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        UPDATE Don_Dat_San
+        SET da_gui_nhac_nho = 1,
+            thoi_gian_nhac_nho = GETDATE()
+        WHERE id = @ma_don_dat;
+
+        SELECT 1 AS thanh_cong, N'Đã đánh dấu gửi thông báo nhắc nhở thành công' AS thong_bao;
     END TRY
     BEGIN CATCH
         ;THROW;

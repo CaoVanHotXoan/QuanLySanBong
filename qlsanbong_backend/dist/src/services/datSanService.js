@@ -229,6 +229,7 @@ const capNhatLichCoDinh = async (params) => {
     const pool = await db_1.poolPromise;
     const result = await pool.request()
         .input('id', db_1.sql.Int, params.id)
+        .input('ma_nguoi_dung', db_1.sql.Int, params.ma_nguoi_dung || null)
         .input('ten_doi_bong', db_1.sql.NVarChar(100), params.ten_doi_bong || null)
         .input('so_dien_thoai', db_1.sql.VarChar(20), params.so_dien_thoai || null)
         .input('don_gia_moi_buoi', db_1.sql.Decimal(10, 2), params.don_gia_moi_buoi !== undefined ? params.don_gia_moi_buoi : null)

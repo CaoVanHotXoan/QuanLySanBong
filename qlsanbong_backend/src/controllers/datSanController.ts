@@ -1113,6 +1113,18 @@ export const kiemTraDoiSan = async (req: AuthRequest, res: Response) => {
         }
 
         const pool = await poolPromise;
+
+        // Quy định: Mỗi đơn đặt sân chỉ được phép đổi sân 1 lần duy nhất
+        const checkDoiSan = await pool.request()
+            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+            .query('SELECT TOP 1 id FROM Lich_Su_Doi_San WHERE ma_don_dat = @ma_don_dat');
+        if (checkDoiSan.recordset && checkDoiSan.recordset.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mỗi đơn đặt sân chỉ được phép đổi sân tối đa 1 lần duy nhất!'
+            });
+        }
+
         const result = await pool.request()
             .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
             .input('ma_san_moi', sql.Int, parseInt(ma_san_moi, 10))
@@ -1178,6 +1190,18 @@ export const xacNhanDoiSan = async (req: AuthRequest, res: Response) => {
             : null;
 
         const pool = await poolPromise;
+
+        // Quy định: Mỗi đơn đặt sân chỉ được phép đổi sân 1 lần duy nhất
+        const checkDoiSan = await pool.request()
+            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+            .query('SELECT TOP 1 id FROM Lich_Su_Doi_San WHERE ma_don_dat = @ma_don_dat');
+        if (checkDoiSan.recordset && checkDoiSan.recordset.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mỗi đơn đặt sân chỉ được phép đổi sân tối đa 1 lần duy nhất!'
+            });
+        }
+
         const result = await pool.request()
             .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
             .input('ma_san_moi', sql.Int, parseInt(ma_san_moi, 10))
@@ -2609,6 +2633,18 @@ export const themDoiSanAdmin = async (req: AuthRequest, res: Response) => {
             : null;
 
         const pool = await poolPromise;
+
+        // Quy định: Mỗi đơn đặt sân chỉ được phép đổi sân 1 lần duy nhất
+        const checkDoiSan = await pool.request()
+            .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
+            .query('SELECT TOP 1 id FROM Lich_Su_Doi_San WHERE ma_don_dat = @ma_don_dat');
+        if (checkDoiSan.recordset && checkDoiSan.recordset.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mỗi đơn đặt sân chỉ được phép đổi sân tối đa 1 lần duy nhất!'
+            });
+        }
+
         const result = await pool.request()
             .input('ma_don_dat', sql.Int, parseInt(ma_don_dat, 10))
             .input('ma_san_moi', sql.Int, parseInt(ma_san_moi, 10))

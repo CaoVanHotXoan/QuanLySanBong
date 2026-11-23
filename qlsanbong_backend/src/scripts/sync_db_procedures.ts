@@ -879,6 +879,7 @@ async function syncProcedures() {
                   JOIN #TempSanDat t ON d.ma_san = t.ma_san AND d.ngay_da = t.ngay_da
                   WHERE d.trang_thai NOT IN ('DA_HUY', N'Đã hủy')
                     AND NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%')
+                    AND NOT EXISTS (SELECT 1 FROM Chi_Tiet_Don_Dat ct_check WHERE ct_check.ma_don_dat = d.id)
                     AND t.gio_bat_dau < d.gio_ket_thuc 
                     AND t.gio_ket_thuc > d.gio_bat_dau
               ) OR EXISTS (
@@ -890,6 +891,13 @@ async function syncProcedures() {
                     AND NOT (d.trang_thai IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN') AND d.ghi_chu LIKE '%PayOS%')
                     AND t.gio_bat_dau < ct.gio_ket_thuc 
                     AND t.gio_ket_thuc > ct.gio_bat_dau
+              ) OR EXISTS (
+                  SELECT 1 
+                  FROM #TempSanDat t1
+                  JOIN #TempSanDat t2 ON t1.ma_san = t2.ma_san AND t1.ngay_da = t2.ngay_da
+                  WHERE (t1.gio_bat_dau <> t2.gio_bat_dau OR t1.gio_ket_thuc <> t2.gio_ket_thuc)
+                    AND t1.gio_bat_dau < t2.gio_ket_thuc 
+                    AND t1.gio_ket_thuc > t2.gio_bat_dau
               )
               BEGIN
                   ;THROW 50023, N'Một trong các sân bạn chọn đã có người đặt trong khung giờ này. Vui lòng chọn lại!', 1;
@@ -961,6 +969,112 @@ async function syncProcedures() {
       END;
     `);
     console.log('✅ Đã tạo / cập nhật sp_DatNhieuSan');
+
+    // 19. Cập nhật sp_XoaLoaiSan và sp_XoaLoaiSanDuBi
+    await pool.request().query(`
+      CREATE OR ALTER PROCEDURE sp_XoaLoaiSan
+          @id INT
+      AS
+      BEGIN
+          SET NOCOUNT ON;
+          BEGIN TRY
+              BEGIN TRANSACTION;
+                  IF NOT EXISTS (SELECT 1 FROM Loai_San WHERE id = @id)
+                  BEGIN
+                      ;THROW 50031, N'Loại sân không tồn tại.', 1;
+                  END;
+
+                  IF OBJECT_ID('Lich_Su_Doi_San', 'U') IS NOT NULL
+                  BEGIN
+                      DELETE FROM Lich_Su_Doi_San 
+                      WHERE ma_san_cu IN (SELECT id FROM San_Bong WHERE ma_loai_san = @id)
+                         OR ma_san_moi IN (SELECT id FROM San_Bong WHERE ma_loai_san = @id);
+                  END;
+
+                  IF OBJECT_ID('Lich_Co_Dinh', 'U') IS NOT NULL
+                  BEGIN
+                      DELETE FROM Lich_Co_Dinh 
+                      WHERE ma_san IN (SELECT id FROM San_Bong WHERE ma_loai_san = @id);
+                  END;
+
+                  DELETE FROM Don_Dat_San 
+                  WHERE ma_san IN (SELECT id FROM San_Bong WHERE ma_loai_san = @id);
+
+                  DELETE FROM San_Bong 
+                  WHERE ma_loai_san = @id;
+
+                  DELETE FROM Loai_San 
+                  WHERE id = @id;
+
+              COMMIT TRANSACTION;
+          END TRY
+          BEGIN CATCH
+              IF @@TRANCOUNT > 0
+                  ROLLBACK TRANSACTION;
+              ;THROW;
+          END CATCH;
+      END;
+    `);
+
+    await pool.request().query(`
+      CREATE OR ALTER PROCEDURE sp_XoaLoaiSanDuBi
+      AS
+      BEGIN
+          SET NOCOUNT ON;
+          BEGIN TRY
+              BEGIN TRANSACTION;
+                  DECLARE @DuBiTable TABLE (id INT);
+                  INSERT INTO @DuBiTable (id)
+                  SELECT id FROM Loai_San 
+                  WHERE LOWER(ten_loai) LIKE N'%dự bị%' 
+                     OR LOWER(ten_loai) LIKE N'%du bi%'
+                     OR LOWER(ten_loai) LIKE N'%dự phòng%'
+                     OR LOWER(ten_loai) LIKE N'%du phong%'
+                     OR id = 3;
+
+                  DECLARE @SanDuBiTable TABLE (id INT);
+                  INSERT INTO @SanDuBiTable (id)
+                  SELECT id FROM San_Bong 
+                  WHERE ma_loai_san IN (SELECT id FROM @DuBiTable)
+                     OR LOWER(ten_san) LIKE N'%dự bị%'
+                     OR LOWER(ten_san) LIKE N'%du bi%';
+
+                  IF OBJECT_ID('Lich_Su_Doi_San', 'U') IS NOT NULL
+                  BEGIN
+                      DELETE FROM Lich_Su_Doi_San 
+                      WHERE ma_san_cu IN (SELECT id FROM @SanDuBiTable)
+                         OR ma_san_moi IN (SELECT id FROM @SanDuBiTable);
+                  END;
+
+                  IF OBJECT_ID('Lich_Co_Dinh', 'U') IS NOT NULL
+                  BEGIN
+                      DELETE FROM Lich_Co_Dinh 
+                      WHERE ma_san IN (SELECT id FROM @SanDuBiTable);
+                  END;
+
+                  DELETE FROM Don_Dat_San 
+                  WHERE ma_san IN (SELECT id FROM @SanDuBiTable);
+
+                  DELETE FROM San_Bong 
+                  WHERE id IN (SELECT id FROM @SanDuBiTable);
+
+                  DELETE FROM Loai_San 
+                  WHERE id IN (SELECT id FROM @DuBiTable);
+
+              COMMIT TRANSACTION;
+              SELECT 1 AS success, N'Đã xóa toàn bộ loại sân dự bị và sân dự bị thành công' AS message;
+          END TRY
+          BEGIN CATCH
+              IF @@TRANCOUNT > 0
+                  ROLLBACK TRANSACTION;
+              ;THROW;
+          END CATCH;
+      END;
+    `);
+
+    // Thực thi dọn dẹp các sân dự bị nếu có
+    await pool.request().execute('sp_XoaLoaiSanDuBi');
+    console.log('✅ Đã tạo / cập nhật sp_XoaLoaiSan, sp_XoaLoaiSanDuBi và dọn sạch sân dự bị');
 
     console.log('🎉 Đồng bộ SQL Server hoàn tất thành công 100%!');
     process.exit(0);

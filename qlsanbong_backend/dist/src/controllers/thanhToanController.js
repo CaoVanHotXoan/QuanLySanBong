@@ -47,7 +47,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.huyDonTamPayOS = exports.xoaHoanTien = exports.hoanTacHoanTien = exports.xacNhanHoanTien = exports.suaHoanTien = exports.themHoanTien = exports.layDanhSachHoanTien = exports.layDanhSachThanhToan = exports.xacNhanWebhookUrl = exports.xuLyWebhookPayOS = exports.kiemTraTrangThaiPayOS = exports.taoThanhToanPayOS = exports.thanhToanDon = exports.lamSachNoiDungChuyenKhoan = void 0;
+exports.taiAnhQRCode = exports.layDanhSachNganHang = exports.huyDonTamPayOS = exports.xoaHoanTien = exports.hoanTacHoanTien = exports.xacNhanHoanTien = exports.suaHoanTien = exports.themHoanTien = exports.layDanhSachHoanTien = exports.layDanhSachThanhToan = exports.xacNhanWebhookUrl = exports.xuLyWebhookPayOS = exports.kiemTraTrangThaiPayOS = exports.taoThanhToanPayOS = exports.thanhToanDon = exports.lamSachNoiDungChuyenKhoan = void 0;
 const db_1 = require("../config/db");
 const payos_1 = __importDefault(require("../config/payos"));
 const datSanController_1 = require("./datSanController");
@@ -827,17 +827,23 @@ const xacNhanHoanTien = async (req, res) => {
         }
         // Tự động gửi email thông báo hoàn tiền thành công tới khách hàng nếu có email
         if (updated && updated.email) {
+            let pitchName = updated.ten_san;
+            let playDate = updated.ngay_da_dmy || (updated.ngay_da ? new Date(updated.ngay_da).toLocaleDateString('vi-VN') : '');
+            let playTime = (updated.gio_bat_dau && updated.gio_ket_thuc)
+                ? `${String(updated.gio_bat_dau).substring(0, 5)} - ${String(updated.gio_ket_thuc).substring(0, 5)}`
+                : (updated.gio_bat_dau ? String(updated.gio_bat_dau).substring(0, 5) : '');
             emailService.sendRefundSuccessEmail({
                 toEmail: updated.email,
                 customerName: updated.ten_khach_hang || updated.ten_chu_tai_khoan || 'Quý khách',
                 bookingId: updated.ma_don_dat,
-                pitchName: updated.ten_san,
-                playDate: updated.ngay_da,
+                pitchName: pitchName || 'Sân bóng Sport247',
+                playDate: playDate || '',
+                playTime: playTime || '',
+                cancelReason: updated.ly_do_huy || 'Hủy sân theo quy định',
                 refundAmount: updated.so_tien_hoan,
                 bankName: updated.ten_ngan_hang,
                 bankAccount: updated.so_tai_khoan,
-                accountHolder: updated.ten_chu_tai_khoan,
-                adminNote: updated.ghi_chu_admin
+                accountHolder: updated.ten_chu_tai_khoan
             }).catch((err) => console.warn('Lỗi gửi email hoàn tiền:', err.message));
         }
         return res.status(200).json({
@@ -961,3 +967,102 @@ const huyDonTamPayOS = async (req, res) => {
     }
 };
 exports.huyDonTamPayOS = huyDonTamPayOS;
+/**
+ * Danh sách ngân hàng chuẩn Napas dự phòng
+ */
+const DEFAULT_BANKS = [
+    { id: 21, code: 'MB', shortName: 'MBBank', name: 'Ngân hàng TMCP Quân đội', bin: '970422' },
+    { id: 43, code: 'VCB', shortName: 'Vietcombank', name: 'Ngân hàng TMCP Ngoại Thương Việt Nam', bin: '970436' },
+    { id: 17, code: 'ICB', shortName: 'VietinBank', name: 'Ngân hàng TMCP Công thương Việt Nam', bin: '970415' },
+    { id: 2, code: 'BIDV', shortName: 'BIDV', name: 'Ngân hàng TMCP Đầu tư và Phát triển Việt Nam', bin: '970418' },
+    { id: 38, code: 'TCB', shortName: 'Techcombank', name: 'Ngân hàng TMCP Kỹ thương Việt Nam', bin: '970407' },
+    { id: 47, code: 'VPB', shortName: 'VPBank', name: 'Ngân hàng TMCP Việt Nam Thịnh Vượng', bin: '970432' },
+    { id: 1, code: 'ACB', shortName: 'ACB', name: 'Ngân hàng TMCP Á Châu', bin: '970416' },
+    { id: 42, code: 'VBA', shortName: 'Agribank', name: 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam', bin: '970405' },
+    { id: 40, code: 'TPB', shortName: 'TPBank', name: 'Ngân hàng TMCP Tiên Phong', bin: '970423' },
+    { id: 35, code: 'STB', shortName: 'Sacombank', name: 'Ngân hàng TMCP Sài Gòn Thương Tín', bin: '970403' },
+    { id: 13, code: 'HDB', shortName: 'HDBank', name: 'Ngân hàng TMCP Phát triển TP.HCM', bin: '970437' },
+    { id: 44, code: 'VIB', shortName: 'VIB', name: 'Ngân hàng TMCP Quốc tế Việt Nam', bin: '970441' },
+    { id: 33, code: 'SHB', shortName: 'SHB', name: 'Ngân hàng TMCP Sài Gòn - Hà Nội', bin: '970443' },
+    { id: 22, code: 'MSB', shortName: 'MSB', name: 'Ngân hàng TMCP Hàng Hải', bin: '970426' },
+    { id: 32, code: 'SSB', shortName: 'SeABank', name: 'Ngân hàng TMCP Đông Nam Á', bin: '970440' },
+    { id: 27, code: 'OCB', shortName: 'OCB', name: 'Ngân hàng TMCP Phương Đông', bin: '970448' },
+    { id: 9, code: 'EIB', shortName: 'Eximbank', name: 'Ngân hàng TMCP Xuất Nhập khẩu Việt Nam', bin: '970431' },
+    { id: 20, code: 'LPB', shortName: 'LPBank', name: 'Ngân hàng TMCP Lộc Phát Việt Nam', bin: '970449' }
+];
+let cachedBanks = null;
+let lastBanksFetchTime = 0;
+/**
+ * Lấy danh sách ngân hàng thương mại Việt Nam (Dữ liệu thật 100% từ VietQR / Napas Open API)
+ * GET /api/thanh-toan/danh-sach-ngan-hang
+ */
+const layDanhSachNganHang = async (req, res) => {
+    try {
+        const now = Date.now();
+        if (cachedBanks && cachedBanks.length > 0 && now - lastBanksFetchTime < 1000 * 60 * 60 * 24) {
+            return res.status(200).json({ success: true, data: cachedBanks });
+        }
+        const response = await fetch('https://api.vietqr.io/v2/banks', { signal: AbortSignal.timeout(4000) });
+        const data = await response.json();
+        if (data && data.code === '00' && Array.isArray(data.data)) {
+            cachedBanks = data.data.map((b) => ({
+                id: b.id,
+                name: b.name,
+                code: b.code,
+                bin: b.bin,
+                shortName: b.shortName || b.short_name,
+                logo: b.logo
+            }));
+            lastBanksFetchTime = now;
+            return res.status(200).json({ success: true, data: cachedBanks });
+        }
+        return res.status(200).json({ success: true, data: DEFAULT_BANKS });
+    }
+    catch (error) {
+        return res.status(200).json({ success: true, data: cachedBanks || DEFAULT_BANKS });
+    }
+};
+exports.layDanhSachNganHang = layDanhSachNganHang;
+/**
+ * API: GET /api/thanh-toan/tai-qr
+ * Proxy tải ảnh mã QR từ VietQR CDN về máy người dùng
+ * Giải quyết triệt để lỗi CORS của trình duyệt web khi client tải ảnh trực tiếp từ img.vietqr.io
+ * Trả về header Content-Disposition: attachment; filename="..." để trình duyệt tải trực tiếp về máy, không mở tab mới
+ */
+const taiAnhQRCode = async (req, res) => {
+    try {
+        const { url, fileName } = req.query;
+        if (!url || typeof url !== 'string') {
+            return res.status(400).json({ success: false, message: 'Thiếu đường dẫn URL ảnh QR!' });
+        }
+        // Kiểm tra an toàn: Chỉ cho phép proxy từ hệ thống VietQR
+        if (!url.startsWith('https://img.vietqr.io/') && !url.startsWith('https://api.vietqr.io/')) {
+            return res.status(403).json({ success: false, message: 'Nguồn ảnh không hợp lệ!' });
+        }
+        // Tự động chuẩn hóa đuôi .svg sang .png nếu có, để thiết bị và App ngân hàng quét được trực tiếp
+        const pngUrl = url.replace(/\.svg(\?|$)/i, '.png$1');
+        const targetFileName = (typeof fileName === 'string' && fileName.trim())
+            ? (fileName.trim().endsWith('.png') ? fileName.trim() : `${fileName.trim()}.png`)
+            : 'Sport247_VietQR_MBBank.png';
+        let qrRes = await fetch(pngUrl, { signal: AbortSignal.timeout(8000) });
+        if (!qrRes.ok) {
+            // Thử tải lại với URL gốc nếu .png không khả dụng
+            qrRes = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (!qrRes.ok) {
+                return res.status(qrRes.status).json({ success: false, message: 'Không thể lấy ảnh từ máy chủ VietQR' });
+            }
+        }
+        const arrayBuffer = await qrRes.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const contentType = qrRes.headers.get('content-type') || 'image/png';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${targetFileName}"`);
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+        return res.send(buffer);
+    }
+    catch (error) {
+        console.error('Lỗi khi proxy tải ảnh VietQR:', error);
+        return res.status(500).json({ success: false, message: 'Lỗi khi tải ảnh mã QR về máy: ' + error.message });
+    }
+};
+exports.taiAnhQRCode = taiAnhQRCode;

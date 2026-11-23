@@ -10,7 +10,7 @@
  * =====================================================================
  */
 
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { sql, poolPromise } from '../config/db';
 import payOS from '../config/payos';
 import { AuthRequest } from '../types';
@@ -871,17 +871,24 @@ export const xacNhanHoanTien = async (req: AuthRequest, res: Response) => {
 
         // Tự động gửi email thông báo hoàn tiền thành công tới khách hàng nếu có email
         if (updated && updated.email) {
+            let pitchName = updated.ten_san;
+            let playDate = updated.ngay_da_dmy || (updated.ngay_da ? new Date(updated.ngay_da).toLocaleDateString('vi-VN') : '');
+            let playTime = (updated.gio_bat_dau && updated.gio_ket_thuc)
+                ? `${String(updated.gio_bat_dau).substring(0, 5)} - ${String(updated.gio_ket_thuc).substring(0, 5)}`
+                : (updated.gio_bat_dau ? String(updated.gio_bat_dau).substring(0, 5) : '');
+
             emailService.sendRefundSuccessEmail({
                 toEmail: updated.email,
                 customerName: updated.ten_khach_hang || updated.ten_chu_tai_khoan || 'Quý khách',
                 bookingId: updated.ma_don_dat,
-                pitchName: updated.ten_san,
-                playDate: updated.ngay_da,
+                pitchName: pitchName || 'Sân bóng Sport247',
+                playDate: playDate || '',
+                playTime: playTime || '',
+                cancelReason: updated.ly_do_huy || 'Hủy sân theo quy định',
                 refundAmount: updated.so_tien_hoan,
                 bankName: updated.ten_ngan_hang,
                 bankAccount: updated.so_tai_khoan,
-                accountHolder: updated.ten_chu_tai_khoan,
-                adminNote: updated.ghi_chu_admin
+                accountHolder: updated.ten_chu_tai_khoan
             }).catch((err: any) => console.warn('Lỗi gửi email hoàn tiền:', err.message));
         }
 
@@ -1064,5 +1071,52 @@ export const layDanhSachNganHang = async (req: AuthRequest, res: Response) => {
         return res.status(200).json({ success: true, data: DEFAULT_BANKS });
     } catch (error: any) {
         return res.status(200).json({ success: true, data: cachedBanks || DEFAULT_BANKS });
+    }
+};
+
+/**
+ * API: GET /api/thanh-toan/tai-qr
+ * Proxy tải ảnh mã QR từ VietQR CDN về máy người dùng
+ * Giải quyết triệt để lỗi CORS của trình duyệt web khi client tải ảnh trực tiếp từ img.vietqr.io
+ * Trả về header Content-Disposition: attachment; filename="..." để trình duyệt tải trực tiếp về máy, không mở tab mới
+ */
+export const taiAnhQRCode = async (req: Request, res: Response) => {
+    try {
+        const { url, fileName } = req.query;
+        if (!url || typeof url !== 'string') {
+            return res.status(400).json({ success: false, message: 'Thiếu đường dẫn URL ảnh QR!' });
+        }
+
+        // Kiểm tra an toàn: Chỉ cho phép proxy từ hệ thống VietQR
+        if (!url.startsWith('https://img.vietqr.io/') && !url.startsWith('https://api.vietqr.io/')) {
+            return res.status(403).json({ success: false, message: 'Nguồn ảnh không hợp lệ!' });
+        }
+
+        // Tự động chuẩn hóa đuôi .svg sang .png nếu có, để thiết bị và App ngân hàng quét được trực tiếp
+        const pngUrl = url.replace(/\.svg(\?|$)/i, '.png$1');
+        const targetFileName = (typeof fileName === 'string' && fileName.trim())
+            ? (fileName.trim().endsWith('.png') ? fileName.trim() : `${fileName.trim()}.png`)
+            : 'Sport247_VietQR_MBBank.png';
+
+        let qrRes = await fetch(pngUrl, { signal: AbortSignal.timeout(8000) });
+        if (!qrRes.ok) {
+            // Thử tải lại với URL gốc nếu .png không khả dụng
+            qrRes = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (!qrRes.ok) {
+                return res.status(qrRes.status).json({ success: false, message: 'Không thể lấy ảnh từ máy chủ VietQR' });
+            }
+        }
+
+        const arrayBuffer = await qrRes.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const contentType = qrRes.headers.get('content-type') || 'image/png';
+
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${targetFileName}"`);
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+        return res.send(buffer);
+    } catch (error: any) {
+        console.error('Lỗi khi proxy tải ảnh VietQR:', error);
+        return res.status(500).json({ success: false, message: 'Lỗi khi tải ảnh mã QR về máy: ' + error.message });
     }
 };

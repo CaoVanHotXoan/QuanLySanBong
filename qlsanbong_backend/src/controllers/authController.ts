@@ -539,7 +539,7 @@ export const suaNguoiDung = async (req: AuthRequest, res: Response) => {
                 .input('ho_ten', sql.NVarChar(100), ho_ten)
                 .input('email', sql.VarChar(255), email)
                 .input('so_dien_thoai', sql.VarChar(15), so_dien_thoai || null)
-                .input('vai_tro', sql.VarChar(20), vai_tro || 'KHACH_HANG')
+                .input('vai_tro', sql.VarChar(20), vai_tro || null)
                 .input('mat_khau', sql.VarChar(255), hashedPassword)
                 .input('dia_chi', sql.NVarChar(255), userDiaChi)
                 .execute('sp_SuaNguoiDung');
