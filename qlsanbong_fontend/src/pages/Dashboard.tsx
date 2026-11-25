@@ -229,6 +229,10 @@ export interface DonDatSan {
     don_vi_tinh?: string;
     thanh_tien?: number;
   }[];
+  ma_loai_san?: number;
+  ten_loai?: string;
+  ma_voucher?: string;
+  tien_giam_gia?: number;
 }
 
 // 5. Chi_Tiet_Dich_Vu
@@ -875,7 +879,9 @@ export default function AdminDashboard() {
     }
   });
 
-  // 3 Bộ lọc cho Bảng Đơn Đặt Sân & Thanh Toán
+  // Bộ lọc cho Đơn Đặt Sân & Thanh Toán
+  const [filterCourtType, setFilterCourtType] = useState<string>('ALL');
+  const [filterCourtId, setFilterCourtId] = useState<string>('ALL');
   const [filterPaymentMethod, setFilterPaymentMethod] = useState<'ALL' | 'TIEN_MAT' | 'CHUYEN_KHOAN'>('ALL');
   const [filterBookingStatus, setFilterBookingStatus] = useState<'ALL' | 'DA_THANH_TOAN' | 'DA_COC' | 'CHUA_THANH_TOAN' | 'DA_HUY'>('ALL');
   const [filterCustomerType, setFilterCustomerType] = useState<'ALL' | 'KHACH_LE' | 'KHACH_DAT'>('ALL');
@@ -2170,17 +2176,33 @@ export default function AdminDashboard() {
     });
   }, [courtList, bookingList, selectedDate]);
 
-  // Danh sách Đơn Đặt Sân & Thanh Toán theo 3 Bộ Lọc: Phương Thức, Trạng Thái, Khách Lẻ Quầy
+  // Danh sách Đơn Đặt Sân & Thanh Toán theo các Bộ Lọc: Loại Sân, Sân Bóng, Phương Thức, Trạng Thái, Khách Lẻ Quầy
   const filteredBookingList = useMemo(() => {
     return bookingList.filter((b) => {
-      // 1. Lọc Phương Thức
+      // 1. Lọc Loại Sân
+      if (filterCourtType !== 'ALL') {
+        const court = courtList.find((c) => Number(c.id) === Number(b.ma_san));
+        const courtTypeId = court ? String(court.ma_loai_san) : String(b.ma_loai_san || '');
+        const courtTypeName = (b.ten_loai || '').toLowerCase();
+        const targetType = String(filterCourtType).toLowerCase();
+        if (courtTypeId !== filterCourtType && !courtTypeName.includes(targetType)) {
+          return false;
+        }
+      }
+
+      // 2. Lọc Sân Bóng Cụ Thể
+      if (filterCourtId !== 'ALL') {
+        if (Number(b.ma_san) !== Number(filterCourtId)) return false;
+      }
+
+      // 3. Lọc Phương Thức
       if (filterPaymentMethod !== 'ALL') {
         const pm = (b.phuong_thuc || 'TIEN_MAT').toUpperCase();
         if (filterPaymentMethod === 'CHUYEN_KHOAN' && pm !== 'CHUYEN_KHOAN') return false;
         if (filterPaymentMethod === 'TIEN_MAT' && pm === 'CHUYEN_KHOAN') return false;
       }
 
-      // 2. Lọc Trạng Thái
+      // 4. Lọc Trạng Thái
       if (filterBookingStatus !== 'ALL') {
         const soTienDaTra = Number(b.so_tien_da_tra || b.tien_coc_da_tra || 0);
         const tongTien = Number(b.tong_tien || b.tien_san || 0);
@@ -2210,7 +2232,7 @@ export default function AdminDashboard() {
         if (filterBookingStatus === 'DA_HUY' && !isCancelled) return false;
       }
 
-      // 3. Lọc Khách Lẻ Quầy
+      // 5. Lọc Khách Lẻ Quầy
       if (filterCustomerType !== 'ALL') {
         const name = (b.ten_khach_hang || '').toLowerCase();
         const san = (b.ten_san || '').toLowerCase();
@@ -2222,7 +2244,7 @@ export default function AdminDashboard() {
 
       return true;
     });
-  }, [bookingList, filterPaymentMethod, filterBookingStatus, filterCustomerType]);
+  }, [bookingList, courtList, filterCourtType, filterCourtId, filterPaymentMethod, filterBookingStatus, filterCustomerType]);
 
   // =====================================================================
   // HANDLERS CRUD CHO TẤT CẢ CÁC BẢNG (GỌI STORED PROCEDURES)
@@ -3606,6 +3628,54 @@ export default function AdminDashboard() {
     return Math.round(diffMinutes * donGiaPhut);
   };
 
+  // Helper tính số tiền giảm giá của voucher
+  const calculateVoucherDiscount = (voucherCode: string, subtotal: number): number => {
+    if (!voucherCode || !voucherCode.trim()) return 0;
+    const v = voucherList.find(
+      (x) => x.ma_code.toUpperCase() === voucherCode.trim().toUpperCase()
+    );
+    if (!v) return 0;
+    if (v.don_toi_thieu && subtotal < Number(v.don_toi_thieu)) return 0;
+    let discount = 0;
+    if (v.loai_giam === 'PHAN_TRAM') {
+      discount = Math.round((subtotal * Number(v.gia_tri_giam)) / 100);
+      if (v.giam_toi_da && discount > Number(v.giam_toi_da)) {
+        discount = Number(v.giam_toi_da);
+      }
+    } else {
+      discount = Number(v.gia_tri_giam || 0);
+    }
+    return Math.min(discount, subtotal);
+  };
+
+  // Helper cập nhật tổng tiền & tiền giảm giá trong bookingModal
+  const updateBookingModalTotals = (prevData: any, newTienSan?: number, newDichVuList?: any[], newVoucherCode?: string) => {
+    const ts = newTienSan !== undefined ? Number(newTienSan || 0) : Number(prevData.tien_san || 0);
+    const dvList = newDichVuList !== undefined ? newDichVuList : (prevData.dich_vu_list || []);
+    const totalDv = dvList.reduce((sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0), 0);
+    const vCode = newVoucherCode !== undefined ? newVoucherCode : (prevData.ma_voucher || '');
+    const subtotal = ts + totalDv;
+    const discount = calculateVoucherDiscount(vCode, subtotal);
+    const finalTongTien = Math.max(0, subtotal - discount);
+
+    let nextSoTien = prevData.so_tien;
+    if (prevData.trang_thai === 'DA_THANH_TOAN') {
+      nextSoTien = finalTongTien;
+    } else if (prevData.trang_thai === 'DA_COC') {
+      nextSoTien = Math.round(finalTongTien * 0.3);
+    }
+
+    return {
+      ...prevData,
+      tien_san: ts,
+      dich_vu_list: dvList,
+      ma_voucher: vCode,
+      tien_giam_gia: discount,
+      tong_tien: finalTongTien,
+      so_tien: nextSoTien,
+    };
+  };
+
   // Helper tính lại tiền và đồng bộ danh sách sân đã chọn trong bookingModal
   const recalculateBookingWithCourts = (newCourtIds: number[], overrideData?: any, updatedChiTiet?: any[]) => {
     const curData = overrideData ? { ...bookingModal.data, ...overrideData } : bookingModal.data;
@@ -3639,7 +3709,8 @@ export default function AdminDashboard() {
     );
     const primaryCourt = courtList.find((c) => c.id === ids[0]);
     const finalPrice = autoPrice > 0 ? autoPrice : (curData.tien_san || 0);
-    const finalTongTien = finalPrice + totalDv;
+    const discount = calculateVoucherDiscount(curData.ma_voucher, finalPrice + totalDv);
+    const finalTongTien = Math.max(0, finalPrice + totalDv - discount);
 
     let nextSoTien = curData.so_tien;
     if (curData.trang_thai === 'DA_THANH_TOAN') {
@@ -3658,6 +3729,7 @@ export default function AdminDashboard() {
         chi_tiet_san: nextDetails,
         ten_san: primaryCourt?.ten_san,
         tien_san: finalPrice,
+        tien_giam_gia: discount,
         tong_tien: finalTongTien,
         so_tien: nextSoTien
       }
@@ -3744,7 +3816,7 @@ export default function AdminDashboard() {
   // 9. Thêm/Sửa Đơn Đặt Sân & Thanh Toán (Don_Dat_San & Thanh_Toan)
   const handleSaveDonDatThanhToan = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { id, ma_san, danh_sach_ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, dich_vu_list } = bookingModal.data;
+    const { id, ma_san, danh_sach_ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, dich_vu_list, ma_voucher, tien_giam_gia } = bookingModal.data;
 
     const selectedSanIds = Array.isArray(danh_sach_ma_san) && danh_sach_ma_san.length > 0
       ? danh_sach_ma_san.map(Number)
@@ -3799,7 +3871,9 @@ export default function AdminDashboard() {
             loai_thanh_toan: finalLoaiTT,
             so_tien: finalSoTien,
             trang_thai_gd: finalTrangThaiGd,
-            dich_vu_list: dich_vu_list || []
+            dich_vu_list: dich_vu_list || [],
+            ma_voucher: ma_voucher || null,
+            tien_giam_gia: Number(tien_giam_gia || 0)
           })
         });
         const data = await res.json();
@@ -3835,7 +3909,9 @@ export default function AdminDashboard() {
             loai_thanh_toan: finalLoaiTT,
             so_tien: finalSoTien,
             trang_thai_gd: finalTrangThaiGd,
-            dich_vu_list: dich_vu_list || []
+            dich_vu_list: dich_vu_list || [],
+            ma_voucher: ma_voucher || null,
+            tien_giam_gia: Number(tien_giam_gia || 0)
           })
         });
         const data = await res.json();
@@ -6232,42 +6308,101 @@ export default function AdminDashboard() {
               const pagedData = getPaginatedData(filteredBookingList, 'DON_DAT_THANH_TOAN', 10);
               return (
               <div className={`rounded-2xl border overflow-hidden shadow-xl ${isDarkMode ? 'bg-[#0b132b] border-emerald-900/40 text-white' : 'bg-white border-slate-300 shadow-md text-[#0f172a]'}`}>
-                <div className={`p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
+                <div className={`p-4 md:p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-3.5 border-b ${isDarkMode ? 'border-emerald-900/40 bg-[#101c3d]' : 'border-slate-200 bg-slate-50'}`}>
                   <div>
-                    <h3 className="text-base font-black flex items-center gap-2">
-                      <Receipt className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                      Bảng Đơn Đặt Sân & Thanh Toán
+                    <h3 className="text-base font-black flex items-start gap-2 text-slate-900 dark:text-white shrink-0">
+                      <Receipt className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                      <div className="leading-tight">
+                        <span className="block whitespace-nowrap">Đơn Đặt Sân</span>
+                        <span className="block text-xs font-extrabold text-slate-700 dark:text-slate-300 mt-0.5 whitespace-nowrap">& Thanh Toán</span>
+                      </div>
                     </h3>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    {/* NÚT LỌC 1: PHƯƠNG THỨC */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* LỌC 1: THEO LOẠI SÂN */}
+                    <div className="relative">
+                      <select
+                        value={filterCourtType}
+                        onChange={(e) => setFilterCourtType(e.target.value)}
+                        className={`text-xs font-semibold pl-2.5 pr-7 py-1.5 rounded-lg border transition-all cursor-pointer outline-none appearance-none ${
+                          filterCourtType !== 'ALL'
+                            ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
+                            : isDarkMode
+                            ? 'bg-[#070d1e] border-slate-700 text-slate-300 hover:border-emerald-500'
+                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500'
+                        }`}
+                        title="Lọc theo loại sân"
+                      >
+                        <option value="ALL">🏟️ Loại sân: Tất cả</option>
+                        {categoryList.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.ten_loai}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                    </div>
+
+                    {/* LỌC 2: THEO SÂN BÓNG */}
+                    <div className="relative">
+                      <select
+                        value={filterCourtId}
+                        onChange={(e) => setFilterCourtId(e.target.value)}
+                        className={`text-xs font-semibold pl-2.5 pr-7 py-1.5 rounded-lg border transition-all cursor-pointer outline-none appearance-none ${
+                          filterCourtId !== 'ALL'
+                            ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
+                            : isDarkMode
+                            ? 'bg-[#070d1e] border-slate-700 text-slate-300 hover:border-emerald-500'
+                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500'
+                        }`}
+                        title="Lọc theo từng sân bóng"
+                      >
+                        <option value="ALL">⚽ Sân: Tất cả</option>
+                        {courtList
+                          .filter((c) => filterCourtType === 'ALL' || String(c.ma_loai_san) === String(filterCourtType))
+                          .map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.ten_san}
+                            </option>
+                          ))}
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                    </div>
+
+                    {/* LỌC 3: PHƯƠNG THỨC */}
                     <div className="relative">
                       <select
                         value={filterPaymentMethod}
                         onChange={(e) => setFilterPaymentMethod(e.target.value as any)}
-                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${isDarkMode
-                            ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
-                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
-                          }`}
+                        className={`text-xs font-semibold pl-2.5 pr-7 py-1.5 rounded-lg border transition-all cursor-pointer outline-none appearance-none ${
+                          filterPaymentMethod !== 'ALL'
+                            ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
+                            : isDarkMode
+                            ? 'bg-[#070d1e] border-slate-700 text-slate-300 hover:border-emerald-500'
+                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500'
+                        }`}
                         title="Lọc theo phương thức thanh toán"
                       >
                         <option value="ALL">💳 Phương thức: Tất cả</option>
                         <option value="TIEN_MAT">💵 Tiền Mặt</option>
                         <option value="CHUYEN_KHOAN">📱 Chuyển Khoản</option>
                       </select>
-                      <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
+                      <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
                     </div>
 
-                    {/* NÚT LỌC 2: TRẠNG THÁI */}
+                    {/* LỌC 4: TRẠNG THÁI */}
                     <div className="relative">
                       <select
                         value={filterBookingStatus}
                         onChange={(e) => setFilterBookingStatus(e.target.value as any)}
-                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${isDarkMode
-                            ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
-                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
-                          }`}
+                        className={`text-xs font-semibold pl-2.5 pr-7 py-1.5 rounded-lg border transition-all cursor-pointer outline-none appearance-none ${
+                          filterBookingStatus !== 'ALL'
+                            ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
+                            : isDarkMode
+                            ? 'bg-[#070d1e] border-slate-700 text-slate-300 hover:border-emerald-500'
+                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500'
+                        }`}
                         title="Lọc theo trạng thái đơn"
                       >
                         <option value="ALL">⚡ Trạng thái: Tất cả</option>
@@ -6279,15 +6414,18 @@ export default function AdminDashboard() {
                       <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
                     </div>
 
-                    {/* NÚT LỌC 3: KHÁCH LẺ QUẦY */}
+                    {/* LỌC 5: KHÁCH LẺ QUẦY */}
                     <div className="relative">
                       <select
                         value={filterCustomerType}
                         onChange={(e) => setFilterCustomerType(e.target.value as any)}
-                        className={`text-xs font-bold pl-3 pr-8 py-2 rounded-xl border transition-all cursor-pointer outline-none appearance-none ${isDarkMode
-                            ? 'bg-[#070d1e] border-emerald-900/60 text-emerald-200 hover:border-emerald-500 focus:border-emerald-500'
-                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500 focus:border-emerald-500'
-                          }`}
+                        className={`text-xs font-semibold pl-2.5 pr-7 py-1.5 rounded-lg border transition-all cursor-pointer outline-none appearance-none ${
+                          filterCustomerType !== 'ALL'
+                            ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 font-bold'
+                            : isDarkMode
+                            ? 'bg-[#070d1e] border-slate-700 text-slate-300 hover:border-emerald-500'
+                            : 'bg-white border-slate-300 text-slate-700 shadow-sm hover:border-emerald-500'
+                        }`}
                         title="Lọc theo loại khách hàng"
                       >
                         <option value="ALL">👥 Khách: Tất cả</option>
@@ -6296,6 +6434,24 @@ export default function AdminDashboard() {
                       </select>
                       <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" />
                     </div>
+
+                    {/* Nút Đặt Lại Bộ Lọc */}
+                    {(filterCourtType !== 'ALL' || filterCourtId !== 'ALL' || filterPaymentMethod !== 'ALL' || filterBookingStatus !== 'ALL' || filterCustomerType !== 'ALL') && (
+                      <button
+                        onClick={() => {
+                          setFilterCourtType('ALL');
+                          setFilterCourtId('ALL');
+                          setFilterPaymentMethod('ALL');
+                          setFilterBookingStatus('ALL');
+                          setFilterCustomerType('ALL');
+                        }}
+                        className="text-xs font-bold px-2.5 py-1.5 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 transition-colors flex items-center gap-1 cursor-pointer"
+                        title="Đặt lại toàn bộ bộ lọc"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Đặt lại</span>
+                      </button>
+                    )}
 
                     {/* Nút Thêm Đơn & Thanh Toán */}
                     <button
@@ -6330,11 +6486,13 @@ export default function AdminDashboard() {
                             so_tien: 0,
                             trang_thai_gd: 'DANG_CHO',
                             ghi_chu: 'Đặt trực tiếp tại quầy',
-                            dich_vu_list: []
+                            dich_vu_list: [],
+                            ma_voucher: '',
+                            tien_giam_gia: 0
                           }
                         });
                       }}
-                      className="px-4 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer shrink-0"
+                      className="text-xs font-bold px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
                     >
                       <Plus className="w-4 h-4 stroke-[3]" /> Thêm Đơn & Thanh Toán
                     </button>
@@ -6414,8 +6572,16 @@ export default function AdminDashboard() {
                                 <div className="font-black text-sm text-emerald-600 dark:text-emerald-400">
                                   {Number(b.tong_tien || b.tien_san || 0).toLocaleString('vi-VN')} đ
                                 </div>
+                                {b.ma_voucher && (
+                                  <div className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-300 dark:border-amber-800/60 mt-0.5">
+                                    <span>🎟️ {b.ma_voucher}</span>
+                                    {Number(b.tien_giam_gia || 0) > 0 && (
+                                      <span className="font-mono">(-{Number(b.tien_giam_gia).toLocaleString('vi-VN')}đ)</span>
+                                    )}
+                                  </div>
+                                )}
                                 {totalDvPrice > 0 && (
-                                  <div className="text-[10px] text-slate-700 dark:text-slate-400 font-medium font-medium mt-0.5">
+                                  <div className="text-[10px] text-slate-700 dark:text-slate-400 font-medium mt-0.5">
                                     <span>Sân: {Number(b.tien_san || 0).toLocaleString('vi-VN')} đ</span>
                                   </div>
                                 )}
@@ -6536,7 +6702,9 @@ export default function AdminDashboard() {
                                           so_luong: s.so_luong,
                                           don_gia: s.gia_luc_ban || s.don_gia || 0,
                                           don_vi_tinh: s.don_vi_tinh || 'Chai'
-                                        }))
+                                        })),
+                                        ma_voucher: b.ma_voucher || '',
+                                        tien_giam_gia: Number(b.tien_giam_gia || 0)
                                       }
                                     });
                                   }}
@@ -8280,7 +8448,7 @@ export default function AdminDashboard() {
                     <h3 className="text-base font-black flex items-center gap-2">
                       <Ticket className="w-5 h-5 text-emerald-600" /> Quản Lý Mã Giảm Giá & Kho Voucher
                     </h3>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">
                       Tạo mã khuyến mãi bạn mới, ưu đãi giờ vàng, giảm giá theo % hoặc tiền mặt
                     </p>
                   </div>
@@ -8390,7 +8558,7 @@ export default function AdminDashboard() {
                                 </div>
                                 <div className="font-black text-sm text-slate-900 dark:text-white">{v.tieu_de}</div>
                                 {v.mo_ta && (
-                                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-sm truncate" title={v.mo_ta}>
+                                  <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5 max-w-sm truncate" title={v.mo_ta}>
                                     {v.mo_ta}
                                   </div>
                                 )}
@@ -8402,28 +8570,28 @@ export default function AdminDashboard() {
                                   {v.loai_giam === 'PHAN_TRAM' ? `${v.gia_tri_giam}%` : `${Number(v.gia_tri_giam).toLocaleString('vi-VN')} đ`}
                                 </div>
                                 {v.loai_giam === 'PHAN_TRAM' && v.giam_toi_da ? (
-                                  <div className="text-[10px] text-slate-500 font-medium">
-                                    Tối đa: {Number(v.giam_toi_da).toLocaleString('vi-VN')} đ
+                                  <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5">
+                                    Tối đa: <span className="font-mono text-emerald-700 dark:text-emerald-400 font-black">{Number(v.giam_toi_da).toLocaleString('vi-VN')} đ</span>
                                   </div>
                                 ) : (
-                                  <div className="text-[10px] text-slate-500 font-medium">
+                                  <div className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5">
                                     {v.loai_giam === 'PHAN_TRAM' ? 'Không giới hạn tối đa' : 'Giảm trực tiếp'}
                                   </div>
                                 )}
                               </td>
 
                               {/* Cột 3: Điều kiện áp dụng */}
-                              <td className="p-3 md:p-4 space-y-0.5">
-                                <div className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                              <td className="p-3 md:p-4 space-y-1">
+                                <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
                                   {Number(v.don_toi_thieu) > 0 ? (
-                                    <span>Đơn từ: <strong className="font-mono text-emerald-600 dark:text-emerald-400">{Number(v.don_toi_thieu).toLocaleString('vi-VN')} đ</strong></span>
+                                    <span>Đơn từ: <strong className="font-mono text-emerald-700 dark:text-emerald-400 font-black">{Number(v.don_toi_thieu).toLocaleString('vi-VN')} đ</strong></span>
                                   ) : (
-                                    <span className="text-slate-400">Không yêu cầu đơn tối thiểu</span>
+                                    <span className="text-slate-700 dark:text-slate-300 font-semibold">Không yêu cầu đơn tối thiểu</span>
                                   )}
                                 </div>
                                 {v.gio_bat_dau && v.gio_ket_thuc && (
-                                  <div className="text-[10px] text-amber-600 dark:text-amber-400 font-mono">
-                                    ⏰ Khung giờ: {v.gio_bat_dau} - {v.gio_ket_thuc}
+                                  <div className="text-xs font-black text-amber-700 dark:text-amber-400 font-mono flex items-center gap-1 mt-0.5 bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30 w-fit">
+                                    <span>⏰ Khung giờ: {v.gio_bat_dau} - {v.gio_ket_thuc}</span>
                                   </div>
                                 )}
                               </td>
@@ -8431,11 +8599,11 @@ export default function AdminDashboard() {
                               {/* Cột 4: Số lượng & Đã dùng */}
                               <td className="p-3 md:p-4 text-center">
                                 <div className="font-mono font-bold text-xs flex items-center justify-center gap-1">
-                                  <span className="text-emerald-600 dark:text-emerald-400">{v.so_luong_da_dung || 0}</span>
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-black">{v.so_luong_da_dung || 0}</span>
                                   {v.so_luong && Number(v.so_luong) > 0 ? (
-                                    <span className="text-slate-400"> / {v.so_luong}</span>
+                                    <span className="text-slate-700 dark:text-slate-300 font-bold"> / {v.so_luong}</span>
                                   ) : (
-                                    <span className="text-amber-500 font-sans font-black text-[10px] ml-1 bg-amber-500/10 px-1.5 py-0.2 rounded-md border border-amber-500/30">
+                                    <span className="text-amber-600 dark:text-amber-400 font-sans font-black text-[10px] ml-1 bg-amber-500/10 px-1.5 py-0.5 rounded-md border border-amber-500/30">
                                       ∞ Vô hạn
                                     </span>
                                   )}
@@ -8448,7 +8616,7 @@ export default function AdminDashboard() {
                                     />
                                   </div>
                                 ) : (
-                                  <div className="text-[10px] text-slate-400 mt-0.5">Không giới hạn</div>
+                                  <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-0.5">Không giới hạn</div>
                                 )}
                               </td>
 
@@ -10005,13 +10173,10 @@ export default function AdminDashboard() {
                               onChange={(e) => {
                                 const tsVal = parseCleanNumberInput(e.target.value, true);
                                 const ts = tsVal === '' ? 0 : tsVal;
-                                const totalDv = (bookingModal.data.dich_vu_list || []).reduce(
-                                  (sum: number, it: any) => sum + Number(it.so_luong || 0) * Number(it.don_gia || 0),
-                                  0
-                                );
+                                const updated = updateBookingModalTotals(bookingModal.data, ts, undefined, undefined);
                                 setBookingModal({
                                   ...bookingModal,
-                                  data: { ...bookingModal.data, tien_san: tsVal, tong_tien: ts + totalDv },
+                                  data: { ...updated, tien_san: tsVal },
                                 });
                               }}
                               className={`w-full p-2.5 rounded-xl border font-black font-mono text-sm ${
@@ -10113,17 +10278,10 @@ export default function AdminDashboard() {
                                 don_vi_tinh: s.don_vi_tinh,
                               });
                             }
-                            const totalDv = currentList.reduce(
-                              (sum: number, d: any) => sum + Number(d.so_luong) * Number(d.don_gia),
-                              0
-                            );
+                            const updated = updateBookingModalTotals(bookingModal.data, undefined, currentList, undefined);
                             setBookingModal({
                               ...bookingModal,
-                              data: {
-                                ...bookingModal.data,
-                                dich_vu_list: currentList,
-                                tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv,
-                              },
+                              data: updated,
                             });
                             e.target.value = '';
                           }}
@@ -10170,17 +10328,10 @@ export default function AdminDashboard() {
                                       } else {
                                         list.splice(idx, 1);
                                       }
-                                      const totalDv = list.reduce(
-                                        (s: number, d: any) => s + Number(d.so_luong) * Number(d.don_gia),
-                                        0
-                                      );
+                                      const updated = updateBookingModalTotals(bookingModal.data, undefined, list, undefined);
                                       setBookingModal({
                                         ...bookingModal,
-                                        data: {
-                                          ...bookingModal.data,
-                                          dich_vu_list: list,
-                                          tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv,
-                                        },
+                                        data: updated,
                                       });
                                     }}
                                     className="px-2 py-0.5 hover:bg-slate-200 dark:hover:bg-emerald-950 font-bold transition-colors cursor-pointer"
@@ -10193,17 +10344,10 @@ export default function AdminDashboard() {
                                     onClick={() => {
                                       const list = [...(bookingModal.data.dich_vu_list || [])];
                                       list[idx].so_luong += 1;
-                                      const totalDv = list.reduce(
-                                        (s: number, d: any) => s + Number(d.so_luong) * Number(d.don_gia),
-                                        0
-                                      );
+                                      const updated = updateBookingModalTotals(bookingModal.data, undefined, list, undefined);
                                       setBookingModal({
                                         ...bookingModal,
-                                        data: {
-                                          ...bookingModal.data,
-                                          dich_vu_list: list,
-                                          tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv,
-                                        },
+                                        data: updated,
                                       });
                                     }}
                                     className="px-2 py-0.5 hover:bg-slate-200 dark:hover:bg-emerald-950 font-bold transition-colors cursor-pointer"
@@ -10218,17 +10362,10 @@ export default function AdminDashboard() {
                                   type="button"
                                   onClick={() => {
                                     const list = bookingModal.data.dich_vu_list.filter((_: any, i: number) => i !== idx);
-                                    const totalDv = list.reduce(
-                                      (s: number, d: any) => s + Number(d.so_luong) * Number(d.don_gia),
-                                      0
-                                    );
+                                    const updated = updateBookingModalTotals(bookingModal.data, undefined, list, undefined);
                                     setBookingModal({
                                       ...bookingModal,
-                                      data: {
-                                        ...bookingModal.data,
-                                        dich_vu_list: list,
-                                        tong_tien: Number(bookingModal.data.tien_san || 0) + totalDv,
-                                      },
+                                      data: updated,
                                     });
                                   }}
                                   className="text-rose-500 hover:text-rose-700 p-1 cursor-pointer transition-colors"
@@ -10375,6 +10512,88 @@ export default function AdminDashboard() {
                       )}
                     </div>
 
+                    {/* KHỐI 5: MÃ GIẢM GIÁ / VOUCHER */}
+                    <div
+                      className={`p-4 rounded-2xl border space-y-3 ${
+                        isDarkMode ? 'bg-[#070d1e]/60 border-emerald-950/80' : 'bg-slate-50/70 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200/80 dark:border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-amber-500" />
+                          <h4 className="font-black text-xs uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                            5. Áp Dụng Mã Ưu Đãi / Voucher
+                          </h4>
+                        </div>
+                        {bookingModal.data.ma_voucher && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = updateBookingModalTotals(bookingModal.data, undefined, undefined, '');
+                              setBookingModal({ ...bookingModal, data: updated });
+                            }}
+                            className="text-[11px] font-bold text-rose-500 hover:text-rose-600 hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" /> Gỡ mã
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block font-black uppercase text-[11px] text-slate-500 dark:text-slate-400">
+                          Chọn Voucher Khả Dụng
+                        </label>
+                        <select
+                          value={bookingModal.data.ma_voucher || ''}
+                          onChange={(e) => {
+                            const vCode = e.target.value;
+                            const updated = updateBookingModalTotals(bookingModal.data, undefined, undefined, vCode);
+                            setBookingModal({ ...bookingModal, data: updated });
+                          }}
+                          className={`w-full p-2.5 rounded-xl border font-bold text-xs cursor-pointer ${
+                            isDarkMode
+                              ? 'bg-[#0b132b] border-emerald-800/40 text-white'
+                              : 'bg-white border-slate-300 text-[#0f172a]'
+                          }`}
+                        >
+                          <option value="">-- Không áp dụng voucher --</option>
+                          {voucherList
+                            .filter((v) => (v.trang_thai as any) == 1 || (v.trang_thai as any) === true)
+                            .map((v) => {
+                              const discountLabel =
+                                v.loai_giam === 'PHAN_TRAM'
+                                  ? `Giảm ${v.gia_tri_giam}%${v.giam_toi_da ? ` (tối đa ${Number(v.giam_toi_da).toLocaleString('vi-VN')}đ)` : ''}`
+                                  : `Giảm ${Number(v.gia_tri_giam).toLocaleString('vi-VN')}đ`;
+                              return (
+                                <option key={v.id} value={v.ma_code}>
+                                  🎟️ {v.ma_code} - {v.tieu_de} ({discountLabel})
+                                </option>
+                              );
+                            })}
+                        </select>
+                      </div>
+
+                      {/* Card hiển thị chi tiết mã đang áp dụng */}
+                      {bookingModal.data.ma_voucher && (
+                        <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-transparent border border-emerald-500/30 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            <div>
+                              <span className="font-mono font-black text-xs text-emerald-600 dark:text-emerald-400">
+                                {bookingModal.data.ma_voucher}
+                              </span>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                                Đã áp dụng giảm trực tiếp vào hóa đơn
+                              </p>
+                            </div>
+                          </div>
+                          <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-xs">
+                            -{Number(bookingModal.data.tien_giam_gia || 0).toLocaleString('vi-VN')} đ
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
                     {/* KHỐI 6: TỔNG KẾT HÓA ĐƠN (INVOICE SUMMARY CARD) */}
                     <div
                       className={`p-4 rounded-2xl border space-y-2.5 ${
@@ -10401,6 +10620,14 @@ export default function AdminDashboard() {
                           đ
                         </span>
                       </div>
+                      {Number(bookingModal.data.tien_giam_gia || 0) > 0 && (
+                        <div className="flex items-center justify-between text-xs text-rose-500 font-bold">
+                          <span>Giảm giá Voucher ({bookingModal.data.ma_voucher}):</span>
+                          <span className="font-mono">
+                            -{Number(bookingModal.data.tien_giam_gia).toLocaleString('vi-VN')} đ
+                          </span>
+                        </div>
+                      )}
                       <div className="border-t border-dashed border-slate-300 dark:border-emerald-800/50 pt-2 flex items-center justify-between">
                         <span className="font-black text-xs uppercase tracking-wider text-slate-800 dark:text-white">
                           Tổng Thanh Toán:

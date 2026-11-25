@@ -992,6 +992,9 @@ BEGIN
             d.ma_san,
             ISNULL(sb.ten_san, N'Quầy Nước / Dịch Vụ Lẻ') AS ten_san,
             ISNULL(ls.ten_loai, N'Bán lẻ dịch vụ') AS ten_loai,
+            sb.ma_loai_san,
+            d.ma_voucher,
+            ISNULL(d.tien_giam_gia, 0) AS tien_giam_gia,
             d.ma_nguoi_dung,
             ISNULL(nd.ho_ten, N'Khách vãng lai') AS ten_khach_hang,
             nd.so_dien_thoai,
@@ -2966,7 +2969,9 @@ CREATE OR ALTER PROCEDURE sp_ThemDonDatVaThanhToan
     @trang_thai_gd VARCHAR(20) = 'THANH_CONG',
     @ten_khach_hang NVARCHAR(100) = NULL,
     @so_dien_thoai VARCHAR(20) = NULL,
-    @danh_sach_ma_san VARCHAR(500) = NULL
+    @danh_sach_ma_san VARCHAR(500) = NULL,
+    @ma_voucher VARCHAR(30) = NULL,
+    @tien_giam_gia DECIMAL(10, 2) = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3035,14 +3040,23 @@ BEGIN
 
         INSERT INTO Don_Dat_San (
             ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc,
-            tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao
+            tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao,
+            ma_voucher, tien_giam_gia
         )
         VALUES (
             @final_user_id, @ma_san, @ngay_da, @bd_time, @kt_time,
-            @tien_san_val, @tong_tien_val, @phuong_thuc, @ghi_chu, @trang_thai_chuan, GETDATE()
+            @tien_san_val, @tong_tien_val, @phuong_thuc, @ghi_chu, @trang_thai_chuan, GETDATE(),
+            @ma_voucher, ISNULL(@tien_giam_gia, 0)
         );
 
         DECLARE @newId INT = SCOPE_IDENTITY();
+
+        IF @ma_voucher IS NOT NULL AND LEN(LTRIM(RTRIM(@ma_voucher))) > 0
+        BEGIN
+            UPDATE Khuyen_Mai
+            SET so_luong_da_dung = ISNULL(so_luong_da_dung, 0) + 1
+            WHERE ma_code = LTRIM(RTRIM(@ma_voucher));
+        END;
 
         IF @trang_thai_chuan = 'DA_THANH_TOAN' AND (@so_tien IS NULL OR @so_tien = 0)
         BEGIN
@@ -3114,7 +3128,9 @@ CREATE OR ALTER PROCEDURE sp_SuaDonDatVaThanhToan
     @trang_thai_gd VARCHAR(20) = 'THANH_CONG',
     @ten_khach_hang NVARCHAR(100) = NULL,
     @so_dien_thoai VARCHAR(20) = NULL,
-    @danh_sach_ma_san VARCHAR(500) = NULL
+    @danh_sach_ma_san VARCHAR(500) = NULL,
+    @ma_voucher VARCHAR(30) = NULL,
+    @tien_giam_gia DECIMAL(10, 2) = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -3186,7 +3202,9 @@ BEGIN
             tong_tien = ISNULL(@tong_tien, tong_tien),
             phuong_thuc = @phuong_thuc,
             ghi_chu = @ghi_chu,
-            trang_thai = @trang_thai_chuan
+            trang_thai = @trang_thai_chuan,
+            ma_voucher = @ma_voucher,
+            tien_giam_gia = ISNULL(@tien_giam_gia, 0)
         WHERE id = @id;
 
         IF @trang_thai_chuan IN ('CHO_THANH_TOAN', 'CHUA_THANH_TOAN')

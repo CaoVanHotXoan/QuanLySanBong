@@ -1686,7 +1686,7 @@ async function resolveCustomerUserId(pool: any, ten_khach_hang?: string, so_dien
  */
 export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
     try {
-        const { ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai } = req.body;
+        const { ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai, ma_voucher, tien_giam_gia } = req.body;
 
         const pool = await poolPromise;
         const trang_thai_chuan = (trang_thai === 'DA_THANH_TOAN' || trang_thai === 'Da Thanh Toan')
@@ -1734,6 +1734,8 @@ export const themDonDatVaThanhToan = async (req: AuthRequest, res: Response) => 
             .input('trang_thai_gd', sql.VarChar(20), (trang_thai_chuan === 'DA_THANH_TOAN' || trang_thai_chuan === 'DA_COC') ? 'THANH_CONG' : (trang_thai_gd === 'CHO_XU_LY' ? 'DANG_CHO' : (trang_thai_gd || 'DANG_CHO')))
             .input('ten_khach_hang', sql.NVarChar(100), tenKhach || null)
             .input('so_dien_thoai', sql.VarChar(20), sdtKhach || null)
+            .input('ma_voucher', sql.VarChar(30), ma_voucher || null)
+            .input('tien_giam_gia', sql.Decimal(10, 2), tien_giam_gia ? parseFloat(tien_giam_gia) : 0)
             .execute('sp_ThemDonDatVaThanhToan');
 
         const orderData = result.recordset[0];
@@ -1790,7 +1792,7 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
                 message: 'ID đơn đặt không hợp lệ'
             });
         }
-        const { ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai } = req.body;
+        const { ma_san, ma_nguoi_dung, ngay_da, gio_bat_dau, gio_ket_thuc, tien_san, tong_tien, ghi_chu, trang_thai, phuong_thuc, loai_thanh_toan, so_tien, trang_thai_gd, ten_khach_hang, so_dien_thoai, ma_voucher, tien_giam_gia } = req.body;
 
         const pool = await poolPromise;
         const phuong_thuc_chuan = phuong_thuc ? ((phuong_thuc === 'CHUYEN_KHOAN') ? 'CHUYEN_KHOAN' : 'TIEN_MAT') : 'TIEN_MAT';
@@ -1837,6 +1839,8 @@ export const suaDonDatVaThanhToan = async (req: AuthRequest, res: Response) => {
             .input('trang_thai_gd', sql.VarChar(20), (trang_thai_chuan === 'DA_THANH_TOAN' || trang_thai_chuan === 'DA_COC') ? 'THANH_CONG' : (trang_thai_gd === 'CHO_XU_LY' ? 'DANG_CHO' : (trang_thai_gd || 'DANG_CHO')))
             .input('ten_khach_hang', sql.NVarChar(100), tenKhach || null)
             .input('so_dien_thoai', sql.VarChar(20), sdtKhach || null)
+            .input('ma_voucher', sql.VarChar(30), ma_voucher || null)
+            .input('tien_giam_gia', sql.Decimal(10, 2), tien_giam_gia ? parseFloat(tien_giam_gia) : 0)
             .execute('sp_SuaDonDatVaThanhToan');
 
         if (Array.isArray(req.body.dich_vu_list)) {
