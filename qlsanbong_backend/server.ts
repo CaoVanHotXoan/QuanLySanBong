@@ -30,6 +30,7 @@ import uploadRoutes from './src/routes/uploadRoutes';
 import contentRoutes from './src/routes/contentRoutes';
 import reviewRoutes from './src/routes/reviewRoutes';
 import thongBaoRoutes from './src/routes/thongBaoRoutes';
+import khuyenMaiRoutes from './src/routes/khuyenMaiRoutes';
 import { startBookingReminderCron } from './src/services/reminderService';
 
 const app = express();
@@ -72,6 +73,7 @@ app.use('/api/bao-cao', baoCaoRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/thong-bao', thongBaoRoutes);
+app.use('/api/khuyen-mai', khuyenMaiRoutes);
 app.use('/api', contentRoutes);
 
 // Cung cấp giao diện Swagger UI trực quan tương tác (/api-docs)

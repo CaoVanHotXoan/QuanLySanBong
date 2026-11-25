@@ -144,6 +144,40 @@ export const contentService = {
   deleteBanner: async (id: number) => {
     return api.delete<{ success: boolean; message: string }>(`/banner/${id}`);
   },
+
+  // --- VOUCHER & KHUYẾN MÃI (ADMIN) ---
+  getVouchersAdmin: async (params?: { tu_khoa?: string; trang_thai?: number }) => {
+    return api.get<{ success: boolean; message?: string; data: VoucherAdminItem[] }>('/khuyen-mai/admin', params);
+  },
+  createVoucher: async (data: Partial<VoucherAdminItem>) => {
+    return api.post<{ success: boolean; message: string; data?: any }>('/khuyen-mai', data);
+  },
+  updateVoucher: async (id: number, data: Partial<VoucherAdminItem>) => {
+    return api.put<{ success: boolean; message: string; data?: any }>(`/khuyen-mai/${id}`, data);
+  },
+  deleteVoucher: async (id: number) => {
+    return api.delete<{ success: boolean; message: string; action?: string }>(`/khuyen-mai/${id}`);
+  },
 };
+
+export interface VoucherAdminItem {
+  id: number;
+  ma_code: string;
+  tieu_de: string;
+  mo_ta?: string;
+  loai_giam: 'PHAN_TRAM' | 'SO_TIEN';
+  gia_tri_giam: number;
+  giam_toi_da?: number | null;
+  don_toi_thieu: number;
+  chi_danh_cho_khach_moi: boolean | number;
+  gio_bat_dau?: string | null;
+  gio_ket_thuc?: string | null;
+  thu_trong_tuan?: string | null;
+  so_luong?: number | null;
+  so_luong_da_dung: number;
+  ngay_bat_dau?: string | null;
+  ngay_ket_thuc?: string | null;
+  trang_thai: boolean | number;
+}
 
 export default contentService;

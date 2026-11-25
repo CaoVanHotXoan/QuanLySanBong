@@ -73,6 +73,7 @@ interface LoaiSan {
   id: number;
   ten_loai: string;
   mo_ta: string;
+  icon?: string | null;
   trang_thai?: boolean;
 }
 
@@ -85,6 +86,7 @@ interface SanBong {
   hinh_anh?: string;
   mo_ta?: string;
   trang_thai: 'SAN_SANG' | 'BAO_TRI';
+  tien_ich?: string | null;
 }
 
 type TrangThaiSlot = 'TRONG' | 'CHO_XAC_NHAN' | 'DA_CHOT';

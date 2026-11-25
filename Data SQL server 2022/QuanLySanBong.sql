@@ -24,6 +24,8 @@ GO
 -- =====================================================================
 -- 2. XÓA BẢNG CŨ NẾU ĐÃ TỒN TẠI (THEO THỨ TỰ RÀNG BUỘC KHÓA NGOẠI)
 -- =====================================================================
+IF OBJECT_ID('Lich_Su_Dung_Voucher', 'U') IS NOT NULL DROP TABLE Lich_Su_Dung_Voucher;
+IF OBJECT_ID('Khuyen_Mai', 'U') IS NOT NULL DROP TABLE Khuyen_Mai;
 IF OBJECT_ID('Chi_Tiet_Don_Dat', 'U') IS NOT NULL DROP TABLE Chi_Tiet_Don_Dat;
 IF OBJECT_ID('Chi_Tiet_Dich_Vu', 'U') IS NOT NULL DROP TABLE Chi_Tiet_Dich_Vu;
 IF OBJECT_ID('Phieu_Nhap_Kho', 'U') IS NOT NULL DROP TABLE Phieu_Nhap_Kho;
@@ -78,6 +80,7 @@ CREATE TABLE Loai_San (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ten_loai NVARCHAR(50) NOT NULL, 
     mo_ta NVARCHAR(MAX),
+    icon NVARCHAR(50),
     trang_thai BIT DEFAULT 1
 );
 GO
@@ -90,6 +93,7 @@ CREATE TABLE San_Bong (
     hinh_anh VARCHAR(255),
     don_gia_phut DECIMAL(10, 2) NOT NULL DEFAULT 5000.00,
     trang_thai VARCHAR(20) CHECK (trang_thai IN ('SAN_SANG', 'BAO_TRI')) DEFAULT 'SAN_SANG',
+    tien_ich NVARCHAR(MAX) NULL,
     FOREIGN KEY (ma_loai_san) REFERENCES Loai_San(id) ON DELETE CASCADE
 );
 GO
@@ -147,6 +151,8 @@ CREATE TABLE Don_Dat_San (
     gio_vao_san TIME NULL,
     da_gui_nhac_nho BIT DEFAULT 0,
     thoi_gian_nhac_nho DATETIME NULL,
+    ma_voucher VARCHAR(30) NULL,
+    tien_giam_gia DECIMAL(10, 2) DEFAULT 0,
     ngay_tao DATETIME DEFAULT GETDATE(),
     FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id) ON DELETE CASCADE,
     FOREIGN KEY (ma_san) REFERENCES San_Bong(id) ON DELETE CASCADE,
@@ -389,6 +395,41 @@ CREATE TABLE Thong_Bao (
 );
 GO
 
+-- 3.22. Bảng Khuyen_Mai (Quản lý các chương trình ưu đãi, mã giảm giá và voucher)
+CREATE TABLE Khuyen_Mai (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ma_code VARCHAR(30) NOT NULL UNIQUE,
+    tieu_de NVARCHAR(100) NOT NULL,
+    mo_ta NVARCHAR(255) NULL,
+    loai_giam VARCHAR(20) NOT NULL CHECK (loai_giam IN ('PHAN_TRAM', 'SO_TIEN')),
+    gia_tri_giam DECIMAL(10, 2) NOT NULL,
+    giam_toi_da DECIMAL(10, 2) NULL,
+    don_toi_thieu DECIMAL(10, 2) DEFAULT 0,
+    chi_danh_cho_khach_moi BIT DEFAULT 0,
+    gio_bat_dau TIME NULL,
+    gio_ket_thuc TIME NULL,
+    thu_trong_tuan VARCHAR(50) NULL,
+    so_luong INT DEFAULT 1000,
+    so_luong_da_dung INT DEFAULT 0,
+    ngay_bat_dau DATETIME DEFAULT GETDATE(),
+    ngay_ket_thuc DATETIME NULL,
+    trang_thai BIT DEFAULT 1
+);
+GO
+
+-- 3.23. Bảng Lich_Su_Dung_Voucher (Lịch sử sử dụng voucher theo từng đơn đặt sân)
+CREATE TABLE Lich_Su_Dung_Voucher (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    ma_voucher VARCHAR(30) NOT NULL,
+    ma_nguoi_dung INT NOT NULL,
+    ma_don_dat INT NOT NULL,
+    so_tien_giam DECIMAL(10, 2) NOT NULL,
+    ngay_dung DATETIME DEFAULT GETDATE(),
+    FOREIGN KEY (ma_nguoi_dung) REFERENCES Nguoi_Dung(id),
+    FOREIGN KEY (ma_don_dat) REFERENCES Don_Dat_San(id)
+);
+GO
+
 -- =====================================================================
 -- 4. CHỈ MỤC TỐI ƯU HIỆU NĂNG TRUY VẤN (PERFORMANCE INDEXES)
 -- =====================================================================
@@ -442,32 +483,32 @@ GO
 -- 5.3. Dữ liệu Loại Sân (Đa dạng các môn thể thao theo thực tế)
 IF NOT EXISTS (SELECT 1 FROM Loai_San)
 BEGIN
-    INSERT INTO Loai_San (ten_loai, mo_ta, trang_thai) VALUES
-    (N'Bóng đá', N'Sân 5, 7, 11 người • Cỏ FIFA', 1),
-    (N'Cầu lông', N'Thảm Taraflex • Sàn gỗ chuẩn', 1),
-    (N'Pickleball', N'Có mái che • Điều hòa mát lạnh', 1),
-    (N'Quần vợt (Tennis)', N'Mặt sân cứng • Đèn LED ban đêm', 1),
-    (N'Bóng rổ', N'Trong nhà & Ngoài trời', 1),
-    (N'Bóng chuyền', N'Mặt sân cao cấp • Lưới chuẩn', 1),
-    (N'Bóng bàn', N'Bàn thi đấu quốc tế', 1);
+    INSERT INTO Loai_San (ten_loai, mo_ta, icon, trang_thai) VALUES
+    (N'Bóng Đá', N'Mặt cỏ nhân tạo cao cấp FIFA 2 sao, có đèn LED cao áp', 'bong-da', 1),
+    (N'Quần Vợt', N'Kích thước chuẩn thi đấu giải đấu phủi và phong trào', 'quan-vot', 1),
+    (N'Cầu Lông', NULL, 'cau-long', 1),
+    (N'Bóng Rổ', NULL, 'bong-ro', 1),
+    (N'Bóng Bàn', N'Bàn thi đấu quốc tế', 'bong-ban', 1),
+    (N'Pickleball', N'Có mái che • Điều hòa mát lạnh', 'bong-ban', 1),
+    (N'Bóng Chuyền', N'Mặt sân cao cấp • Lưới chuẩn', 'bong-chuyen', 1);
 END;
 GO
 
 -- 5.4. Dữ liệu Sân Bóng mẫu
 IF NOT EXISTS (SELECT 1 FROM San_Bong)
 BEGIN
-    INSERT INTO San_Bong (ma_loai_san, ten_san, don_gia_phut, trang_thai) VALUES
-    (1, N'Sân Bóng Đá 5A', 5000.00, 'SAN_SANG'),
-    (1, N'Sân Bóng Đá 5B', 5000.00, 'SAN_SANG'),
-    (1, N'Sân Bóng Đá 7A', 8000.00, 'SAN_SANG'),
-    (2, N'Sân Cầu Lông VIP 1', 3500.00, 'SAN_SANG'),
-    (2, N'Sân Cầu Lông VIP 2', 3500.00, 'SAN_SANG'),
-    (3, N'Sân Pickleball Pro 1', 4000.00, 'SAN_SANG'),
-    (3, N'Sân Pickleball Pro 2', 4000.00, 'SAN_SANG'),
-    (4, N'Sân Quần Vợt LED 1', 6000.00, 'SAN_SANG'),
-    (5, N'Sân Bóng Rổ Trong Nhà', 5500.00, 'SAN_SANG'),
-    (6, N'Sân Bóng Chuyền Chuẩn', 4500.00, 'SAN_SANG'),
-    (7, N'Bàn Bóng Bàn Số 1', 2500.00, 'SAN_SANG');
+    INSERT INTO San_Bong (ma_loai_san, ten_san, don_gia_phut, trang_thai, tien_ich) VALUES
+    (1, N'Sân Bóng Đá 5A', 5000.00, 'SAN_SANG', N'["Mặt cỏ nhân tạo FIFA 2 sao êm ái, chống trơn trượt", "Hệ thống đèn LED cao áp chuẩn thi đấu ban đêm", "Khán đài mini, phòng thay đồ, bãi xe ô tô/xe máy miễn phí", "Có sẵn bóng thi đấu, nước uống và áo tập"]'),
+    (1, N'Sân Bóng Đá 5B', 5000.00, 'SAN_SANG', N'["Mặt cỏ nhân tạo FIFA 2 sao êm ái, chống trơn trượt", "Hệ thống đèn LED cao áp chuẩn thi đấu ban đêm", "Khán đài mini, phòng thay đồ, bãi xe ô tô/xe máy miễn phí", "Có sẵn bóng thi đấu, nước uống và áo tập"]'),
+    (1, N'Sân Bóng Đá 7A', 8000.00, 'SAN_SANG', N'["Mặt cỏ nhân tạo tiêu chuẩn sân 7 đạt chuẩn FIFA", "Dàn đèn LED công suất cao chiếu sáng đều toàn sân", "Khu kỹ thuật hai đội, khán đài có mái che", "Bãi xe ô tô rộng rãi, phòng thay đồ tắm nóng lạnh"]'),
+    (2, N'Sân Cầu Lông VIP 1', 3500.00, 'SAN_SANG', N'["Thảm sàn Taraflex chuyên dụng êm ái, bám chân", "Hệ thống đèn chống chói đạt chuẩn thi đấu", "Phòng thay đồ máy lạnh, nước uống miễn phí", "Có sẵn vợt và quả cầu lông tiêu chuẩn phục vụ"]'),
+    (2, N'Sân Cầu Lông VIP 2', 3500.00, 'SAN_SANG', N'["Thảm sàn Taraflex chuyên dụng êm ái, bám chân", "Hệ thống đèn chống chói đạt chuẩn thi đấu", "Phòng thay đồ máy lạnh, nước uống miễn phí", "Có sẵn vợt và quả cầu lông tiêu chuẩn phục vụ"]'),
+    (3, N'Sân Pickleball Pro 1', 4000.00, 'SAN_SANG', N'["Mặt sân cứng tiêu chuẩn quốc tế, độ nảy bóng chuẩn", "Hệ thống đèn LED cao áp chiếu sáng phủ đều sân", "Khu vực nghỉ ngơi có mái che, bãi xe miễn phí", "Có sẵn bóng thi đấu, nước uống giải khát"]'),
+    (3, N'Sân Pickleball Pro 2', 4000.00, 'SAN_SANG', N'["Mặt sân cứng tiêu chuẩn quốc tế, độ nảy bóng chuẩn", "Hệ thống đèn LED cao áp chiếu sáng phủ đều sân", "Khu vực nghỉ ngơi có mái che, bãi xe miễn phí", "Có sẵn bóng thi đấu, nước uống giải khát"]'),
+    (4, N'Sân Quần Vợt LED 1', 6000.00, 'SAN_SANG', N'["Mặt sân cứng DecoTurf tiêu chuẩn giải đấu quốc tế", "Đèn cao áp LED 1000W chiếu sáng rõ nét ban đêm", "Khu vực nghỉ ngơi có mái che, quạt gió làm mát", "Bãi xe ô tô rộng rãi, phòng tắm nóng lạnh"]'),
+    (5, N'Sân Bóng Rổ Trong Nhà', 5500.00, 'SAN_SANG', N'["Mặt sân bóng rổ tiêu chuẩn thi đấu, chống trơn trượt", "Bảng rổ kính cường lực và vành rổ đàn hồi chuẩn", "Hệ thống đèn chiếu sáng cao áp ban đêm", "Khán đài mini, bãi xe miễn phí, có sẵn bóng tập"]'),
+    (6, N'Sân Bóng Chuyền Chuẩn', 4500.00, 'SAN_SANG', N'["Mặt sân cao cấp tiêu chuẩn thi đấu bóng chuyền", "Lưới thi đấu tiêu chuẩn điều chỉnh độ cao linh hoạt", "Hệ thống đèn LED cao áp chiếu sáng không góc chết", "Phòng thay đồ, nước uống miễn phí"]'),
+    (7, N'Bàn Bóng Bàn Số 1', 2500.00, 'SAN_SANG', N'["Bàn bóng bàn thi đấu đạt tiêu chuẩn quốc tế ITTF", "Sàn thi đấu chống trơn trượt, ánh sáng khu vực chuẩn", "Không gian điều hòa máy lạnh mát mẻ", "Trang bị sẵn vợt và bóng thi đấu miễn phí"]');
 END;
 GO
 
@@ -570,6 +611,28 @@ BEGIN
 
     INSERT INTO Danh_Gia_San (ma_san, ma_nguoi_dung, binh_luan_cha_id, so_sao, noi_dung, ngay_tao)
     VALUES (1, 1, @parent_cm1, NULL, N'Cảm ơn bạn đã tin tưởng và ủng hộ sân bóng! Chúc đội bóng của bạn luôn có những trận đấu thăng hoa.', DATEADD(HOUR, -3, GETDATE()));
+END;
+GO
+
+-- 5.13. Dữ liệu Khuyến Mãi & Voucher mẫu (Ưu đãi bạn mới, Happy Hour trưa, Cuối tuần)
+IF NOT EXISTS (SELECT 1 FROM Khuyen_Mai WHERE ma_code = 'SOCCER247NEW')
+BEGIN
+    INSERT INTO Khuyen_Mai (ma_code, tieu_de, mo_ta, loai_giam, gia_tri_giam, giam_toi_da, don_toi_thieu, chi_danh_cho_khach_moi, gio_bat_dau, gio_ket_thuc, thu_trong_tuan, so_luong, so_luong_da_dung, trang_thai)
+    VALUES ('SOCCER247NEW', N'Giảm 50% cho bạn mới', N'Chỉ dành cho đơn đặt sân đầu tiên của bạn mới.', 'PHAN_TRAM', 50, 150000, 0, 1, NULL, NULL, NULL, 500, 0, 1);
+END;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM Khuyen_Mai WHERE ma_code = 'HAPPYHOUR')
+BEGIN
+    INSERT INTO Khuyen_Mai (ma_code, tieu_de, mo_ta, loai_giam, gia_tri_giam, giam_toi_da, don_toi_thieu, chi_danh_cho_khach_moi, gio_bat_dau, gio_ket_thuc, thu_trong_tuan, so_luong, so_luong_da_dung, trang_thai)
+    VALUES ('HAPPYHOUR', N'Giảm 20% khung giờ trưa', N'Áp dụng khung giờ 11:00 – 14:00 từ Thứ 2 đến Thứ 6.', 'PHAN_TRAM', 20, NULL, 0, 0, '11:00:00', '14:00:00', '2,3,4,5,6', 1000, 0, 1);
+END;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM Khuyen_Mai WHERE ma_code = 'CUOITUAN50')
+BEGIN
+    INSERT INTO Khuyen_Mai (ma_code, tieu_de, mo_ta, loai_giam, gia_tri_giam, giam_toi_da, don_toi_thieu, chi_danh_cho_khach_moi, gio_bat_dau, gio_ket_thuc, thu_trong_tuan, so_luong, so_luong_da_dung, trang_thai)
+    VALUES ('CUOITUAN50', N'Giảm 50.000đ cho đơn từ 300k', N'Giảm 50.000đ cho đơn từ 300.000đ trở lên.', 'SO_TIEN', 50000, NULL, 300000, 0, NULL, NULL, NULL, 1000, 0, 1);
 END;
 GO
 

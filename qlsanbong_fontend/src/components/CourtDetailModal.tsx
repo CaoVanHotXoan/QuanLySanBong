@@ -45,6 +45,7 @@ interface CourtStats {
   hinh_anh: string | null;
   don_gia_phut: number;
   trang_thai: string;
+  tien_ich?: string | null;
   ma_loai_san: number;
   ten_loai: string;
   diem_trung_binh: number;
@@ -452,6 +453,70 @@ export default function CourtDetailModal({
 
   const hourlyPrice = (courtData?.don_gia_phut || 300) * 60;
 
+  const getCourtAmenities = (typeName?: string) => {
+    const lower = (typeName || "").toLowerCase();
+    if (lower.includes("bóng rổ") || lower.includes("basketball")) {
+      return [
+        "Mặt sân bóng rổ tiêu chuẩn thi đấu, chống trơn trượt",
+        "Hệ thống đèn LED cao áp chuẩn thi đấu ban đêm",
+        "Khán đài mini, phòng thay đồ, bãi xe ô tô/xe máy miễn phí",
+        "Có sẵn bóng rổ thi đấu, nước uống và bảng điểm",
+      ];
+    }
+    if (lower.includes("cầu lông") || lower.includes("badminton")) {
+      return [
+        "Thảm sàn Taraflex chuyên dụng êm ái, bám chân",
+        "Hệ thống đèn chống lóa đạt chuẩn thi đấu",
+        "Khán đài mini, phòng thay đồ, bãi xe ô tô/xe máy miễn phí",
+        "Có sẵn vợt, quả cầu lông và nước uống phục vụ",
+      ];
+    }
+    if (lower.includes("quần vợt") || lower.includes("tennis") || lower.includes("pickleball")) {
+      return [
+        "Mặt sân cứng tiêu chuẩn quốc tế, độ nảy bóng chuẩn",
+        "Hệ thống đèn LED cao áp chiếu sáng phủ đều sân",
+        "Khu vực nghỉ ngơi có mái che, bãi xe miễn phí",
+        "Có sẵn bóng thi đấu, nước uống giải khát",
+      ];
+    }
+    return [
+      "Mặt cỏ nhân tạo FIFA 2 sao êm ái, chống trơn trượt",
+      "Hệ thống đèn LED cao áp chuẩn thi đấu ban đêm",
+      "Khán đài mini, phòng thay đồ, bãi xe ô tô/xe máy miễn phí",
+      "Có sẵn bóng thi đấu, nước uống và áo tập",
+    ];
+  };
+
+  // Trích xuất danh sách tiện ích từ CSDL thật hoặc fallback thông minh
+  const parseAmenities = (rawTienIch?: string | null, typeName?: string): string[] => {
+    if (rawTienIch && typeof rawTienIch === "string" && rawTienIch.trim()) {
+      const trimmed = rawTienIch.trim();
+      // Parse JSON array nếu CSDL lưu dạng mảng chuỗi
+      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((item: any) => String(item).trim()).filter(Boolean);
+          }
+        } catch {}
+      }
+      // Phân tách theo dấu xuống dòng
+      if (trimmed.includes("\n")) {
+        const lines = trimmed.split("\n").map((l) => l.trim().replace(/^[-*•]\s*/, "")).filter(Boolean);
+        if (lines.length > 0) return lines;
+      }
+      // Phân tách theo dấu chấm phẩy
+      if (trimmed.includes(";")) {
+        const parts = trimmed.split(";").map((l) => l.trim()).filter(Boolean);
+        if (parts.length > 0) return parts;
+      }
+      return [trimmed];
+    }
+    return getCourtAmenities(typeName);
+  };
+
+  const courtAmenities = parseAmenities(courtData?.tien_ich, courtData?.ten_loai);
+
   // Hàm hiển thị bình luận hoặc câu trả lời đệ quy nhiều lớp
   const renderCommentNode = (item: ReviewItem, depth: number = 0) => {
     const isAuthorAdmin =
@@ -850,7 +915,7 @@ export default function CourtDetailModal({
       onClick={onClose}
     >
       <div
-        className={`relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ${isDarkMode
+        className={`relative w-full max-w-5xl xl:max-w-6xl max-h-[92vh] flex flex-col rounded-3xl border shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ${isDarkMode
             ? "bg-slate-900 border-slate-700/80 text-white shadow-black/90"
             : "bg-white border-slate-200 text-slate-900 shadow-2xl"
           }`}
@@ -900,10 +965,10 @@ export default function CourtDetailModal({
           </button>
         </div>
 
-        {/* THÂN MODAL CUỘN DỌC TỰ DO (OVERFLOW-Y-AUTO) */}
+        {/* THÂN MODAL DẠNG NGANG GỌN GÀNG */}
         <div
           ref={modalScrollRef}
-          className={`flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-6 ${
+          className={`flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 ${
             isDarkMode ? "bg-slate-900/50" : "bg-slate-50/70"
           }`}
         >
@@ -915,11 +980,11 @@ export default function CourtDetailModal({
               </p>
             </div>
           ) : (
-            <>
-              {/* PHẦN 1: BANNER ẢNH THỰC TẾ & THÔNG TIN SÂN */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
-                {/* ẢNH THỰC TẾ SÂN */}
-                <div className={`md:col-span-7 relative rounded-2xl overflow-hidden border group shadow-lg aspect-video md:aspect-auto ${
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              {/* CỘT TRÁI (COL-SPAN-5): THÔNG TIN SÂN, BẢNG GIÁ, TIỆN ÍCH & NÚT ĐẶT SÂN */}
+              <div className="lg:col-span-5 flex flex-col gap-3.5">
+                {/* ẢNH THỰC TẾ SÂN DẠNG NGANG LANDSCAPE */}
+                <div className={`w-full aspect-[16/10] relative rounded-2xl overflow-hidden border group shadow-md shrink-0 ${
                   isDarkMode ? "border-slate-800" : "border-slate-200"
                 }`}>
                   <img
@@ -927,321 +992,355 @@ export default function CourtDetailModal({
                     alt={courtData?.ten_san}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-500 text-slate-950">
-                        {courtData?.trang_thai === "SAN_SANG" ? "Sẵn sàng thi đấu" : "Bảo trì"}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent flex flex-col justify-between p-3.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase shadow-sm ${
+                        courtData?.trang_thai === "SAN_SANG"
+                          ? "bg-emerald-500 text-slate-950"
+                          : "bg-amber-500 text-slate-950"
+                      }`}>
+                        {courtData?.trang_thai === "SAN_SANG" ? "Sẵn sàng thi đấu" : "Đang bảo trì"}
                       </span>
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-950/80 text-white backdrop-blur-sm border border-slate-700">
                         {courtData?.ten_loai}
                       </span>
                     </div>
-                    <h3 className="text-lg sm:text-xl font-black text-white drop-shadow-md">
-                      {courtData?.ten_san}
-                    </h3>
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-slate-950/80 backdrop-blur-sm text-amber-400 border border-amber-400/30 text-[11px] font-black">
+                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                          <span>{courtData?.diem_trung_binh ? Number(courtData.diem_trung_binh).toFixed(1) : "5.0"}</span>
+                        </div>
+                        <span className="text-[11px] text-slate-300 font-medium drop-shadow">
+                          ({courtData?.tong_danh_gia || 0} đánh giá)
+                        </span>
+                      </div>
+                      <h3 className="text-lg sm:text-xl font-black text-white drop-shadow-md">
+                        {courtData?.ten_san}
+                      </h3>
+                    </div>
                   </div>
                 </div>
 
-                {/* THÔNG TIN GIÁ & TIỆN ÍCH */}
-                <div className={`md:col-span-5 flex flex-col justify-between p-4 sm:p-5 rounded-2xl border space-y-4 ${
-                  isDarkMode
-                    ? "bg-slate-950/60 border-slate-800/80"
-                    : "bg-white border-slate-200 shadow-md"
+                {/* BẢNG GIÁ THUÊ SÂN */}
+                <div className={`p-3.5 rounded-2xl border ${
+                  isDarkMode ? "bg-slate-950/60 border-slate-800" : "bg-emerald-50/50 border-emerald-100"
                 }`}>
-                  <div>
+                  <div className="flex items-center justify-between mb-2">
                     <span className={`text-[11px] font-bold uppercase tracking-wider ${
-                      isDarkMode ? "text-slate-400" : "text-slate-500"
+                      isDarkMode ? "text-slate-400" : "text-slate-600"
                     }`}>
                       Bảng giá thuê sân
                     </span>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <span className={`text-2xl sm:text-3xl font-black ${
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+                      Giá niêm yết
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className={`p-2.5 rounded-xl border ${
+                      isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
+                    }`}>
+                      <p className={`text-[10px] font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                        Theo giờ (60 phút)
+                      </p>
+                      <p className={`text-base sm:text-lg font-black mt-0.5 ${
                         isDarkMode ? "text-emerald-400" : "text-emerald-600"
                       }`}>
                         {hourlyPrice.toLocaleString("vi-VN")} đ
-                      </span>
-                      <span className={`text-xs font-semibold ${
-                        isDarkMode ? "text-slate-400" : "text-slate-500"
-                      }`}>/ giờ</span>
+                      </p>
                     </div>
-                    <p className={`text-[11px] mt-0.5 ${
-                      isDarkMode ? "text-slate-500" : "text-slate-400"
+                    <div className={`p-2.5 rounded-xl border ${
+                      isDarkMode ? "bg-slate-900 border-slate-800" : "bg-white border-slate-200"
                     }`}>
-                      (Tương đương {(hourlyPrice / 2).toLocaleString("vi-VN")} đ cho mỗi ca 30 phút)
-                    </p>
+                      <p className={`text-[10px] font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>
+                        Theo ca (30 phút)
+                      </p>
+                      <p className={`text-base sm:text-lg font-black mt-0.5 ${
+                        isDarkMode ? "text-teal-400" : "text-teal-600"
+                      }`}>
+                        {(hourlyPrice / 2).toLocaleString("vi-VN")} đ
+                      </p>
+                    </div>
                   </div>
+                </div>
 
-                  {/* TIỆN ÍCH TIÊU CHUẨN */}
-                  <div className="space-y-2">
-                    <span className={`text-[11px] font-bold uppercase tracking-wider ${
-                      isDarkMode ? "text-slate-400" : "text-slate-500"
+                {/* TIỆN ÍCH & ĐẶC QUYỀN SÂN (DỮ LIỆU THẬT TỪ CSDL) */}
+                <div className={`p-3.5 rounded-2xl border space-y-2.5 ${
+                  isDarkMode ? "bg-slate-950/60 border-slate-800" : "bg-white border-slate-200"
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[11px] font-bold uppercase tracking-wider block ${
+                      isDarkMode ? "text-slate-400" : "text-slate-600"
                     }`}>
                       Tiện ích & Đặc quyền sân
                     </span>
-                    <ul className={`text-xs space-y-1.5 ${
-                      isDarkMode ? "text-slate-300" : "text-slate-700"
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                      isDarkMode
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                     }`}>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span>Mặt cỏ nhân tạo FIFA 2 sao êm ái, chống trơn trượt</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span>Hệ thống đèn LED cao áp chuẩn thi đấu ban đêm</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span>Khán đài mini, phòng thay đồ, bãi xe ô tô/xe máy miễn phí</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span>Có sẵn bóng thi đấu, nước uống và áo tập</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  {/* NÚT ĐẶT SÂN NGAY */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (onBookNow && courtData) {
-                        onBookNow(courtData);
-                      }
-                      onClose();
-                    }}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95"
-                  >
-                    <Zap className="w-4 h-4 fill-current" />
-                    <span>Chọn Giờ & Đặt Sân Này Ngay</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* PHẦN 2: THỐNG KÊ ĐÁNH GIÁ TỔNG QUAN */}
-              <div className={`p-5 rounded-2xl border ${
-                isDarkMode
-                  ? "bg-slate-950/60 border-slate-800"
-                  : "bg-white border-slate-200 shadow-md"
-              }`}>
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-                  {/* ĐIỂM TRUNG BÌNH */}
-                  <div className={`md:col-span-4 flex flex-col items-center justify-center text-center p-3 border-b md:border-b-0 md:border-r ${
-                    isDarkMode ? "border-slate-800" : "border-slate-200"
-                  }`}>
-                    <span className="text-4xl sm:text-5xl font-black text-amber-500 leading-none">
-                      {courtData?.diem_trung_binh ? Number(courtData.diem_trung_binh).toFixed(1) : "5.0"}
-                    </span>
-                    <div className="flex items-center gap-1 my-2">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <Star
-                          key={s}
-                          className={`w-4 h-4 ${s <= Math.round(courtData?.diem_trung_binh || 5)
-                              ? "text-amber-400 fill-amber-400"
-                              : isDarkMode ? "text-slate-700" : "text-slate-300"
-                            }`}
-                        />
-                      ))}
-                    </div>
-                    <span className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-                      Dựa trên <strong>{courtData?.tong_danh_gia || 0}</strong> lượt đánh giá
+                      Chuẩn cơ sở vật chất
                     </span>
                   </div>
-
-                  {/* THANH PHÂN PHỐI SỐ SAO */}
-                  <div className="md:col-span-8 space-y-1.5 px-2">
-                    {[5, 4, 3, 2, 1].map((starNum) => {
-                      const count = (courtData as any)?.[`sao_${starNum}`] || 0;
-                      const total = courtData?.tong_danh_gia || 1;
-                      const pct = Math.round((count / total) * 100);
-                      return (
-                        <div key={starNum} className={`flex items-center gap-2.5 text-xs ${
-                          isDarkMode ? "text-slate-400" : "text-slate-600"
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {courtAmenities.map((amenity, idx) => (
+                      <div key={idx} className="flex items-start gap-1.5 text-xs">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                        <span className={`text-[11px] font-medium leading-snug break-words ${
+                          isDarkMode ? "text-slate-300" : "text-slate-700"
                         }`}>
-                          <span className={`w-10 text-right font-bold flex items-center justify-end gap-1 ${
-                            isDarkMode ? "text-slate-300" : "text-slate-700"
-                          }`}>
-                            <span>{starNum}</span>
-                            <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                          </span>
-                          <div className={`flex-1 h-2 rounded-full overflow-hidden ${
-                            isDarkMode ? "bg-slate-800" : "bg-slate-100 border border-slate-200"
-                          }`}>
-                            <div
-                              className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-500"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <span className={`w-8 text-right font-mono text-[11px] ${
-                            isDarkMode ? "text-slate-400" : "text-slate-500"
-                          }`}>{count}</span>
-                        </div>
-                      );
-                    })}
+                          {amenity}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
+
+                {/* NÚT ĐẶT SÂN NGAY */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onBookNow && courtData) {
+                      onBookNow(courtData);
+                    }
+                    onClose();
+                  }}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-95"
+                >
+                  <Zap className="w-4 h-4 fill-current" />
+                  <span>Chọn Giờ & Đặt Sân Này Ngay</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
               </div>
 
-              {/* PHẦN 3: FORM GỬI ĐÁNH GIÁ & BÌNH LUẬN */}
-              <div className={`p-5 rounded-2xl border space-y-3.5 ${
-                isDarkMode
-                  ? "bg-slate-950/80 border-slate-800"
-                  : "bg-white border-slate-200 shadow-md"
-              }`}>
-                <div className="flex items-center justify-between">
-                  <h4 className={`text-sm font-black flex items-center gap-2 ${
-                    isDarkMode ? "text-white" : "text-slate-900"
-                  }`}>
-                    <MessageSquare className="w-4 h-4 text-emerald-500" />
-                    <span>Viết Đánh Giá Của Bạn</span>
-                  </h4>
-                  {currentUser && (
-                    <span className={`text-xs ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
-                      Đang đánh giá với tên: <strong className={isDarkMode ? "text-emerald-400" : "text-emerald-700"}>{currentUser.ho_ten || currentUser.hoTen}</strong>
-                    </span>
+              {/* CỘT PHẢI (COL-SPAN-7): ĐÁNH GIÁ, FORM GỬI & DANH SÁCH BÌNH LUẬN */}
+              <div className="lg:col-span-7 flex flex-col gap-3.5">
+                {/* THỐNG KÊ ĐÁNH GIÁ TỔNG QUAN */}
+                <div className={`p-4 rounded-2xl border ${
+                  isDarkMode
+                    ? "bg-slate-950/60 border-slate-800"
+                    : "bg-white border-slate-200 shadow-sm"
+                }`}>
+                  <div className="grid grid-cols-12 gap-3 items-center">
+                    {/* ĐIỂM TRUNG BÌNH */}
+                    <div className={`col-span-4 flex flex-col items-center justify-center text-center pr-3 border-r ${
+                      isDarkMode ? "border-slate-800" : "border-slate-200"
+                    }`}>
+                      <span className="text-3xl sm:text-4xl font-black text-amber-500 leading-none">
+                        {courtData?.diem_trung_binh ? Number(courtData.diem_trung_binh).toFixed(1) : "5.0"}
+                      </span>
+                      <div className="flex items-center gap-0.5 my-1.5">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            className={`w-3.5 h-3.5 ${s <= Math.round(courtData?.diem_trung_binh || 5)
+                                ? "text-amber-400 fill-amber-400"
+                                : isDarkMode ? "text-slate-700" : "text-slate-300"
+                              }`}
+                          />
+                        ))}
+                      </div>
+                      <span className={`text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+                        Dựa trên <strong>{courtData?.tong_danh_gia || 0}</strong> lượt đánh giá
+                      </span>
+                    </div>
+
+                    {/* THANH PHÂN PHỐI SỐ SAO */}
+                    <div className="col-span-8 space-y-1 pl-1">
+                      {[5, 4, 3, 2, 1].map((starNum) => {
+                        const count = (courtData as any)?.[`sao_${starNum}`] || 0;
+                        const total = courtData?.tong_danh_gia || 1;
+                        const pct = Math.round((count / total) * 100);
+                        return (
+                          <div key={starNum} className={`flex items-center gap-2 text-[11px] ${
+                            isDarkMode ? "text-slate-400" : "text-slate-600"
+                          }`}>
+                            <span className={`w-8 text-right font-bold flex items-center justify-end gap-0.5 ${
+                              isDarkMode ? "text-slate-300" : "text-slate-700"
+                            }`}>
+                              <span>{starNum}</span>
+                              <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
+                            </span>
+                            <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${
+                              isDarkMode ? "bg-slate-800" : "bg-slate-100 border border-slate-200"
+                            }`}>
+                              <div
+                                className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-500"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className={`w-6 text-right font-mono text-[10px] ${
+                              isDarkMode ? "text-slate-400" : "text-slate-500"
+                            }`}>{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* FORM GỬI ĐÁNH GIÁ & BÌNH LUẬN */}
+                <div className={`p-4 rounded-2xl border space-y-2.5 ${
+                  isDarkMode
+                    ? "bg-slate-950/80 border-slate-800"
+                    : "bg-white border-slate-200 shadow-sm"
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <h4 className={`text-xs font-black flex items-center gap-1.5 ${
+                      isDarkMode ? "text-white" : "text-slate-900"
+                    }`}>
+                      <MessageSquare className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Viết Đánh Giá Của Bạn</span>
+                    </h4>
+                    {currentUser && (
+                      <span className={`text-[11px] ${isDarkMode ? "text-slate-400" : "text-slate-600"}`}>
+                        Đang đánh giá với tên: <strong className={isDarkMode ? "text-emerald-400" : "text-emerald-700"}>{currentUser.ho_ten || currentUser.hoTen}</strong>
+                      </span>
+                    )}
+                  </div>
+
+                  {feedbackMsg.text && (
+                    <div
+                      className={`p-2 rounded-xl text-xs flex items-center gap-1.5 ${feedbackMsg.type === "success"
+                          ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400"
+                          : "bg-rose-500/15 border border-rose-500/30 text-rose-400"
+                        }`}
+                    >
+                      {feedbackMsg.type === "success" ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      )}
+                      <span>{feedbackMsg.text}</span>
+                    </div>
+                  )}
+
+                  {currentUser ? (
+                    <form onSubmit={handleSubmitReview} className="space-y-2.5">
+                      {/* CHỌN SỐ SAO */}
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className={`text-xs font-semibold ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
+                          Chấm điểm:
+                        </span>
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <button
+                              type="button"
+                              key={s}
+                              onMouseEnter={() => setHoverRating(s)}
+                              onMouseLeave={() => setHoverRating(0)}
+                              onClick={() => setRatingInput(s)}
+                              className="p-0.5 cursor-pointer transition-transform hover:scale-125 focus:outline-none"
+                            >
+                              <Star
+                                className={`w-4 h-4 transition-colors ${s <= (hoverRating || ratingInput)
+                                    ? "text-amber-400 fill-amber-400"
+                                    : isDarkMode ? "text-slate-700" : "text-slate-300"
+                                  }`}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                        <span className="text-[11px] font-bold text-amber-500">
+                          {ratingInput === 5
+                            ? "Tuyệt vời (5★)"
+                            : ratingInput === 4
+                              ? "Rất tốt (4★)"
+                              : ratingInput === 3
+                                ? "Bình thường (3★)"
+                                : ratingInput === 2
+                                  ? "Chưa hài lòng (2★)"
+                                  : "Tệ (1★)"}
+                        </span>
+                      </div>
+
+                      {/* Ô NHẬP NHẬN XÉT */}
+                      <div className="relative">
+                        <textarea
+                          rows={2}
+                          value={commentInput}
+                          onChange={(e) => setCommentInput(e.target.value)}
+                          placeholder="Chia sẻ trải nghiệm thi đấu tại sân này (mặt sân, đèn chiếu sáng, dịch vụ hỗ trợ...)"
+                          className={`w-full px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors border ${
+                            isDarkMode
+                              ? "bg-slate-900 border-slate-700 text-white"
+                              : "bg-slate-50 border-slate-200 text-slate-900"
+                          }`}
+                          required
+                          maxLength={1000}
+                        />
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          {isSubmitting ? (
+                            <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Send className="w-3.5 h-3.5" />
+                          )}
+                          <span>Gửi Đánh Giá</span>
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className={`p-3 rounded-xl border text-center space-y-1.5 ${
+                      isDarkMode
+                        ? "bg-slate-900 border-slate-800 text-slate-400"
+                        : "bg-slate-50 border-slate-200 text-slate-600"
+                    }`}>
+                      <p className="text-xs">
+                        Bạn cần đăng nhập tài khoản để có thể chấm điểm và gửi bình luận đánh giá cho sân này.
+                      </p>
+                      <span className={`inline-block text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                        isDarkMode
+                          ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/25"
+                          : "text-emerald-700 bg-emerald-50 border border-emerald-200"
+                      }`}>
+                        Vui lòng đăng nhập từ menu đầu trang
+                      </span>
+                    </div>
                   )}
                 </div>
 
-                {feedbackMsg.text && (
-                  <div
-                    className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${feedbackMsg.type === "success"
-                        ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400"
-                        : "bg-rose-500/15 border border-rose-500/30 text-rose-400"
-                      }`}
-                  >
-                    {feedbackMsg.type === "success" ? (
-                      <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                    )}
-                    <span>{feedbackMsg.text}</span>
-                  </div>
-                )}
-
-                {currentUser ? (
-                  <form onSubmit={handleSubmitReview} className="space-y-3">
-                    {/* CHỌN SỐ SAO */}
-                    <div className="flex items-center gap-3">
-                      <span className={`text-xs font-semibold ${isDarkMode ? "text-slate-300" : "text-slate-700"}`}>
-                        Chấm điểm sân:
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <button
-                            type="button"
-                            key={s}
-                            onMouseEnter={() => setHoverRating(s)}
-                            onMouseLeave={() => setHoverRating(0)}
-                            onClick={() => setRatingInput(s)}
-                            className="p-1 cursor-pointer transition-transform hover:scale-125 focus:outline-none"
-                          >
-                            <Star
-                              className={`w-5 h-5 transition-colors ${s <= (hoverRating || ratingInput)
-                                  ? "text-amber-400 fill-amber-400"
-                                  : isDarkMode ? "text-slate-700" : "text-slate-300"
-                                }`}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                      <span className="text-xs font-bold text-amber-500">
-                        {ratingInput === 5
-                          ? "Tuyệt vời (5★)"
-                          : ratingInput === 4
-                            ? "Rất tốt (4★)"
-                            : ratingInput === 3
-                              ? "Bình thường (3★)"
-                              : ratingInput === 2
-                                ? "Chưa hài lòng (2★)"
-                                : "Tệ (1★)"}
-                      </span>
-                    </div>
-
-                    {/* Ô NHẬP NHẬN XÉT */}
-                    <div className="relative">
-                      <textarea
-                        rows={3}
-                        value={commentInput}
-                        onChange={(e) => setCommentInput(e.target.value)}
-                        placeholder="Chia sẻ trải nghiệm thi đấu tại sân này (chất lượng mặt cỏ, hệ thống đèn chiếu sáng, dịch vụ hỗ trợ...)"
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-xs placeholder-slate-400 focus:outline-none focus:border-emerald-500 transition-colors border ${
-                          isDarkMode
-                            ? "bg-slate-900 border-slate-700 text-white"
-                            : "bg-slate-50 border-slate-200 text-slate-900"
-                        }`}
-                        required
-                        maxLength={1000}
-                      />
-                    </div>
-
-                    <div className="flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        {isSubmitting ? (
-                          <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Send className="w-3.5 h-3.5" />
-                        )}
-                        <span>Gửi Đánh Giá</span>
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className={`p-4 rounded-xl border text-center space-y-2 ${
-                    isDarkMode
-                      ? "bg-slate-900 border-slate-800 text-slate-400"
-                      : "bg-slate-50 border-slate-200 text-slate-600"
+                {/* DANH SÁCH BÌNH LUẬN & TRẢ LỜI */}
+                <div className="space-y-3">
+                  <div className={`flex items-center justify-between border-b pb-1.5 ${
+                    isDarkMode ? "border-slate-800" : "border-slate-200"
                   }`}>
-                    <p className="text-xs">
-                      Bạn cần đăng nhập tài khoản để có thể chấm điểm và gửi bình luận đánh giá cho sân này.
-                    </p>
-                    <span className={`inline-block text-[11px] font-bold px-3 py-1 rounded-full ${
-                      isDarkMode
-                        ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/25"
-                        : "text-emerald-700 bg-emerald-50 border border-emerald-200"
+                    <h4 className={`text-xs font-black flex items-center gap-1.5 ${
+                      isDarkMode ? "text-white" : "text-slate-900"
                     }`}>
-                      Vui lòng đăng nhập từ menu đầu trang
-                    </span>
+                      <MessageSquare className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Nhận Xét Từ Cộng Đồng Người Chơi</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                        isDarkMode ? "text-emerald-400 bg-emerald-500/15" : "text-emerald-700 bg-emerald-100"
+                      }`}>
+                        {totalReviewsCount}
+                      </span>
+                    </h4>
                   </div>
-                )}
-              </div>
 
-              {/* PHẦN 4: DANH SÁCH BÌNH LUẬN & TRẢ LỜI (REPLIES) */}
-              <div className="space-y-4">
-                <div className={`flex items-center justify-between border-b pb-2 ${
-                  isDarkMode ? "border-slate-800" : "border-slate-200"
-                }`}>
-                  <h4 className={`text-sm font-black flex items-center gap-2 ${
-                    isDarkMode ? "text-white" : "text-slate-900"
-                  }`}>
-                    <span>Nhận Xét Từ Cộng Đồng Người Chơi</span>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      isDarkMode ? "text-emerald-400 bg-emerald-500/15" : "text-emerald-700 bg-emerald-100"
+                  {reviews.length === 0 ? (
+                    <div className={`py-6 text-center text-xs ${
+                      isDarkMode ? "text-slate-500" : "text-slate-400"
                     }`}>
-                      {totalReviewsCount}
-                    </span>
-                  </h4>
+                      <MessageSquare className={`w-6 h-6 mx-auto mb-1.5 ${
+                        isDarkMode ? "text-slate-700" : "text-slate-300"
+                      }`} />
+                      <p>Chưa có bình luận nào cho sân này. Hãy là người đầu tiên đánh giá!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+                      {reviews.map((rev) => renderCommentNode(rev, 0))}
+                    </div>
+                  )}
                 </div>
-
-                {reviews.length === 0 ? (
-                  <div className={`py-8 text-center text-xs ${
-                    isDarkMode ? "text-slate-500" : "text-slate-400"
-                  }`}>
-                    <MessageSquare className={`w-8 h-8 mx-auto mb-2 ${
-                      isDarkMode ? "text-slate-700" : "text-slate-300"
-                    }`} />
-                    <p>Chưa có bình luận nào cho sân này. Hãy là người đầu tiên đánh giá!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {reviews.map((rev) => renderCommentNode(rev, 0))}
-                  </div>
-                )}
               </div>
-            </>
+            </div>
           )}
         </div>
       </div>

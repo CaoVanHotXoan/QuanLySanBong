@@ -243,6 +243,18 @@ const taoThanhToanPayOS = async (req, res) => {
                     .execute('sp_DatNhieuSan');
                 if (datNhieuResult.recordset && datNhieuResult.recordset[0]) {
                     finalDonDatId = datNhieuResult.recordset[0].id;
+                    if (req.body.ma_voucher || req.body.tien_giam_gia) {
+                        try {
+                            await pool.request()
+                                .input('id', db_1.sql.Int, finalDonDatId)
+                                .input('ma_voucher', db_1.sql.VarChar(30), req.body.ma_voucher || null)
+                                .input('tien_giam_gia', db_1.sql.Decimal(10, 2), req.body.tien_giam_gia ? parseFloat(req.body.tien_giam_gia) : 0)
+                                .query(`UPDATE Don_Dat_San SET ma_voucher = @ma_voucher, tien_giam_gia = @tien_giam_gia WHERE id = @id`);
+                        }
+                        catch (e) {
+                            console.warn('⚠️ Lỗi cập nhật voucher vào đơn đặt nhiều sân:', e.message);
+                        }
+                    }
                 }
             }
             else {
@@ -260,6 +272,8 @@ const taoThanhToanPayOS = async (req, res) => {
                     .input('phuong_thuc', db_1.sql.VarChar(20), 'CHUYEN_KHOAN')
                     .input('trang_thai', db_1.sql.VarChar(20), initialStatus)
                     .input('ghi_chu', db_1.sql.NVarChar(db_1.sql.MAX), ghi_chu || `PayOS VietQR MB Bank - ${isTraHet ? '100%' : '30%'}`)
+                    .input('ma_voucher', db_1.sql.VarChar(30), (bookingData.ma_voucher || req.body.ma_voucher || null))
+                    .input('tien_giam_gia', db_1.sql.Decimal(10, 2), (bookingData.tien_giam_gia || req.body.tien_giam_gia ? parseFloat(bookingData.tien_giam_gia || req.body.tien_giam_gia) : 0))
                     .execute('sp_DatSan');
                 if (datSanResult.recordset && datSanResult.recordset[0]) {
                     finalDonDatId = datSanResult.recordset[0].id;

@@ -368,6 +368,7 @@ BEGIN
             sb.hinh_anh,
             sb.don_gia_phut,
             sb.trang_thai,
+            sb.tien_ich,
             ISNULL(ls.id, sb.ma_loai_san) AS ma_loai_san,
             ISNULL(ls.ten_loai, N'Sân bóng tiêu chuẩn') AS ten_loai,
             ISNULL(ls.mo_ta, N'') AS mo_ta
@@ -393,12 +394,13 @@ BEGIN
             ls.id, 
             ls.ten_loai, 
             ls.mo_ta, 
+            ls.icon,
             ls.trang_thai,
             COUNT(sb.id) AS so_luong_san
         FROM Loai_San ls
         LEFT JOIN San_Bong sb ON ls.id = sb.ma_loai_san AND sb.trang_thai = 'SAN_SANG'
         WHERE (ls.trang_thai = 1 OR ls.trang_thai IS NULL)
-        GROUP BY ls.id, ls.ten_loai, ls.mo_ta, ls.trang_thai
+        GROUP BY ls.id, ls.ten_loai, ls.mo_ta, ls.icon, ls.trang_thai
         ORDER BY ls.id ASC;
     END TRY
     BEGIN CATCH
@@ -412,7 +414,8 @@ CREATE OR ALTER PROCEDURE sp_ThemSanBong
     @ma_loai_san INT = NULL,
     @hinh_anh VARCHAR(255) = NULL,
     @don_gia_phut DECIMAL(10, 2) = 5000.00,
-    @trang_thai VARCHAR(20) = 'SAN_SANG'
+    @trang_thai VARCHAR(20) = 'SAN_SANG',
+    @tien_ich NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -429,11 +432,11 @@ BEGIN
                 END;
             END;
 
-            INSERT INTO San_Bong (ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai)
-            VALUES (LTRIM(RTRIM(@ten_san)), @ma_loai_san, ISNULL(@hinh_anh, '/images/default-pitch.jpg'), ISNULL(@don_gia_phut, 5000.00), ISNULL(@trang_thai, 'SAN_SANG'));
+            INSERT INTO San_Bong (ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai, tien_ich)
+            VALUES (LTRIM(RTRIM(@ten_san)), @ma_loai_san, ISNULL(@hinh_anh, '/images/default-pitch.jpg'), ISNULL(@don_gia_phut, 5000.00), ISNULL(@trang_thai, 'SAN_SANG'), @tien_ich);
 
             SELECT 
-                sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, ls.id AS ma_loai_san, ISNULL(ls.ten_loai, N'Sân bóng tiêu chuẩn') AS ten_loai
+                sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, sb.tien_ich, ls.id AS ma_loai_san, ISNULL(ls.ten_loai, N'Sân bóng tiêu chuẩn') AS ten_loai
             FROM San_Bong sb
             LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
             WHERE sb.id = SCOPE_IDENTITY();
@@ -453,7 +456,8 @@ CREATE OR ALTER PROCEDURE sp_SuaSanBong
     @ma_loai_san INT = NULL,
     @hinh_anh VARCHAR(255) = NULL,
     @don_gia_phut DECIMAL(10, 2) = NULL,
-    @trang_thai VARCHAR(20) = 'SAN_SANG'
+    @trang_thai VARCHAR(20) = 'SAN_SANG',
+    @tien_ich NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -479,11 +483,12 @@ BEGIN
                 ma_loai_san = @ma_loai_san,
                 hinh_anh = @hinh_anh,
                 don_gia_phut = ISNULL(@don_gia_phut, don_gia_phut),
-                trang_thai = ISNULL(@trang_thai, trang_thai)
+                trang_thai = ISNULL(@trang_thai, trang_thai),
+                tien_ich = ISNULL(@tien_ich, tien_ich)
             WHERE id = @id;
 
             SELECT 
-                sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, ls.id AS ma_loai_san, ISNULL(ls.ten_loai, N'Sân bóng tiêu chuẩn') AS ten_loai
+                sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, sb.tien_ich, ls.id AS ma_loai_san, ISNULL(ls.ten_loai, N'Sân bóng tiêu chuẩn') AS ten_loai
             FROM San_Bong sb
             LEFT JOIN Loai_San ls ON sb.ma_loai_san = ls.id
             WHERE sb.id = @id;
@@ -1630,7 +1635,9 @@ CREATE OR ALTER PROCEDURE sp_DatSan
     @tong_tien DECIMAL(10, 2) = NULL,
     @phuong_thuc VARCHAR(20) = 'CHUYEN_KHOAN',
     @trang_thai VARCHAR(20) = 'DA_COC',
-    @ghi_chu NVARCHAR(MAX) = NULL
+    @ghi_chu NVARCHAR(MAX) = NULL,
+    @ma_voucher VARCHAR(30) = NULL,
+    @tien_giam_gia DECIMAL(10, 2) = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1669,11 +1676,13 @@ BEGIN
 
         INSERT INTO Don_Dat_San (
             ma_nguoi_dung, ma_san, ngay_da, gio_bat_dau, gio_ket_thuc, 
-            tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao
+            tien_san, tong_tien, phuong_thuc, ghi_chu, trang_thai, ngay_tao,
+            ma_voucher, tien_giam_gia
         )
         VALUES (
             @ma_nguoi_dung, @ma_san, @ngay_da, @gio_bat_dau, @gio_ket_thuc, 
-            @gia_tinh_duoc, @tong_tien_final, @phuong_thuc, @ghi_chu, @trang_thai, GETDATE()
+            @gia_tinh_duoc, @tong_tien_final, @phuong_thuc, @ghi_chu, @trang_thai, GETDATE(),
+            @ma_voucher, ISNULL(@tien_giam_gia, 0)
         );
 
         DECLARE @ma_don_moi INT = SCOPE_IDENTITY();
@@ -1686,7 +1695,8 @@ BEGIN
             CONVERT(VARCHAR(5), d.gio_ket_thuc, 108) AS gio_ket_thuc,
             d.tien_san, d.tong_tien, d.phuong_thuc,
             @so_phut AS so_phut_da,
-            d.trang_thai, d.ngay_tao
+            d.trang_thai, d.ngay_tao,
+            d.ma_voucher, d.tien_giam_gia
         FROM Don_Dat_San d
         INNER JOIN San_Bong sb ON d.ma_san = sb.id
         WHERE d.id = @ma_don_moi;
@@ -2326,6 +2336,28 @@ BEGIN
             UPDATE Don_Dat_San SET trang_thai = 'DA_COC' WHERE id = @ma_don_dat;
         END;
 
+        -- Tự động ghi nhận lịch sử dùng voucher nếu đơn có voucher và thanh toán thành công
+        DECLARE @voucherCode VARCHAR(30), @giamGia DECIMAL(10,2), @maKhach INT;
+        SELECT @voucherCode = ma_voucher, @giamGia = ISNULL(tien_giam_gia, 0), @maKhach = ma_nguoi_dung
+        FROM Don_Dat_San
+        WHERE id = @ma_don_dat;
+
+        IF @voucherCode IS NOT NULL AND LTRIM(RTRIM(@voucherCode)) <> ''
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM Lich_Su_Dung_Voucher WHERE ma_don_dat = @ma_don_dat)
+            BEGIN
+                IF @maKhach IS NOT NULL
+                BEGIN
+                    INSERT INTO Lich_Su_Dung_Voucher (ma_voucher, ma_nguoi_dung, ma_don_dat, so_tien_giam, ngay_dung)
+                    VALUES (@voucherCode, @maKhach, @ma_don_dat, @giamGia, GETDATE());
+                END;
+
+                UPDATE Khuyen_Mai 
+                SET so_luong_da_dung = so_luong_da_dung + 1 
+                WHERE UPPER(LTRIM(RTRIM(ma_code))) = UPPER(LTRIM(RTRIM(@voucherCode)));
+            END;
+        END;
+
         COMMIT TRANSACTION;
 
         SELECT 
@@ -2637,7 +2669,8 @@ GO
 CREATE OR ALTER PROCEDURE sp_ThemLoaiSan
     @ten_loai NVARCHAR(50),
     @mo_ta NVARCHAR(MAX) = NULL,
-    @trang_thai BIT = 1
+    @trang_thai BIT = 1,
+    @icon NVARCHAR(50) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -2648,10 +2681,10 @@ BEGIN
                 ;THROW 50035, N'Tên loại sân đã tồn tại trong hệ thống.', 1;
             END;
 
-            INSERT INTO Loai_San (ten_loai, mo_ta, trang_thai)
-            VALUES (LTRIM(RTRIM(@ten_loai)), @mo_ta, @trang_thai);
+            INSERT INTO Loai_San (ten_loai, mo_ta, trang_thai, icon)
+            VALUES (LTRIM(RTRIM(@ten_loai)), @mo_ta, @trang_thai, @icon);
 
-            SELECT id, ten_loai, mo_ta, trang_thai
+            SELECT id, ten_loai, mo_ta, icon, trang_thai
             FROM Loai_San
             WHERE id = SCOPE_IDENTITY();
         COMMIT TRANSACTION;
@@ -2668,7 +2701,8 @@ CREATE OR ALTER PROCEDURE sp_SuaLoaiSan
     @id INT,
     @ten_loai NVARCHAR(50),
     @mo_ta NVARCHAR(MAX) = NULL,
-    @trang_thai BIT = 1
+    @trang_thai BIT = 1,
+    @icon NVARCHAR(50) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -2687,10 +2721,11 @@ BEGIN
             UPDATE Loai_San
             SET ten_loai = LTRIM(RTRIM(@ten_loai)),
                 mo_ta = @mo_ta,
+                icon = ISNULL(@icon, icon),
                 trang_thai = ISNULL(@trang_thai, trang_thai)
             WHERE id = @id;
 
-            SELECT id, ten_loai, mo_ta, trang_thai
+            SELECT id, ten_loai, mo_ta, icon, trang_thai
             FROM Loai_San
             WHERE id = @id;
         COMMIT TRANSACTION;
@@ -6439,6 +6474,7 @@ BEGIN
         sb.hinh_anh,
         sb.don_gia_phut,
         sb.trang_thai,
+        sb.tien_ich,
         ls.id AS ma_loai_san,
         ls.ten_loai,
         ISNULL(ROUND(AVG(CAST(dg.so_sao AS FLOAT)), 1), 5.0) AS diem_trung_binh,
@@ -6452,7 +6488,7 @@ BEGIN
     JOIN Loai_San ls ON sb.ma_loai_san = ls.id
     LEFT JOIN Danh_Gia_San dg ON sb.id = dg.ma_san AND dg.trang_thai = 1
     WHERE sb.id = @ma_san
-    GROUP BY sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, ls.id, ls.ten_loai;
+    GROUP BY sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, sb.tien_ich, ls.id, ls.ten_loai;
 
     -- 2. Danh sách toàn bộ đánh giá và câu trả lời (kèm tên người được trả lời cha)
     SELECT 
@@ -7692,6 +7728,444 @@ BEGIN
         SELECT 1 AS thanh_cong, N'Đã đánh dấu gửi thông báo nhắc nhở thành công' AS thong_bao;
     END TRY
     BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 142. THỦ TỤC LẤY DANH SÁCH VOUCHER KHẢ DỤNG CHO NGƯỜI DÙNG (sp_LayDanhSachVoucherKhaDung)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_LayDanhSachVoucherKhaDung
+    @ma_nguoi_dung INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        DECLARE @da_tung_dat INT = 0;
+        IF @ma_nguoi_dung IS NOT NULL AND @ma_nguoi_dung > 0
+        BEGIN
+            SELECT @da_tung_dat = COUNT(*)
+            FROM Don_Dat_San
+            WHERE ma_nguoi_dung = @ma_nguoi_dung
+              AND trang_thai IN ('DA_COC', 'DA_THANH_TOAN', 'HOAN_THANH', 'HOAN_TAT');
+        END;
+
+        SELECT 
+            id,
+            ma_code,
+            tieu_de,
+            mo_ta,
+            loai_giam,
+            gia_tri_giam,
+            giam_toi_da,
+            don_toi_thieu,
+            chi_danh_cho_khach_moi,
+            CONVERT(VARCHAR(5), gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), gio_ket_thuc, 108) AS gio_ket_thuc,
+            thu_trong_tuan,
+            so_luong,
+            so_luong_da_dung,
+            ngay_bat_dau,
+            ngay_ket_thuc,
+            trang_thai,
+            @da_tung_dat AS da_tung_dat_san,
+            CASE 
+                WHEN chi_danh_cho_khach_moi = 1 AND @da_tung_dat > 0 THEN 0
+                ELSE 1
+            END AS hop_le_khach_hang
+        FROM Khuyen_Mai
+        WHERE trang_thai = 1
+          AND (ngay_bat_dau IS NULL OR ngay_bat_dau <= GETDATE())
+          AND (ngay_ket_thuc IS NULL OR ngay_ket_thuc >= GETDATE())
+          AND (so_luong IS NULL OR so_luong = 0 OR so_luong_da_dung < so_luong)
+        ORDER BY 
+            chi_danh_cho_khach_moi DESC,
+            don_toi_thieu ASC,
+            id ASC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 143. THỦ TỤC KIỂM TRA & TÍNH TIỀN GIẢM VOUCHER (sp_KiemTraVaApDungVoucher)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_KiemTraVaApDungVoucher
+    @ma_code VARCHAR(30),
+    @ma_nguoi_dung INT = NULL,
+    @tong_tien DECIMAL(10, 2),
+    @ngay_da DATE = NULL,
+    @gio_bat_dau TIME = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        DECLARE @voucherId INT,
+                @tieu_de NVARCHAR(100),
+                @mo_ta NVARCHAR(255),
+                @loai_giam VARCHAR(20),
+                @gia_tri_giam DECIMAL(10, 2),
+                @giam_toi_da DECIMAL(10, 2),
+                @don_toi_thieu DECIMAL(10, 2),
+                @chi_danh_cho_khach_moi BIT,
+                @gio_bd_km TIME,
+                @gio_kt_km TIME,
+                @thu_km VARCHAR(50),
+                @so_luong INT,
+                @so_luong_da_dung INT,
+                @ngay_bd DATETIME,
+                @ngay_kt DATETIME,
+                @trang_thai BIT;
+
+        SELECT 
+            @voucherId = id,
+            @tieu_de = tieu_de,
+            @mo_ta = mo_ta,
+            @loai_giam = loai_giam,
+            @gia_tri_giam = gia_tri_giam,
+            @giam_toi_da = giam_toi_da,
+            @don_toi_thieu = ISNULL(don_toi_thieu, 0),
+            @chi_danh_cho_khach_moi = ISNULL(chi_danh_cho_khach_moi, 0),
+            @gio_bd_km = gio_bat_dau,
+            @gio_kt_km = gio_ket_thuc,
+            @thu_km = thu_trong_tuan,
+            @so_luong = so_luong,
+            @so_luong_da_dung = ISNULL(so_luong_da_dung, 0),
+            @ngay_bd = ngay_bat_dau,
+            @ngay_kt = ngay_ket_thuc,
+            @trang_thai = trang_thai
+        FROM Khuyen_Mai
+        WHERE UPPER(LTRIM(RTRIM(ma_code))) = UPPER(LTRIM(RTRIM(@ma_code)));
+
+        -- 1. Kiểm tra tồn tại
+        IF @voucherId IS NULL
+        BEGIN
+            SELECT 0 AS hop_le, @ma_code AS ma_code, NULL AS tieu_de, 0.00 AS tien_giam, @tong_tien AS tong_tien_sau_giam, N'Mã giảm giá không tồn tại trong hệ thống.' AS ly_do;
+            RETURN;
+        END;
+
+        -- 2. Kiểm tra kích hoạt
+        IF @trang_thai = 0
+        BEGIN
+            SELECT 0 AS hop_le, @ma_code AS ma_code, @tieu_de AS tieu_de, 0.00 AS tien_giam, @tong_tien AS tong_tien_sau_giam, N'Mã ưu đãi hiện đang tạm ngưng áp dụng.' AS ly_do;
+            RETURN;
+        END;
+
+        -- 3. Kiểm tra hạn sử dụng
+        IF (@ngay_bd IS NOT NULL AND GETDATE() < @ngay_bd) OR (@ngay_kt IS NOT NULL AND GETDATE() > @ngay_kt)
+        BEGIN
+            SELECT 0 AS hop_le, @ma_code AS ma_code, @tieu_de AS tieu_de, 0.00 AS tien_giam, @tong_tien AS tong_tien_sau_giam, N'Mã ưu đãi chưa đến hạn hoặc đã hết thời gian sử dụng.' AS ly_do;
+            RETURN;
+        END;
+
+        -- 4. Kiểm tra số lượng (NULL hoặc 0 = Không giới hạn số lượng)
+        IF @so_luong IS NOT NULL AND @so_luong > 0 AND @so_luong_da_dung >= @so_luong
+        BEGIN
+            SELECT 0 AS hop_le, @ma_code AS ma_code, @tieu_de AS tieu_de, 0.00 AS tien_giam, @tong_tien AS tong_tien_sau_giam, N'Mã ưu đãi đã hết lượt sử dụng.' AS ly_do;
+            RETURN;
+        END;
+
+        -- 5. Kiểm tra khách mới
+        IF @chi_danh_cho_khach_moi = 1
+        BEGIN
+            IF @ma_nguoi_dung IS NOT NULL AND @ma_nguoi_dung > 0
+            BEGIN
+                DECLARE @da_dat INT = 0;
+                SELECT @da_dat = COUNT(*) FROM Don_Dat_San 
+                WHERE ma_nguoi_dung = @ma_nguoi_dung 
+                  AND trang_thai IN ('DA_COC', 'DA_THANH_TOAN', 'HOAN_THANH', 'HOAN_TAT');
+                IF @da_dat > 0
+                BEGIN
+                    SELECT 0 AS hop_le, @ma_code AS ma_code, @tieu_de AS tieu_de, 0.00 AS tien_giam, @tong_tien AS tong_tien_sau_giam, N'Chỉ dành cho đơn đặt sân đầu tiên của bạn mới.' AS ly_do;
+                    RETURN;
+                END;
+            END;
+        END;
+
+        -- 6. Kiểm tra đơn tối thiểu
+        IF @tong_tien < @don_toi_thieu
+        BEGIN
+            DECLARE @thieu DECIMAL(10,2) = @don_toi_thieu - @tong_tien;
+            DECLARE @msgThieu NVARCHAR(255) = N'Đặt thêm ' + FORMAT(@thieu, 'N0', 'vi-VN') + N' đ để sử dụng mã này.';
+            SELECT 0 AS hop_le, @ma_code AS ma_code, @tieu_de AS tieu_de, 0.00 AS tien_giam, @tong_tien AS tong_tien_sau_giam, @msgThieu AS ly_do, @thieu AS thieu_tien;
+            RETURN;
+        END;
+
+        -- 7. Kiểm tra thứ trong tuần (nếu có)
+        IF @thu_km IS NOT NULL AND @ngay_da IS NOT NULL
+        BEGIN
+            DECLARE @dayOfWeek INT = ((DATEPART(dw, @ngay_da) + @@DATEFIRST - 2) % 7) + 2;
+            IF @thu_km NOT LIKE '%' + CAST(@dayOfWeek AS VARCHAR(10)) + '%'
+            BEGIN
+                SELECT 0 AS hop_le, @ma_code AS ma_code, @tieu_de AS tieu_de, 0.00 AS tien_giam, @tong_tien AS tong_tien_sau_giam, N'Mã chỉ áp dụng từ Thứ 2 đến Thứ 6.' AS ly_do;
+                RETURN;
+            END;
+        END;
+
+        -- 8. Kiểm tra khung giờ (nếu có)
+        IF @gio_bd_km IS NOT NULL AND @gio_kt_km IS NOT NULL AND @gio_bat_dau IS NOT NULL
+        BEGIN
+            IF @gio_bat_dau < @gio_bd_km OR @gio_bat_dau > @gio_kt_km
+            BEGIN
+                SELECT 0 AS hop_le, @ma_code AS ma_code, @tieu_de AS tieu_de, 0.00 AS tien_giam, @tong_tien AS tong_tien_sau_giam, N'Chỉ áp dụng cho khung giờ từ ' + CONVERT(VARCHAR(5), @gio_bd_km, 108) + N' đến ' + CONVERT(VARCHAR(5), @gio_kt_km, 108) + N'.' AS ly_do;
+                RETURN;
+            END;
+        END;
+
+        -- Tính tiền giảm
+        DECLARE @tien_giam DECIMAL(10, 2) = 0.00;
+        IF @loai_giam = 'PHAN_TRAM'
+        BEGIN
+            SET @tien_giam = @tong_tien * (@gia_tri_giam / 100.00);
+            IF @giam_toi_da IS NOT NULL AND @tien_giam > @giam_toi_da
+            BEGIN
+                SET @tien_giam = @giam_toi_da;
+            END;
+        END
+        ELSE IF @loai_giam = 'SO_TIEN'
+        BEGIN
+            SET @tien_giam = @gia_tri_giam;
+            IF @tien_giam > @tong_tien
+            BEGIN
+                SET @tien_giam = @tong_tien;
+            END;
+        END;
+
+        DECLARE @sau_giam DECIMAL(10, 2) = @tong_tien - @tien_giam;
+        IF @sau_giam < 0 SET @sau_giam = 0;
+
+        SELECT 
+            1 AS hop_le,
+            @ma_code AS ma_code,
+            @tieu_de AS tieu_de,
+            @mo_ta AS mo_ta,
+            @tien_giam AS tien_giam,
+            @sau_giam AS tong_tien_sau_giam,
+            N'Áp dụng voucher thành công!' AS ly_do;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 144. Thủ tục lấy danh sách voucher dành cho trang quản trị (Admin)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_LayDanhSachVoucherAdmin
+    @tu_khoa NVARCHAR(100) = NULL,
+    @trang_thai INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        SELECT 
+            id,
+            ma_code,
+            tieu_de,
+            mo_ta,
+            loai_giam,
+            gia_tri_giam,
+            giam_toi_da,
+            don_toi_thieu,
+            chi_danh_cho_khach_moi,
+            CONVERT(VARCHAR(5), gio_bat_dau, 108) AS gio_bat_dau,
+            CONVERT(VARCHAR(5), gio_ket_thuc, 108) AS gio_ket_thuc,
+            thu_trong_tuan,
+            so_luong,
+            so_luong_da_dung,
+            CONVERT(VARCHAR(19), ngay_bat_dau, 120) AS ngay_bat_dau,
+            CONVERT(VARCHAR(19), ngay_ket_thuc, 120) AS ngay_ket_thuc,
+            trang_thai
+        FROM Khuyen_Mai
+        WHERE (@tu_khoa IS NULL OR LTRIM(RTRIM(@tu_khoa)) = '' 
+               OR ma_code LIKE '%' + @tu_khoa + '%' 
+               OR tieu_de LIKE N'%' + @tu_khoa + '%')
+          AND (@trang_thai IS NULL OR @trang_thai = -1 OR trang_thai = @trang_thai)
+        ORDER BY id DESC;
+    END TRY
+    BEGIN CATCH
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 145. Thủ tục thêm voucher mới (Admin)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_ThemVoucher
+    @ma_code VARCHAR(30),
+    @tieu_de NVARCHAR(100),
+    @mo_ta NVARCHAR(255) = NULL,
+    @loai_giam VARCHAR(20) = 'PHAN_TRAM',
+    @gia_tri_giam DECIMAL(10, 2),
+    @giam_toi_da DECIMAL(10, 2) = NULL,
+    @don_toi_thieu DECIMAL(10, 2) = 0,
+    @chi_danh_cho_khach_moi BIT = 0,
+    @gio_bat_dau TIME = NULL,
+    @gio_ket_thuc TIME = NULL,
+    @thu_trong_tuan VARCHAR(50) = NULL,
+    @so_luong INT = NULL,
+    @ngay_bat_dau DATETIME = NULL,
+    @ngay_ket_thuc DATETIME = NULL,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+            SET @ma_code = UPPER(LTRIM(RTRIM(@ma_code)));
+            IF @ma_code IS NULL OR @ma_code = ''
+            BEGIN
+                ;THROW 50060, N'Mã voucher không được để trống.', 1;
+            END;
+
+            IF EXISTS (SELECT 1 FROM Khuyen_Mai WHERE UPPER(ma_code) = @ma_code)
+            BEGIN
+                ;THROW 50061, N'Mã voucher này đã tồn tại trong hệ thống.', 1;
+            END;
+
+            IF @loai_giam NOT IN ('PHAN_TRAM', 'SO_TIEN')
+            BEGIN
+                SET @loai_giam = 'PHAN_TRAM';
+            END;
+
+            INSERT INTO Khuyen_Mai (
+                ma_code, tieu_de, mo_ta, loai_giam, gia_tri_giam,
+                giam_toi_da, don_toi_thieu, chi_danh_cho_khach_moi,
+                gio_bat_dau, gio_ket_thuc, thu_trong_tuan,
+                so_luong, so_luong_da_dung,
+                ngay_bat_dau, ngay_ket_thuc, trang_thai
+            )
+            VALUES (
+                @ma_code, LTRIM(RTRIM(@tieu_de)), @mo_ta, @loai_giam, @gia_tri_giam,
+                @giam_toi_da, ISNULL(@don_toi_thieu, 0), ISNULL(@chi_danh_cho_khach_moi, 0),
+                @gio_bat_dau, @gio_ket_thuc, @thu_trong_tuan,
+                CASE WHEN @so_luong > 0 THEN @so_luong ELSE NULL END, 0,
+                ISNULL(@ngay_bat_dau, GETDATE()), @ngay_ket_thuc, ISNULL(@trang_thai, 1)
+            );
+
+            SELECT SCOPE_IDENTITY() AS id, @ma_code AS ma_code;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 146. Thủ tục sửa voucher (Admin)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_SuaVoucher
+    @id INT,
+    @ma_code VARCHAR(30),
+    @tieu_de NVARCHAR(100),
+    @mo_ta NVARCHAR(255) = NULL,
+    @loai_giam VARCHAR(20) = 'PHAN_TRAM',
+    @gia_tri_giam DECIMAL(10, 2),
+    @giam_toi_da DECIMAL(10, 2) = NULL,
+    @don_toi_thieu DECIMAL(10, 2) = 0,
+    @chi_danh_cho_khach_moi BIT = 0,
+    @gio_bat_dau TIME = NULL,
+    @gio_ket_thuc TIME = NULL,
+    @thu_trong_tuan VARCHAR(50) = NULL,
+    @so_luong INT = NULL,
+    @ngay_bat_dau DATETIME = NULL,
+    @ngay_ket_thuc DATETIME = NULL,
+    @trang_thai BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+            IF NOT EXISTS (SELECT 1 FROM Khuyen_Mai WHERE id = @id)
+            BEGIN
+                ;THROW 50062, N'Voucher không tồn tại.', 1;
+            END;
+
+            SET @ma_code = UPPER(LTRIM(RTRIM(@ma_code)));
+            IF EXISTS (SELECT 1 FROM Khuyen_Mai WHERE UPPER(ma_code) = @ma_code AND id <> @id)
+            BEGIN
+                ;THROW 50063, N'Mã voucher đã được sử dụng bởi voucher khác.', 1;
+            END;
+
+            IF @loai_giam NOT IN ('PHAN_TRAM', 'SO_TIEN')
+            BEGIN
+                SET @loai_giam = 'PHAN_TRAM';
+            END;
+
+            UPDATE Khuyen_Mai
+            SET ma_code = @ma_code,
+                tieu_de = LTRIM(RTRIM(@tieu_de)),
+                mo_ta = @mo_ta,
+                loai_giam = @loai_giam,
+                gia_tri_giam = @gia_tri_giam,
+                giam_toi_da = @giam_toi_da,
+                don_toi_thieu = ISNULL(@don_toi_thieu, 0),
+                chi_danh_cho_khach_moi = ISNULL(@chi_danh_cho_khach_moi, 0),
+                gio_bat_dau = @gio_bat_dau,
+                gio_ket_thuc = @gio_ket_thuc,
+                thu_trong_tuan = @thu_trong_tuan,
+                so_luong = CASE WHEN @so_luong > 0 THEN @so_luong ELSE NULL END,
+                ngay_bat_dau = ISNULL(@ngay_bat_dau, ngay_bat_dau),
+                ngay_ket_thuc = @ngay_ket_thuc,
+                trang_thai = ISNULL(@trang_thai, 1)
+            WHERE id = @id;
+
+            SELECT @id AS id, @ma_code AS ma_code;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ;THROW;
+    END CATCH;
+END;
+GO
+
+-- =====================================================================
+-- 147. Thủ tục xóa hoặc vô hiệu hóa voucher (Admin)
+-- =====================================================================
+CREATE OR ALTER PROCEDURE sp_XoaVoucher
+    @id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRY
+        BEGIN TRANSACTION;
+            IF NOT EXISTS (SELECT 1 FROM Khuyen_Mai WHERE id = @id)
+            BEGIN
+                ;THROW 50064, N'Voucher không tồn tại.', 1;
+            END;
+
+            DECLARE @ma_code VARCHAR(30);
+            SELECT @ma_code = ma_code FROM Khuyen_Mai WHERE id = @id;
+
+            -- Nếu voucher đã được áp dụng trong đơn đặt sân hoặc lịch sử, chuyển sang vô hiệu hóa (trang_thai = 0)
+            IF EXISTS (SELECT 1 FROM Don_Dat_San WHERE UPPER(ma_voucher) = UPPER(@ma_code))
+               OR EXISTS (SELECT 1 FROM Lich_Su_Dung_Voucher WHERE UPPER(ma_voucher) = UPPER(@ma_code))
+            BEGIN
+                UPDATE Khuyen_Mai
+                SET trang_thai = 0
+                WHERE id = @id;
+                SELECT @id AS id, 'DEACTIVATED' AS action_result;
+            END
+            ELSE
+            BEGIN
+                DELETE FROM Khuyen_Mai WHERE id = @id;
+                SELECT @id AS id, 'DELETED' AS action_result;
+            END;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
         ;THROW;
     END CATCH;
 END;

@@ -403,9 +403,9 @@ export default function HeaderNav({ activeTab = 'home' }: HeaderNavProps) {
             </nav>
 
             <div className="hidden lg:flex items-center gap-4 text-[11px] font-semibold text-slate-400 shrink-0">
-              <span className={`flex items-center gap-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                <Phone className="w-3.5 h-3.5 text-emerald-500" />
-                Hotline Đặt Sân: <strong className="text-emerald-500 font-mono">0816344504</strong>
+              <span className={`flex items-center gap-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-800 font-bold'}`}>
+                <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                Hotline Đặt Sân: <strong className="text-emerald-700 dark:text-emerald-500 font-mono text-xs">0816344504</strong>
               </span>
             </div>
           </div>

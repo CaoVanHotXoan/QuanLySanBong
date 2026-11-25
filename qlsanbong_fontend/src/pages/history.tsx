@@ -140,30 +140,53 @@ export const toUpperCaseNoAccents = (str: string): string => {
 };
 
 // Helper theme icon & phụ đề cho từng loại sân
-export const getSportTheme = (name: string, moTa?: string) => {
-  const n = (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (n.includes('bong da') || n.includes('san 5') || n.includes('san 7') || n.includes('san 11') || n.includes('mini')) {
-    return { icon: '⚽', subtitle: moTa || 'Sân 5, 7, 11 người • Cỏ FIFA' };
+export const getSportTheme = (name: string, moTa?: string | null, customIcon?: string | null) => {
+  const c = (customIcon || '').trim().toLowerCase();
+  let resolvedIcon: string | null = null;
+  if (c === 'pickleball') resolvedIcon = '🏓';
+  else if (c === 'bong-da' || c === 'soccer' || c === 'football') resolvedIcon = '⚽';
+  else if (c === 'quan-vot' || c === 'tennis') resolvedIcon = '🎾';
+  else if (c === 'cau-long' || c === 'badminton') resolvedIcon = '🏸';
+  else if (c === 'bong-ro' || c === 'basketball') resolvedIcon = '🏀';
+  else if (c === 'bong-ban' || c === 'table-tennis' || c === 'ping-pong') resolvedIcon = '🏓';
+  else if (c === 'bong-chuyen' || c === 'volleyball') resolvedIcon = '🏐';
+  else if (customIcon && customIcon.trim() && !customIcon.includes('?') && !customIcon.includes('đŸ') && !customIcon.includes('â')) {
+    resolvedIcon = customIcon.trim();
+  }
+
+  if (resolvedIcon) {
+    return { icon: resolvedIcon, subtitle: moTa || '' };
+  }
+
+  const n = (name || '')
+    .toLowerCase()
+    .replace(/[đĐ]/g, 'd')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  if (n.includes('bong da') || n.includes('san 5') || n.includes('san 7') || n.includes('san 11') || n.includes('mini') || n.includes('futsal')) {
+    return { icon: '⚽', subtitle: moTa || '' };
   }
   if (n.includes('cau long') || n.includes('badminton')) {
-    return { icon: '🏸', subtitle: moTa || 'Thảm Taraflex • Sàn gỗ chuẩn' };
+    return { icon: '🏸', subtitle: moTa || '' };
   }
   if (n.includes('pickleball')) {
-    return { icon: '🏓', subtitle: moTa || 'Có mái che • Điều hòa mát lạnh' };
+    return { icon: '🏓', subtitle: moTa || '' };
   }
   if (n.includes('quan vot') || n.includes('tennis')) {
-    return { icon: '🎾', subtitle: moTa || 'Mặt sân cứng • Đèn LED ban đêm' };
+    return { icon: '🎾', subtitle: moTa || '' };
   }
   if (n.includes('bong ro') || n.includes('basketball')) {
-    return { icon: '🏀', subtitle: moTa || 'Trong nhà & Ngoài trời' };
+    return { icon: '🏀', subtitle: moTa || '' };
   }
   if (n.includes('bong chuyen') || n.includes('volleyball')) {
-    return { icon: '🏐', subtitle: moTa || 'Mặt sân cao cấp • Lưới chuẩn' };
+    return { icon: '🏐', subtitle: moTa || '' };
   }
-  if (n.includes('bong ban') || n.includes('table tennis')) {
-    return { icon: '🏓', subtitle: moTa || 'Bàn thi đấu tiêu chuẩn quốc tế' };
+  if (n.includes('bong ban') || n.includes('table tennis') || n.includes('ping pong')) {
+    return { icon: '🏓', subtitle: moTa || '' };
   }
-  return { icon: '🏆', subtitle: moTa || 'Sân thể thao chất lượng cao' };
+  return { icon: '🏟️', subtitle: moTa || '' };
 };
 
 // Helper cộng thêm phút vào chuỗi giờ (HH:mm)
@@ -4014,7 +4037,7 @@ export default function History() {
                       >
                         <div className="flex items-center gap-2 truncate">
                           <span className="text-base">
-                            {exchangeSelectedCategory ? getSportTheme(exchangeSelectedCategory.ten_loai, exchangeSelectedCategory.mo_ta).icon : '⚽'}
+                            {exchangeSelectedCategory ? getSportTheme(exchangeSelectedCategory.ten_loai, exchangeSelectedCategory.mo_ta, exchangeSelectedCategory.icon).icon : '⚽'}
                           </span>
                           <span className="truncate">
                             {exchangeSelectedCategory ? exchangeSelectedCategory.ten_loai : 'Chọn loại sân muốn đặt...'}
@@ -4029,7 +4052,7 @@ export default function History() {
                           isDarkMode ? 'bg-slate-900 border-slate-700 text-white shadow-slate-950/80' : 'bg-white border-slate-200 text-slate-900'
                         }`}>
                           {exchangeCategoryList.map((cat) => {
-                            const theme = getSportTheme(cat.ten_loai, cat.mo_ta);
+                            const theme = getSportTheme(cat.ten_loai, cat.mo_ta, cat.icon);
                             const isSelected = exchangeSelectedCategory?.id === cat.id;
                             return (
                               <button
@@ -4829,7 +4852,7 @@ export default function History() {
             }`}>
               <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 flex items-center justify-center text-xl shrink-0 shadow-inner">
-                  {getSportTheme(exchangeSelectedCategory.ten_loai, exchangeSelectedCategory.mo_ta).icon}
+                  {getSportTheme(exchangeSelectedCategory.ten_loai, exchangeSelectedCategory.mo_ta, exchangeSelectedCategory.icon).icon}
                 </div>
                 <div className="min-w-0">
                   <h3 className={`font-black text-sm sm:text-base truncate ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>

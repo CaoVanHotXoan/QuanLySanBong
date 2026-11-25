@@ -13,6 +13,7 @@ export interface SanBong {
     ten_loai_san?: string;
     trang_thai: string;
     gia_mac_dinh?: number;
+    tien_ich?: string | null;
 }
 
 export interface LoaiSan {
@@ -20,6 +21,7 @@ export interface LoaiSan {
     ten_loai_san: string;
     so_nguoi: number;
     mo_ta?: string;
+    icon?: string | null;
 }
 
 export interface KhungGio {

@@ -31,6 +31,7 @@ const uploadRoutes_1 = __importDefault(require("./src/routes/uploadRoutes"));
 const contentRoutes_1 = __importDefault(require("./src/routes/contentRoutes"));
 const reviewRoutes_1 = __importDefault(require("./src/routes/reviewRoutes"));
 const thongBaoRoutes_1 = __importDefault(require("./src/routes/thongBaoRoutes"));
+const khuyenMaiRoutes_1 = __importDefault(require("./src/routes/khuyenMaiRoutes"));
 const reminderService_1 = require("./src/services/reminderService");
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 5000;
@@ -69,6 +70,7 @@ app.use('/api/bao-cao', baoCaoRoutes_1.default);
 app.use('/api/upload', uploadRoutes_1.default);
 app.use('/api/reviews', reviewRoutes_1.default);
 app.use('/api/thong-bao', thongBaoRoutes_1.default);
+app.use('/api/khuyen-mai', khuyenMaiRoutes_1.default);
 app.use('/api', contentRoutes_1.default);
 // Cung cấp giao diện Swagger UI trực quan tương tác (/api-docs)
 try {

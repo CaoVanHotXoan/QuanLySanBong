@@ -60,7 +60,12 @@ import {
   ShoppingCart,
   Trash2,
   Plus,
-  Layers
+  Layers,
+  Ticket,
+  Tag,
+  Percent,
+  Gift,
+  FileText
 } from 'lucide-react';
 import Login, { AuthUser } from './Login/login';
 import Profile from './profile';
@@ -100,7 +105,8 @@ interface PayOSData {
 interface LoaiSan {
   id: number;
   ten_loai: string;
-  mo_ta: string;
+  mo_ta: string | null;
+  icon?: string | null;
   trang_thai?: boolean;
 }
 
@@ -116,6 +122,7 @@ interface SanBong {
   hinh_anh?: string;
   mo_ta?: string;
   trang_thai: 'SAN_SANG' | 'BAO_TRI';
+  tien_ich?: string | null;
 }
 
 /**
@@ -147,6 +154,28 @@ interface DichVu {
   don_gia: number;
   don_vi_tinh: string;
   ton_kho: number;
+}
+
+/**
+ * Interface Mã Khuyến Mãi / Voucher Ưu Đãi (Khuyen_Mai trong CSDL SQL Server)
+ */
+interface Voucher {
+  id: number;
+  ma_code: string;
+  tieu_de: string;
+  mo_ta: string | null;
+  loai_giam: 'PHAN_TRAM' | 'SO_TIEN';
+  gia_tri_giam: number;
+  giam_toi_da: number | null;
+  don_toi_thieu: number;
+  chi_danh_cho_khach_moi: boolean;
+  gio_bat_dau: string | null;
+  gio_ket_thuc: string | null;
+  thu_trong_tuan: string | null;
+  so_luong: number;
+  so_luong_da_dung: number;
+  hop_le_khach_hang?: number | boolean;
+  da_tung_dat_san?: number;
 }
 
 // Cấu hình URL Backend API Express kết nối trực tiếp CSDL SQL Server
@@ -211,9 +240,55 @@ function formatDateVietnamese(dateStr: string): string {
   return dateStr;
 }
 
+// Icon quả bóng Pickleball đục lỗ (Perforated Wiffle Ball) - Biểu tượng độc nhất vô nhị của môn Pickleball
+export function PickleballIcon({ className = "w-7 h-7" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 36 36" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        {/* Màu vàng chanh neon 3D đặc trưng của bóng thi đấu Pickleball chuẩn quốc tế */}
+        <radialGradient id="pickleballBallGrad" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#FEF08A" />
+          <stop offset="40%" stopColor="#EAB308" />
+          <stop offset="75%" stopColor="#CA8A04" />
+          <stop offset="100%" stopColor="#854D0E" />
+        </radialGradient>
+      </defs>
+
+      {/* Thân quả bóng tròn chuẩn */}
+      <circle cx="18" cy="18" r="15" fill="url(#pickleballBallGrad)" stroke="#A16207" strokeWidth="1.2" />
+
+      {/* Các lỗ đục đặc trưng của bóng Pickleball với độ sâu 3D */}
+      {/* Lỗ trung tâm */}
+      <circle cx="18" cy="18" r="2.2" fill="#451A03" stroke="#78350F" strokeWidth="0.8" />
+      <circle cx="17.6" cy="17.6" r="1.3" fill="#260F02" />
+
+      {/* Vòng lỗ bên trong */}
+      <circle cx="18" cy="9.8" r="2" fill="#451A03" stroke="#78350F" strokeWidth="0.7" />
+      <circle cx="24.8" cy="13.2" r="1.9" fill="#451A03" stroke="#78350F" strokeWidth="0.7" />
+      <circle cx="24.8" cy="22.8" r="1.9" fill="#451A03" stroke="#78350F" strokeWidth="0.7" />
+      <circle cx="18" cy="26.2" r="2" fill="#451A03" stroke="#78350F" strokeWidth="0.7" />
+      <circle cx="11.2" cy="22.8" r="1.9" fill="#451A03" stroke="#78350F" strokeWidth="0.7" />
+      <circle cx="11.2" cy="13.2" r="1.9" fill="#451A03" stroke="#78350F" strokeWidth="0.7" />
+
+      {/* Vòng lỗ viền xung quanh (co lại theo phối cảnh hình cầu) */}
+      <ellipse cx="18" cy="4.8" rx="1.6" ry="0.9" fill="#451A03" />
+      <ellipse cx="29" cy="9.2" rx="1.2" ry="1.6" fill="#451A03" />
+      <ellipse cx="31.2" cy="18" rx="0.9" ry="1.7" fill="#451A03" />
+      <ellipse cx="29" cy="26.8" rx="1.2" ry="1.6" fill="#451A03" />
+      <ellipse cx="18" cy="31.2" rx="1.6" ry="0.9" fill="#451A03" />
+      <ellipse cx="7" cy="26.8" rx="1.2" ry="1.6" fill="#451A03" />
+      <ellipse cx="4.8" cy="18" rx="0.9" ry="1.7" fill="#451A03" />
+      <ellipse cx="7" cy="9.2" rx="1.2" ry="1.6" fill="#451A03" />
+
+      {/* Ánh sáng phản chiếu bóng nhựa (Gloss Highlight) */}
+      <ellipse cx="13" cy="9.5" rx="3.5" ry="1.8" transform="rotate(-30 13 9.5)" fill="#FFFFFF" fillOpacity="0.45" />
+    </svg>
+  );
+}
+
 // Cấu hình thông tin hiển thị môn thể thao (Icon, mô tả đặc điểm)
 export interface SportTheme {
-  icon: string;
+  icon: React.ReactNode;
   subtitle: string;
   badge?: string;
   gradient: string;
@@ -221,13 +296,55 @@ export interface SportTheme {
   accentColor: string;
 }
 
-export const getSportTheme = (name: string, moTa?: string): SportTheme => {
-  const n = (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// Hàm resolve icon môn thể thao an toàn tuyệt đối (hỗ trợ slug, emoji chuẩn và tự động nhận diện theo tên)
+export const resolveSportIcon = (name: string, customIcon?: string | null): React.ReactNode => {
+  const c = (customIcon || '').trim().toLowerCase();
+  if (c === 'pickleball') return '🏓';
+  if (c === 'bong-da' || c === 'soccer' || c === 'football') return '⚽';
+  if (c === 'quan-vot' || c === 'tennis') return '🎾';
+  if (c === 'cau-long' || c === 'badminton') return '🏸';
+  if (c === 'bong-ro' || c === 'basketball') return '🏀';
+  if (c === 'bong-ban' || c === 'table-tennis' || c === 'ping-pong') return '🏓';
+  if (c === 'bong-chuyen' || c === 'volleyball') return '🏐';
+
+  // Nếu customIcon là emoji hợp lệ (không phải chuỗi lỗi mã hóa / mojibake '?' hoặc 'đŸ' hoặc 'â')
+  if (customIcon && customIcon.trim() && !customIcon.includes('?') && !customIcon.includes('đŸ') && !customIcon.includes('â')) {
+    return customIcon.trim();
+  }
+
+  // Tự động nhận diện chuẩn theo tên môn thể thao
+  const n = (name || '')
+    .toLowerCase()
+    .replace(/[đĐ]/g, 'd')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  if (n.includes('pickleball')) return '🏓';
+  if (n.includes('bong da') || n.includes('san 5') || n.includes('san 7') || n.includes('san 11') || n.includes('mini') || n.includes('futsal')) return '⚽';
+  if (n.includes('cau long') || n.includes('badminton')) return '🏸';
+  if (n.includes('quan vot') || n.includes('tennis')) return '🎾';
+  if (n.includes('bong ro') || n.includes('basketball')) return '🏀';
+  if (n.includes('bong chuyen') || n.includes('volleyball')) return '🏐';
+  if (n.includes('bong ban') || n.includes('table tennis') || n.includes('ping pong')) return '🏓';
+
+  return '🏟️';
+};
+
+export const getSportTheme = (name: string, moTa?: string | null, customIcon?: string | null): SportTheme => {
+  const n = (name || '')
+    .toLowerCase()
+    .replace(/[đĐ]/g, 'd')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
   
-  if (n.includes('bong da') || n.includes('san 5') || n.includes('san 7') || n.includes('san 11') || n.includes('mini')) {
+  const icon = resolveSportIcon(name, customIcon);
+
+  if (n.includes('bong da') || n.includes('san 5') || n.includes('san 7') || n.includes('san 11') || n.includes('mini') || n.includes('futsal')) {
     return {
-      icon: '⚽',
-      subtitle: moTa || 'Sân 5, 7, 11 người • Cỏ FIFA',
+      icon,
+      subtitle: moTa || '',
       gradient: 'from-blue-950/40 via-slate-900/60 to-slate-900/90',
       iconBg: 'bg-blue-500/15 border-blue-500/30 text-blue-400',
       accentColor: 'text-blue-400',
@@ -235,8 +352,8 @@ export const getSportTheme = (name: string, moTa?: string): SportTheme => {
   }
   if (n.includes('cau long') || n.includes('badminton')) {
     return {
-      icon: '🏸',
-      subtitle: moTa || 'Thảm Taraflex • Sàn gỗ chuẩn',
+      icon,
+      subtitle: moTa || '',
       gradient: 'from-indigo-950/40 via-slate-900/60 to-slate-900/90',
       iconBg: 'bg-indigo-500/15 border-indigo-500/30 text-indigo-400',
       accentColor: 'text-indigo-400',
@@ -244,26 +361,26 @@ export const getSportTheme = (name: string, moTa?: string): SportTheme => {
   }
   if (n.includes('pickleball')) {
     return {
-      icon: '🏓',
-      subtitle: moTa || 'Có mái che • Điều hòa mát lạnh',
-      gradient: 'from-pink-950/40 via-slate-900/60 to-slate-900/90',
-      iconBg: 'bg-pink-500/15 border-pink-500/30 text-pink-400',
-      accentColor: 'text-pink-400',
-    };
-  }
-  if (n.includes('quan vot') || n.includes('tennis')) {
-    return {
-      icon: '🎾',
-      subtitle: moTa || 'Mặt sân cứng • Đèn LED ban đêm',
+      icon,
+      subtitle: moTa || '',
       gradient: 'from-emerald-950/40 via-slate-900/60 to-slate-900/90',
       iconBg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
       accentColor: 'text-emerald-400',
     };
   }
+  if (n.includes('quan vot') || n.includes('tennis')) {
+    return {
+      icon,
+      subtitle: moTa || '',
+      gradient: 'from-amber-950/40 via-slate-900/60 to-slate-900/90',
+      iconBg: 'bg-amber-500/15 border-amber-500/30 text-amber-400',
+      accentColor: 'text-amber-400',
+    };
+  }
   if (n.includes('bong ro') || n.includes('basketball')) {
     return {
-      icon: '🏀',
-      subtitle: moTa || 'Trong nhà & Ngoài trời',
+      icon,
+      subtitle: moTa || '',
       gradient: 'from-orange-950/40 via-slate-900/60 to-slate-900/90',
       iconBg: 'bg-orange-500/15 border-orange-500/30 text-orange-400',
       accentColor: 'text-orange-400',
@@ -271,25 +388,25 @@ export const getSportTheme = (name: string, moTa?: string): SportTheme => {
   }
   if (n.includes('bong chuyen') || n.includes('volleyball')) {
     return {
-      icon: '🏐',
-      subtitle: moTa || 'Mặt sân cao cấp • Lưới chuẩn',
+      icon,
+      subtitle: moTa || '',
       gradient: 'from-purple-950/40 via-slate-900/60 to-slate-900/90',
       iconBg: 'bg-purple-500/15 border-purple-500/30 text-purple-400',
       accentColor: 'text-purple-400',
     };
   }
-  if (n.includes('bong ban') || n.includes('table tennis')) {
+  if (n.includes('bong ban') || n.includes('table tennis') || n.includes('ping pong')) {
     return {
-      icon: '🏓',
-      subtitle: moTa || 'Bàn thi đấu quốc tế',
+      icon,
+      subtitle: moTa || '',
       gradient: 'from-rose-950/40 via-slate-900/60 to-slate-900/90',
       iconBg: 'bg-rose-500/15 border-rose-500/30 text-rose-400',
       accentColor: 'text-rose-400',
     };
   }
   return {
-    icon: '🏆',
-    subtitle: moTa || 'Sân thể thao tiêu chuẩn thi đấu',
+    icon,
+    subtitle: moTa || '',
     gradient: 'from-slate-950/40 via-slate-900/60 to-slate-900/90',
     iconBg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
     accentColor: 'text-emerald-400',
@@ -297,10 +414,11 @@ export const getSportTheme = (name: string, moTa?: string): SportTheme => {
 };
 
 // Helper kiểm tra sân hoặc loại sân có phải là "Dự bị" hay không để ẩn trên trang chủ Khách hàng
-function isDuBiPitch(item?: { ten_loai?: string; ten_san?: string; mo_ta?: string } | null): boolean {
+function isDuBiPitch(item?: { ten_loai?: string; ten_san?: string; mo_ta?: string | null } | null): boolean {
   if (!item) return false;
   const str = `${item.ten_loai || ''} ${item.ten_san || ''} ${item.mo_ta || ''}`
     .toLowerCase()
+    .replace(/[đĐ]/g, 'd')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
   return str.includes('du bi') || str.includes('du phong');
@@ -503,7 +621,7 @@ export default function HomePage() {
   const [isMultiBookingMode, setIsMultiBookingMode] = useState<boolean>(false);
   const [cartCourts, setCartCourts] = useState<CartCourtItem[]>([]);
   const [isMultiBookingModalOpen, setIsMultiBookingModalOpen] = useState<boolean>(false);
-  const [multiBookingStep, setMultiBookingStep] = useState<'CART' | 'SERVICES' | 'QR'>('CART');
+  const [multiBookingStep, setMultiBookingStep] = useState<'CART' | 'SERVICES' | 'CONFIRM' | 'QR'>('CART');
   const [multiPayOSData, setMultiPayOSData] = useState<any>(null);
   const [holdSecondsLeft, setHoldSecondsLeft] = useState<number>(600); // 10 phút giữ sân (600 giây)
 
@@ -532,6 +650,14 @@ export default function HomePage() {
   // State thông báo Toast & Trạng thái gửi đơn
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string; shortMessage?: string } | null>(null);
+
+  // State Quản lý Mã Giảm Giá & Voucher Ưu Đãi (Shopee / Grab style)
+  const [voucherList, setVoucherList] = useState<Voucher[]>([]);
+  const [isVoucherModalOpen, setIsVoucherModalOpen] = useState<boolean>(false);
+  const [voucherInput, setVoucherInput] = useState<string>('');
+  const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState<boolean>(false);
 
   // State Cổng thanh toán PayOS VietQR MB Bank
   const [payOSData, setPayOSData] = useState<PayOSData | null>(null);
@@ -585,6 +711,10 @@ export default function HomePage() {
           setCartCourts([]);
           setIsMultiBookingModalOpen(false);
           setMultiBookingStep('CART');
+          setBookingForm((p) => ({ ...p, dich_vu_chon: {}, ghi_chu: '' }));
+          setAppliedVoucher(null);
+          setVoucherInput('');
+          setVoucherError(null);
           triggerToast({
             type: 'info',
             message: '⏱️ Thời gian giữ sân 10 phút đã hết! Các sân đã được giải phóng để khách hàng khác có thể đặt.',
@@ -931,6 +1061,249 @@ export default function HomePage() {
     }
   };
 
+  // 6. Tải danh sách mã khuyến mãi / voucher khả dụng (sp_LayDanhSachVoucherKhaDung)
+  const fetchVouchers = async () => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const url = currentUser?.id
+        ? `${API_BASE_URL}/khuyen-mai?ma_nguoi_dung=${currentUser.id}`
+        : `${API_BASE_URL}/khuyen-mai`;
+      const res = await fetch(url, { headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setVoucherList(data.data);
+      }
+    } catch (err: any) {
+      console.warn('Lỗi khi tải danh sách voucher:', err.message);
+    }
+  };
+
+  // Kiểm tra điều kiện áp dụng voucher cho đơn đặt hiện tại (UX Shopee/Grab)
+  const getVoucherStatus = (v: Voucher) => {
+    let currentTotal = 0;
+    let matchDate = filterNgayDa || new Date().toISOString().split('T')[0];
+    let startTime = '06:00';
+
+    if (cartCourts.length > 0) {
+      const cartSan = cartCourts.reduce((sum, item) => sum + item.giaTien, 0);
+      const cartDv = Object.entries(bookingForm.dich_vu_chon).reduce((sum, [dvId, qty]) => {
+        const dv = dichVuList.find((d) => d.id === Number(dvId));
+        return sum + (dv ? dv.don_gia * qty : 0);
+      }, 0);
+      currentTotal = cartSan + cartDv;
+      matchDate = cartCourts[0].ngay_da || matchDate;
+      startTime = cartCourts[0].slot.start || startTime;
+    } else if (selectedSlot) {
+      currentTotal = selectedSlot.giaTien + tongTienDichVu;
+      matchDate = filterNgayDa || matchDate;
+      startTime = selectedSlot.slot.start || startTime;
+    }
+
+    const minOrder = v.don_toi_thieu || 0;
+    const shortage = minOrder > currentTotal ? minOrder - currentTotal : 0;
+    const progressPercent = minOrder > 0 ? Math.min(100, Math.max(8, Math.round((currentTotal / minOrder) * 100))) : 100;
+
+    // 1. Kiểm tra bạn mới
+    if (v.chi_danh_cho_khach_moi) {
+      if ((v.da_tung_dat_san && v.da_tung_dat_san > 0) || v.hop_le_khach_hang === 0 || v.hop_le_khach_hang === false) {
+        return {
+          eligible: false,
+          reason: 'Chỉ dành cho đơn đặt sân đầu tiên của bạn mới',
+          calculatedDiscount: 0,
+          currentTotal,
+          minOrder,
+          shortage,
+          progressPercent,
+          conditionType: 'NEW_USER' as const,
+        };
+      }
+    }
+
+    // 2. Kiểm tra thứ trong tuần (Thứ 2 - Thứ 6 = 2,3,4,5,6)
+    if (v.thu_trong_tuan && matchDate) {
+      const d = new Date(matchDate);
+      const day = d.getDay(); // 0: CN, 1: T2, ..., 6: T7
+      const vnDay = day === 0 ? 8 : (day + 1); // 2: T2, 3: T3, 4: T4, 5: T5, 6: T6, 7: T7, 8: CN
+      const allowedDays = v.thu_trong_tuan.split(',').map((s) => s.trim());
+      if (!allowedDays.includes(String(vnDay))) {
+        return {
+          eligible: false,
+          reason: 'Chỉ áp dụng các ngày Thứ 2 đến Thứ 6',
+          calculatedDiscount: 0,
+          currentTotal,
+          minOrder,
+          shortage,
+          progressPercent,
+          conditionType: 'DAY_OF_WEEK' as const,
+        };
+      }
+    }
+
+    // 3. Kiểm tra khung giờ
+    if (v.gio_bat_dau && v.gio_ket_thuc && startTime) {
+      const startClean = startTime.slice(0, 5);
+      const vStartClean = v.gio_bat_dau.slice(0, 5);
+      const vEndClean = v.gio_ket_thuc.slice(0, 5);
+      if (startClean < vStartClean || startClean > vEndClean) {
+        return {
+          eligible: false,
+          reason: `Chỉ áp dụng trong khung giờ ${vStartClean} – ${vEndClean}`,
+          calculatedDiscount: 0,
+          currentTotal,
+          minOrder,
+          shortage,
+          progressPercent,
+          conditionType: 'TIME_SLOT' as const,
+        };
+      }
+    }
+
+    // 4. Kiểm tra đơn tối thiểu
+    if (minOrder > 0 && currentTotal < minOrder) {
+      return {
+        eligible: false,
+        reason: `Đặt thêm ${shortage.toLocaleString('vi-VN')} đ để sử dụng mã này`,
+        calculatedDiscount: 0,
+        currentTotal,
+        minOrder,
+        shortage,
+        progressPercent,
+        conditionType: 'MIN_ORDER' as const,
+      };
+    }
+
+    // Đủ điều kiện -> tính mức giảm
+    let discount = 0;
+    if (v.loai_giam === 'PHAN_TRAM') {
+      discount = Math.round(currentTotal * (v.gia_tri_giam / 100));
+      if (v.giam_toi_da && discount > v.giam_toi_da) {
+        discount = v.giam_toi_da;
+      }
+    } else {
+      discount = Math.min(currentTotal, v.gia_tri_giam);
+    }
+
+    return {
+      eligible: true,
+      reason: 'Đủ điều kiện áp dụng',
+      calculatedDiscount: discount,
+      currentTotal,
+      minOrder,
+      shortage: 0,
+      progressPercent: 100,
+      conditionType: 'ELIGIBLE' as const,
+    };
+  };
+
+  // Áp dụng voucher từ danh sách
+  const handleSelectVoucher = (v: Voucher) => {
+    const status = getVoucherStatus(v);
+    if (!status.eligible) {
+      triggerToast({
+        type: 'error',
+        message: status.reason,
+      });
+      return;
+    }
+    setAppliedVoucher(v);
+    setVoucherInput(v.ma_code);
+    setVoucherError(null);
+    setIsVoucherModalOpen(false);
+    triggerToast({
+      type: 'success',
+      message: `🎉 Đã áp dụng mã ưu đãi ${v.ma_code} (-${status.calculatedDiscount.toLocaleString('vi-VN')} đ)!`,
+    });
+  };
+
+  // Áp dụng voucher khi nhập tay
+  const handleApplyVoucherInput = async () => {
+    const code = voucherInput.trim().toUpperCase();
+    if (!code) return;
+
+    let currentTotal = 0;
+    let matchDate = filterNgayDa;
+    let startTime = selectedSlot?.slot.start;
+
+    if (cartCourts.length > 0) {
+      const cartSan = cartCourts.reduce((sum, item) => sum + item.giaTien, 0);
+      const cartDv = Object.entries(bookingForm.dich_vu_chon).reduce((sum, [dvId, qty]) => {
+        const dv = dichVuList.find((d) => d.id === Number(dvId));
+        return sum + (dv ? dv.don_gia * qty : 0);
+      }, 0);
+      currentTotal = cartSan + cartDv;
+      matchDate = cartCourts[0].ngay_da;
+      startTime = cartCourts[0].slot.start;
+    } else if (selectedSlot) {
+      currentTotal = selectedSlot.giaTien + tongTienDichVu;
+    }
+
+    setIsValidatingVoucher(true);
+    setVoucherError(null);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/khuyen-mai/kiem-tra`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ma_code: code,
+          tong_tien: currentTotal,
+          ngay_da: matchDate,
+          gio_bat_dau: startTime,
+          ma_nguoi_dung: currentUser?.id || undefined,
+        }),
+      });
+      const result = await res.json();
+      if (result.success && result.data && result.data.hop_le === 1) {
+        const match = voucherList.find((v) => v.ma_code.toUpperCase() === code) || {
+          id: 0,
+          ma_code: result.data.ma_code,
+          tieu_de: result.data.tieu_de,
+          mo_ta: result.data.mo_ta,
+          loai_giam: 'SO_TIEN' as const,
+          gia_tri_giam: result.data.tien_giam,
+          giam_toi_da: null,
+          don_toi_thieu: 0,
+          chi_danh_cho_khach_moi: false,
+          gio_bat_dau: null,
+          gio_ket_thuc: null,
+          thu_trong_tuan: null,
+          so_luong: 100,
+          so_luong_da_dung: 0,
+        };
+        setAppliedVoucher(match);
+        triggerToast({
+          type: 'success',
+          message: `🎉 Áp dụng mã ưu đãi ${code} thành công (-${Number(result.data.tien_giam).toLocaleString('vi-VN')} đ)!`,
+        });
+      } else {
+        const errMsg = result.data?.ly_do || result.message || 'Mã ưu đãi không hợp lệ!';
+        setVoucherError(errMsg);
+        triggerToast({
+          type: 'error',
+          message: errMsg,
+        });
+      }
+    } catch {
+      setVoucherError('Lỗi kết nối khi kiểm tra mã ưu đãi');
+    } finally {
+      setIsValidatingVoucher(false);
+    }
+  };
+
+  // Gỡ voucher đã áp dụng
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    setVoucherInput('');
+    setVoucherError(null);
+    triggerToast({
+      type: 'info',
+      message: 'Đã hủy áp dụng mã ưu đãi.',
+    });
+  };
+
   const handleNextBanner = useCallback(() => {
     setCurrentBannerIndex((prev) => {
       if (!banners || banners.length <= 1) return 0;
@@ -997,13 +1370,26 @@ export default function HomePage() {
         fetchSanBong(),
         fetchKhungGio(),
         fetchDichVu(),
-        fetchBanners()
+        fetchBanners(),
+        fetchVouchers()
       ]);
       setIsLoadingData(false);
     };
 
     loadAllInitialData();
   }, []);
+
+  // Cập nhật lại voucher khi người dùng đăng nhập hoặc đổi tài khoản
+  useEffect(() => {
+    fetchVouchers();
+  }, [currentUser]);
+
+  // Cập nhật lại voucher khi mở modal kho voucher
+  useEffect(() => {
+    if (isVoucherModalOpen) {
+      fetchVouchers();
+    }
+  }, [isVoucherModalOpen]);
 
   // Khởi tạo kết nối Real-time Socket.io Client + Cơ chế Đồng bộ kép (Dual-Engine Realtime)
   useEffect(() => {
@@ -1285,6 +1671,15 @@ export default function HomePage() {
     setPayOSData(null);
     setQrModalAlert(null);
     setIsPaymentSuccess(false);
+    setAppliedVoucher(null);
+    setVoucherInput('');
+    setVoucherError(null);
+    setIsVoucherModalOpen(false);
+    setBookingForm((p) => ({
+      ...p,
+      ghi_chu: '',
+      dich_vu_chon: {},
+    }));
   };
 
   // ===================================================================================
@@ -1373,6 +1768,15 @@ export default function HomePage() {
     setPayOSData(null);
     setQrModalAlert(null);
     setIsPaymentSuccess(false);
+    setAppliedVoucher(null);
+    setVoucherInput('');
+    setVoucherError(null);
+    setIsVoucherModalOpen(false);
+    setBookingForm((p) => ({
+      ...p,
+      ghi_chu: '',
+      dich_vu_chon: {},
+    }));
   };
 
 
@@ -1711,6 +2115,10 @@ export default function HomePage() {
     setHoldSecondsLeft(600);
     setIsCartBarCollapsed(false);
     setMultiBookingStep('CART');
+    setBookingForm((p) => ({ ...p, dich_vu_chon: {}, ghi_chu: '' }));
+    setAppliedVoucher(null);
+    setVoucherInput('');
+    setVoucherError(null);
     triggerToast({
       type: 'info',
       message: 'Đã xóa toàn bộ sân trong danh sách chọn!',
@@ -1751,6 +2159,10 @@ export default function HomePage() {
       setMyLockedSlotIds([]);
       setHoldSecondsLeft(600);
       setIsMultiBookingModalOpen(false);
+      setBookingForm((p) => ({ ...p, dich_vu_chon: {}, ghi_chu: '' }));
+      setAppliedVoucher(null);
+      setVoucherInput('');
+      setVoucherError(null);
     } else {
       socketRef.current?.emit('lock_slots', remainingHoldKeys);
       setMyLockedSlotIds(remainingHoldKeys);
@@ -1771,7 +2183,21 @@ export default function HomePage() {
   }, [bookingForm.dich_vu_chon, dichVuList]);
 
   // Tổng tiền đơn nhiều sân và tiền cọc 30%
-  const tongTienDonCart = tongTienSanCart + tongTienDichVuCart;
+  const tongTienDonCartGoc = tongTienSanCart + tongTienDichVuCart;
+  const tienGiamVoucherCart = useMemo(() => {
+    if (!appliedVoucher) return 0;
+    if (appliedVoucher.loai_giam === 'PHAN_TRAM') {
+      let giam = Math.round(tongTienDonCartGoc * (appliedVoucher.gia_tri_giam / 100));
+      if (appliedVoucher.giam_toi_da && giam > appliedVoucher.giam_toi_da) {
+        giam = appliedVoucher.giam_toi_da;
+      }
+      return giam;
+    } else {
+      return Math.min(tongTienDonCartGoc, appliedVoucher.gia_tri_giam);
+    }
+  }, [appliedVoucher, tongTienDonCartGoc]);
+
+  const tongTienDonCart = Math.max(0, tongTienDonCartGoc - tienGiamVoucherCart);
   const tienCocCart = Math.round(tongTienDonCart * 0.3);
 
   // Tạo thanh toán PayOS cho giỏ sân (1 sân hoặc nhiều sân)
@@ -1807,6 +2233,8 @@ export default function HomePage() {
           ghi_chu: bookingForm.ghi_chu || null,
           danh_sach_san: danhSachSanPayload,
           dich_vu_chon: bookingForm.dich_vu_chon,
+          ma_voucher: appliedVoucher?.ma_code || undefined,
+          tien_giam_gia: tienGiamVoucherCart || 0,
         }),
       });
 
@@ -1968,6 +2396,9 @@ export default function HomePage() {
     const newCart = [...cartCourts, newItem];
     if (cartCourts.length === 0) {
       setHoldSecondsLeft(600);
+      setAppliedVoucher(null);
+      setVoucherInput('');
+      setVoucherError(null);
     }
     setCartCourts(newCart);
 
@@ -1975,11 +2406,12 @@ export default function HomePage() {
     socketRef.current?.emit('lock_slots', allHoldKeys);
     setMyLockedSlotIds(allHoldKeys);
 
-    // Điền sẵn thông tin người đặt từ currentUser
+    // Điền sẵn thông tin người đặt từ currentUser; nếu bắt đầu đơn mới thì reset dịch vụ & ghi chú cũ
     setBookingForm((p) => ({
       ...p,
       ho_ten: currentUser?.ho_ten || p.ho_ten || 'Khách hàng Sport247',
       so_dien_thoai: currentUser?.so_dien_thoai || p.so_dien_thoai || '0816344504',
+      ...(cartCourts.length === 0 ? { dich_vu_chon: {}, ghi_chu: '' } : {}),
     }));
 
     // Bật ngay giao diện giỏ hàng xác nhận đặt sân (dù đặt 1 sân hay nhiều sân)
@@ -2043,9 +2475,9 @@ export default function HomePage() {
     });
   };
 
-  // Tính toán tổng tiền: Tiền sân + Tiền dịch vụ
-  const { tongTienDichVu, tongTienDon, soTienThanhToan } = useMemo(() => {
-    if (!selectedSlot) return { tongTienDichVu: 0, tongTienDon: 0, soTienThanhToan: 0 };
+  // Tính toán tổng tiền: Tiền sân + Tiền dịch vụ - Giảm giá Voucher
+  const { tongTienDichVu, tongTienDonGoc, tienGiamVoucher, tongTienDon, soTienThanhToan } = useMemo(() => {
+    if (!selectedSlot) return { tongTienDichVu: 0, tongTienDonGoc: 0, tienGiamVoucher: 0, tongTienDon: 0, soTienThanhToan: 0 };
 
     let tienDv = 0;
     Object.entries(bookingForm.dich_vu_chon).forEach(([dvId, qty]) => {
@@ -2056,15 +2488,31 @@ export default function HomePage() {
     });
 
     const tienSan = selectedSlot.giaTien;
-    const tong = tienSan + tienDv;
-    const thanhToan = bookingForm.loai_thanh_toan === 'DAT_COC' ? Math.round(tong * 0.3) : tong;
+    const tongGoc = tienSan + tienDv;
+
+    let giam = 0;
+    if (appliedVoucher) {
+      if (appliedVoucher.loai_giam === 'PHAN_TRAM') {
+        giam = Math.round(tongGoc * (appliedVoucher.gia_tri_giam / 100));
+        if (appliedVoucher.giam_toi_da && giam > appliedVoucher.giam_toi_da) {
+          giam = appliedVoucher.giam_toi_da;
+        }
+      } else {
+        giam = Math.min(tongGoc, appliedVoucher.gia_tri_giam);
+      }
+    }
+
+    const tongSauGiam = Math.max(0, tongGoc - giam);
+    const thanhToan = bookingForm.loai_thanh_toan === 'DAT_COC' ? Math.round(tongSauGiam * 0.3) : tongSauGiam;
 
     return {
       tongTienDichVu: tienDv,
-      tongTienDon: tong,
+      tongTienDonGoc: tongGoc,
+      tienGiamVoucher: giam,
+      tongTienDon: tongSauGiam,
       soTienThanhToan: thanhToan,
     };
-  }, [selectedSlot, bookingForm.dich_vu_chon, bookingForm.loai_thanh_toan, dichVuList]);
+  }, [selectedSlot, bookingForm.dich_vu_chon, bookingForm.loai_thanh_toan, dichVuList, appliedVoucher]);
 
   // ===================================================================================
   // [LUỒNG ĐẶT LỊCH ONLINE - BƯỚC 4]: XÁC NHẬN THỜI LƯỢNG & CHUYỂN SANG NHẬP THÔNG TIN KHÁCH
@@ -2136,9 +2584,13 @@ export default function HomePage() {
             so_dien_thoai: soDienThoai,
             ma_nguoi_dung: currentUser?.id || undefined,
             email: currentUser?.email || undefined,
+            ma_voucher: appliedVoucher?.ma_code || undefined,
+            tien_giam_gia: tienGiamVoucher || 0,
           },
           so_tien: soTienThanhToan,
           loai_thanh_toan: bookingForm.loai_thanh_toan,
+          ma_voucher: appliedVoucher?.ma_code || undefined,
+          tien_giam_gia: tienGiamVoucher || 0,
           ho_ten: hoTen,
           so_dien_thoai: soDienThoai,
           ma_nguoi_dung: currentUser?.id || undefined,
@@ -2601,9 +3053,9 @@ export default function HomePage() {
 
             {/* Thông tin hỗ trợ nhanh */}
             <div className="hidden lg:flex items-center gap-4 text-[11px] font-semibold text-slate-400 shrink-0">
-              <span className={`flex items-center gap-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-                <Phone className="w-3.5 h-3.5 text-emerald-500" />
-                Hotline Đặt Sân: <strong className="text-emerald-500 font-mono">0816344504</strong>
+              <span className={`flex items-center gap-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-800 font-bold'}`}>
+                <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                Hotline Đặt Sân: <strong className="text-emerald-700 dark:text-emerald-500 font-mono text-xs">0816344504</strong>
               </span>
             </div>
 
@@ -2990,7 +3442,7 @@ export default function HomePage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 {loaiSanList.filter((l) => !isDuBiPitch(l)).map((loai) => {
-                  const theme = getSportTheme(loai.ten_loai, loai.mo_ta);
+                  const theme = getSportTheme(loai.ten_loai, loai.mo_ta, loai.icon);
                   return (
                     <div
                       key={loai.id}
@@ -3011,15 +3463,17 @@ export default function HomePage() {
                           </div>
                         </div>
 
-                        {/* TÊN LOẠI SÂN & MÔ TẢ ĐẶC ĐIỂM */}
+                        {/* TÊN LOẠI SÂN & MÔ TẢ ĐẶC ĐIỂM (CHỈ HIỂN THỊ DỮ LIỆU THẬT TỪ CSDL) */}
                         <h3 className={`text-lg sm:text-xl font-black mt-4 tracking-tight group-hover:text-emerald-500 transition-colors ${
                           isDarkMode ? 'text-white' : 'text-slate-900'
                         }`}>
                           {loai.ten_loai}
                         </h3>
-                        <p className={`text-xs mt-1.5 font-medium leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          {theme.subtitle}
-                        </p>
+                        {loai.mo_ta && loai.mo_ta.trim() ? (
+                          <p className={`text-xs mt-1.5 font-medium leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            {loai.mo_ta.trim()}
+                          </p>
+                        ) : null}
                       </div>
 
                       {/* HÀNG DƯỚI: NÚT ĐẶT NGAY (ĐÃ XÓA 30+ CỤM SÂN THEO YÊU CẦU, CĂN PHẢI GỌN GÀNG) */}
@@ -3067,7 +3521,7 @@ export default function HomePage() {
                   <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-xl border shadow-inner shrink-0 ${
                     isDarkMode ? 'bg-slate-800/90 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                   }`}>
-                    <span>{getSportTheme(selectedCategory.ten_loai, selectedCategory.mo_ta).icon}</span>
+                    <span>{getSportTheme(selectedCategory.ten_loai, selectedCategory.mo_ta, selectedCategory.icon).icon}</span>
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -4005,6 +4459,53 @@ export default function HomePage() {
                   </button>
                 </div>
               </div>
+            ) : multiBookingStep === 'CONFIRM' ? (
+              <div className={`px-4 py-2.5 sm:px-6 sm:py-3 border-b flex items-center justify-between shrink-0 ${
+                isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-emerald-50/70 border-slate-200'
+              }`}>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setMultiBookingStep('SERVICES')}
+                    className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all cursor-pointer border border-slate-700"
+                    title="Quay lại dịch vụ đi kèm"
+                  >
+                    <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center font-black shadow-md">
+                    <FileText className="w-4 h-4 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h2 className={`text-sm sm:text-base font-black ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      Xác Nhận Đơn Đặt & Ưu Đãi
+                    </h2>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-mono font-black text-xs shadow-xs ${
+                    isDarkMode
+                      ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                      : 'bg-amber-100 border-amber-300 text-amber-800'
+                  }`}>
+                    <Clock className={`w-3.5 h-3.5 ${isDarkMode ? 'text-amber-400' : 'text-amber-700'}`} />
+                    <span>Giữ sân: {formatCountdown(holdSecondsLeft)}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMultiBookingModalOpen(false);
+                      setMultiBookingStep('CART');
+                    }}
+                    className={`w-8 h-8 rounded-xl border flex items-center justify-center transition-all cursor-pointer ${
+                      isDarkMode
+                        ? 'border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800'
+                        : 'border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-100 shadow-xs'
+                    }`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className={`px-4 py-2.5 sm:px-6 sm:py-3 border-b flex items-center justify-between shrink-0 ${
                 isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-emerald-50/70 border-slate-200'
@@ -4026,10 +4527,10 @@ export default function HomePage() {
                         }
                         setPayOSData(null);
                         setQrModalAlert(null);
-                        setMultiBookingStep('SERVICES');
+                        setMultiBookingStep('CONFIRM');
                       }}
                       className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center transition-all cursor-pointer border border-slate-700"
-                      title="Quay lại dịch vụ đi kèm"
+                      title="Quay lại xác nhận đơn đặt"
                     >
                       <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
                     </button>
@@ -4307,7 +4808,7 @@ export default function HomePage() {
                             Tổng tiền trọn gói:
                           </span>
                           <span className="text-base sm:text-lg font-mono font-black text-emerald-600 dark:text-emerald-400">
-                            {tongTienDonCart.toLocaleString('vi-VN')} đ
+                            {tongTienSanCart.toLocaleString('vi-VN')} đ
                           </span>
                         </div>
 
@@ -4440,6 +4941,278 @@ export default function HomePage() {
                 </div>
               )}
 
+              {multiBookingStep === 'CONFIRM' && (
+                /* Thân Modal: BƯỚC 3 - XÁC NHẬN ĐƠN ĐẶT SÂN & VOUCHER ƯU ĐÃI */
+                <div className="space-y-4">
+                  {/* 1. TẤT CẢ CÁC ĐƠN SÂN THI ĐẤU ĐÃ CHỌN */}
+                  <div className={`p-4 rounded-2xl border ${
+                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                        isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                      }`}>
+                        <span>🏟️ Danh sách sân thi đấu ({cartCourts.length} sân)</span>
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setMultiBookingStep('CART')}
+                        className="text-xs font-bold text-emerald-500 hover:underline flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <span>Sửa sân</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {cartCourts.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                            isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-xs'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span className="w-6 h-6 rounded-lg bg-emerald-500/15 text-emerald-500 flex items-center justify-center font-black text-[11px] shrink-0">
+                              {idx + 1}
+                            </span>
+                            <div>
+                              <div className="flex items-center gap-1.5 font-black">
+                                <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>{item.san.ten_san}</span>
+                                {item.san.ten_loai && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-500">
+                                    {item.san.ten_loai}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-400 mt-0.5">
+                                📅 {formatDateDMY(item.ngay_da)} • ⏰ {item.slot.start} - {item.gioKetThuc} ({item.durationMin}p)
+                              </p>
+                            </div>
+                          </div>
+                          <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm shrink-0">
+                            {item.giaTien.toLocaleString('vi-VN')} đ
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. DỊCH VỤ ĐI KÈM ĐÃ CHỌN */}
+                  <div className={`p-4 rounded-2xl border ${
+                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className={`text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                        isDarkMode ? 'text-slate-300' : 'text-slate-700'
+                      }`}>
+                        <span>🥤 Dịch vụ đi kèm</span>
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setMultiBookingStep('SERVICES')}
+                        className="text-xs font-bold text-emerald-500 hover:underline flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <span>Sửa dịch vụ</span>
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    {Object.entries(bookingForm.dich_vu_chon).some(([_, qty]) => qty > 0) ? (
+                      <div className="space-y-1.5">
+                        {Object.entries(bookingForm.dich_vu_chon)
+                          .filter(([_, qty]) => qty > 0)
+                          .map(([dvId, qty]) => {
+                            const dv = dichVuList.find((d) => d.id === Number(dvId));
+                            if (!dv) return null;
+                            return (
+                              <div
+                                key={dvId}
+                                className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                                  isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className={isDarkMode ? 'text-slate-200' : 'text-slate-800 font-bold'}>{dv.ten_dich_vu}</span>
+                                  <span className="text-slate-400">x{qty}</span>
+                                </div>
+                                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                  {(dv.don_gia * qty).toLocaleString('vi-VN')} đ
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic">
+                        Không chọn dịch vụ đi kèm.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 3. HÌNH THỨC THANH TOÁN */}
+                  <div className={`p-3.5 rounded-2xl border flex items-center justify-between ${
+                    isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-base">💳</span>
+                      <div>
+                        <span className={`text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-500 font-medium'}`}>
+                          Hình thức thanh toán:
+                        </span>
+                        <span className="font-bold text-xs text-slate-800 dark:text-white">
+                          {bookingForm.loai_thanh_toan === 'DAT_COC' 
+                            ? 'Đặt cọc 30% giữ chỗ (còn lại trả tại quầy)' 
+                            : 'Thanh toán 100% trọn gói'}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMultiBookingStep('CART')}
+                      className="text-xs font-bold text-emerald-500 hover:underline cursor-pointer"
+                    >
+                      Đổi
+                    </button>
+                  </div>
+
+                  {/* 4. MÃ ƯU ĐÃI & VOUCHER (DUY NHẤT Ở ĐÂY) */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className={`text-xs font-black uppercase tracking-wider ${
+                        isDarkMode ? 'text-slate-400' : 'text-slate-700 font-extrabold'
+                      }`}>
+                        Mã ưu đãi & Voucher
+                      </h3>
+                      {/* Nút Xem tất cả mã ưu đãi (Kho Voucher) */}
+                      <button
+                        type="button"
+                        onClick={() => setIsVoucherModalOpen(true)}
+                        className="px-3 py-1 rounded-xl text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all flex items-center gap-1 cursor-pointer border border-emerald-500/30 shadow-xs"
+                      >
+                        <span>🎫 Chọn Voucher</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className={`p-3 sm:p-3.5 rounded-2xl border transition-all ${
+                      isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-gradient-to-r from-emerald-50/70 to-teal-50/50 border-emerald-200 shadow-xs'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Tag className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                          <input
+                            type="text"
+                            value={voucherInput}
+                            onChange={(e) => {
+                              setVoucherInput(e.target.value.toUpperCase());
+                              if (voucherError) setVoucherError(null);
+                            }}
+                            placeholder="Nhập mã ưu đãi (VD: SOCCER247NEW)..."
+                            className={`w-full pl-8 pr-3 py-2 text-xs font-mono font-bold uppercase rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
+                              isDarkMode 
+                                ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-500' 
+                                : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                            }`}
+                          />
+                        </div>
+                        {appliedVoucher ? (
+                          <button
+                            type="button"
+                            onClick={handleRemoveVoucher}
+                            className="px-3 py-2 text-xs font-bold text-rose-500 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl transition-all cursor-pointer border border-rose-500/30 flex items-center gap-1 shrink-0"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Gỡ mã</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleApplyVoucherInput}
+                            disabled={!voucherInput.trim() || isValidatingVoucher}
+                            className="px-4 py-2 text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-emerald-500/20 flex items-center gap-1 shrink-0"
+                          >
+                            {isValidatingVoucher ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>Áp dụng</span>}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Hiển thị thẻ voucher đang áp dụng */}
+                      {appliedVoucher && (
+                        <div className={`mt-2.5 p-2.5 rounded-2xl border flex items-center justify-between text-xs transition-all shadow-sm animate-in fade-in-50 ${
+                          isDarkMode
+                            ? 'bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/10 border-amber-500/40 shadow-amber-500/5'
+                            : 'bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50/80 border-amber-300 shadow-amber-500/10'
+                        }`}>
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-black shadow-xs shrink-0">
+                              <Sparkles className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="font-black text-amber-700 dark:text-amber-300 flex items-center gap-1.5 font-mono">
+                                <span className="tracking-wider">{appliedVoucher.ma_code}</span>
+                                <span className="text-[10px] font-sans font-black px-2 py-0.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md shadow-2xs">
+                                  {appliedVoucher.loai_giam === 'PHAN_TRAM' ? `-${appliedVoucher.gia_tri_giam}%` : `-${appliedVoucher.gia_tri_giam.toLocaleString('vi-VN')}đ`}
+                                </span>
+                              </div>
+                              <p className={`text-[11px] mt-0.5 line-clamp-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700 font-semibold'}`}>
+                                {appliedVoucher.tieu_de}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="font-black font-mono text-orange-600 dark:text-orange-400 text-sm sm:text-base shrink-0">
+                            -{tienGiamVoucherCart.toLocaleString('vi-VN')} đ
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Hiển thị lỗi hoặc gợi ý nếu chưa đạt */}
+                      {voucherError && (
+                        <div className="mt-2 p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-semibold animate-in fade-in-50">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{voucherError}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 5. CHI TIẾT THANH TOÁN (HÓA ĐƠN) */}
+                  <div className={`p-4 rounded-2xl border space-y-2 text-xs ${
+                    isDarkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-100/80 border-slate-300'
+                  }`}>
+                    <div className={`flex justify-between items-center ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>
+                      <span>Tiền sân ({cartCourts.length} sân):</span>
+                      <span className={`font-mono font-black ${isDarkMode ? 'text-slate-200' : 'text-slate-950 text-sm'}`}>{tongTienSanCart.toLocaleString('vi-VN')} đ</span>
+                    </div>
+                    <div className={`flex justify-between items-center ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>
+                      <span>Tiền dịch vụ đi kèm:</span>
+                      <span className={`font-mono font-black ${isDarkMode ? 'text-slate-200' : 'text-slate-950 text-sm'}`}>{tongTienDichVuCart.toLocaleString('vi-VN')} đ</span>
+                    </div>
+                    {tienGiamVoucherCart > 0 && (
+                      <div className="flex justify-between items-center text-rose-500 font-black">
+                        <span>Giảm giá Voucher:</span>
+                        <span className="font-mono text-sm">-{tienGiamVoucherCart.toLocaleString('vi-VN')} đ</span>
+                      </div>
+                    )}
+                    <div className={`pt-2 border-t flex justify-between items-center text-sm font-black ${
+                      isDarkMode ? 'border-slate-800 text-white' : 'border-slate-300 text-slate-950'
+                    }`}>
+                      <span>Tổng giá trị đơn:</span>
+                      <div className="flex items-center gap-1.5">
+                        {tienGiamVoucherCart > 0 && (
+                          <span className={`line-through text-xs font-mono font-normal ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {tongTienDonCartGoc.toLocaleString('vi-VN')} đ
+                          </span>
+                        )}
+                        <span className="font-mono text-blue-600 dark:text-emerald-400 text-base font-black">
+                          {tongTienDonCart.toLocaleString('vi-VN')} đ
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {multiBookingStep === 'QR' && (
                 /* Thân Modal: BƯỚC 3 - THANH TOÁN VIETQR PAYOS */
                 <div className="space-y-6">
@@ -4497,17 +5270,17 @@ export default function HomePage() {
                         {/* Chi tiết đơn */}
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div>
-                            <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Mã đơn đặt:</span>
+                            <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Mã đơn đặt:</span>
                             <p className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-sm">#{payOSData?.ma_don_dat}</p>
                           </div>
                           <div>
-                            <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Mã GD PayOS:</span>
+                            <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Mã GD PayOS:</span>
                             <p className={`font-mono font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>#{payOSData?.orderCode}</p>
                           </div>
                         </div>
 
                         <div className={`pt-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-                          <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Danh sách sân thi đấu ({cartCourts.length}):</span>
+                          <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Danh sách sân thi đấu ({cartCourts.length}):</span>
                           <div className="mt-1 space-y-1">
                             {cartCourts.map((c, i) => (
                               <div key={i} className={`p-2 rounded-xl flex items-center justify-between font-bold text-xs ${
@@ -4521,14 +5294,26 @@ export default function HomePage() {
                         </div>
 
                         <div className={`flex justify-between items-center pt-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-                          <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500'}>Khách hàng:</span>
+                          <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Khách hàng:</span>
                           <span className={`font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>
                             {bookingForm.ho_ten || currentUser?.ho_ten || 'Khách hàng'} ({bookingForm.so_dien_thoai || currentUser?.so_dien_thoai || ''})
                           </span>
                         </div>
 
+                        {appliedVoucher && (
+                          <div className={`flex justify-between items-center pt-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                            <span className="text-emerald-500 font-bold flex items-center gap-1">
+                              <Ticket className="w-3.5 h-3.5" />
+                              <span>Mã ưu đãi ({appliedVoucher.ma_code}):</span>
+                            </span>
+                            <span className="font-mono font-bold text-rose-500">
+                              -{tienGiamVoucherCart.toLocaleString('vi-VN')} đ
+                            </span>
+                          </div>
+                        )}
+
                         <div className={`flex justify-between items-center pt-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-                          <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500 font-bold'}>Số tiền thanh toán:</span>
+                          <span className={isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}>Số tiền thanh toán:</span>
                           <span className="font-mono font-black text-emerald-600 dark:text-emerald-400 text-lg">
                             {(payOSData?.amount || (bookingForm.loai_thanh_toan === 'DAT_COC' ? tienCocCart : tongTienDonCart)).toLocaleString('vi-VN')} đ
                           </span>
@@ -4718,23 +5503,23 @@ export default function HomePage() {
               <div className={`px-4 py-2.5 sm:px-6 sm:py-3 border-t flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0 ${
                 isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-50 border-slate-200'
               }`}>
-                {/* Cụm giá tiền: Gọn gàng thẳng hàng */}
+                {/* Cụm giá tiền */}
                 <div className="flex items-center gap-3 sm:gap-4 flex-wrap text-left w-full sm:w-auto">
                   <div>
-                    <span className={`text-[10px] sm:text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-500 font-semibold'}`}>
-                      Tổng {cartCourts.length} sân{tongTienDichVuCart > 0 ? ' + DV' : ''}:
+                    <span className={`text-[10px] sm:text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>
+                      Tổng tiền {cartCourts.length} sân:
                     </span>
-                    <strong className="font-mono text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm font-black">
-                      {tongTienDonCart.toLocaleString('vi-VN')} đ
+                    <strong className={`font-mono text-xs sm:text-sm font-black ${isDarkMode ? 'text-emerald-400' : 'text-slate-900'}`}>
+                      {tongTienSanCart.toLocaleString('vi-VN')} đ
                     </strong>
                   </div>
                   <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
                   <div>
-                    <span className={`text-[10px] sm:text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-500 font-semibold'}`}>
-                      Cần thanh toán ngay:
+                    <span className={`text-[10px] sm:text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>
+                      {bookingForm.loai_thanh_toan === 'DAT_COC' ? 'Cần cọc 30%:' : 'Thanh toán 100%:'}
                     </span>
-                    <span className="font-mono text-emerald-600 dark:text-emerald-500 text-sm sm:text-base font-black">
-                      {(bookingForm.loai_thanh_toan === 'DAT_COC' ? tienCocCart : tongTienDonCart).toLocaleString('vi-VN')} đ
+                    <span className={`font-mono text-sm sm:text-base font-black ${isDarkMode ? 'text-emerald-400' : 'text-blue-700'}`}>
+                      {(bookingForm.loai_thanh_toan === 'DAT_COC' ? Math.round(tongTienSanCart * 0.3) : tongTienSanCart).toLocaleString('vi-VN')} đ
                     </span>
                   </div>
                 </div>
@@ -4775,20 +5560,20 @@ export default function HomePage() {
                 {/* Cụm giá tiền */}
                 <div className="flex items-center gap-3 sm:gap-4 flex-wrap text-left w-full sm:w-auto">
                   <div>
-                    <span className={`text-[10px] sm:text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-500 font-semibold'}`}>
-                      Tổng {cartCourts.length} sân + dịch vụ:
+                    <span className={`text-[10px] sm:text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>
+                      Tổng tiền sân + dịch vụ:
                     </span>
-                    <strong className="font-mono text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm font-black">
-                      {tongTienDonCart.toLocaleString('vi-VN')} đ
+                    <strong className={`font-mono text-xs sm:text-sm font-black ${isDarkMode ? 'text-emerald-400' : 'text-slate-900'}`}>
+                      {(tongTienSanCart + tongTienDichVuCart).toLocaleString('vi-VN')} đ
                     </strong>
                   </div>
                   <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
                   <div>
-                    <span className={`text-[10px] sm:text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-500 font-semibold'}`}>
-                      Cần thanh toán ngay:
+                    <span className={`text-[10px] sm:text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>
+                      {bookingForm.loai_thanh_toan === 'DAT_COC' ? 'Cần cọc 30%:' : 'Thanh toán 100%:'}
                     </span>
-                    <span className="font-mono text-emerald-600 dark:text-emerald-500 text-sm sm:text-base font-black">
-                      {(bookingForm.loai_thanh_toan === 'DAT_COC' ? tienCocCart : tongTienDonCart).toLocaleString('vi-VN')} đ
+                    <span className={`font-mono text-sm sm:text-base font-black ${isDarkMode ? 'text-emerald-400' : 'text-blue-700'}`}>
+                      {(bookingForm.loai_thanh_toan === 'DAT_COC' ? Math.round((tongTienSanCart + tongTienDichVuCart) * 0.3) : (tongTienSanCart + tongTienDichVuCart)).toLocaleString('vi-VN')} đ
                     </span>
                   </div>
                 </div>
@@ -4798,6 +5583,78 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={() => setMultiBookingStep('CART')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      isDarkMode
+                        ? 'border-slate-700 hover:bg-slate-800 text-slate-300'
+                        : 'border-slate-300 bg-white hover:bg-slate-100 text-slate-700 hover:text-slate-900 shadow-xs'
+                    }`}
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Quay lại</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMultiBookingStep('CONFIRM')}
+                    className="px-5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 text-slate-950 shadow-md shadow-emerald-500/25 flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                  >
+                    <span>Tiếp tục</span>
+                    <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Footer Modal: BƯỚC 3 (XÁC NHẬN ĐƠN ĐẶT & VOUCHER) */}
+            {multiBookingStep === 'CONFIRM' && (
+              <div className={`px-4 py-2.5 sm:px-6 sm:py-3 border-t flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0 ${
+                isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}>
+                {/* Cụm giá tiền */}
+                <div className="flex items-center gap-3 sm:gap-4 flex-wrap text-left w-full sm:w-auto">
+                  <div>
+                    <span className={`text-[10px] sm:text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>
+                      Tổng đơn ({cartCourts.length} sân{tongTienDichVuCart > 0 ? ' + DV' : ''}):
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {tienGiamVoucherCart > 0 && (
+                        <span className={`line-through text-[11px] font-mono ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {tongTienDonCartGoc.toLocaleString('vi-VN')} đ
+                        </span>
+                      )}
+                      <strong className={`font-mono text-xs sm:text-sm font-black ${isDarkMode ? 'text-emerald-400' : 'text-slate-900'}`}>
+                        {tongTienDonCart.toLocaleString('vi-VN')} đ
+                      </strong>
+                    </div>
+                  </div>
+                  {tienGiamVoucherCart > 0 && (
+                    <>
+                      <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+                      <div>
+                        <span className="text-[10px] sm:text-[11px] block text-rose-500 font-bold">
+                          Tiết kiệm:
+                        </span>
+                        <strong className="font-mono text-rose-500 text-xs sm:text-sm font-black">
+                          -{tienGiamVoucherCart.toLocaleString('vi-VN')} đ
+                        </strong>
+                      </div>
+                    </>
+                  )}
+                  <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+                  <div>
+                    <span className={`text-[10px] sm:text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-bold'}`}>
+                      Cần thanh toán ngay:
+                    </span>
+                    <span className={`font-mono text-sm sm:text-base font-black ${isDarkMode ? 'text-emerald-400' : 'text-blue-700'}`}>
+                      {(bookingForm.loai_thanh_toan === 'DAT_COC' ? tienCocCart : tongTienDonCart).toLocaleString('vi-VN')} đ
+                    </span>
+                  </div>
+                </div>
+
+                {/* Các nút hành động */}
+                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setMultiBookingStep('SERVICES')}
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                       isDarkMode
                         ? 'border-slate-700 hover:bg-slate-800 text-slate-300'
@@ -4819,14 +5676,17 @@ export default function HomePage() {
                         <span>Đang tạo mã VietQR...</span>
                       </>
                     ) : (
-                      <span>Thanh Toán</span>
+                      <>
+                        <span>Thanh Toán</span>
+                        <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                      </>
                     )}
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Footer Modal: BƯỚC 3 (THANH TOÁN VIETQR) */}
+            {/* Footer Modal: BƯỚC 4 (THANH TOÁN VIETQR) */}
             {multiBookingStep === 'QR' && !isPaymentSuccess && (
               <div className={`p-4 sm:p-5 border-t flex flex-col sm:flex-row items-center gap-3 ${
                 isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-slate-50 border-slate-200'
@@ -4846,7 +5706,7 @@ export default function HomePage() {
                     }
                     setPayOSData(null);
                     setQrModalAlert(null);
-                    setMultiBookingStep('SERVICES');
+                    setMultiBookingStep('CONFIRM');
                   }}
                   className={`w-full sm:w-1/3 py-3 rounded-xl font-bold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                     isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
@@ -5325,6 +6185,39 @@ export default function HomePage() {
                       );
                     })}
                   </div>
+
+                  {/* Thẻ Voucher tại Bước 2 nếu có hoặc cho phép đổi/chọn */}
+                  <div className={`p-3 rounded-2xl border flex items-center justify-between text-xs ${
+                    appliedVoucher
+                      ? 'bg-emerald-500/10 border-emerald-500/30'
+                      : isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Ticket className="w-4 h-4 text-emerald-500 shrink-0" />
+                      {appliedVoucher ? (
+                        <div>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                            {appliedVoucher.ma_code} (-{tienGiamVoucherCart.toLocaleString('vi-VN')} đ)
+                          </span>
+                          <span className={`text-[11px] block ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            {appliedVoucher.tieu_de}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          Chưa áp dụng mã ưu đãi
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsVoucherModalOpen(true)}
+                      className="px-2.5 py-1 rounded-lg text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 transition-all flex items-center gap-1 cursor-pointer border border-emerald-500/30"
+                    >
+                      <span>{appliedVoucher ? 'Đổi mã' : '🎫 Chọn Voucher'}</span>
+                      <ChevronRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Chọn hình thức thanh toán */}
@@ -5386,6 +6279,109 @@ export default function HomePage() {
                   </div>
                 </div>
 
+                {/* KHỐI MÃ GIẢM GIÁ & VOUCHER ƯU ĐÃI (UX CHUẨN SHOPEE / GRAB) */}
+                <div className={`p-4 rounded-2xl border transition-all ${
+                  isDarkMode ? 'bg-slate-950/70 border-slate-800' : 'bg-gradient-to-r from-emerald-50/60 to-teal-50/40 border-emerald-200/80 shadow-sm'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center font-bold">
+                        <Ticket className="w-4 h-4" />
+                      </div>
+                      <span className={`text-xs font-black uppercase tracking-wider ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        Mã Ưu Đãi / Voucher
+                      </span>
+                    </div>
+
+                    {/* Nút Xem tất cả mã ưu đãi (Kho Voucher) */}
+                    <button
+                      type="button"
+                      onClick={() => setIsVoucherModalOpen(true)}
+                      className="px-2.5 py-1 rounded-lg text-xs font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all flex items-center gap-1 cursor-pointer border border-emerald-500/30 shadow-sm"
+                    >
+                      <span>🎫 Chọn Voucher</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Ô nhập mã và nút Áp dụng */}
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Tag className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+                      <input
+                        type="text"
+                        value={voucherInput}
+                        onChange={(e) => {
+                          setVoucherInput(e.target.value.toUpperCase());
+                          if (voucherError) setVoucherError(null);
+                        }}
+                        placeholder="Nhập mã ưu đãi (VD: SOCCER247NEW)..."
+                        className={`w-full pl-8 pr-3 py-2 text-xs font-mono font-bold uppercase rounded-xl border focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all ${
+                          isDarkMode 
+                            ? 'bg-slate-900 border-slate-800 text-white placeholder-slate-500' 
+                            : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400'
+                        }`}
+                      />
+                    </div>
+                    {appliedVoucher ? (
+                      <button
+                        type="button"
+                        onClick={handleRemoveVoucher}
+                        className="px-3 py-2 text-xs font-bold text-rose-500 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl transition-all cursor-pointer border border-rose-500/30 flex items-center gap-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Gỡ mã</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleApplyVoucherInput}
+                        disabled={!voucherInput.trim() || isValidatingVoucher}
+                        className="px-4 py-2 text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-emerald-500/20 flex items-center gap-1"
+                      >
+                        {isValidatingVoucher ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>Áp dụng</span>}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Hiển thị mã đang áp dụng */}
+                  {appliedVoucher && (
+                    <div className={`mt-2.5 p-2.5 rounded-2xl border flex items-center justify-between text-xs transition-all shadow-sm animate-in fade-in-50 ${
+                      isDarkMode
+                        ? 'bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/10 border-amber-500/40 shadow-amber-500/5'
+                        : 'bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50/80 border-amber-300 shadow-amber-500/10'
+                    }`}>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-black shadow-xs shrink-0">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-black text-amber-700 dark:text-amber-300 flex items-center gap-1.5 font-mono">
+                            <span className="tracking-wider">{appliedVoucher.ma_code}</span>
+                            <span className="text-[10px] font-sans font-black px-2 py-0.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md shadow-2xs">
+                              {appliedVoucher.loai_giam === 'PHAN_TRAM' ? `-${appliedVoucher.gia_tri_giam}%` : `-${appliedVoucher.gia_tri_giam.toLocaleString('vi-VN')}đ`}
+                            </span>
+                          </div>
+                          <p className={`text-[11px] mt-0.5 line-clamp-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-700 font-semibold'}`}>
+                            {appliedVoucher.tieu_de}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="font-black font-mono text-orange-600 dark:text-orange-400 text-sm sm:text-base shrink-0">
+                        -{tienGiamVoucher.toLocaleString('vi-VN')} đ
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Hiển thị lỗi hoặc gợi ý nếu chưa đạt */}
+                  {voucherError && (
+                    <div className="mt-2 p-2 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-semibold animate-in fade-in-50">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{voucherError}</span>
+                    </div>
+                  )}
+                </div>
+
                 {/* Bảng tổng tiền */}
                 <div className={`p-4 rounded-2xl border space-y-2 text-xs ${isDarkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
                   <div className={`flex justify-between ${isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
@@ -5398,9 +6394,25 @@ export default function HomePage() {
                       <span className={`font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-900'}`}>{tongTienDichVu.toLocaleString('vi-VN')} đ</span>
                     </div>
                   )}
+                  {tienGiamVoucher > 0 && (
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-bold">
+                      <span className="flex items-center gap-1">
+                        <Tag className="w-3.5 h-3.5" />
+                        Giảm giá ưu đãi ({appliedVoucher?.ma_code}):
+                      </span>
+                      <span className="font-mono font-black">-{tienGiamVoucher.toLocaleString('vi-VN')} đ</span>
+                    </div>
+                  )}
                   <div className={`flex justify-between pt-2 border-t text-sm font-bold ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                     <span className={isDarkMode ? 'text-white' : 'text-slate-900'}>Tổng giá trị đơn:</span>
-                    <span className="text-emerald-600 dark:text-emerald-500 text-base">{tongTienDon.toLocaleString('vi-VN')} đ</span>
+                    <div className="text-right">
+                      {tienGiamVoucher > 0 && (
+                        <span className="line-through text-xs text-slate-400 font-mono mr-2">
+                          {tongTienDonGoc.toLocaleString('vi-VN')} đ
+                        </span>
+                      )}
+                      <span className="text-emerald-600 dark:text-emerald-500 text-base">{tongTienDon.toLocaleString('vi-VN')} đ</span>
+                    </div>
                   </div>
                 </div>
 
@@ -5523,6 +6535,18 @@ export default function HomePage() {
                           {bookingForm.ho_ten || currentUser?.ho_ten || 'Khách hàng'} ({bookingForm.so_dien_thoai || currentUser?.so_dien_thoai || ''})
                         </span>
                       </div>
+
+                      {appliedVoucher && (
+                        <div className={`flex justify-between items-center pt-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                          <span className="text-emerald-500 font-bold flex items-center gap-1">
+                            <Tag className="w-3.5 h-3.5" />
+                            Ưu đãi giảm giá ({appliedVoucher.ma_code}):
+                          </span>
+                          <span className="font-mono font-bold text-emerald-500">
+                            -{tienGiamVoucher.toLocaleString('vi-VN')} đ
+                          </span>
+                        </div>
+                      )}
 
                       <div className={`flex justify-between items-center pt-2 border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`}>
                         <span className={isDarkMode ? 'text-slate-400' : 'text-slate-500 font-bold'}>Số tiền thanh toán:</span>
@@ -5908,6 +6932,358 @@ export default function HomePage() {
           }
         }}
       />
+
+      {/* =====================================================================
+          MODAL KHO VOUCHER & MÃ ƯU ĐÃI (UX/UI CHUẨN SHOPEE / GRAB / TRAVELOKA)
+          - Thiết kế cuống vé coupon chuẩn với vết khuyết 2 bên và đường xé nét đứt
+          - Thanh tiến trình điều kiện thông minh (Smart Progress Bar)
+          - Phân cấp thị giác: Mã dùng được nổi bật ánh kim, mã khóa mờ nhẹ
+          - Thanh nhập mã & Header hiện đại với đếm số mã khả dụng
+          - Hiệu ứng tương tác mượt mà (Micro-interactions)
+      ===================================================================== */}
+      {isVoucherModalOpen && (
+        <div className="fixed inset-0 z-[1000000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in-50 duration-200">
+          <div
+            className={`w-full max-w-lg rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 ${
+              isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+            }`}
+          >
+            {/* Modal Header */}
+            <div className={`px-6 py-4 border-b flex items-center justify-between ${
+              isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent border-slate-100'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-amber-400 text-white flex items-center justify-center font-black shadow-lg shadow-orange-500/25 shrink-0">
+                  <Ticket className="w-6 h-6 drop-shadow-sm" />
+                </div>
+                <div>
+                  <h3 className={`text-base font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    Kho Ưu Đãi & Voucher
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                    <p className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                      Chọn mã ưu đãi tốt nhất cho bạn
+                    </p>
+                    {voucherList.length > 0 && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                        {voucherList.filter((v) => getVoucherStatus(v).eligible).length} mã dùng được
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsVoucherModalOpen(false)}
+                className={`p-2 rounded-full transition-colors cursor-pointer ${
+                  isDarkMode ? 'hover:bg-slate-800 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Voucher Quick Search / Input Bar */}
+            <div className={`p-4 border-b ${isDarkMode ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-100'}`}>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Tag className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors ${
+                    voucherInput.trim() ? 'text-amber-500' : isDarkMode ? 'text-slate-500' : 'text-slate-400'
+                  }`} />
+                  <input
+                    type="text"
+                    value={voucherInput}
+                    onChange={(e) => {
+                      setVoucherInput(e.target.value.toUpperCase());
+                      if (voucherError) setVoucherError(null);
+                    }}
+                    placeholder="Nhập mã ưu đãi (VD: SOCCER247NEW)..."
+                    className={`w-full pl-10 pr-3 py-2.5 text-xs font-mono font-bold uppercase rounded-2xl border transition-all ${
+                      isDarkMode 
+                        ? 'bg-slate-900 border-slate-700 text-white placeholder-slate-500 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20' 
+                        : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
+                    }`}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleApplyVoucherInput}
+                  disabled={!voucherInput.trim() || isValidatingVoucher}
+                  className={`px-4 py-2.5 text-xs font-black rounded-2xl transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                    voucherInput.trim()
+                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white shadow-md shadow-orange-500/25 active:scale-95'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 opacity-60 cursor-not-allowed'
+                  }`}
+                >
+                  {isValidatingVoucher ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>Áp dụng</span>}
+                </button>
+              </div>
+
+              {voucherError && (
+                <div className="mt-2.5 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-500 flex items-center gap-1.5 font-medium animate-in fade-in-50">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{voucherError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Voucher List Body */}
+            <div className={`p-4 space-y-3.5 overflow-y-auto flex-1 max-h-[58vh] ${
+              isDarkMode ? 'bg-slate-950/40' : 'bg-slate-100/60'
+            }`}>
+              {voucherList.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 space-y-2">
+                  <Ticket className="w-10 h-10 mx-auto opacity-40 animate-pulse text-amber-500" />
+                  <p className="text-xs">Hiện tại chưa có mã ưu đãi nào khả dụng.</p>
+                </div>
+              ) : (
+                (() => {
+                  const sortedVouchers = [...voucherList]
+                    .map((v) => ({
+                      voucher: v,
+                      status: getVoucherStatus(v),
+                      isCurrentApplied: appliedVoucher?.ma_code === v.ma_code,
+                    }))
+                    .sort((a, b) => {
+                      if (a.isCurrentApplied && !b.isCurrentApplied) return -1;
+                      if (!a.isCurrentApplied && b.isCurrentApplied) return 1;
+                      if (a.status.eligible && !b.status.eligible) return -1;
+                      if (!a.status.eligible && b.status.eligible) return 1;
+                      if (a.status.eligible && b.status.eligible) {
+                        return b.status.calculatedDiscount - a.status.calculatedDiscount;
+                      }
+                      return 0;
+                    });
+
+                  return sortedVouchers.map(({ voucher: v, status, isCurrentApplied }, index) => {
+                    // Hiển thị dải phân cách giữa nhóm mã dùng được và nhóm chưa đủ điều kiện
+                    const showIneligibleDivider =
+                      !status.eligible &&
+                      index > 0 &&
+                      sortedVouchers[index - 1].status.eligible;
+
+                    return (
+                      <React.Fragment key={v.id || v.ma_code}>
+                        {showIneligibleDivider && (
+                          <div className="py-2 flex items-center gap-3">
+                            <div className={`h-px flex-1 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-300'}`} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
+                              <Lock className="w-3 h-3 text-slate-400" />
+                              Ưu đãi khác chưa đủ điều kiện
+                            </span>
+                            <div className={`h-px flex-1 ${isDarkMode ? 'bg-slate-800' : 'bg-slate-300'}`} />
+                          </div>
+                        )}
+
+                        <div
+                          className={`relative rounded-2xl border transition-all duration-300 flex flex-row items-stretch overflow-hidden group ${
+                            isCurrentApplied
+                              ? 'border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-500/5 shadow-lg shadow-emerald-500/10'
+                              : status.eligible
+                              ? isDarkMode
+                                ? 'border-amber-500/40 hover:border-amber-500 bg-slate-900 shadow-md hover:shadow-xl hover:-translate-y-0.5'
+                                : 'border-amber-300 hover:border-amber-400 bg-white shadow-md hover:shadow-xl hover:-translate-y-0.5'
+                              : isDarkMode
+                              ? 'border-slate-800/80 bg-slate-950/60 opacity-75 hover:opacity-95'
+                              : 'border-slate-200 bg-white/70 opacity-80 hover:opacity-100'
+                          }`}
+                        >
+                          {/* Lỗ khuyết vé bán nguyệt ở trên và dưới đường nét đứt */}
+                          <div
+                            className="absolute -top-2.5 left-24 sm:left-28 -translate-x-1/2 w-5 h-5 rounded-full z-20 pointer-events-none"
+                            style={{
+                              backgroundColor: isDarkMode ? '#030712' : '#f1f5f9',
+                              borderBottom: `1.5px solid ${status.eligible ? '#f59e0b' : isDarkMode ? '#334155' : '#cbd5e1'}`,
+                            }}
+                          />
+                          <div
+                            className="absolute -bottom-2.5 left-24 sm:left-28 -translate-x-1/2 w-5 h-5 rounded-full z-20 pointer-events-none"
+                            style={{
+                              backgroundColor: isDarkMode ? '#030712' : '#f1f5f9',
+                              borderTop: `1.5px solid ${status.eligible ? '#f59e0b' : isDarkMode ? '#334155' : '#cbd5e1'}`,
+                            }}
+                          />
+
+                          {/* Huy hiệu ĐANG CHỌN */}
+                          {isCurrentApplied && (
+                            <div className="absolute top-0 right-0 bg-gradient-to-l from-emerald-500 to-teal-500 text-slate-950 font-black text-[9px] px-2.5 py-0.5 rounded-bl-xl shadow-sm uppercase tracking-wider flex items-center gap-1 z-10">
+                              <Check className="w-2.5 h-2.5 stroke-[3]" />
+                              <span>Đang chọn</span>
+                            </div>
+                          )}
+
+                          {/* CỘT TRÁI: CUỐNG VÉ (TICKET STUB) */}
+                          <div
+                            className={`w-24 sm:w-28 shrink-0 flex flex-col items-center justify-center text-center p-2.5 relative select-none border-r border-dashed ${
+                              status.eligible
+                                ? 'bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 text-white border-amber-300/40 shadow-inner'
+                                : isDarkMode
+                                ? 'bg-gradient-to-b from-slate-800 to-slate-900 text-slate-400 border-slate-700'
+                                : 'bg-gradient-to-b from-slate-200 to-slate-300 text-slate-600 border-slate-300'
+                            }`}
+                          >
+                            <Ticket className="w-12 h-12 absolute -bottom-2 -right-2 opacity-10 pointer-events-none rotate-12" />
+
+                            <div className="relative z-10">
+                              <div className={`text-xl sm:text-2xl font-black font-mono leading-none tracking-tight ${
+                                status.eligible ? 'text-white drop-shadow-sm' : ''
+                              }`}>
+                                {v.loai_giam === 'PHAN_TRAM' ? `${v.gia_tri_giam}%` : `${Math.round(v.gia_tri_giam / 1000)}K`}
+                              </div>
+                              <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider block mt-1 ${
+                                status.eligible ? 'text-amber-100' : 'text-slate-500 dark:text-slate-400'
+                              }`}>
+                                GIẢM {v.loai_giam === 'PHAN_TRAM' ? 'TỔNG' : 'TIỀN'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* CỘT PHẢI: THÂN VÉ (TICKET BODY) */}
+                          <div className="p-3 sm:p-3.5 flex-1 min-w-0 flex flex-col justify-between space-y-2">
+                            <div>
+                              {/* Hàng code và nhãn */}
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-black font-mono uppercase tracking-wider ${
+                                  status.eligible
+                                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30'
+                                    : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700'
+                                }`}>
+                                  {v.ma_code}
+                                </span>
+                                {v.chi_danh_cho_khach_moi && (
+                                  <span className="px-1.5 py-0.2 rounded-md text-[9px] sm:text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                                    ⭐ Bạn Mới
+                                  </span>
+                                )}
+                                {v.thu_trong_tuan && (
+                                  <span className="px-1.5 py-0.2 rounded-md text-[9px] sm:text-[10px] font-bold bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30">
+                                    📅 T2 - T6
+                                  </span>
+                                )}
+                              </div>
+
+                              <h4 className={`text-xs sm:text-sm font-black truncate ${
+                                isDarkMode ? 'text-white' : 'text-slate-900'
+                              }`}>
+                                {v.tieu_de}
+                              </h4>
+
+                              <p className={`text-[11px] line-clamp-2 leading-relaxed mt-0.5 ${
+                                isDarkMode ? 'text-slate-400' : 'text-slate-600 font-medium'
+                              }`}>
+                                {v.mo_ta}
+                              </p>
+
+                              {/* Điều kiện thông minh & Thanh tiến trình */}
+                              {!status.eligible && (
+                                <div className="pt-1.5">
+                                  {status.conditionType === 'MIN_ORDER' ? (
+                                    <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1.5">
+                                      <div className="flex items-center justify-between text-[10px] font-bold">
+                                        <span className="text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                                          <Zap className="w-3 h-3 text-amber-500 shrink-0" />
+                                          <span>Tiến trình đơn:</span>
+                                        </span>
+                                        <span className="font-mono text-amber-800 dark:text-amber-200">
+                                          {status.currentTotal.toLocaleString('vi-VN')}đ / {v.don_toi_thieu.toLocaleString('vi-VN')}đ ({status.progressPercent}%)
+                                        </span>
+                                      </div>
+                                      <div className="w-full bg-slate-200 dark:bg-slate-700/60 h-1.5 rounded-full overflow-hidden">
+                                        <div
+                                          className="bg-gradient-to-r from-amber-500 to-orange-500 h-full rounded-full transition-all duration-500"
+                                          style={{ width: `${status.progressPercent}%` }}
+                                        />
+                                      </div>
+                                      <p className="text-[10px] font-medium text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                                        <span>💡</span>
+                                        <span>Đặt thêm <strong>{status.shortage.toLocaleString('vi-VN')} đ</strong> để mở khóa mã này!</span>
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                                      <AlertCircle className="w-3 h-3 shrink-0 text-amber-500" />
+                                      <span>{status.reason}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Hàng nút bấm & số tiền tiết kiệm */}
+                            <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
+                              <div>
+                                {status.eligible ? (
+                                  <div className="text-[11px] font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-mono">
+                                    <Sparkles className="w-3 h-3 shrink-0" />
+                                    <span>Tiết kiệm: {status.calculatedDiscount.toLocaleString('vi-VN')} đ</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                    {v.don_toi_thieu ? `Đơn tối thiểu: ${v.don_toi_thieu.toLocaleString('vi-VN')}đ` : 'Ưu đãi có điều kiện'}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div>
+                                {isCurrentApplied ? (
+                                  <button
+                                    type="button"
+                                    onClick={handleRemoveVoucher}
+                                    className="px-3.5 py-1.5 rounded-full text-xs font-black bg-rose-500/15 hover:bg-rose-500/25 text-rose-500 border border-rose-500/30 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+                                  >
+                                    <X className="w-3 h-3 stroke-[2.5]" />
+                                    <span>Bỏ chọn</span>
+                                  </button>
+                                ) : status.eligible ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectVoucher(v)}
+                                    className="px-4 py-1.5 rounded-full text-xs font-black bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 hover:brightness-110 text-white shadow-md shadow-orange-500/25 transition-all cursor-pointer flex items-center gap-1 active:scale-95 group-hover:scale-105"
+                                  >
+                                    <span>Dùng mã</span>
+                                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className="px-3 py-1 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-80"
+                                  >
+                                    <span>Chưa đủ điều kiện</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </React.Fragment>
+                    );
+                  });
+                })()
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className={`p-4 border-t flex items-center justify-between text-xs ${
+              isDarkMode ? 'bg-slate-950/80 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'
+            }`}>
+              <div className="flex items-center gap-1.5 text-[11px]">
+                <Info className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                <span>Mỗi đơn đặt sân được áp dụng 1 mã ưu đãi tốt nhất.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsVoucherModalOpen(false)}
+                className={`px-4 py-1.5 rounded-xl font-bold transition-colors cursor-pointer ${
+                  isDarkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                }`}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

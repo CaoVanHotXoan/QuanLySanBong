@@ -186,7 +186,7 @@ exports.layDanhSachLoaiSan = layDanhSachLoaiSan;
  */
 const themLoaiSan = async (req, res) => {
     try {
-        const { ten_loai, mo_ta, trang_thai } = req.body;
+        const { ten_loai, mo_ta, trang_thai, icon } = req.body;
         if (!ten_loai || !ten_loai.trim()) {
             return res.status(400).json({
                 success: false,
@@ -198,6 +198,7 @@ const themLoaiSan = async (req, res) => {
             .input('ten_loai', db_1.sql.NVarChar(50), ten_loai.trim())
             .input('mo_ta', db_1.sql.NVarChar(db_1.sql.MAX), mo_ta || null)
             .input('trang_thai', db_1.sql.Bit, trang_thai !== false ? 1 : 0)
+            .input('icon', db_1.sql.NVarChar(50), icon || null)
             .execute('sp_ThemLoaiSan');
         cacheService_1.default.del('danh_sach_loai_san');
         cacheService_1.default.delPrefix('danh_sach_san_');
@@ -224,7 +225,7 @@ exports.themLoaiSan = themLoaiSan;
 const suaLoaiSan = async (req, res) => {
     try {
         const id = String(req.params.id);
-        const { ten_loai, mo_ta, trang_thai } = req.body;
+        const { ten_loai, mo_ta, trang_thai, icon } = req.body;
         if (!ten_loai || !ten_loai.trim()) {
             return res.status(400).json({
                 success: false,
@@ -237,6 +238,7 @@ const suaLoaiSan = async (req, res) => {
             .input('ten_loai', db_1.sql.NVarChar(50), ten_loai.trim())
             .input('mo_ta', db_1.sql.NVarChar(db_1.sql.MAX), mo_ta !== undefined ? (mo_ta ? mo_ta.trim() : null) : null)
             .input('trang_thai', db_1.sql.Bit, trang_thai !== false ? 1 : 0)
+            .input('icon', db_1.sql.NVarChar(50), icon !== undefined ? (icon ? icon.trim() : null) : null)
             .execute('sp_SuaLoaiSan');
         cacheService_1.default.del('danh_sach_loai_san');
         cacheService_1.default.delPrefix('danh_sach_san_');
@@ -290,7 +292,7 @@ exports.xoaLoaiSan = xoaLoaiSan;
  */
 const themSanBong = async (req, res) => {
     try {
-        const { ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai } = req.body;
+        const { ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai, tien_ich } = req.body;
         if (!ten_san || !ten_san.trim()) {
             return res.status(400).json({
                 success: false,
@@ -304,6 +306,7 @@ const themSanBong = async (req, res) => {
             .input('hinh_anh', db_1.sql.VarChar(255), hinh_anh || null)
             .input('don_gia_phut', db_1.sql.Decimal(10, 2), don_gia_phut ? parseFloat(String(don_gia_phut)) : 5000.00)
             .input('trang_thai', db_1.sql.VarChar(20), trang_thai || 'SAN_SANG')
+            .input('tien_ich', db_1.sql.NVarChar(db_1.sql.MAX), tien_ich ? (typeof tien_ich === 'object' ? JSON.stringify(tien_ich) : String(tien_ich).trim()) : null)
             .execute('sp_ThemSanBong');
         cacheService_1.default.delPrefix('danh_sach_san_');
         return res.status(201).json({
@@ -329,7 +332,7 @@ exports.themSanBong = themSanBong;
 const suaSanBong = async (req, res) => {
     try {
         const id = String(req.params.id);
-        const { ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai } = req.body;
+        const { ten_san, ma_loai_san, hinh_anh, don_gia_phut, trang_thai, tien_ich } = req.body;
         if (!ten_san || !ten_san.trim()) {
             return res.status(400).json({
                 success: false,
@@ -344,6 +347,7 @@ const suaSanBong = async (req, res) => {
             .input('hinh_anh', db_1.sql.VarChar(255), hinh_anh !== undefined ? (hinh_anh ? hinh_anh.trim() : null) : null)
             .input('don_gia_phut', db_1.sql.Decimal(10, 2), don_gia_phut ? parseFloat(String(don_gia_phut)) : null)
             .input('trang_thai', db_1.sql.VarChar(20), trang_thai || 'SAN_SANG')
+            .input('tien_ich', db_1.sql.NVarChar(db_1.sql.MAX), tien_ich !== undefined ? (typeof tien_ich === 'object' ? JSON.stringify(tien_ich) : (tien_ich ? String(tien_ich).trim() : null)) : null)
             .execute('sp_SuaSanBong');
         cacheService_1.default.delPrefix('danh_sach_san_');
         return res.status(200).json({

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ExternalLink, Navigation, ShieldCheck, MapPin } from 'lucide-react';
+import { ExternalLink, Navigation, MapPin } from 'lucide-react';
 
 interface DongNaiMapProps {
   linkMap?: string;
@@ -83,7 +83,8 @@ export default function DongNaiMap({
           maxZoom: 18, // Cho phép phóng to tối đa để xem sân bóng và đường phố
           maxBounds: DONG_NAI_BOUNDS, // GIỚI HẠN PHẠM VI: Toàn bộ tỉnh Đồng Nai
           maxBoundsViscosity: 1.0, // Chống cuộn ra ngoài tỉnh (độ cản 100% giữ nguyên trong tỉnh)
-          zoomControl: false // Chúng ta dùng custom zoom control hoặc đặt góc thuận tiện
+          zoomControl: false, // Chúng ta dùng custom zoom control hoặc đặt góc thuận tiện
+          attributionControl: false // Xóa hoàn toàn chữ bản quyền Leaflet | OpenStreetMap
         });
 
         // Đặt zoom control ở góc dưới bên phải
@@ -91,7 +92,7 @@ export default function DongNaiMap({
 
         // Lớp bản đồ OpenStreetMap chất lượng cao hiển thị chi tiết tên đường tiếng Việt
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '&copy; OpenStreetMap',
+          attribution: '',
           maxZoom: 19
         }).addTo(map);
 
@@ -164,7 +165,7 @@ export default function DongNaiMap({
     : `https://www.google.com/maps/search/?api=1&query=${coords[0]},${coords[1]}`;
 
   return (
-    <div className={`relative w-full h-full overflow-hidden select-none isolate ${className}`}>
+    <div className={`relative w-full h-full overflow-hidden select-none isolate [&_.leaflet-control-attribution]:!hidden ${className}`}>
       {/* Vùng chứa bản đồ Leaflet */}
       <div 
         ref={mapContainerRef} 
@@ -172,29 +173,19 @@ export default function DongNaiMap({
         style={{ background: isDarkMode ? '#0f172a' : '#f8fafc' }}
       />
 
-      {/* Huy hiệu thông báo phạm vi bản đồ */}
-      <div className={`absolute top-2.5 left-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-lg backdrop-blur-md text-[10px] font-bold shadow-lg pointer-events-none transition-colors ${
-        isDarkMode
-          ? 'bg-slate-950/85 border border-emerald-500/30 text-emerald-300'
-          : 'bg-white/95 border border-emerald-500/40 text-emerald-800 shadow-slate-300/60'
-      }`}>
-        <ShieldCheck className={`w-3.5 h-3.5 shrink-0 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
-        <span>Khu vực: Tỉnh Đồng Nai (Đã khóa phạm vi)</span>
-      </div>
-
       {/* Các nút tiện ích trên bản đồ */}
       <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-2">
         <button
           type="button"
           onClick={handleResetToField}
           title="Đưa bản đồ về vị trí sân bóng"
-          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold shadow-md transition-all flex items-center gap-1 backdrop-blur-md ${
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-md transition-all flex items-center gap-1 backdrop-blur-md ${
             isDarkMode
               ? 'bg-slate-900/90 hover:bg-emerald-600 text-white border border-slate-700 hover:border-emerald-500'
-              : 'bg-white/95 hover:bg-emerald-600 text-slate-800 hover:text-white border border-slate-200 hover:border-emerald-500 shadow-sm'
+              : 'bg-white hover:bg-emerald-600 text-slate-900 hover:text-white border border-slate-300 hover:border-emerald-500 shadow-sm'
           }`}
         >
-          <Navigation className={`w-3 h-3 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'} group-hover:text-white`} />
+          <Navigation className={`w-3 h-3 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-700'} group-hover:text-white`} />
           <span>Vị trí sân</span>
         </button>
 
@@ -203,10 +194,10 @@ export default function DongNaiMap({
           target="_blank"
           rel="noreferrer"
           title="Mở trên ứng dụng Google Maps"
-          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold shadow-md transition-all flex items-center gap-1 backdrop-blur-md ${
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-md transition-all flex items-center gap-1 backdrop-blur-md ${
             isDarkMode
               ? 'bg-slate-900/90 hover:bg-emerald-600 text-white border border-slate-700 hover:border-emerald-500'
-              : 'bg-white/95 hover:bg-emerald-600 text-slate-800 hover:text-white border border-slate-200 hover:border-emerald-500 shadow-sm'
+              : 'bg-white hover:bg-emerald-600 text-slate-900 hover:text-white border border-slate-300 hover:border-emerald-500 shadow-sm'
           }`}
         >
           <span>Google Maps</span>

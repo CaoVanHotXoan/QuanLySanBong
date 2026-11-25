@@ -103,7 +103,7 @@ export default function Footer() {
               </span>
             </div>
             <p className={`text-sm leading-relaxed max-w-lg transition-colors ${
-              isDarkMode ? 'text-slate-400' : 'text-slate-600'
+              isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'
             }`}>
               {gioiThieu}
             </p>
@@ -113,14 +113,14 @@ export default function Footer() {
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-colors ${
                   isDarkMode 
                     ? 'bg-slate-900 border-slate-800 text-emerald-400' 
-                    : 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-700'
                 }`}>
                   <Phone className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Hotline đặt sân:</div>
+                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>Hotline đặt sân:</div>
                   <a href={`tel:${hotline}`} className={`font-bold text-base font-mono transition-colors ${
-                    isDarkMode ? 'text-white hover:text-emerald-400' : 'text-slate-900 hover:text-emerald-600'
+                    isDarkMode ? 'text-white hover:text-emerald-400' : 'text-slate-950 hover:text-emerald-600'
                   }`}>
                     {hotline}
                   </a>
@@ -131,14 +131,14 @@ export default function Footer() {
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-colors ${
                   isDarkMode 
                     ? 'bg-slate-900 border-slate-800 text-emerald-400' 
-                    : 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-700'
                 }`}>
                   <Mail className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Email:</div>
+                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>Email:</div>
                   <a href={`mailto:${email}`} className={`font-bold transition-colors ${
-                    isDarkMode ? 'text-white hover:text-emerald-400' : 'text-slate-900 hover:text-emerald-600'
+                    isDarkMode ? 'text-white hover:text-emerald-400' : 'text-slate-950 hover:text-emerald-600'
                   }`}>
                     {email}
                   </a>
@@ -149,13 +149,13 @@ export default function Footer() {
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border transition-colors ${
                   isDarkMode 
                     ? 'bg-slate-900 border-slate-800 text-emerald-400' 
-                    : 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-700'
                 }`}>
                   <MapPin className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Địa chỉ cụm sân:</div>
-                  <div className={`font-bold transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{diaChi}</div>
+                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600 font-semibold'}`}>Địa chỉ cụm sân:</div>
+                  <div className={`font-bold transition-colors ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>{diaChi}</div>
                 </div>
               </div>
             </div>
@@ -185,13 +185,13 @@ export default function Footer() {
 
         {/* Bản quyền & Điều hướng liên quan */}
         <div className={`pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs transition-colors duration-300 ${
-          isDarkMode ? 'text-slate-400' : 'text-slate-500'
+          isDarkMode ? 'text-slate-400' : 'text-slate-700 font-medium'
         }`}>
           <p>© 2026 {tenTrungTam}. Đặt Sân Thể Thao Nhanh Chóng & Chuyên Nghiệp.</p>
           <div className="flex items-center gap-6">
-            <Link href="/about-us" className={`transition-colors ${isDarkMode ? 'hover:text-emerald-400' : 'hover:text-emerald-600'}`}>Giới thiệu</Link>
-            <Link href="/tin-tuc" className={`transition-colors ${isDarkMode ? 'hover:text-emerald-400' : 'hover:text-emerald-600'}`}>Tin tức & Sự kiện</Link>
-            <Link href="/lien-he" className={`transition-colors ${isDarkMode ? 'hover:text-emerald-400' : 'hover:text-emerald-600'}`}>Gửi phản hồi</Link>
+            <Link href="/about-us" className={`transition-colors font-semibold ${isDarkMode ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-700 hover:text-emerald-600'}`}>Giới thiệu</Link>
+            <Link href="/tin-tuc" className={`transition-colors font-semibold ${isDarkMode ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-700 hover:text-emerald-600'}`}>Tin tức & Sự kiện</Link>
+            <Link href="/lien-he" className={`transition-colors font-semibold ${isDarkMode ? 'text-slate-400 hover:text-emerald-400' : 'text-slate-700 hover:text-emerald-600'}`}>Gửi phản hồi</Link>
           </div>
         </div>
       </div>
