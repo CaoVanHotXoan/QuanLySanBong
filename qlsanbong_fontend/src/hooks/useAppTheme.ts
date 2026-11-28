@@ -67,10 +67,10 @@ export function useAppTheme(defaultDark: boolean = true) {
     };
   }, [defaultDark]);
 
-  // Hàm chuyển đổi bật / tắt theme
-  const toggleTheme = useCallback(() => {
-    setIsDarkModeState((current) => {
-      const nextVal = !current;
+  // Hàm thực hiện hiệu ứng gợn tròn lan tỏa từ nút bấm khi đổi theme
+  const applyThemeWithTransition = useCallback((nextVal: boolean, event?: React.MouseEvent | MouseEvent | any) => {
+    const updateThemeDOMAndState = () => {
+      setIsDarkModeState(nextVal);
       try {
         localStorage.setItem(STORAGE_KEY, nextVal ? 'true' : 'false');
         localStorage.setItem('theme', nextVal ? 'dark' : 'light');
@@ -79,33 +79,80 @@ export function useAppTheme(defaultDark: boolean = true) {
         } else {
           document.documentElement.classList.remove('dark');
         }
-        // Phát sự kiện ra window để tất cả các component (HeaderNav, Page...) đồng loạt cập nhật
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: nextVal }));
         }, 0);
       } catch (_err) {}
-      return nextVal;
+    };
+
+    // Kiểm tra trình duyệt có hỗ trợ View Transitions API hay không và người dùng có tắt hiệu ứng không
+    if (
+      typeof document === 'undefined' ||
+      !(document as any).startViewTransition ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      updateThemeDOMAndState();
+      return;
+    }
+
+    // Xác định tọa độ tâm hiệu ứng từ nút bấm
+    let x = window.innerWidth / 2;
+    let y = window.innerHeight / 2;
+
+    if (event && typeof event.clientX === 'number' && typeof event.clientY === 'number' && (event.clientX !== 0 || event.clientY !== 0)) {
+      x = event.clientX;
+      y = event.clientY;
+    } else if (event && event.currentTarget && typeof event.currentTarget.getBoundingClientRect === 'function') {
+      const rect = event.currentTarget.getBoundingClientRect();
+      x = rect.left + rect.width / 2;
+      y = rect.top + rect.height / 2;
+    }
+
+    // Bán kính tối đa để vòng tròn bao trùm toàn bộ 4 góc màn hình
+    const endRadius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y)
+    );
+
+    const transition = (document as any).startViewTransition(() => {
+      updateThemeDOMAndState();
+    });
+
+    transition.ready.then(() => {
+      const clipPath = [
+        `circle(0px at ${x}px ${y}px)`,
+        `circle(${endRadius}px at ${x}px ${y}px)`,
+      ];
+
+      document.documentElement.animate(
+        {
+          clipPath: clipPath,
+        },
+        {
+          duration: 500,
+          easing: 'ease-in-out',
+          pseudoElement: '::view-transition-new(root)',
+        }
+      );
     });
   }, []);
 
-  const setIsDarkMode = useCallback((value: boolean | ((prev: boolean) => boolean)) => {
+  // Hàm chuyển đổi bật / tắt theme
+  const toggleTheme = useCallback((event?: React.MouseEvent | MouseEvent | any) => {
     setIsDarkModeState((current) => {
-      const nextVal = typeof value === 'function' ? value(current) : value;
-      try {
-        localStorage.setItem(STORAGE_KEY, nextVal ? 'true' : 'false');
-        localStorage.setItem('theme', nextVal ? 'dark' : 'light');
-        if (nextVal) {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
-        }
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: nextVal }));
-        }, 0);
-      } catch (_err) {}
+      const nextVal = !current;
+      applyThemeWithTransition(nextVal, event);
       return nextVal;
     });
-  }, []);
+  }, [applyThemeWithTransition]);
+
+  const setIsDarkMode = useCallback((value: boolean | ((prev: boolean) => boolean), event?: React.MouseEvent | MouseEvent | any) => {
+    setIsDarkModeState((current) => {
+      const nextVal = typeof value === 'function' ? value(current) : value;
+      applyThemeWithTransition(nextVal, event);
+      return nextVal;
+    });
+  }, [applyThemeWithTransition]);
 
   return { isDarkMode, setIsDarkMode, toggleTheme, mounted };
 }

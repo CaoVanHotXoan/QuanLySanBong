@@ -298,7 +298,21 @@ export interface SportTheme {
 
 // Hàm resolve icon môn thể thao an toàn tuyệt đối (hỗ trợ slug, emoji chuẩn và tự động nhận diện theo tên)
 export const resolveSportIcon = (name: string, customIcon?: string | null): React.ReactNode => {
-  const c = (customIcon || '').trim().toLowerCase();
+  const raw = (customIcon || '').trim();
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('/') || raw.startsWith('data:image')) {
+    return (
+      <img
+        src={raw}
+        alt={name || 'Icon'}
+        className="w-full h-full object-contain p-0.5"
+        onError={(e) => {
+          (e.currentTarget as HTMLElement).style.display = 'none';
+        }}
+      />
+    );
+  }
+
+  const c = raw.toLowerCase();
   if (c === 'pickleball') return '🏓';
   if (c === 'bong-da' || c === 'soccer' || c === 'football') return '⚽';
   if (c === 'quan-vot' || c === 'tennis') return '🎾';
@@ -308,8 +322,8 @@ export const resolveSportIcon = (name: string, customIcon?: string | null): Reac
   if (c === 'bong-chuyen' || c === 'volleyball') return '🏐';
 
   // Nếu customIcon là emoji hợp lệ (không phải chuỗi lỗi mã hóa / mojibake '?' hoặc 'đŸ' hoặc 'â')
-  if (customIcon && customIcon.trim() && !customIcon.includes('?') && !customIcon.includes('đŸ') && !customIcon.includes('â')) {
-    return customIcon.trim();
+  if (raw && !raw.includes('?') && !raw.includes('đŸ') && !raw.includes('â')) {
+    return raw;
   }
 
   // Tự động nhận diện chuẩn theo tên môn thể thao

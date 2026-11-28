@@ -159,7 +159,7 @@ export const themLoaiSan = async (req: AuthRequest, res: Response) => {
             .input('ten_loai', sql.NVarChar(50), ten_loai.trim())
             .input('mo_ta', sql.NVarChar(sql.MAX), mo_ta || null)
             .input('trang_thai', sql.Bit, trang_thai !== false ? 1 : 0)
-            .input('icon', sql.NVarChar(50), icon || null)
+            .input('icon', sql.NVarChar(500), icon || null)
             .execute('sp_ThemLoaiSan');
 
         memoryCache.del('danh_sach_loai_san');
@@ -200,7 +200,7 @@ export const suaLoaiSan = async (req: AuthRequest, res: Response) => {
             .input('ten_loai', sql.NVarChar(50), ten_loai.trim())
             .input('mo_ta', sql.NVarChar(sql.MAX), mo_ta !== undefined ? (mo_ta ? mo_ta.trim() : null) : null)
             .input('trang_thai', sql.Bit, trang_thai !== false ? 1 : 0)
-            .input('icon', sql.NVarChar(50), icon !== undefined ? (icon ? icon.trim() : null) : null)
+            .input('icon', sql.NVarChar(500), icon !== undefined ? (icon ? icon.trim() : null) : null)
             .execute('sp_SuaLoaiSan');
 
         memoryCache.del('danh_sach_loai_san');

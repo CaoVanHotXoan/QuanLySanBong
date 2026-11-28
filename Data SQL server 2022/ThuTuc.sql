@@ -2673,7 +2673,7 @@ CREATE OR ALTER PROCEDURE sp_ThemLoaiSan
     @ten_loai NVARCHAR(50),
     @mo_ta NVARCHAR(MAX) = NULL,
     @trang_thai BIT = 1,
-    @icon NVARCHAR(50) = NULL
+    @icon NVARCHAR(500) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -2705,7 +2705,7 @@ CREATE OR ALTER PROCEDURE sp_SuaLoaiSan
     @ten_loai NVARCHAR(50),
     @mo_ta NVARCHAR(MAX) = NULL,
     @trang_thai BIT = 1,
-    @icon NVARCHAR(50) = NULL
+    @icon NVARCHAR(500) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -6495,6 +6495,7 @@ BEGIN
         sb.tien_ich,
         ls.id AS ma_loai_san,
         ls.ten_loai,
+        ls.icon,
         ISNULL(ROUND(AVG(CAST(dg.so_sao AS FLOAT)), 1), 5.0) AS diem_trung_binh,
         COUNT(CASE WHEN dg.binh_luan_cha_id IS NULL AND dg.so_sao IS NOT NULL THEN 1 END) AS tong_danh_gia,
         COUNT(CASE WHEN dg.so_sao = 5 THEN 1 END) AS sao_5,
@@ -6506,7 +6507,7 @@ BEGIN
     JOIN Loai_San ls ON sb.ma_loai_san = ls.id
     LEFT JOIN Danh_Gia_San dg ON sb.id = dg.ma_san AND dg.trang_thai = 1
     WHERE sb.id = @ma_san
-    GROUP BY sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, sb.tien_ich, ls.id, ls.ten_loai;
+    GROUP BY sb.id, sb.ten_san, sb.hinh_anh, sb.don_gia_phut, sb.trang_thai, sb.tien_ich, ls.id, ls.ten_loai, ls.icon;
 
     -- 2. Danh sách toàn bộ đánh giá và câu trả lời (kèm tên người được trả lời cha)
     SELECT 

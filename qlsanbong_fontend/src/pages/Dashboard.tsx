@@ -891,6 +891,7 @@ export default function AdminDashboard() {
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
+  const [isUploadingLoaiSanIcon, setIsUploadingLoaiSanIcon] = useState<boolean>(false);
 
   useEffect(() => {
     if (toastMessage) {
@@ -1578,9 +1579,23 @@ export default function AdminDashboard() {
     return '';
   };
 
-  // Helper lấy icon theo môn thể thao cho Loại sân
+  // Helper lấy icon theo môn thể thao cho Loại sân (Hỗ trợ URL ảnh / SVG hoặc Emoji)
   const getSportIcon = (name?: string, customIcon?: string | null) => {
-    const c = (customIcon || '').trim().toLowerCase();
+    const raw = (customIcon || '').trim();
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('/') || raw.startsWith('data:image')) {
+      return (
+        <img
+          src={raw}
+          alt={name || 'Icon'}
+          className="w-full h-full object-contain p-0.5"
+          onError={(e) => {
+            (e.currentTarget as HTMLElement).style.display = 'none';
+          }}
+        />
+      );
+    }
+
+    const c = raw.toLowerCase();
     if (c === 'pickleball') return '🏓';
     if (c === 'bong-da' || c === 'soccer' || c === 'football') return '⚽';
     if (c === 'quan-vot' || c === 'tennis') return '🎾';
@@ -1589,8 +1604,8 @@ export default function AdminDashboard() {
     if (c === 'bong-ban' || c === 'table-tennis' || c === 'ping-pong') return '🏓';
     if (c === 'bong-chuyen' || c === 'volleyball') return '🏐';
 
-    if (customIcon && customIcon.trim() && !customIcon.includes('?') && !customIcon.includes('đŸ') && !customIcon.includes('â')) {
-      return customIcon.trim();
+    if (raw && !raw.includes('?') && !raw.includes('đŸ') && !raw.includes('â')) {
+      return raw;
     }
 
     const n = (name || '')
@@ -2506,12 +2521,62 @@ export default function AdminDashboard() {
       return;
     }
 
+    setIsUploadingLoaiSanIcon(true);
+    let finalIcon = icon ? icon.trim() : '';
+
     try {
+      const oldLoai = categoryList.find((l) => l.id === id);
+      const oldIconUrl = oldLoai?.icon ? oldLoai.icon.trim() : '';
+
+      // Tình huống 1: Dán link ảnh trên mạng (http/https không phải cloudinary) -> Đẩy lên Cloudinary & Xóa ảnh cũ
+      if (finalIcon && (finalIcon.startsWith('http://') || finalIcon.startsWith('https://')) && !finalIcon.includes('cloudinary.com')) {
+        // Xóa ảnh cũ nếu từng có trên Cloudinary
+        if (oldIconUrl && oldIconUrl.includes('cloudinary.com') && oldIconUrl !== finalIcon) {
+          try {
+            await fetch(`${API_BASE}/upload/delete`, {
+              method: 'POST',
+              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: oldIconUrl })
+            });
+          } catch (e) {
+            console.warn('Lỗi xóa icon cũ Cloudinary:', e);
+          }
+        }
+
+        // Tải ảnh từ URL về và lưu trữ chính thức trên Cloudinary
+        try {
+          const uploadRes = await fetch(`${API_BASE}/upload`, {
+            method: 'POST',
+            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: finalIcon })
+          });
+          const uploadData = await uploadRes.json();
+          if (uploadData.success && uploadData.url) {
+            finalIcon = uploadData.url;
+            setToastMessage({ type: 'success', message: '☁️ Đã tải ảnh từ link và lưu trữ an toàn trên Cloudinary!' });
+          }
+        } catch (uploadErr) {
+          console.warn('Lỗi đồng bộ URL lên Cloudinary:', uploadErr);
+        }
+      }
+      // Tình huống 2: Người dùng đổi sang icon khác (Emoji hoặc URL mới) hoặc xóa icon -> Xóa ảnh cũ trên Cloudinary
+      else if (oldIconUrl && oldIconUrl.includes('cloudinary.com') && oldIconUrl !== finalIcon) {
+        try {
+          await fetch(`${API_BASE}/upload/delete`, {
+            method: 'POST',
+            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: oldIconUrl })
+          });
+        } catch (e) {
+          console.warn('Lỗi xóa icon cũ Cloudinary:', e);
+        }
+      }
+
       if (loaiSanModal.mode === 'ADD') {
         const res = await fetch(`${API_BASE}/dat-san/loai-san`, {
           method: 'POST',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '', icon: icon?.trim() || null })
+          body: JSON.stringify({ ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '', icon: finalIcon || null })
         });
         const data = await res.json();
         if (data.success) {
@@ -2527,7 +2592,7 @@ export default function AdminDashboard() {
         const res = await fetch(`${API_BASE}/dat-san/loai-san/${id}`, {
           method: 'PUT',
           headers: getAuthHeaders(),
-          body: JSON.stringify({ ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '', icon: icon?.trim() || null })
+          body: JSON.stringify({ ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '', icon: finalIcon || null })
         });
         const data = await res.json();
         if (data.success) {
@@ -2540,14 +2605,16 @@ export default function AdminDashboard() {
           return;
         }
       }
-    } catch (err) { }
+    } catch (err) { } finally {
+      setIsUploadingLoaiSanIcon(false);
+    }
 
     if (loaiSanModal.mode === 'ADD') {
       const newId = Math.max(...categoryList.map(l => l.id), 0) + 1;
-      setCategoryList([...categoryList, { id: newId, ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '', icon: icon?.trim() || null }]);
+      setCategoryList([...categoryList, { id: newId, ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '', icon: finalIcon || null }]);
       setToastMessage({ type: 'success', message: `✅ Đã thêm loại sân [${ten_loai.trim()}] thành công!` });
     } else {
-      setCategoryList(categoryList.map(l => l.id === id ? { ...l, ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '', icon: icon?.trim() || null } : l));
+      setCategoryList(categoryList.map(l => l.id === id ? { ...l, ten_loai: ten_loai.trim(), mo_ta: mo_ta?.trim() || '', icon: finalIcon || null } : l));
       setToastMessage({ type: 'success', message: `✅ Đã cập nhật loại sân [${ten_loai.trim()}]!` });
     }
     setLoaiSanModal({ isOpen: false, mode: 'ADD', data: {} });
@@ -2570,6 +2637,22 @@ export default function AdminDashboard() {
       confirmDetail,
       async () => {
         // Optimistic UI: Gỡ bỏ loại sân và tất cả các sân trực thuộc ngay lập tức
+        const targetLoai = categoryList.find((l) => l.id === id);
+        const iconUrl = targetLoai?.icon ? targetLoai.icon.trim() : '';
+
+        // Xóa ảnh icon trên Cloudinary nếu có
+        if (iconUrl && iconUrl.includes('cloudinary.com')) {
+          try {
+            await fetch(`${API_BASE}/upload/delete`, {
+              method: 'POST',
+              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: iconUrl })
+            });
+          } catch (e) {
+            console.warn('Lỗi xóa icon trên Cloudinary:', e);
+          }
+        }
+
         setCategoryList((prev) => prev.filter((l) => l.id !== id));
         if (hasCourts) {
           setCourtList((prev) => prev.filter((c) => Number(c.ma_loai_san) !== Number(id)));
@@ -5097,7 +5180,7 @@ export default function AdminDashboard() {
               </div>
 
               <button
-                onClick={() => setIsDarkMode(!isDarkMode)}
+                onClick={(e) => toggleTheme(e)}
                 className={`p-2 rounded-xl border transition-all cursor-pointer ${isDarkMode ? 'bg-[#101c3d] border-emerald-800/40 text-amber-400 hover:bg-emerald-900/40' : 'bg-white border-slate-300 text-[#0f172a] hover:bg-slate-50'}`}
               >
                 {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-emerald-700" />}
@@ -9230,30 +9313,120 @@ export default function AdminDashboard() {
                 />
               </div>
               <div>
-                <label className="block font-black uppercase mb-1">Icon / Biểu Tượng Môn Thể Thao</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-black uppercase text-[11px]">Icon / Biểu Tượng Môn Thể Thao</label>
+                  <label className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                    isUploadingLoaiSanIcon ? 'opacity-50 pointer-events-none' : 'hover:scale-105 active:scale-95'
+                  } ${isDarkMode ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 hover:bg-emerald-900/60' : 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100'}`}>
+                    <span>{isUploadingLoaiSanIcon ? '⏳ Đang tải lên Cloudinary...' : '☁️ Tải ảnh / SVG'}</span>
+                    <input
+                      type="file"
+                      accept=".png,.svg,.webp,.jpg,.jpeg"
+                      className="hidden"
+                      disabled={isUploadingLoaiSanIcon}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 5 * 1024 * 1024) {
+                          setToastMessage({ type: 'error', message: 'Kích thước file tối đa là 5MB!' });
+                          return;
+                        }
+                        setIsUploadingLoaiSanIcon(true);
+                        try {
+                          const formData = new FormData();
+                          formData.append('image', file);
+                          const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
+                          const res = await fetch(`${API_BASE}/upload`, {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${token}` },
+                            body: formData,
+                          });
+                          const data = await res.json();
+                          if (data.success && data.url) {
+                            setLoaiSanModal((prev) => ({
+                              ...prev,
+                              data: { ...prev.data, icon: data.url },
+                            }));
+                            setToastMessage({ type: 'success', message: '☁️ Đã tải ảnh icon lên Cloudinary thành công!' });
+                          } else {
+                            setToastMessage({ type: 'error', message: data.message || 'Lỗi tải ảnh lên Cloudinary' });
+                          }
+                        } catch (err: any) {
+                          setToastMessage({ type: 'error', message: err.message || 'Lỗi kết nối upload Cloudinary' });
+                        } finally {
+                          setIsUploadingLoaiSanIcon(false);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+
                 <div className="flex items-center gap-2 mb-2">
                   <input
                     type="text"
                     value={loaiSanModal.data.icon || ''}
                     onChange={(e) => setLoaiSanModal({ ...loaiSanModal, data: { ...loaiSanModal.data, icon: e.target.value } })}
-                    placeholder="Ví dụ: ⚽, 🎾, 🏸, 🏀, 🏓, 🏐..."
+                    onBlur={async (e) => {
+                      const url = e.target.value.trim();
+                      if (url && (url.startsWith('http://') || url.startsWith('https://')) && !url.includes('cloudinary.com')) {
+                        setIsUploadingLoaiSanIcon(true);
+                        try {
+                          const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
+                          const res = await fetch(`${API_BASE}/upload`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              Authorization: `Bearer ${token}`
+                            },
+                            body: JSON.stringify({ url })
+                          });
+                          const data = await res.json();
+                          if (data.success && data.url) {
+                            setLoaiSanModal((prev) => ({
+                              ...prev,
+                              data: { ...prev.data, icon: data.url }
+                            }));
+                            setToastMessage({ type: 'success', message: '☁️ Đã tải ảnh từ link và lưu lên Cloudinary!' });
+                          }
+                        } catch (err) {
+                          console.warn('Lỗi auto upload link sang Cloudinary:', err);
+                        } finally {
+                          setIsUploadingLoaiSanIcon(false);
+                        }
+                      }
+                    }}
+                    placeholder="Dán link ảnh (https://...) hoặc chọn Emoji..."
                     className={`flex-1 p-2.5 rounded-xl border font-bold ${isDarkMode ? 'bg-[#070d1e] border-emerald-800/40 text-white' : 'bg-white border-slate-300 text-[#0f172a]'}`}
                   />
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl border ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-300'}`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl border overflow-hidden shrink-0 shadow-inner ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-slate-100 border-slate-300'}`}>
                     <span>{getSportIcon(loaiSanModal.data.ten_loai, loaiSanModal.data.icon)}</span>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {['⚽', '🎾', '🏸', '🏀', '🏓', '🏐', '🟡', '🏟️'].map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => setLoaiSanModal({ ...loaiSanModal, data: { ...loaiSanModal.data, icon: emoji } })}
-                      className="px-2 py-1 rounded-lg text-sm bg-slate-800/60 hover:bg-slate-700 border border-slate-700/80 cursor-pointer transition-all"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
+
+                <div className="flex items-center justify-between gap-1 flex-wrap">
+                  <span className={`text-[10px] font-semibold ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Gợi ý nhanh:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {['⚽', '🎾', '🏸', '🏀', '🏓', '🏐', '🟡', '🏟️'].map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => setLoaiSanModal({ ...loaiSanModal, data: { ...loaiSanModal.data, icon: emoji } })}
+                        className="px-2 py-1 rounded-lg text-sm bg-slate-800/60 hover:bg-slate-700 border border-slate-700/80 cursor-pointer transition-all"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                    {loaiSanModal.data.icon && (
+                      <button
+                        type="button"
+                        onClick={() => setLoaiSanModal({ ...loaiSanModal, data: { ...loaiSanModal.data, icon: '' } })}
+                        className="px-2 py-1 rounded-lg text-[10px] font-bold text-rose-400 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/50 cursor-pointer transition-all"
+                        title="Xóa icon để dùng tự động theo tên sân"
+                      >
+                        Xóa
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div>

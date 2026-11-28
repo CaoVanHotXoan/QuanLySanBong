@@ -126,4 +126,31 @@ body {
   pointer-events: none !important;
 }
 
+/* =========================================================================
+   HIỆU ỨNG GỢN TRÒN CHUYỂN GIAO DIỆN SÁNG / TỐI (CIRCULAR VIEW TRANSITION)
+   Lấy tâm từ tọa độ nút bấm, lan tỏa hình tròn phủ kín toàn bộ trang web
+   ========================================================================= */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 99999;
+}
+
+.dark::view-transition-old(root) {
+  z-index: 1;
+}
+
+.dark::view-transition-new(root) {
+  z-index: 99999;
+}
+
+
 

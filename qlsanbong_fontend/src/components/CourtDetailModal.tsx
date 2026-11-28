@@ -48,6 +48,7 @@ interface CourtStats {
   tien_ich?: string | null;
   ma_loai_san: number;
   ten_loai: string;
+  icon?: string | null;
   diem_trung_binh: number;
   tong_danh_gia: number;
   sao_5: number;
@@ -66,6 +67,87 @@ interface CourtDetailModalProps {
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+
+// Hàm helper lấy biểu tượng và màu sắc theo loại sân thi đấu (Hỗ trợ Custom URL ảnh/SVG hoặc Emoji)
+const getSportVisual = (courtData?: CourtStats | null) => {
+  const customIcon = (courtData?.icon || "").trim();
+  if (customIcon.startsWith("http://") || customIcon.startsWith("https://") || customIcon.startsWith("/") || customIcon.startsWith("data:image")) {
+    return {
+      icon: (
+        <img
+          src={customIcon}
+          alt={courtData?.ten_loai || "Icon"}
+          className="w-full h-full object-contain p-1"
+          onError={(e) => {
+            (e.currentTarget as HTMLElement).style.display = "none";
+          }}
+        />
+      ),
+      gradient: "from-slate-800 to-slate-900 text-white",
+      tagBg: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400",
+    };
+  }
+
+  const loai = (courtData?.ten_loai || "").toLowerCase().replace(/[đĐ]/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const san = (courtData?.ten_san || "").toLowerCase().replace(/[đĐ]/g, "d").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const text = `${loai} ${san}`;
+
+  if (text.includes("pickleball")) {
+    return {
+      icon: "🏓",
+      gradient: "from-amber-500 to-yellow-400 text-slate-950",
+      tagBg: "bg-amber-500/15 border-amber-500/30 text-amber-400",
+    };
+  }
+  if (text.includes("bong da") || text.includes("san 5") || text.includes("san 7") || text.includes("futsal") || text.includes("soccer")) {
+    return {
+      icon: "⚽",
+      gradient: "from-emerald-500 to-teal-400 text-slate-950",
+      tagBg: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400",
+    };
+  }
+  if (text.includes("cau long") || text.includes("badminton")) {
+    return {
+      icon: "🏸",
+      gradient: "from-teal-500 to-emerald-400 text-slate-950",
+      tagBg: "bg-teal-500/15 border-teal-500/30 text-teal-400",
+    };
+  }
+  if (text.includes("quan vot") || text.includes("tennis")) {
+    return {
+      icon: "🎾",
+      gradient: "from-lime-500 to-green-400 text-slate-950",
+      tagBg: "bg-lime-500/15 border-lime-500/30 text-lime-400",
+    };
+  }
+  if (text.includes("bong ro") || text.includes("basketball")) {
+    return {
+      icon: "🏀",
+      gradient: "from-orange-500 to-amber-400 text-slate-950",
+      tagBg: "bg-orange-500/15 border-orange-500/30 text-orange-400",
+    };
+  }
+  if (text.includes("bong chuyen") || text.includes("volleyball")) {
+    return {
+      icon: "🏐",
+      gradient: "from-sky-500 to-blue-400 text-slate-950",
+      tagBg: "bg-sky-500/15 border-sky-500/30 text-sky-400",
+    };
+  }
+  if (text.includes("bong ban") || text.includes("table tennis") || text.includes("ping pong")) {
+    return {
+      icon: "🏓",
+      gradient: "from-rose-500 to-pink-400 text-slate-950",
+      tagBg: "bg-rose-500/15 border-rose-500/30 text-rose-400",
+    };
+  }
+
+  return {
+    icon: "🏟️",
+    gradient: "from-emerald-500 to-teal-400 text-slate-950",
+    tagBg: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400",
+  };
+};
 
 export default function CourtDetailModal({
   isOpen,
@@ -562,7 +644,7 @@ export default function CourtDetailModal({
           <div className="flex items-center gap-2">
             {/* Avatar */}
             <div
-              className={`rounded-full flex items-center justify-center font-bold text-white shrink-0 overflow-hidden shadow-sm ${
+              className={`rounded-full relative flex items-center justify-center font-bold text-white shrink-0 overflow-hidden shadow-sm ${
                 isRoot
                   ? "w-9 h-9 bg-gradient-to-tr from-emerald-600 to-teal-500 text-xs"
                   : isAuthorAdmin
@@ -573,7 +655,23 @@ export default function CourtDetailModal({
               }`}
             >
               {item.anh_dai_dien ? (
-                <img src={item.anh_dai_dien} alt={item.ho_ten} className="w-full h-full object-cover" />
+                <>
+                  <img
+                    src={item.anh_dai_dien}
+                    alt={item.ho_ten || "Avatar"}
+                    referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
+                    className="w-full h-full object-cover relative z-10"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                      const fallback = e.currentTarget.parentElement?.querySelector(".avatar-fallback-text");
+                      if (fallback) (fallback as HTMLElement).style.display = "flex";
+                    }}
+                  />
+                  <span className="avatar-fallback-text hidden absolute inset-0 items-center justify-center w-full h-full">
+                    {item.ho_ten ? item.ho_ten.substring(0, 2).toUpperCase() : (isAuthorAdmin ? "QT" : "KH")}
+                  </span>
+                </>
               ) : (
                 <span>
                   {item.ho_ten ? item.ho_ten.substring(0, 2).toUpperCase() : (isAuthorAdmin ? "QT" : "KH")}
@@ -927,9 +1025,14 @@ export default function CourtDetailModal({
             }`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black shadow-md shrink-0">
-              <Sparkles className="w-5 h-5 stroke-[2.5]" />
-            </div>
+            {(() => {
+              const visual = getSportVisual(courtData);
+              return (
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr ${visual.gradient} flex items-center justify-center text-lg sm:text-xl shadow-md shrink-0 border border-white/20 select-none`}>
+                  <span>{visual.icon}</span>
+                </div>
+              );
+            })()}
             <div className="min-w-0">
               <h2 className={`text-sm sm:text-base font-black truncate leading-tight flex items-center gap-2 ${
                 isDarkMode ? "text-white" : "text-slate-900"

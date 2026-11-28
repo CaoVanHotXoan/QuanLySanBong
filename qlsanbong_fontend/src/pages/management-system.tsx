@@ -4193,7 +4193,7 @@ export default function ManagementSystem() {
               <button
                 id="theme-toggle-btn"
                 type="button"
-                onClick={() => setIsDarkMode(!isDarkMode)}
+                onClick={(e) => toggleTheme(e)}
                 className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${isDarkMode
                   ? 'border-slate-700 bg-slate-800 text-amber-400 hover:bg-slate-700'
                   : 'border-slate-200 bg-slate-100 text-indigo-600 hover:bg-slate-200 shadow-sm'

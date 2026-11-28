@@ -80,7 +80,7 @@ CREATE TABLE Loai_San (
     id INT IDENTITY(1,1) PRIMARY KEY,
     ten_loai NVARCHAR(50) NOT NULL, 
     mo_ta NVARCHAR(MAX),
-    icon NVARCHAR(50),
+    icon NVARCHAR(500),
     trang_thai BIT DEFAULT 1
 );
 GO
